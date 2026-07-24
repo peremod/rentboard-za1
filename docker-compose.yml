@@ -1,0 +1,12 @@
+# Local dev database only — app services run via `npm run start:dev` / `ng serve`.
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: rentboard
+      POSTGRES_PASSWORD: rentboard_dev
+      POSTGRES_DB: rentboard_dev
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+volumes:
+  pgdata:

@@ -1,0 +1,12 @@
+@use 'variables' as *;
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; scroll-behavior: smooth; }
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: $color-cream;
+  color: $color-ink;
+  line-height: 1.5;
+}
+img, picture { display: block; max-width: 100%; }
+a { color: $color-terracotta; }

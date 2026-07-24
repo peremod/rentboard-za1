@@ -1,0 +1,156 @@
+// ═══════════════════════════════════════════════════════════
+// RentBoard ZA — Prisma Schema (Foundation release, v0.1.0)
+// PostgreSQL via Supabase.
+//
+// Design decisions:
+// - Monetary values stored as INTEGER ZAR cents — avoids float bugs.
+// - UUID primary keys — safe to expose in URLs.
+// - Soft status transitions on Room — data is never hard-deleted.
+// - Images stored as ImageKit file paths, not full URLs.
+//
+// This file will grow module-by-module (Application, Message,
+// Payment, etc. land in the next scaffold pass — see README §Roadmap).
+// ═══════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  TENANT
+  LANDLORD
+  ADMIN
+}
+
+enum RoomType {
+  shared_house
+  en_suite
+  studio
+  private
+}
+
+enum RoomStatus {
+  draft
+  active
+  reserved
+  let
+  paused
+  deleted
+}
+
+enum PlanTier {
+  free
+  pro
+  agency
+}
+
+/// Core user account — shared by tenants, landlords, and admins.
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  passwordHash   String?
+  role           UserRole @default(TENANT)
+  fullName       String
+  avatarPath     String?
+  phone          String?
+  isVerified     Boolean  @default(false)
+  isActive       Boolean  @default(true)
+  authProvider   String   @default("email")
+  authProviderId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lastLoginAt    DateTime?
+
+  landlordProfile LandlordProfile?
+  tenantProfile   TenantProfile?
+  rooms           Room[]
+
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model LandlordProfile {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName      String?
+  planTier         PlanTier @default(free)
+  planExpiresAt    DateTime?
+  stripeCustomerId String?  @unique
+  idVerified       Boolean  @default(false)
+  rating           Float?
+  ratingCount      Int      @default(0)
+
+  @@map("landlord_profiles")
+}
+
+model TenantProfile {
+  id                String   @id @default(uuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  employmentStatus  String?
+  annualIncomeCents Int?
+  incomeVerified    Boolean  @default(false)
+  idVerified        Boolean  @default(false)
+  hasPassport       Boolean  @default(false)
+  passportExpiresAt DateTime?
+
+  @@map("tenant_profiles")
+}
+
+/// Room — the core listing entity. Rooms-only MVP (no full-property lets).
+model Room {
+  id               String     @id @default(uuid())
+  landlordId       String
+  landlord         User       @relation(fields: [landlordId], references: [id], onDelete: Cascade)
+
+  roomType         RoomType
+  title            String
+  description      String?
+  status           RoomStatus @default(draft)
+
+  /// Monthly rent in ZAR cents: R950/mo = 95000
+  rentCents        Int
+  depositCents      Int?
+  billsIncluded    Boolean    @default(false)
+
+  province         String
+  city             String
+  locationDisplay  String
+
+  availableFrom    DateTime
+  housematesCount  Int        @default(0)
+
+  couplesAllowed   Boolean    @default(false)
+  dssAccepted      Boolean    @default(false)
+  guarantorAccepted Boolean   @default(false)
+  petsAllowed      Boolean    @default(false)
+
+  heroImagePath    String?
+  imagePaths       String[]
+
+  isFeatured       Boolean    @default(false)
+  featuredUntil    DateTime?
+
+  viewCount        Int        @default(0)
+  applicationCount Int        @default(0)
+  relistCount      Int        @default(0)
+  letAt            DateTime?
+
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  publishedAt      DateTime?
+
+  @@index([status])
+  @@index([province, city])
+  @@index([rentCents])
+  @@index([landlordId])
+  @@map("rooms")
+}
