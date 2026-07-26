@@ -142,8 +142,8 @@ Each pass below has a full reference implementation already written in the proje
 
 | Pass | Adds | Reference artifact |
 |---|---|---|
-| 0.1.0 ✅ | Repo scaffold, health check, Prisma foundation, CI, Docker | *this commit* |
-| 0.2.0 | Auth (JWT + Google OAuth), guards, interceptors | `RentBoard-Fresh-Part3-Auth-Guards-Services.html` |
+| 0.1.0 ✅ | Repo scaffold, health check, Prisma foundation, CI, Docker | *v0.1.0 commit* |
+| 0.2.0 ✅ | Auth (JWT + Google OAuth), guards, interceptors, working login/register/callback + guarded dashboards | `RentBoard-Fresh-Part3-Auth-Guards-Services.html` — *v0.2.0 commit* |
 | 0.3.0 | Legal pages (POPIA/PAIA), cookie consent, Rooms API + SCSS system | `RentBoard-Fresh-Part4-Legal-API-Styles.html`, `RentBoard-ZA-*` legal artifacts |
 | 0.4.0 | Navbar/footer, home notice board, room card, CI/CD deploy workflows | `RentBoard-Fresh-Part5-UI-CICD.html` |
 | 0.5.0 | Rooms service full lifecycle, WhatsApp bridge, email templates | `RentBoard-Fresh-Part6-Services-README.html` |
@@ -161,15 +161,35 @@ Operational cadence (on-call, weekly/monthly checks, incident escalation) is doc
 rentboard-za/
 ├── frontend/            Angular 21 — SSR, zoneless, signals
 │   └── src/app/
-│       ├── core/        singleton services, guards, interceptors (added in 0.2.0)
-│       ├── shared/      reusable components (error-page here now)
-│       └── features/    lazy-loaded routes (home here now)
+│       ├── core/        AuthService (signals), guards, interceptors, User model
+│       ├── shared/      reusable components (error-page)
+│       └── features/    home, auth (login/register/callback), tenant + landlord dashboards
 ├── backend/              NestJS 11 — REST API
 │   └── src/
 │       ├── config/       typed env access (configuration.ts)
 │       ├── prisma/       PrismaService/Module
-│       └── modules/      feature modules (health here now)
+│       ├── common/       guards (JWT/roles/admin/landlord), decorators
+│       └── modules/      health, auth (JWT + Google OAuth)
 ├── .github/workflows/    CI
 ├── docker-compose.yml    local Postgres
 └── CONTRIBUTING.md       git workflow, commit rules, release process
 ```
+
+## 12. Testing the auth flow locally
+
+```bash
+# Generate a real JWT secret and put it in backend/.env
+node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+
+# Google OAuth is optional for local dev — email/password works without it.
+# To test Google sign-in, create OAuth credentials in Google Cloud Console and
+# set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_CALLBACK_URL in backend/.env.
+```
+
+Manual flow check (mirrors `SEO-LIGHTHOUSE-CHECKLIST.md` §6, applied to auth):
+- [ ] `/` → "Log in" and "…get started free" links resolve
+- [ ] Register as tenant → lands on `/tenant/dashboard`
+- [ ] Register as landlord → lands on `/landlord/dashboard`
+- [ ] Visiting `/landlord/dashboard` as a tenant → redirected to `/tenant/dashboard`, not a 403
+- [ ] Visiting `/tenant/dashboard` unauthenticated → redirected to `/auth/login?returnUrl=/tenant/dashboard`, and lands back on `/tenant/dashboard` after login
+- [ ] Log out → returns to `/`, protected routes now redirect to login again

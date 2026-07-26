@@ -4,6 +4,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import configuration from './config/configuration';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthController } from './modules/health/health.controller';
+import { AuthModule } from './modules/auth/auth.module';
 
 /**
  * Root module — foundation release.
@@ -22,6 +23,7 @@ import { HealthController } from './modules/health/health.controller';
       { name: 'global', ttl: 15 * 60 * 1000, limit: 150 },
     ]),
     PrismaModule,
+    AuthModule,
   ],
   controllers: [HealthController],
 })
