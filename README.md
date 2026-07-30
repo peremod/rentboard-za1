@@ -144,7 +144,7 @@ Each pass below has a full reference implementation already written in the proje
 |---|---|---|
 | 0.1.0 ✅ | Repo scaffold, health check, Prisma foundation, CI, Docker | *v0.1.0 commit* |
 | 0.2.0 ✅ | Auth (JWT + Google OAuth), guards, interceptors, working login/register/callback + guarded dashboards | `RentBoard-Fresh-Part3-Auth-Guards-Services.html` — *v0.2.0 commit* |
-| 0.3.0 | Legal pages (POPIA/PAIA), cookie consent, Rooms API + SCSS system | `RentBoard-Fresh-Part4-Legal-API-Styles.html`, `RentBoard-ZA-*` legal artifacts |
+| 0.3.0 ✅ | Legal pages (POPIA/PAIA), cookie consent, Rooms API (backend) + RoomsService (frontend), SCSS legal styles, ZarCentsPipe | `RentBoard-Fresh-Part4-Legal-API-Styles.html`, `RentBoard-ZA-*` legal artifacts — *v0.3.0 commit* |
 | 0.4.0 | Navbar/footer, home notice board, room card, CI/CD deploy workflows | `RentBoard-Fresh-Part5-UI-CICD.html` |
 | 0.5.0 | Rooms service full lifecycle, WhatsApp bridge, email templates | `RentBoard-Fresh-Part6-Services-README.html` |
 | 0.6.0 | Create-room wizard, photo upload, filters, room detail + apply | `RentBoard-Sprint2-Code.html` |
@@ -193,3 +193,10 @@ Manual flow check (mirrors `SEO-LIGHTHOUSE-CHECKLIST.md` §6, applied to auth):
 - [ ] Visiting `/landlord/dashboard` as a tenant → redirected to `/tenant/dashboard`, not a 403
 - [ ] Visiting `/tenant/dashboard` unauthenticated → redirected to `/auth/login?returnUrl=/tenant/dashboard`, and lands back on `/tenant/dashboard` after login
 - [ ] Log out → returns to `/`, protected routes now redirect to login again
+
+## 13. Legal & Rooms API (v0.3.0) — what to check, what's still a placeholder
+
+- All five legal pages (`/legal/privacy`, `/legal/terms`, `/legal/disclaimer`, `/legal/cookies`, `/legal/paia`) resolve from the Home footer links and are prerendered (`serverRoutes: 'legal/**'`) — verify with `curl -s http://localhost:4200/legal/paia | grep "PAIA Manual"` after a prod build.
+- **`[PLACEHOLDER]` values in the legal pages are not optional** — company name, CIPC number, registered address, Information Officer name must be filled in, and the PAIA manual **must be filed with the SAHRC** (paia@sahrc.org.za, Form 2, no fee), before this repo can go to production. Tracked in the roadmap's 1.0.0 row.
+- Rooms API is testable via Swagger (`/api/docs`) once you have a landlord JWT: register a `LANDLORD` account, `POST /api/rooms`, then `POST /api/rooms/:id/publish` (requires `heroImagePath` + a 50+ char `description` — upload flow itself lands in pass 0.6.0, so publish will 400 until then; `POST`/`PATCH`/draft lifecycle all work today).
+- `ZarCentsPipe` (`shared/pipes/zar-cents.pipe.ts`) is the only sanctioned way to render `rentCents`/`depositCents` — never hand-divide by 100 in a template (this is exactly the class of bug the project's Audit Report flagged under "ZarCentsPipe not imported").

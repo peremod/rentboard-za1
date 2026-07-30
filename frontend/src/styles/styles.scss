@@ -10,3 +10,33 @@ body {
 }
 img, picture { display: block; max-width: 100%; }
 a { color: $color-terracotta; }
+
+// ── Legal pages (Privacy, Terms, Disclaimer, Cookies, PAIA) ──────────────
+.legal-page { min-height: 100vh; padding: 2rem 1rem; }
+.legal-container {
+  max-width: 760px;
+  margin: 0 auto;
+
+  section { margin-bottom: 2.5rem; }
+  h2 { font-size: 1.15rem; margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 2px solid #DDD5C8; }
+  h3 { font-size: 1rem; margin: 1rem 0 .5rem; }
+  p, li { line-height: 1.75; margin-bottom: .5rem; }
+  ul, ol { margin-left: 1.5rem; margin-bottom: .75rem; }
+  address { font-style: normal; line-height: 1.9; }
+}
+.legal-header { margin-bottom: 2.5rem; }
+.legal-meta { font-size: .85rem; color: #7A6E60; margin-bottom: 1rem; }
+.legal-intro {
+  font-size: 1rem; line-height: 1.75; color: #3A3228;
+  background: #F2EDE3; border-left: 3px solid $color-terracotta;
+  padding: 1.1rem; border-radius: 6px;
+}
+.disclaimer-banner {
+  background: rgba(212, 168, 83, .12); border: 1px solid rgba(212, 168, 83, .35);
+  border-radius: 8px; padding: 1rem; line-height: 1.7; margin-top: 1rem;
+}
+.legal-table {
+  width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .88rem;
+  th { background: #F2EDE3; padding: .6rem .9rem; text-align: left; border-bottom: 2px solid #DDD5C8; }
+  td { padding: .55rem .9rem; border-bottom: 1px solid #DDD5C8; }
+}

@@ -5,6 +5,7 @@ import configuration from './config/configuration';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthController } from './modules/health/health.controller';
 import { AuthModule } from './modules/auth/auth.module';
+import { RoomsModule } from './modules/rooms/rooms.module';
 
 /**
  * Root module — foundation release.
@@ -24,6 +25,7 @@ import { AuthModule } from './modules/auth/auth.module';
     ]),
     PrismaModule,
     AuthModule,
+    RoomsModule,
   ],
   controllers: [HealthController],
 })
