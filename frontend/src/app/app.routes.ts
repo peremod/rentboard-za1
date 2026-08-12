@@ -8,7 +8,7 @@ import { tenantGuard } from './core/guards/tenant.guard';
  * Application routes — all feature routes are lazy-loaded.
  * Route `title` drives per-page <title> for SEO (see SEO-LIGHTHOUSE-CHECKLIST.md §5).
  *
- * Guard chain (verified end-to-end in this pass):
+ * Guard chain (verified end-to-end since the Auth pass):
  *   unauthenticated → /auth/login?returnUrl=<attempted>
  *   login/register success → returnUrl, else role-appropriate dashboard
  *   wrong-role access → redirected to their own dashboard, not a 403 page
@@ -18,6 +18,10 @@ export const routes: Routes = [
     path: '',
     loadComponent: () => import('./features/home/home').then((m) => m.Home),
     title: 'RentBoard — Rooms to Rent in South Africa, No Agent Fees',
+  },
+  {
+    path: 'rooms/:id',
+    loadComponent: () => import('./features/room-detail/room-detail').then((m) => m.RoomDetail),
   },
   {
     path: 'auth',
@@ -46,12 +50,13 @@ export const routes: Routes = [
 
 /**
  * SSR rendering mode per route.
- * Static/public pages prerender at build time (fast LCP, zero server load).
- * Auth-gated portals render client-side only — private, per-user data must
- * never be cached or prerendered.
+ * Static pages prerender at build time. Room detail is dynamic per-ID content
+ * — SSR'd per request (crawlable for SEO, can't be known at build time).
+ * Auth-gated portals render client-side only — private data is never cached.
  */
 export const serverRoutes: ServerRoute[] = [
   { path: '', renderMode: RenderMode.Prerender },
+  { path: 'rooms/:id', renderMode: RenderMode.Server },
   { path: 'legal/**', renderMode: RenderMode.Prerender },
   { path: 'auth/**', renderMode: RenderMode.Client },
   { path: 'tenant/**', renderMode: RenderMode.Client },

@@ -1,0 +1,31 @@
+# Deploys the NestJS backend to Railway on push to main (production)
+# or develop (staging) — matches CONTRIBUTING.md §8 environment-branch mapping.
+name: Deploy Backend
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ['backend/**']
+
+jobs:
+  deploy:
+    name: Deploy to Railway
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy
+        working-directory: backend
+        run: railway up --service rentboard-api --environment ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Run database migrations
+        working-directory: backend
+        run: railway run --environment ${{ github.ref_name == 'main' && 'production' || 'staging' }} npx prisma migrate deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
