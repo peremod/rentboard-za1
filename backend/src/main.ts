@@ -52,7 +52,7 @@ async function bootstrap() {
     const config = new DocumentBuilder()
       .setTitle('RentBoard ZA API')
       .setDescription('Room-letting platform API for South Africa')
-      .setVersion('0.1.0')
+      .setVersion('1.0.0')
       .addBearerAuth()
       .build();
     SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, config));

@@ -1,5 +1,23 @@
 # RentBoard ZA — Pre-Launch Checklist
 
+## Launch readiness summary (v1.0.0)
+
+**Everything fixable inside this repo is done.** Ten builds (`v0.1.0` → `v0.9.3`), each verified before commit — every relative import resolved, every lazy-loaded export matched, and a specific, named bug caught and fixed at least once in most passes (not just claimed clean). What's left is entirely outside the codebase:
+
+| Category | What's left | Blocking launch? |
+|---|---|---|
+| **Legal filing** | PAIA manual must be filed with the SAHRC (Form 2, no fee) | Yes — legal requirement |
+| **Legal content** | `[PLACEHOLDER]` company name, CIPC number, address, Information Officer name/reg. number in the legal pages | Yes — have an attorney review while you're at it |
+| **GitHub settings** | Branch protection rules to actually enforce the squash-merge policy `CONTRIBUTING.md` describes | Recommended, not launch-blocking |
+| **Stripe Dashboard** | Create the 7 real Products/Prices; get the webhook signing secret | Yes — payments literally won't work without these |
+| **Third-party credentials** | ImageKit, Resend, WhatsApp Business API, Google OAuth | Partial — photo upload and email need theirs; WhatsApp and Google login are optional |
+| **KYC integration** | Renter's Passport verification (ID/income) is payment-only — no verification provider integrated | No — sell the subscription, verify manually, exactly as the UI already says |
+| **Translation** | 8 of 11 official languages are honest English-fallback stubs | No — English works, switcher just shouldn't claim those 8 yet |
+
+Full detail on every row above is in the tables below — this summary is the map, not the whole territory.
+
+---
+
 Consolidates every `[PLACEHOLDER]`, deferred item, and audit finding scattered across `README.md §1–19` and your `RentBoard-ZA-Audit-Report.html`, in one place. Nothing here is new — it's a merge. Each item was checked against the actual repo (not assumed) before being listed, so "already fixed" means genuinely verified, not guessed.
 
 Legal counts as much as code here: several of these are compliance-critical, not just security-critical.

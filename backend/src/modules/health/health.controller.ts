@@ -16,7 +16,11 @@ export class HealthController {
     return {
       status: dbOk ? 'ok' : 'degraded',
       db: dbOk ? 'connected' : 'unavailable',
-      version: process.env.npm_package_version ?? '0.1.0',
+      // NOTE: npm_package_version is only set by `npm run` scripts — Docker's
+      // `node dist/main` (see Dockerfile/railway.json) never sets it, so this
+      // fallback is what actually shows in production. Keep it in sync with
+      // package.json manually until this reads package.json directly instead.
+      version: process.env.npm_package_version ?? '1.0.0',
       uptime: Math.floor(process.uptime()),
       ts: new Date().toISOString(),
     };

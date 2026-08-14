@@ -1,6 +1,6 @@
 {
   "name": "rentboard-backend",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "RentBoard ZA API — NestJS 11 + Prisma 6 + PostgreSQL",
   "scripts": {

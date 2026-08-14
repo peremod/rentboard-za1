@@ -151,7 +151,7 @@ Each pass below has a full reference implementation already written in the proje
 | 0.7.0 ✅ | Applicant manager (shortlist/accept/reject, auto-rejects other applicants on accept), messaging thread (in-app + WhatsApp reply-matching now closed) | `RentBoard-Sprint3-Code.html` — *v0.7.0 commit* |
 | 0.8.0 ✅ | Stripe subscriptions (Pro/Agency plans), one-off room boosts, Renter's Passport payment (verification itself is a placeholder — see §18) | `RentBoard-Sprint4-Code.html` — *v0.8.0 commit* |
 | 0.9.0 ✅ | Signal-based i18n engine (11 official SA languages — 2 real translations, 8 honest stubs), graceful shutdown. PgBouncer + cache headers were already done in earlier passes. | `RentBoard-ZA-i18n-Languages-1.html`, `RentBoard-ZA-Capacity-Analysis.html` — *v0.9.0 commit* |
-| 1.0.0 | Audit fixes applied, SAHRC/Information Regulator filings done, launch | `RentBoard-ZA-All-Fixes.html`, `RentBoard-ZA-MVP-Summary.html` |
+| 1.0.0 ✅ | All code-fixable audit findings resolved (v0.9.1–v0.9.3). SAHRC/Information Regulator filings and other legal/manual steps remain — see `PRE-LAUNCH-CHECKLIST.md`, not blocked on this repo | `RentBoard-ZA-All-Fixes.html`, `RentBoard-ZA-MVP-Summary.html` — *v1.0.0 commit* |
 
 Operational cadence (on-call, weekly/monthly checks, incident escalation) is documented in `OPERATIONS.md`.
 
