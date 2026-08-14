@@ -9,6 +9,7 @@ import { RoomsModule } from './modules/rooms/rooms.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ApplicationsModule } from './modules/applications/applications.module';
+import { UploadsModule } from './modules/uploads/uploads.module';
 
 /**
  * Root module — foundation release.
@@ -32,6 +33,7 @@ import { ApplicationsModule } from './modules/applications/applications.module';
     NotificationsModule,
     WhatsappModule,
     ApplicationsModule,
+    UploadsModule,
   ],
   controllers: [HealthController],
 })

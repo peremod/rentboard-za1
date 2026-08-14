@@ -7,5 +7,10 @@ export const LANDLORD_ROUTES: Routes = [
     loadComponent: () => import('./dashboard/landlord-dashboard').then((m) => m.LandlordDashboard),
     title: 'Your Dashboard — RentBoard',
   },
+  {
+    path: 'rooms/new',
+    loadComponent: () => import('./create-room/create-room').then((m) => m.CreateRoom),
+    title: 'List a Room — RentBoard',
+  },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];
