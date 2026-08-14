@@ -146,7 +146,7 @@ Each pass below has a full reference implementation already written in the proje
 | 0.2.0 ✅ | Auth (JWT + Google OAuth), guards, interceptors, working login/register/callback + guarded dashboards | `RentBoard-Fresh-Part3-Auth-Guards-Services.html` — *v0.2.0 commit* |
 | 0.3.0 ✅ | Legal pages (POPIA/PAIA), cookie consent, Rooms API (backend) + RoomsService (frontend), SCSS legal styles, ZarCentsPipe | `RentBoard-Fresh-Part4-Legal-API-Styles.html`, `RentBoard-ZA-*` legal artifacts — *v0.3.0 commit* |
 | 0.4.0 ✅ | Navbar/footer, home notice board (search+filters+infinite scroll), RoomCard (NgOptimizedImage), room-detail placeholder, Vercel+Railway deploy workflows | `RentBoard-Fresh-Part5-UI-CICD.html` — *v0.4.0 commit* |
-| 0.5.0 | Rooms service full lifecycle, WhatsApp bridge, email templates | `RentBoard-Fresh-Part6-Services-README.html` |
+| 0.5.0 ✅ | NotificationsService (6 Resend email templates), WhatsApp bridge (Meta Cloud API), minimal Applications module (apply + notify, tests the chain end-to-end) | `RentBoard-Fresh-Part6-Services-README.html` — *v0.5.0 commit* |
 | 0.6.0 | Create-room wizard, photo upload, filters, room detail + apply | `RentBoard-Sprint2-Code.html` |
 | 0.7.0 | Tenant/landlord dashboards, applicant manager, messaging | `RentBoard-Sprint3-Code.html` |
 | 0.8.0 | Stripe subscriptions/boosts, Renter's Passport, screening | `RentBoard-Sprint4-Code.html` |
@@ -207,3 +207,22 @@ Manual flow check (mirrors `SEO-LIGHTHOUSE-CHECKLIST.md` §6, applied to auth):
 - **`NgOptimizedImage` + the app-wide `IMAGE_LOADER`** (`app.config.ts`) is what gives every room image `loading="lazy"`/`eager`, `fetchpriority`, and fixed `width`/`height` (zero CLS) — the concrete Lighthouse levers for Performance. **Rule:** any component using `NgOptimizedImage` must pass the *raw* stored path to `ngSrc`, never a pre-built ImageKit URL — the loader does the one-and-only transform. Passing a pre-built URL runs it through the loader twice and breaks the image (caught and fixed in `RoomCard` during this pass; see commit message).
 - `getImageUrl()` in `shared/utils/imagekit.utils.ts` is for the *other* case — plain `<img [src]>` usages (avatars, galleries) that don't go through `NgOptimizedImage`.
 - New deploy workflows need these GitHub Actions secrets set (Settings → Secrets and variables → Actions): `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `RAILWAY_TOKEN`. They deploy `main` → production, `develop` → staging, matching `CONTRIBUTING.md §8`.
+
+## 15. Notifications + WhatsApp bridge + Applications (v0.5.0)
+
+**Schema changed — run a migration before starting the backend:**
+```bash
+cd backend
+npx prisma migrate dev --name applications-messages-whatsapp
+```
+This adds `Application`, `Message`, and `LandlordWhatsappConfig` — the minimum needed for the notification chain below to be real, not just declared.
+
+**What's wired end-to-end and testable today** via Swagger (`/api/docs`):
+1. Register a `LANDLORD`, create + publish a room (needs `heroImagePath` set manually via `PATCH /rooms/:id` until pass 0.6.0 adds photo upload)
+2. Register a `TENANT`, `POST /api/applications` with that room's id
+3. The landlord gets a **Resend email** (`sendNewApplicationEmail`) — check your Resend dashboard/logs, since `RESEND_API_KEY` is required for real delivery
+4. If the landlord has called `PATCH /api/whatsapp/config` with a phone number, they also get a **WhatsApp message** — silently skipped (not an error) if WhatsApp isn't configured, exactly as designed: WhatsApp is a bonus channel, email is never allowed to depend on it
+
+**What's deliberately not wired yet:** `sendShortlistedEmail`, `sendAcceptedEmail`, `sendRejectionEmail` exist in `NotificationsService` but have no caller — they're ready for pass 0.7.0's applicant-manager status transitions (shortlist/accept/reject), which is where those state changes actually happen. Don't wire them to `ApplicationsService.create()` — that's only ever a `pending` application.
+
+**WhatsApp webhook honesty note:** an inbound WhatsApp reply is matched back to a conversation via the `wamid` Meta assigns to *our outbound* message — that requires outbound sends to be recorded as `Message` rows first, which only happens once the full conversation-thread API lands (0.7.0). Until then, `WhatsappService.handleIncomingWebhook()` correctly receives and parses Meta's payload but logs-and-no-ops on replies it can't confidently match, rather than mis-filing a message into the wrong thread. This is documented in the service's own docblock too, not just here.

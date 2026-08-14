@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// RentBoard ZA — Prisma Schema (Foundation release, v0.1.0)
+// RentBoard ZA — Prisma Schema
 // PostgreSQL via Supabase.
 //
 // Design decisions:
@@ -8,8 +8,9 @@
 // - Soft status transitions on Room — data is never hard-deleted.
 // - Images stored as ImageKit file paths, not full URLs.
 //
-// This file will grow module-by-module (Application, Message,
-// Payment, etc. land in the next scaffold pass — see README §Roadmap).
+// Growth log: User/LandlordProfile/TenantProfile/Room (v0.1.0) →
+// Application/Message/LandlordWhatsappConfig (v0.5.0, this pass) →
+// Payment/Passport models land in v0.8.0 — see README §Roadmap.
 // ═══════════════════════════════════════════════════════════
 
 generator client {
@@ -70,6 +71,8 @@ model User {
   landlordProfile LandlordProfile?
   tenantProfile   TenantProfile?
   rooms           Room[]
+  applications    Application[]
+  messagesSent    Message[]
 
   @@index([email])
   @@index([role])
@@ -87,6 +90,7 @@ model LandlordProfile {
   idVerified       Boolean  @default(false)
   rating           Float?
   ratingCount      Int      @default(0)
+  whatsappConfig   LandlordWhatsappConfig?
 
   @@map("landlord_profiles")
 }
@@ -148,9 +152,83 @@ model Room {
   updatedAt        DateTime   @updatedAt
   publishedAt      DateTime?
 
+  applications     Application[]
+
   @@index([status])
   @@index([province, city])
   @@index([rentCents])
   @@index([landlordId])
   @@map("rooms")
+}
+
+enum ApplicationStatus {
+  pending
+  viewed
+  shortlisted
+  accepted
+  rejected
+  withdrawn
+}
+
+/// A tenant's application to a room. One tenant can apply to a given room only once.
+model Application {
+  id         String            @id @default(uuid())
+  roomId     String
+  room       Room              @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  tenantId   String
+  tenant     User              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status     ApplicationStatus @default(pending)
+  coverNote  String?
+  viewedAt   DateTime?
+  decidedAt  DateTime?
+
+  messages   Message[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([roomId, tenantId])
+  @@index([tenantId])
+  @@index([roomId, status])
+  @@map("applications")
+}
+
+enum MessageChannel {
+  rentboard
+  whatsapp
+}
+
+/// A single message within an application's conversation thread.
+/// WhatsApp-originated messages carry waMessageId for delivery-status webhooks.
+model Message {
+  id            String         @id @default(uuid())
+  applicationId String
+  application   Application    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  senderId      String
+  sender        User           @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  channel       MessageChannel @default(rentboard)
+  body          String
+  waMessageId   String?        @unique
+  waStatus      String?
+  readAt        DateTime?
+  createdAt     DateTime       @default(now())
+
+  @@index([applicationId])
+  @@index([waMessageId])
+  @@map("messages")
+}
+
+/// Per-landlord WhatsApp Business API opt-in — one landlord notification
+/// channel, separate from the in-app conversation thread.
+model LandlordWhatsappConfig {
+  id                String          @id @default(uuid())
+  landlordId        String          @unique
+  landlord          LandlordProfile @relation(fields: [landlordId], references: [id], onDelete: Cascade)
+  phoneNumber       String
+  phoneVerified     Boolean         @default(false)
+  waEnabled         Boolean         @default(true)
+  optInAt           DateTime        @default(now())
+  totalMessagesSent Int             @default(0)
+
+  @@map("landlord_whatsapp_configs")
 }

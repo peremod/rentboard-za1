@@ -6,6 +6,9 @@ import { PrismaModule } from './prisma/prisma.module';
 import { HealthController } from './modules/health/health.controller';
 import { AuthModule } from './modules/auth/auth.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
+import { ApplicationsModule } from './modules/applications/applications.module';
 
 /**
  * Root module — foundation release.
@@ -26,6 +29,9 @@ import { RoomsModule } from './modules/rooms/rooms.module';
     PrismaModule,
     AuthModule,
     RoomsModule,
+    NotificationsModule,
+    WhatsappModule,
+    ApplicationsModule,
   ],
   controllers: [HealthController],
 })
