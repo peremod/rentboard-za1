@@ -148,7 +148,7 @@ Each pass below has a full reference implementation already written in the proje
 | 0.4.0 ✅ | Navbar/footer, home notice board (search+filters+infinite scroll), RoomCard (NgOptimizedImage), room-detail placeholder, Vercel+Railway deploy workflows | `RentBoard-Fresh-Part5-UI-CICD.html` — *v0.4.0 commit* |
 | 0.5.0 ✅ | NotificationsService (6 Resend email templates), WhatsApp bridge (Meta Cloud API), minimal Applications module (apply + notify, tests the chain end-to-end) | `RentBoard-Fresh-Part6-Services-README.html` — *v0.5.0 commit* |
 | 0.6.0 ✅ | Create-room wizard (4 steps), ImageKit direct-upload, full room detail + apply UI, real landlord/tenant dashboards | `RentBoard-Sprint2-Code.html` — *v0.6.0 commit* |
-| 0.7.0 | Applicant manager (shortlist/accept/reject wiring the emails already built), messaging thread UI | `RentBoard-Sprint3-Code.html` |
+| 0.7.0 ✅ | Applicant manager (shortlist/accept/reject, auto-rejects other applicants on accept), messaging thread (in-app + WhatsApp reply-matching now closed) | `RentBoard-Sprint3-Code.html` — *v0.7.0 commit* |
 | 0.8.0 | Stripe subscriptions/boosts, Renter's Passport, screening | `RentBoard-Sprint4-Code.html` |
 | 0.9.0 | 11-language i18n, capacity hardening (PgBouncer, cache headers, graceful shutdown) | `RentBoard-ZA-i18n-Languages-1.html`, `RentBoard-ZA-Capacity-Analysis.html` |
 | 1.0.0 | Audit fixes applied, SAHRC/Information Regulator filings done, launch | `RentBoard-ZA-All-Fixes.html`, `RentBoard-ZA-MVP-Summary.html` |
@@ -223,9 +223,9 @@ This adds `Application`, `Message`, and `LandlordWhatsappConfig` — the minimum
 3. The landlord gets a **Resend email** (`sendNewApplicationEmail`) — check your Resend dashboard/logs, since `RESEND_API_KEY` is required for real delivery
 4. If the landlord has called `PATCH /api/whatsapp/config` with a phone number, they also get a **WhatsApp message** — silently skipped (not an error) if WhatsApp isn't configured, exactly as designed: WhatsApp is a bonus channel, email is never allowed to depend on it
 
-**What's deliberately not wired yet:** `sendShortlistedEmail`, `sendAcceptedEmail`, `sendRejectionEmail` exist in `NotificationsService` but have no caller — they're ready for pass 0.7.0's applicant-manager status transitions (shortlist/accept/reject), which is where those state changes actually happen. Don't wire them to `ApplicationsService.create()` — that's only ever a `pending` application.
+**Resolved in pass 0.7.0:** `sendShortlistedEmail`, `sendAcceptedEmail`, and `sendRejectionEmail` are now called from `ApplicationsService`'s `shortlist()`/`accept()`/`reject()` methods — see §17 below.
 
-**WhatsApp webhook honesty note:** an inbound WhatsApp reply is matched back to a conversation via the `wamid` Meta assigns to *our outbound* message — that requires outbound sends to be recorded as `Message` rows first, which only happens once the full conversation-thread API lands (0.7.0). Until then, `WhatsappService.handleIncomingWebhook()` correctly receives and parses Meta's payload but logs-and-no-ops on replies it can't confidently match, rather than mis-filing a message into the wrong thread. This is documented in the service's own docblock too, not just here.
+**Resolved in pass 0.7.0:** outbound WhatsApp sends now record their `wamid` on the `Message` row (`MessagesService.send()`), so `WhatsappService.handleIncomingWebhook()` can genuinely match a landlord's reply back to the right conversation thread. See §17 for the full loop.
 
 ## 16. Create-room wizard, photo upload, apply flow (v0.6.0)
 
@@ -238,6 +238,16 @@ This adds `Application`, `Message`, and `LandlordWhatsappConfig` — the minimum
 4. Publish → back on the dashboard, the new room is listed with live status
 5. Log in as a `TENANT`, browse to the room (`/`→ card → `/rooms/:id`), see the real gallery, click Apply
 6. Landlord gets the email (+ WhatsApp if configured) from pass 0.5.0 — the chain is now triggered by a real UI action, not just a Swagger call
-7. Tenant's `/tenant/dashboard` lists the application; landlord's dashboard still shows rooms only (applicant list UI is pass 0.7.0)
+7. Tenant's `/tenant/dashboard` lists the application, expandable into the real message thread; landlord's dashboard links "Applicants →" per room into the full applicant manager (pass 0.7.0)
 
 **Consistent with the `RoomCard` fix from pass 0.4.0:** every `NgOptimizedImage` usage here (`RoomDetail`'s hero + thumbnails) passes the *raw* stored path to `ngSrc`, never a pre-built URL — verified by grep before this commit, same as last time.
+
+## 17. Applicant manager + messaging (v0.7.0)
+
+**The three emails built-but-unused since pass 0.5.0 are now live:** landlord dashboard → "Applicants →" on any room → `/landlord/rooms/:roomId/applicants`. Opening an applicant card marks it `viewed` (once, idempotently) and fires `sendApplicationViewedEmail`. Shortlist/Accept/Reject buttons fire `sendShortlistedEmail`/`sendAcceptedEmail`/`sendRejectionEmail` respectively.
+
+**Accepting auto-rejects the rest:** `ApplicationsService.accept()` sets the room to `let` and rejects every other still-open applicant for that room with a considerate note, matching the behaviour in the Sprint3 reference. This is a real product decision, not just plumbing — if you don't want that behaviour, it's isolated in `autoRejectOthers()`.
+
+**Messaging thread — the WhatsApp loop is now actually closed:** when a tenant sends an in-app message and the landlord has WhatsApp configured (`PATCH /whatsapp/config`), `MessagesService.send()` calls `WhatsappService.notifyLandlord()`, which now **returns the resulting `wamid`** and records it on the `Message` row. When that landlord replies from WhatsApp, Meta's webhook includes `context.id` = that same `wamid`, so `WhatsappService.handleIncomingWebhook()` can genuinely find the matching `Message` and file the reply into the correct thread — this was an open honesty note in pass 0.5.0's README and is resolved here, not worked around.
+
+**Test it end-to-end:** apply as a tenant (0.6.0's flow) → as the landlord, open Applicants → expand the applicant → send a message → (if `WHATSAPP_*` env vars are set) the landlord's phone gets a WhatsApp message with a `context.id` your webhook can match on a real reply.

@@ -10,6 +10,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ApplicationsModule } from './modules/applications/applications.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
+import { MessagesModule } from './modules/messages/messages.module';
 
 /**
  * Root module — foundation release.
@@ -34,6 +35,7 @@ import { UploadsModule } from './modules/uploads/uploads.module';
     WhatsappModule,
     ApplicationsModule,
     UploadsModule,
+    MessagesModule,
   ],
   controllers: [HealthController],
 })

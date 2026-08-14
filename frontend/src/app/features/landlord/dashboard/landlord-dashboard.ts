@@ -36,9 +36,13 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
                 <p style="font-size:.8rem;color:#7A6E60;margin-top:.2rem">
                   {{ room.rentCents | zarCents:'monthly' }} · {{ room.locationDisplay }} ·
                   <span [style.color]="room.status === 'active' ? '#3D7040' : '#7A6E60'">{{ room.status }}</span>
+                  · {{ room.applicationCount }} applicant{{ room.applicationCount !== 1 ? 's' : '' }}
                 </p>
               </div>
-              <a [routerLink]="['/rooms', room.id]" style="font-size:.8rem">View →</a>
+              <div style="display:flex;gap:.75rem">
+                <a [routerLink]="['/landlord/rooms', room.id, 'applicants']" style="font-size:.8rem">Applicants →</a>
+                <a [routerLink]="['/rooms', room.id]" style="font-size:.8rem">View →</a>
+              </div>
             </div>
           }
         </div>

@@ -12,5 +12,10 @@ export const LANDLORD_ROUTES: Routes = [
     loadComponent: () => import('./create-room/create-room').then((m) => m.CreateRoom),
     title: 'List a Room — RentBoard',
   },
+  {
+    path: 'rooms/:roomId/applicants',
+    loadComponent: () => import('./applicants/applicants').then((m) => m.Applicants),
+    title: 'Applicants — RentBoard',
+  },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];

@@ -16,4 +16,25 @@ export class ApplicationsService {
   getMyApplications(): Observable<Application[]> {
     return this.http.get<Application[]>(`${this.api}/applications/mine`);
   }
+
+  // ── Landlord: applicant manager ──
+  getRoomApplications(roomId: string): Observable<Application[]> {
+    return this.http.get<Application[]>(`${this.api}/applications/room/${roomId}`);
+  }
+
+  markViewed(applicationId: string): Observable<Application> {
+    return this.http.post<Application>(`${this.api}/applications/${applicationId}/view`, {});
+  }
+
+  shortlist(applicationId: string): Observable<Application> {
+    return this.http.post<Application>(`${this.api}/applications/${applicationId}/shortlist`, {});
+  }
+
+  accept(applicationId: string): Observable<Application> {
+    return this.http.post<Application>(`${this.api}/applications/${applicationId}/accept`, {});
+  }
+
+  reject(applicationId: string, reason?: string): Observable<Application> {
+    return this.http.post<Application>(`${this.api}/applications/${applicationId}/reject`, { reason });
+  }
 }

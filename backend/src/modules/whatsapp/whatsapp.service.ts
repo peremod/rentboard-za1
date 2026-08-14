@@ -44,14 +44,17 @@ export class WhatsappService {
    * Sends a plain-text notification to a landlord who has opted in.
    * Silently no-ops if the landlord hasn't configured WhatsApp — this is a
    * bonus channel on top of email, never the only notification sent.
+   * Returns the resulting WhatsApp message ID (wamid) so the caller can
+   * record it on a Message row — this is what lets a landlord's reply be
+   * matched back to the right conversation thread by handleIncomingWebhook().
    */
-  async notifyLandlord(landlordProfileId: string, message: string): Promise<void> {
+  async notifyLandlord(landlordProfileId: string, message: string): Promise<string | null> {
     const config = await this.getConfig(landlordProfileId);
-    if (!config?.waEnabled) return;
+    if (!config?.waEnabled) return null;
 
     if (!this.phoneNumberId || !this.accessToken) {
       this.logger.warn('WhatsApp API credentials not configured — skipping send (email notification still applies)');
-      return;
+      return null;
     }
 
     try {
@@ -67,13 +70,18 @@ export class WhatsappService {
       });
       if (!res.ok) throw new Error(`WhatsApp API responded ${res.status}: ${await res.text()}`);
 
+      const data = await res.json();
+      const wamid: string | null = data?.messages?.[0]?.id ?? null;
+
       await this.prisma.landlordWhatsappConfig.update({
         where: { landlordId: landlordProfileId },
         data: { totalMessagesSent: { increment: 1 } },
       });
+      return wamid;
     } catch (err) {
       this.logger.error('WhatsApp send failed — notification still delivered via email', err as Error);
       // Never throw — WhatsApp is a bonus channel; failure here must not fail the caller.
+      return null;
     }
   }
 
@@ -85,15 +93,13 @@ export class WhatsappService {
 
   /**
    * POST /whatsapp/webhook — incoming message/status-update payloads from Meta.
-   * A real reply is matched to its thread via the `context.id` field Meta
-   * includes when a landlord replies to our outbound message; we store it as
-   * a new Message on the matching Application if one can be found.
-   *
-   * NOTE: matching an inbound WhatsApp reply back to a specific Application
-   * is only reliable once outbound sends record the resulting wamid against
-   * a Message row — that wiring lands with the Applications API pass
-   * (0.6.0/0.7.0). Until then this safely logs and no-ops on replies it
-   * can't confidently match, rather than mis-filing a message.
+   * A landlord's reply is matched to its thread via the `context.id` field
+   * Meta includes when they reply to our outbound message — MessagesService
+   * (added in pass 0.7.0) records that outbound wamid on the Message row it
+   * created, which is what makes the lookup below succeed. Any reply whose
+   * context.id we don't recognise (e.g. sent before this pass, or a fresh
+   * WhatsApp conversation with no prior thread) is safely logged and
+   * skipped rather than mis-filed into the wrong conversation.
    */
   async handleIncomingWebhook(body: any): Promise<void> {
     const entry = body?.entry?.[0]?.changes?.[0]?.value;
