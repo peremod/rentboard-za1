@@ -4,6 +4,7 @@ import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ConfigService } from '@nestjs/config';
 import { SendMessageDto } from './dto/send-message.dto';
+import { sanitizeText } from '../../common/utils/sanitize.util';
 
 /**
  * In-app conversation thread, one per Application. Every message also
@@ -33,9 +34,10 @@ export class MessagesService {
     const application = await this.getParticipantApplication(applicationId, senderId);
     const isTenantSending = senderId === application.tenantId;
     const recipient = isTenantSending ? application.room.landlord : application.tenant;
+    const body = sanitizeText(dto.body);
 
     const message = await this.prisma.message.create({
-      data: { applicationId, senderId, body: dto.body, channel: 'rentboard' },
+      data: { applicationId, senderId, body, channel: 'rentboard' },
     });
 
     const sender = await this.prisma.user.findUniqueOrThrow({ where: { id: senderId } });
@@ -44,7 +46,7 @@ export class MessagesService {
     await this.notifications.sendNewMessageEmail(recipient.email, {
       recipientName: recipient.fullName,
       senderName: sender.fullName,
-      messagePreview: dto.body.slice(0, 140),
+      messagePreview: body.slice(0, 140),
       messagesUrl,
     });
 
@@ -53,7 +55,7 @@ export class MessagesService {
     if (isTenantSending && application.room.landlord.landlordProfile) {
       const wamid = await this.whatsapp.notifyLandlord(
         application.room.landlord.landlordProfile.id,
-        `💬 ${sender.fullName}: ${dto.body.slice(0, 300)}`,
+        `💬 ${sender.fullName}: ${body.slice(0, 300)}`,
       );
       if (wamid) {
         await this.prisma.message.update({ where: { id: message.id }, data: { waMessageId: wamid } });

@@ -5,6 +5,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
+import { sanitizeText } from '../../common/utils/sanitize.util';
 
 /**
  * Applications — create (0.5.0) + the full status lifecycle (this pass).
@@ -35,7 +36,9 @@ export class ApplicationsService {
     if (existing) throw new ConflictException('You have already applied for this room');
 
     const [application, tenant] = await Promise.all([
-      this.prisma.application.create({ data: { roomId: dto.roomId, tenantId, coverNote: dto.coverNote } }),
+      this.prisma.application.create({
+        data: { roomId: dto.roomId, tenantId, coverNote: dto.coverNote ? sanitizeText(dto.coverNote) : dto.coverNote },
+      }),
       this.prisma.user.findUniqueOrThrow({ where: { id: tenantId } }),
     ]);
 
@@ -154,7 +157,7 @@ export class ApplicationsService {
     await this.notifications.sendRejectionEmail(tenant.email, {
       tenantName: tenant.fullName,
       roomTitle: application.room.title,
-      reason: dto.reason,
+      reason: dto.reason ? sanitizeText(dto.reason) : dto.reason,
       searchUrl: `${this.config.get<string>('frontendUrl')}/?province=${encodeURIComponent(application.room.province)}`,
     });
     return updated;

@@ -4,6 +4,7 @@ import { RoomFiltersDto } from './dto/room-filters.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { RelistDto } from './dto/relist.dto';
+import { sanitizeText } from '../../common/utils/sanitize.util';
 
 /** Free plan: max 2 active rooms — enforced on create() and relist(). */
 const FREE_PLAN_ROOM_LIMIT = 2;
@@ -71,7 +72,14 @@ export class RoomsService {
   async create(dto: CreateRoomDto, landlordId: string) {
     await this.enforcePlanLimit(landlordId);
     return this.prisma.room.create({
-      data: { ...dto, availableFrom: new Date(dto.availableFrom), landlordId, status: 'draft' },
+      data: {
+        ...dto,
+        title: sanitizeText(dto.title),
+        description: dto.description ? sanitizeText(dto.description) : dto.description,
+        availableFrom: new Date(dto.availableFrom),
+        landlordId,
+        status: 'draft',
+      },
     });
   }
 
@@ -79,7 +87,12 @@ export class RoomsService {
     await this.assertOwner(id, landlordId);
     return this.prisma.room.update({
       where: { id },
-      data: { ...dto, ...(dto.availableFrom && { availableFrom: new Date(dto.availableFrom) }) },
+      data: {
+        ...dto,
+        ...(dto.title && { title: sanitizeText(dto.title) }),
+        ...(dto.description && { description: sanitizeText(dto.description) }),
+        ...(dto.availableFrom && { availableFrom: new Date(dto.availableFrom) }),
+      },
     });
   }
 

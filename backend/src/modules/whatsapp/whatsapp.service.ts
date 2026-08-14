@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateWhatsappConfigDto } from './dto/update-whatsapp-config.dto';
+import { sanitizeText } from '../../common/utils/sanitize.util';
 
 /**
  * WhatsApp Business API bridge (Meta Cloud API).
@@ -123,7 +124,7 @@ export class WhatsappService {
         applicationId: originalMessage.applicationId,
         senderId: originalMessage.senderId,
         channel: 'whatsapp',
-        body: message.text?.body ?? '[unsupported message type]',
+        body: sanitizeText(message.text?.body ?? '[unsupported message type]'),
         waMessageId: message.id,
       },
     });

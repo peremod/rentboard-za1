@@ -1,11 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
+import { escapeHtml } from '../../common/utils/escape-html.util';
 
 /**
  * All transactional email — 6 templates, matching the room application
  * lifecycle. Inline HTML for maximum email-client compatibility (Gmail/
  * Outlook strip <style> tags in the <head>).
+ *
+ * SECURITY: every dynamic value below is passed through escapeHtml() at the
+ * point of interpolation, no exceptions. These templates are raw HTML
+ * strings sent to a recipient's mail client, which renders HTML by default —
+ * an unescaped value (a tenant's name, a message preview, a rejection
+ * reason) is a direct stored/reflected XSS vector into someone's inbox.
+ * This was an open finding until this pass — see PRE-LAUNCH-CHECKLIST.md.
  *
  * Resend free tier: 3,000 emails/month — see Capacity Analysis doc for
  * the upgrade trigger (>2,500/month).
@@ -25,10 +33,13 @@ export class NotificationsService {
 
   /** 1. Landlord — new application received. */
   async sendNewApplicationEmail(to: string, d: { landlordName: string; tenantName: string; roomTitle: string; applicationId: string }) {
+    const landlordName = escapeHtml(d.landlordName);
+    const tenantName = escapeHtml(d.tenantName);
+    const roomTitle = escapeHtml(d.roomTitle);
     await this.send(to, `${d.tenantName} applied for your room`, this.wrap(`
       <h1>New application received</h1>
-      <p>Hi ${d.landlordName},</p>
-      <p><strong>${d.tenantName}</strong> has applied for: <strong>${d.roomTitle}</strong></p>
+      <p>Hi ${landlordName},</p>
+      <p><strong>${tenantName}</strong> has applied for: <strong>${roomTitle}</strong></p>
       <a href="${this.frontend}/landlord/dashboard" class="btn">View application →</a>
       <p class="muted">💡 Landlords who reply within 24 hours receive 3× more applications.</p>
     `));
@@ -36,33 +47,40 @@ export class NotificationsService {
 
   /** 2. Tenant — landlord viewed the application. */
   async sendApplicationViewedEmail(to: string, d: { tenantName: string; roomTitle: string; applicationId: string }) {
+    const tenantName = escapeHtml(d.tenantName);
+    const roomTitle = escapeHtml(d.roomTitle);
     await this.send(to, 'The landlord has viewed your application', this.wrap(`
       <h1>👀 Your application was viewed</h1>
-      <p>Hi ${d.tenantName},</p>
-      <p>The landlord has viewed your application for <strong>${d.roomTitle}</strong>.</p>
+      <p>Hi ${tenantName},</p>
+      <p>The landlord has viewed your application for <strong>${roomTitle}</strong>.</p>
       <a href="${this.frontend}/tenant/dashboard" class="btn">View your application →</a>
     `));
   }
 
   /** 3. Tenant — shortlisted. */
   async sendShortlistedEmail(to: string, d: { tenantName: string; roomTitle: string; applicationId: string }) {
+    const tenantName = escapeHtml(d.tenantName);
+    const roomTitle = escapeHtml(d.roomTitle);
     await this.send(to, "🎉 You've been shortlisted for a room!", this.wrap(`
       <h1>You've been shortlisted!</h1>
-      <p>Hi ${d.tenantName},</p>
-      <p>The landlord has shortlisted you for <strong>${d.roomTitle}</strong>. Message them to arrange a viewing.</p>
+      <p>Hi ${tenantName},</p>
+      <p>The landlord has shortlisted you for <strong>${roomTitle}</strong>. Message them to arrange a viewing.</p>
       <a href="${this.frontend}/tenant/dashboard" class="btn btn--green">💬 Message the landlord →</a>
     `));
   }
 
   /** 4. Tenant — accepted, with move-in partner offers (broadband/insurance/removals). */
   async sendAcceptedEmail(to: string, d: { tenantName: string; roomTitle: string; rentCents: number; city: string }) {
+    const tenantName = escapeHtml(d.tenantName);
+    const roomTitle = escapeHtml(d.roomTitle);
+    const city = escapeHtml(d.city);
     const rand = new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 0 }).format(d.rentCents / 100);
     await this.send(to, "✅ Congratulations — you've got the room!", this.wrap(`
       <h1>You've got the room! 🏠</h1>
-      <p>Hi ${d.tenantName},</p>
-      <p>Congratulations! The landlord accepted your application for <strong>${d.roomTitle}</strong> at <strong>${rand}/mo</strong>.</p>
+      <p>Hi ${tenantName},</p>
+      <p>Congratulations! The landlord accepted your application for <strong>${roomTitle}</strong> at <strong>${rand}/mo</strong>.</p>
       <div class="box">
-        <p style="font-weight:700;margin-bottom:10px">Moving to ${d.city} — your checklist</p>
+        <p style="font-weight:700;margin-bottom:10px">Moving to ${city} — your checklist</p>
         <p>📶 Set up broadband · 🛡️ Contents insurance · 🚛 Book a removal van</p>
         <p class="muted">Compare partner offers from your dashboard.</p>
       </div>
@@ -71,21 +89,27 @@ export class NotificationsService {
 
   /** 5. Tenant — kind rejection with a link back to similar rooms. */
   async sendRejectionEmail(to: string, d: { tenantName: string; roomTitle: string; reason?: string; searchUrl: string }) {
+    const tenantName = escapeHtml(d.tenantName);
+    const roomTitle = escapeHtml(d.roomTitle);
+    const reason = d.reason ? escapeHtml(d.reason) : undefined;
     await this.send(to, `Update on your application for ${d.roomTitle}`, this.wrap(`
       <h1>Update on your application</h1>
-      <p>Hi ${d.tenantName},</p>
-      <p>Unfortunately the landlord has chosen another applicant for <strong>${d.roomTitle}</strong>. This is common and isn't a reflection on your application.</p>
-      ${d.reason ? `<p class="quote">"${d.reason}"</p>` : ''}
+      <p>Hi ${tenantName},</p>
+      <p>Unfortunately the landlord has chosen another applicant for <strong>${roomTitle}</strong>. This is common and isn't a reflection on your application.</p>
+      ${reason ? `<p class="quote">"${reason}"</p>` : ''}
       <a href="${d.searchUrl}" class="btn">Browse similar rooms →</a>
     `));
   }
 
   /** 6. Both directions — new in-platform message. */
   async sendNewMessageEmail(to: string, d: { recipientName: string; senderName: string; messagePreview: string; messagesUrl: string }) {
+    const recipientName = escapeHtml(d.recipientName);
+    const senderName = escapeHtml(d.senderName);
+    const messagePreview = escapeHtml(d.messagePreview);
     await this.send(to, `💬 ${d.senderName} sent you a message`, this.wrap(`
-      <h1>New message from ${d.senderName}</h1>
-      <p>Hi ${d.recipientName},</p>
-      <div class="quote">"${d.messagePreview}"</div>
+      <h1>New message from ${senderName}</h1>
+      <p>Hi ${recipientName},</p>
+      <div class="quote">"${messagePreview}"</div>
       <a href="${d.messagesUrl}" class="btn">Reply →</a>
     `));
   }

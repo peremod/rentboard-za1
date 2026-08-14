@@ -12,7 +12,7 @@ Legal counts as much as code here: several of these are compliance-critical, not
 |---|---|---|---|
 | 1 | **JWT stored in `localStorage`** — vulnerable to XSS; no refresh mechanism, so a stolen token is valid for its full lifetime | ⬜ Open | `frontend/src/app/core/services/auth.service.ts` |
 | 2 | **No refresh token rotation** — access tokens are long-lived with no way to revoke or rotate | ⬜ Open | `backend/src/modules/auth/` |
-| 3 | **No input sanitisation on free-text fields** — `Message.body`, `Room.description`, `Application.coverNote` are stored raw. `sanitize-html` has been a dependency since pass 0.1.0 and has **never actually been imported or called anywhere** | ⬜ Open | `backend/src/modules/messages/`, `rooms/`, `applications/` |
+| 3 | ~~No input sanitisation on free-text fields~~ | ✅ **Fixed in v0.9.1** | `sanitizeText()` (strips all markup) now applied at every write: `Room.title`/`description`, `Application.coverNote`/rejection `reason`, `Message.body` (both in-app and inbound WhatsApp). **Also fixed a sharper version of the same bug found while tracing this:** every `NotificationsService` email template interpolated user text directly into raw HTML with zero escaping — the actual exploitable path, since mail clients render HTML by default. `escapeHtml()` is now applied to every dynamic value in all 6 templates. |
 | 4 | ~~Missing PAIA manual route~~ | ✅ **Already fixed** | Built in pass 0.3.0 — `frontend/src/app/features/legal/paia/paia.ts`, routed at `/legal/paia` |
 
 ## 🟡 Important — fix before launch
@@ -72,7 +72,7 @@ English is authoritative. Afrikaans and isiZulu are real attempts flagged for na
 
 ## Suggested order of work for pass 1.0.0
 
-1. Input sanitisation (#3) — smallest, highest-severity, no design decisions needed
+1. ~~Input sanitisation (#3)~~ ✅ Done — v0.9.1
 2. Auth hardening (#1, #2) — the biggest piece of actual engineering in this list
 3. Error boundary on lazy routes (#11) — small
 4. Mobile responsive pass on the three dashboard-style pages (#9) — small
