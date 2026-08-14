@@ -291,3 +291,23 @@ Applying `TranslatePipe` throughout the rest of the app (room cards, dashboards,
 - **PgBouncer** — already configured since pass 0.1.0: `backend/.env.example`'s `DATABASE_URL` uses `pgbouncer=true&connection_limit=10` against Supabase's pooled connection port (6543), with `DIRECT_URL` on 5432 for migrations (Prisma requires a direct, non-pooled connection to run `migrate`).
 - **Cache headers on public GETs** — already done since pass 0.3.0: `RoomsController`'s `GET /rooms` and `GET /rooms/:id` carry `Cache-Control: public, s-maxage=...`.
 - **Graceful shutdown** — the actual gap, closed in this pass: `app.enableShutdownHooks()` added to `main.ts`. `PrismaService.onModuleDestroy()` has existed since pass 0.1.0 but never fired without this — Railway/Docker sending `SIGTERM` on every deploy was killing in-flight requests and DB connections mid-operation until now.
+
+## 20. Auth hardening (v0.9.2) — checklist items #1 and #2
+
+**Schema changed again — run a migration:**
+```bash
+cd backend
+npx prisma migrate dev --name refresh-tokens
+```
+
+**What changed and why:**
+- **Access token**: shortened from 24h to **15 minutes** (`JWT_EXPIRES_IN` in `.env.example`), returned in the JSON body, held only in an in-memory Angular signal — never `localStorage`. A page refresh loses it by design.
+- **Refresh token**: a new opaque random value (not a JWT), **stored only as a sha256 hash** in the new `RefreshToken` table, delivered as an **httpOnly, secure, sameSite=strict cookie** scoped to `/api/auth`. No JavaScript — injected or otherwise — can read an httpOnly cookie. This is the actual fix for "JWT stored in localStorage, vulnerable to XSS," not a mitigation around it.
+- **Rotation**: every call to `POST /auth/refresh` revokes the presented token and issues a new one. A refresh token is single-use.
+- **Reuse detection**: if an already-*revoked* token is ever presented again, that can only mean it was stolen (or two requests raced) — `AuthService.refresh()` responds by revoking *every* token for that user, forcing a full re-login. This is the standard mitigation for refresh token theft, implemented, not just documented as a residual risk.
+- **Silent refresh**: `errorInterceptor` catches a 401 on any non-auth endpoint, calls `restoreSession()` once, and retries the original request with the new token — invisible to the person using the app in the common case. Only logs them out if the refresh itself also fails.
+- **Google OAuth token delivery**: moved from the callback's query string to the URL **fragment** (`/auth/callback#token=...`) — fragments are never sent to any server, so the access token no longer has a chance to land in a server access log or a `Referer` header during the redirect.
+
+**Known, stated simplification (not silently cut):** concurrent 401s each trigger their own refresh call rather than sharing one in-flight refresh request. Harmless — rotation is safe to call more than once in quick succession — but not maximally efficient. A shared-refresh-lock is a reasonable follow-up, documented in `errorInterceptor`'s own docblock, not implemented here to keep the change reviewable.
+
+**Test it:** log in, wait 15+ minutes (or temporarily set `JWT_EXPIRES_IN=10s` to test faster), then do anything that hits the API — it should silently refresh and succeed, with no visible interruption. Log out, then try presenting the old refresh cookie again (e.g. via `curl` with a saved cookie) — it should be rejected, and a fresh login should still work normally (only that one token's family was revoked, not the account).

@@ -1,11 +1,15 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 
 /**
- * Handles the redirect back from Google OAuth: /auth/callback?token=...&returnUrl=...
- * Exchanges the token for the user record, then redirects to returnUrl (if set)
- * or the role-appropriate dashboard.
+ * Handles the redirect back from Google OAuth: /auth/callback#token=...&returnUrl=...
+ *
+ * The access token arrives in the URL FRAGMENT (after #), not the query
+ * string — deliberate, since fragments are never sent to any server and
+ * never appear in server access logs or Referer headers (auth hardening,
+ * v0.9.2). Read once here via window.location.hash and never persisted —
+ * handleGoogleCallback() puts it straight into the in-memory-only signal.
  */
 @Component({
   selector: 'app-auth-callback',
@@ -20,11 +24,11 @@ import { AuthService } from '../../../core/services/auth.service';
 export class AuthCallback implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
-  private route = inject(ActivatedRoute);
 
   ngOnInit() {
-    const token = this.route.snapshot.queryParams['token'];
-    const returnUrl = this.route.snapshot.queryParams['returnUrl'] ?? null;
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const token = params.get('token');
+    const returnUrl = params.get('returnUrl');
 
     if (!token) {
       this.router.navigate(['/auth/login'], { queryParams: { error: 'google_auth_failed' } });

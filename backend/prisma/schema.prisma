@@ -10,7 +10,8 @@
 //
 // Growth log: User/LandlordProfile/TenantProfile/Room (v0.1.0) →
 // Application/Message/LandlordWhatsappConfig (v0.5.0) →
-// RoomBoost/RentersPassport (v0.8.0, this pass) — see README §Roadmap.
+// RoomBoost/RentersPassport (v0.8.0) → RefreshToken (v0.9.2, this pass,
+// auth hardening) — see README §Roadmap.
 // ═══════════════════════════════════════════════════════════
 
 generator client {
@@ -74,6 +75,7 @@ model User {
   applications    Application[]
   messagesSent    Message[]
   rentersPassport RentersPassport?
+  refreshTokens   RefreshToken[]
 
   @@index([email])
   @@index([role])
@@ -285,4 +287,23 @@ model RentersPassport {
   updatedAt              DateTime       @updatedAt
 
   @@map("renters_passports")
+}
+
+/// Refresh tokens — opaque random values, only ever stored HASHED (sha256).
+/// Rotated on every use: presenting a token revokes it and issues a new one.
+/// If a REVOKED token is ever presented again, that's a signal of theft
+/// (someone replayed an old value) — AuthService responds by revoking every
+/// token for that user, forcing a full re-login. See README §20.
+model RefreshToken {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  replacedById  String?   @unique
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
 }

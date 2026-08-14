@@ -4,6 +4,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -27,6 +28,7 @@ async function bootstrap() {
     },
   }));
   app.use(compression({ threshold: 1024 }));
+  app.use(cookieParser());
 
   app.enableCors({
     origin: isProduction

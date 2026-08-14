@@ -20,9 +20,9 @@ export class App implements OnInit {
   private auth = inject(AuthService);
 
   ngOnInit() {
-    // Sync user from server on startup; refreshUser() logs out silently if the token is stale.
-    if (this.auth.token()) {
-      this.auth.refreshUser()?.subscribe();
-    }
+    // No token is ever persisted client-side (auth hardening, v0.9.2) — the
+    // only way to know if there's a session is to ask the server, via the
+    // httpOnly refresh cookie. Silently does nothing if there isn't one.
+    this.auth.restoreSession().subscribe();
   }
 }
