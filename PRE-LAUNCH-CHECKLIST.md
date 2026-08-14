@@ -9,7 +9,7 @@
 | **Legal filing** | PAIA manual must be filed with the SAHRC (Form 2, no fee) | Yes — legal requirement |
 | **Legal content** | `[PLACEHOLDER]` company name, CIPC number, address, Information Officer name/reg. number in the legal pages | Yes — have an attorney review while you're at it |
 | **GitHub settings** | Branch protection rules to actually enforce the squash-merge policy `CONTRIBUTING.md` describes | Recommended, not launch-blocking |
-| **Stripe Dashboard** | Create the 7 real Products/Prices; get the webhook signing secret | Yes — payments literally won't work without these |
+| **Stripe Dashboard** | ~~Create the 7 real Products/Prices; get the webhook signing secret~~ Not needed right now — billing is deliberately paused (see "Temporarily disabled" below), free tier only | No — paused by request |
 | **Third-party credentials** | ImageKit, Resend, WhatsApp Business API, Google OAuth | Partial — photo upload and email need theirs; WhatsApp and Google login are optional |
 | **KYC integration** | Renter's Passport verification (ID/income) is payment-only — no verification provider integrated | No — sell the subscription, verify manually, exactly as the UI already says |
 | **Translation** | 8 of 11 official languages are honest English-fallback stubs | No — English works, switcher just shouldn't claim those 8 yet |
@@ -88,8 +88,26 @@ English is authoritative. Afrikaans and isiZulu are real attempts flagged for na
 
 ---
 
-## Suggested order of work for pass 1.0.0
+## Temporarily disabled (by request, not a fix)
 
+**Billing (Stripe + Renter's Passport) is paused.** Every landlord is on an unlimited free tier: unlimited listings, up to 20 photos/room, one-click relist. This is a deliberate, reversible flag flip, not a rollback of the v0.8.0 work — nothing was deleted.
+
+| What | How it's disabled | To re-enable |
+|---|---|---|
+| Stripe module (checkout, webhooks, boosts, passport) | `StripeModule` import + registration commented out in `backend/src/app.module.ts` | Uncomment both lines |
+| Room-count cap | `enforcePlanLimit()` commented out in `RoomsService`, call sites removed | Uncomment the method + both call sites (in `create()` and `relist()`) |
+| Upgrade / Boost / Passport UI | Gated behind `BILLING_ENABLED` in `frontend/src/app/core/config/feature-flags.ts` | Flip `BILLING_ENABLED` to `true` |
+| Upgrade / Passport routes | `billingEnabledGuard` redirects away while the flag is off | Same flag flip — the guard checks it directly |
+
+**Two real bugs found and fixed while doing this work, unrelated to the disable itself:**
+1. `UpdateRoomDto` never declared `heroImagePath`/`imagePaths` as valid fields, despite the create-room wizard sending exactly those on the photo-save step. With `forbidNonWhitelisted: true` globally, this meant **every photo save via the wizard should have been rejected with a 400** since pass 0.6.0. Fixed by properly declaring both fields with validation (`@ArrayMaxSize(19)` for the gallery, enforcing the new 20-photo cap at the same time).
+2. **One-click relist had no UI at all** — the backend endpoint and the Angular service method both existed since pass 0.3.0/0.4.0, but nothing on any dashboard ever called `relistRoom()`. Built the missing UI: `LandlordDashboard` now shows let (archived) rooms with a working Relist button.
+
+The 20-photo cap is enforced in three independent places: `PhotoUpload` (client, stops accepting uploads at the limit), `CreateRoomDto`/`UpdateRoomDto` (`@ArrayMaxSize`, rejects with a clean validation error), and `RoomsService.assertPhotoLimit()` (defense in depth, technically redundant given the DTO check but kept deliberately).
+
+---
+
+## Suggested order of work for pass 1.0.0 (all done — kept for history)
 1. ~~Input sanitisation (#3)~~ ✅ Done — v0.9.1
 2. ~~Auth hardening (#1, #2)~~ ✅ Done — v0.9.2
 3. ~~Error boundary on lazy routes (#11)~~ ✅ Done — v0.9.3

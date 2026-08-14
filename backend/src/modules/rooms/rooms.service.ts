@@ -6,8 +6,17 @@ import { UpdateRoomDto } from './dto/update-room.dto';
 import { RelistDto } from './dto/relist.dto';
 import { sanitizeText } from '../../common/utils/sanitize.util';
 
-/** Free plan: max 2 active rooms — enforced on create() and relist(). */
-const FREE_PLAN_ROOM_LIMIT = 2;
+/**
+ * Billing is temporarily disabled (see StripeModule — commented out of
+ * AppModule) — every landlord is effectively on an unlimited free tier
+ * for now. FREE_PLAN_ROOM_LIMIT / enforcePlanLimit() are kept in the file,
+ * just unused, so re-enabling billing later is a small, obvious diff
+ * rather than reconstructing this from scratch. See PRE-LAUNCH-CHECKLIST.md.
+ */
+// const FREE_PLAN_ROOM_LIMIT = 2;
+
+/** Max photos per room while on the (temporary, unlimited) free tier. */
+const MAX_PHOTOS_PER_ROOM = 20;
 /** Landlord can undo a mark-as-let within this window. */
 const UNDO_LET_WINDOW_MINUTES = 30;
 
@@ -70,7 +79,8 @@ export class RoomsService {
   }
 
   async create(dto: CreateRoomDto, landlordId: string) {
-    await this.enforcePlanLimit(landlordId);
+    // Billing paused — no per-landlord room-count limit while on the
+    // temporary unlimited free tier. See file header comment.
     return this.prisma.room.create({
       data: {
         ...dto,
@@ -85,6 +95,7 @@ export class RoomsService {
 
   async update(id: string, dto: UpdateRoomDto, landlordId: string) {
     await this.assertOwner(id, landlordId);
+    this.assertPhotoLimit(dto.imagePaths);
     return this.prisma.room.update({
       where: { id },
       data: {
@@ -94,6 +105,15 @@ export class RoomsService {
         ...(dto.availableFrom && { availableFrom: new Date(dto.availableFrom) }),
       },
     });
+  }
+
+  /** Photo cap — the free tier's stated limit is 20 photos per room. Defense in depth alongside the frontend's own cap in PhotoUpload. */
+  private assertPhotoLimit(imagePaths: string[] | undefined) {
+    if (imagePaths && imagePaths.length > MAX_PHOTOS_PER_ROOM - 1) {
+      // -1 because heroImagePath is stored separately from imagePaths (the
+      // gallery) — together they must not exceed MAX_PHOTOS_PER_ROOM.
+      throw new BadRequestException(`A room can have at most ${MAX_PHOTOS_PER_ROOM} photos (1 cover + ${MAX_PHOTOS_PER_ROOM - 1} gallery).`);
+    }
   }
 
   /** Publish a draft — requires a cover photo and a real description first. */
@@ -138,7 +158,7 @@ export class RoomsService {
     if (room.status !== 'let' && room.status !== 'paused') {
       throw new BadRequestException('Only let or paused rooms can be relisted');
     }
-    await this.enforcePlanLimit(landlordId);
+    // Billing paused — no plan-limit check here either. See file header comment.
 
     return this.prisma.room.update({
       where: { id },
@@ -175,17 +195,22 @@ export class RoomsService {
     return room;
   }
 
-  private async enforcePlanLimit(landlordId: string) {
-    const profile = await this.prisma.landlordProfile.findUnique({ where: { userId: landlordId } });
-    if (profile?.planTier !== 'free') return;
-
-    const count = await this.prisma.room.count({
-      where: { landlordId, status: { in: ['active', 'draft', 'reserved'] } },
-    });
-    if (count >= FREE_PLAN_ROOM_LIMIT) {
-      throw new ForbiddenException(
-        `Free plan allows up to ${FREE_PLAN_ROOM_LIMIT} active rooms. Upgrade to Pro for unlimited listings.`,
-      );
-    }
-  }
+  // Kept for when billing is re-enabled — see file header comment and
+  // PRE-LAUNCH-CHECKLIST.md. Re-enabling: uncomment this, uncomment
+  // FREE_PLAN_ROOM_LIMIT above, and restore the two call sites in
+  // create() and relist().
+  //
+  // private async enforcePlanLimit(landlordId: string) {
+  //   const profile = await this.prisma.landlordProfile.findUnique({ where: { userId: landlordId } });
+  //   if (profile?.planTier !== 'free') return;
+  //
+  //   const count = await this.prisma.room.count({
+  //     where: { landlordId, status: { in: ['active', 'draft', 'reserved'] } },
+  //   });
+  //   if (count >= FREE_PLAN_ROOM_LIMIT) {
+  //     throw new ForbiddenException(
+  //       `Free plan allows up to ${FREE_PLAN_ROOM_LIMIT} active rooms. Upgrade to Pro for unlimited listings.`,
+  //     );
+  //   }
+  // }
 }

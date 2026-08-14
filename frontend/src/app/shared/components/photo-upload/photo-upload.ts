@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
 import { UploadsService } from '../../../core/services/uploads.service';
+import { MAX_PHOTOS_PER_ROOM } from '../../../core/config/feature-flags';
 
 export interface UploadedPhoto {
   path: string;
@@ -18,11 +19,15 @@ export interface UploadedPhoto {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="photo-upload">
-      <div class="photo-upload__dropzone" (click)="fileInput.click()" (dragover)="$event.preventDefault()" (drop)="onDrop($event)">
-        <input #fileInput type="file" accept="image/jpeg,image/png,image/webp" multiple hidden (change)="onFileSelect($event)"/>
-        <p>📷 Click or drag photos here</p>
-        <p class="muted">JPEG, PNG or WebP, up to 8MB each. First photo becomes the cover.</p>
-      </div>
+      @if (photos().length < maxPhotos) {
+        <div class="photo-upload__dropzone" (click)="fileInput.click()" (dragover)="$event.preventDefault()" (drop)="onDrop($event)">
+          <input #fileInput type="file" accept="image/jpeg,image/png,image/webp" multiple hidden (change)="onFileSelect($event)"/>
+          <p>📷 Click or drag photos here</p>
+          <p class="muted">JPEG, PNG or WebP, up to 8MB each. First photo becomes the cover. {{ maxPhotos - photos().length }} of {{ maxPhotos }} remaining.</p>
+        </div>
+      } @else {
+        <p class="muted">Maximum of {{ maxPhotos }} photos reached. Remove one to add another.</p>
+      }
 
       @if (error()) { <p class="error">{{ error() }}</p> }
 
@@ -61,6 +66,7 @@ export class PhotoUpload {
   folder = input.required<string>();
   photosChange = output<UploadedPhoto[]>();
 
+  maxPhotos = MAX_PHOTOS_PER_ROOM;
   photos = signal<UploadedPhoto[]>([]);
   uploading = signal(false);
   error = signal<string | null>(null);
@@ -84,6 +90,10 @@ export class PhotoUpload {
   private async handleFiles(files: File[]) {
     this.error.set(null);
     for (const file of files) {
+      if (this.photos().length >= this.maxPhotos) {
+        this.error.set(`Maximum of ${this.maxPhotos} photos per room.`);
+        break;
+      }
       const validationError = this.uploadsService.validateImage(file);
       if (validationError) {
         this.error.set(validationError);

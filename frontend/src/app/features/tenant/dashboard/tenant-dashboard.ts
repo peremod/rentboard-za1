@@ -5,6 +5,7 @@ import { ApplicationsService } from '../../../core/services/applications.service
 import { Application } from '../../../core/models/application.model';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { MessageThread } from '../../../shared/components/message-thread/message-thread';
+import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 
 @Component({
   selector: 'app-tenant-dashboard',
@@ -20,7 +21,9 @@ import { MessageThread } from '../../../shared/components/message-thread/message
 
       <div class="dashboard__links">
         <a routerLink="/">← Browse more rooms</a>
-        <a routerLink="/tenant/passport">🪪 Get your Renter's Passport</a>
+        @if (billingEnabled) {
+          <a routerLink="/tenant/passport">🪪 Get your Renter's Passport</a>
+        }
       </div>
       <h2 class="dashboard__section-title">Your applications</h2>
 
@@ -77,6 +80,8 @@ import { MessageThread } from '../../../shared/components/message-thread/message
 export class TenantDashboard implements OnInit {
   auth = inject(AuthService);
   private applicationsService = inject(ApplicationsService);
+
+  billingEnabled = BILLING_ENABLED;
 
   applications = signal<Application[]>([]);
   loading = signal(true);

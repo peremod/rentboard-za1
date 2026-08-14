@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { billingEnabledGuard } from '../../core/guards/billing-enabled.guard';
 
 /** Tenant portal — guarded by [authGuard, tenantGuard] at the parent route in app.routes.ts. */
 export const TENANT_ROUTES: Routes = [
@@ -9,6 +10,7 @@ export const TENANT_ROUTES: Routes = [
   },
   {
     path: 'passport',
+    canActivate: [billingEnabledGuard],
     loadComponent: () => import('./passport/passport').then((m) => m.Passport),
     title: "Renter's Passport — RentBoard",
   },

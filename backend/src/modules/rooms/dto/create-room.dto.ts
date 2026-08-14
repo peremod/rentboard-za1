@@ -1,6 +1,14 @@
-import { IsString, IsEnum, IsInt, Min, IsOptional, IsBoolean, IsDateString, MaxLength, MinLength, IsIn } from 'class-validator';
+import { IsString, IsEnum, IsInt, Min, IsOptional, IsBoolean, IsDateString, MaxLength, MinLength, IsIn, IsArray, ArrayMaxSize } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SA_PROVINCES } from './room-filters.dto';
+
+/**
+ * Free-tier photo cap: 1 cover (heroImagePath) + 19 gallery photos
+ * (imagePaths) = 20 total. Mirrors the frontend's PhotoUpload cap and
+ * RoomsService.assertPhotoLimit() — three independent enforcement points
+ * for the same stated limit, not just a UI-level suggestion.
+ */
+const MAX_GALLERY_PHOTOS = 19;
 
 export class CreateRoomDto {
   @ApiProperty({ enum: ['shared_house', 'en_suite', 'studio', 'private'] })
@@ -31,4 +39,12 @@ export class CreateRoomDto {
   @ApiPropertyOptional({ default: false }) @IsOptional() @IsBoolean() dssAccepted?: boolean;
   @ApiPropertyOptional({ default: false }) @IsOptional() @IsBoolean() guarantorAccepted?: boolean;
   @ApiPropertyOptional({ default: false }) @IsOptional() @IsBoolean() petsAllowed?: boolean;
+
+  @ApiPropertyOptional({ description: 'ImageKit path — the room cover photo' })
+  @IsOptional() @IsString() @MaxLength(500)
+  heroImagePath?: string;
+
+  @ApiPropertyOptional({ description: `Gallery photo paths, max ${MAX_GALLERY_PHOTOS} (20 total with the cover)`, type: [String] })
+  @IsOptional() @IsArray() @ArrayMaxSize(MAX_GALLERY_PHOTOS) @IsString({ each: true })
+  imagePaths?: string[];
 }

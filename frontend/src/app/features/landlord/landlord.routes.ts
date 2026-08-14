@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { billingEnabledGuard } from '../../core/guards/billing-enabled.guard';
 
 /** Landlord portal — guarded by [authGuard, landlordGuard] at the parent route in app.routes.ts. */
 export const LANDLORD_ROUTES: Routes = [
@@ -19,6 +20,7 @@ export const LANDLORD_ROUTES: Routes = [
   },
   {
     path: 'upgrade',
+    canActivate: [billingEnabledGuard],
     loadComponent: () => import('./upgrade/upgrade').then((m) => m.Upgrade),
     title: 'Upgrade Your Plan — RentBoard',
   },

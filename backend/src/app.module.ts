@@ -11,11 +11,15 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ApplicationsModule } from './modules/applications/applications.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { MessagesModule } from './modules/messages/messages.module';
-import { StripeModule } from './modules/stripe/stripe.module';
+// Billing temporarily disabled (Stripe + Renter's Passport paused) — see
+// PRE-LAUNCH-CHECKLIST.md "Temporarily disabled" section. Uncomment this
+// import and the registration below, plus StripeController's endpoints in
+// the frontend, to re-enable.
+// import { StripeModule } from './modules/stripe/stripe.module';
 
 /**
  * Root module — foundation release.
- * Feature modules (Auth, Rooms, Applications, Messages, Stripe, WhatsApp...)
+ * Feature modules (Auth, Rooms, Applications, Messages, WhatsApp...)
  * are added incrementally; see README §Roadmap for the build order.
  */
 @Module({
@@ -37,7 +41,7 @@ import { StripeModule } from './modules/stripe/stripe.module';
     ApplicationsModule,
     UploadsModule,
     MessagesModule,
-    StripeModule,
+    // StripeModule, // temporarily disabled — see comment above
   ],
   controllers: [HealthController],
 })
