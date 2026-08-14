@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { RoomsService } from '../../../core/services/rooms.service';
+import { StripeService } from '../../../core/services/stripe.service';
 import { Room } from '../../../core/models/room.model';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 
@@ -17,9 +18,14 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
         <button type="button" (click)="auth.logout()">Log out</button>
       </div>
 
-      <a routerLink="/landlord/rooms/new" style="display:inline-block;background:#C04E28;color:#fff;padding:.6rem 1.1rem;border-radius:6px;text-decoration:none;font-weight:700;margin-bottom:2rem">
-        + List a new room
-      </a>
+      <div style="display:flex;gap:.75rem;margin-bottom:2rem;flex-wrap:wrap">
+        <a routerLink="/landlord/rooms/new" style="background:#C04E28;color:#fff;padding:.6rem 1.1rem;border-radius:6px;text-decoration:none;font-weight:700">
+          + List a new room
+        </a>
+        <a routerLink="/landlord/upgrade" style="background:#1A1410;color:#fff;padding:.6rem 1.1rem;border-radius:6px;text-decoration:none;font-weight:700">
+          ⭐ Upgrade plan
+        </a>
+      </div>
 
       <h2 style="font-size:1rem;margin-bottom:1rem">Your rooms</h2>
 
@@ -33,13 +39,17 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
             <div style="border:1px solid #DDD5C8;border-radius:8px;padding:.9rem;display:flex;justify-content:space-between;align-items:center">
               <div>
                 <strong>{{ room.title }}</strong>
+                @if (room.isFeatured) { <span style="font-size:.6rem;font-weight:700;background:#D4A853;color:#fff;padding:.1rem .4rem;border-radius:10px;margin-left:.3rem">⭐ Featured</span> }
                 <p style="font-size:.8rem;color:#7A6E60;margin-top:.2rem">
                   {{ room.rentCents | zarCents:'monthly' }} · {{ room.locationDisplay }} ·
                   <span [style.color]="room.status === 'active' ? '#3D7040' : '#7A6E60'">{{ room.status }}</span>
                   · {{ room.applicationCount }} applicant{{ room.applicationCount !== 1 ? 's' : '' }}
                 </p>
               </div>
-              <div style="display:flex;gap:.75rem">
+              <div style="display:flex;gap:.75rem;align-items:center">
+                @if (!room.isFeatured && room.status === 'active') {
+                  <button type="button" style="font-size:.78rem;background:none;border:1px solid #D4A853;color:#D4A853;border-radius:6px;padding:.3rem .6rem;cursor:pointer" (click)="boost(room.id)">⭐ Boost R99</button>
+                }
                 <a [routerLink]="['/landlord/rooms', room.id, 'applicants']" style="font-size:.8rem">Applicants →</a>
                 <a [routerLink]="['/rooms', room.id]" style="font-size:.8rem">View →</a>
               </div>
@@ -53,6 +63,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 export class LandlordDashboard implements OnInit {
   auth = inject(AuthService);
   private roomsService = inject(RoomsService);
+  private stripe = inject(StripeService);
 
   rooms = signal<Room[]>([]);
   loading = signal(true);
@@ -62,5 +73,9 @@ export class LandlordDashboard implements OnInit {
       next: (rooms) => { this.rooms.set(rooms); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
+  }
+
+  boost(roomId: string) {
+    this.stripe.boostRoom(roomId);
   }
 }

@@ -19,6 +19,8 @@ import { MessageThread } from '../../../shared/components/message-thread/message
       </div>
 
       <a routerLink="/" style="font-size:.85rem">← Browse more rooms</a>
+      &nbsp;·&nbsp;
+      <a routerLink="/tenant/passport" style="font-size:.85rem">🪪 Get your Renter's Passport</a>
       <h2 style="font-size:1rem;margin:1.5rem 0 1rem">Your applications</h2>
 
       @if (loading()) {

@@ -17,5 +17,10 @@ export const LANDLORD_ROUTES: Routes = [
     loadComponent: () => import('./applicants/applicants').then((m) => m.Applicants),
     title: 'Applicants — RentBoard',
   },
+  {
+    path: 'upgrade',
+    loadComponent: () => import('./upgrade/upgrade').then((m) => m.Upgrade),
+    title: 'Upgrade Your Plan — RentBoard',
+  },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];

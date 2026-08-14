@@ -149,7 +149,7 @@ Each pass below has a full reference implementation already written in the proje
 | 0.5.0 ✅ | NotificationsService (6 Resend email templates), WhatsApp bridge (Meta Cloud API), minimal Applications module (apply + notify, tests the chain end-to-end) | `RentBoard-Fresh-Part6-Services-README.html` — *v0.5.0 commit* |
 | 0.6.0 ✅ | Create-room wizard (4 steps), ImageKit direct-upload, full room detail + apply UI, real landlord/tenant dashboards | `RentBoard-Sprint2-Code.html` — *v0.6.0 commit* |
 | 0.7.0 ✅ | Applicant manager (shortlist/accept/reject, auto-rejects other applicants on accept), messaging thread (in-app + WhatsApp reply-matching now closed) | `RentBoard-Sprint3-Code.html` — *v0.7.0 commit* |
-| 0.8.0 | Stripe subscriptions/boosts, Renter's Passport, screening | `RentBoard-Sprint4-Code.html` |
+| 0.8.0 ✅ | Stripe subscriptions (Pro/Agency plans), one-off room boosts, Renter's Passport payment (verification itself is a placeholder — see §18) | `RentBoard-Sprint4-Code.html` — *v0.8.0 commit* |
 | 0.9.0 | 11-language i18n, capacity hardening (PgBouncer, cache headers, graceful shutdown) | `RentBoard-ZA-i18n-Languages-1.html`, `RentBoard-ZA-Capacity-Analysis.html` |
 | 1.0.0 | Audit fixes applied, SAHRC/Information Regulator filings done, launch | `RentBoard-ZA-All-Fixes.html`, `RentBoard-ZA-MVP-Summary.html` |
 
@@ -251,3 +251,21 @@ This adds `Application`, `Message`, and `LandlordWhatsappConfig` — the minimum
 **Messaging thread — the WhatsApp loop is now actually closed:** when a tenant sends an in-app message and the landlord has WhatsApp configured (`PATCH /whatsapp/config`), `MessagesService.send()` calls `WhatsappService.notifyLandlord()`, which now **returns the resulting `wamid`** and records it on the `Message` row. When that landlord replies from WhatsApp, Meta's webhook includes `context.id` = that same `wamid`, so `WhatsappService.handleIncomingWebhook()` can genuinely find the matching `Message` and file the reply into the correct thread — this was an open honesty note in pass 0.5.0's README and is resolved here, not worked around.
 
 **Test it end-to-end:** apply as a tenant (0.6.0's flow) → as the landlord, open Applicants → expand the applicant → send a message → (if `WHATSAPP_*` env vars are set) the landlord's phone gets a WhatsApp message with a `context.id` your webhook can match on a real reply.
+
+## 18. Stripe — subscriptions, boosts, Renter's Passport (v0.8.0)
+
+**This pass moves real money. Every placeholder below must be resolved before going live — none of them fail loudly if you forget, they just silently don't work (or worse, mismatch what the UI shows):**
+
+| Placeholder | Where | What to do |
+|---|---|---|
+| `STRIPE_PRICE_PRO_MONTHLY` / `_ANNUAL`, `STRIPE_PRICE_AGENCY_*` | `backend/.env.example` | Create these Products/Prices in the Stripe Dashboard (ZAR, recurring). The amounts in `.env.example`'s comments and in `Upgrade`'s template (R349/R2,999/R1,499/R12,999) are **illustrative only** — they must match whatever you actually configure in Stripe, or the UI will show a price different from what's charged. |
+| `STRIPE_PRICE_PASSPORT_MONTHLY` / `_ANNUAL` | `backend/.env.example` | Same — must match `Passport`'s template (R89/R799). |
+| `STRIPE_PRICE_ROOM_BOOST` | `backend/.env.example` | One-off ZAR price, 7-day boost duration is hardcoded in `StripeService.BOOST_DURATION_DAYS`. `LandlordDashboard`'s boost button hardcodes "R99" as display text — **update that literal if your configured Stripe price differs.** |
+| `STRIPE_WEBHOOK_SECRET` | `backend/.env.example` | From Stripe Dashboard → Webhooks → your endpoint's signing secret. Without it, `POST /api/stripe/webhook` throws `BadRequestException` on every call — by design, never skip signature verification. |
+| Renter's Passport **verification** | `RentersPassport.idVerified`/`incomeVerified` (schema), `Passport` component's own docblock | This pass wires the **payment and subscription lifecycle only**. Actual ID/income verification requires a third-party KYC provider (e.g. Smile Identity, Youverify) — not integrated. `Passport`'s UI is explicit about this ("reviewed by our team... not instant") specifically so it isn't sold as automatic. Wiring a real KYC provider is a future pass, not yet on the roadmap table above. |
+
+**Design decisions worth knowing:**
+- Every state change (`plan upgraded`, `boost activated`, `subscription cancelled`) happens **only** inside `StripeService.handleWebhookEvent()` — never optimistically when a checkout session is created. This is the standard/correct Stripe integration pattern: the webhook is the only source Stripe itself guarantees is authoritative, since a customer can close the tab after paying but before the success redirect fires.
+- Room boosts are idempotent on `stripeSessionId` — Stripe retries webhook delivery, and the handler checks `boost.status === 'active'` before ever re-applying it.
+- `onPaymentFailed()` deliberately does **not** downgrade a landlord's plan immediately — Stripe's own dunning/retry schedule runs first; only a final `customer.subscription.deleted` or non-active `customer.subscription.updated` event downgrades. Downgrading on the first failed invoice would punish a landlord over a temporarily-declined card.
+- Test locally with the Stripe CLI: `stripe listen --forward-to localhost:3000/api/stripe/webhook` — it prints a webhook secret to put in `.env` for local testing, separate from your live/test-mode dashboard secret.

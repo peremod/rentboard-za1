@@ -27,6 +27,15 @@ export default () => ({
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+    prices: {
+      proMonthly: process.env.STRIPE_PRICE_PRO_MONTHLY,
+      proAnnual: process.env.STRIPE_PRICE_PRO_ANNUAL,
+      agencyMonthly: process.env.STRIPE_PRICE_AGENCY_MONTHLY,
+      agencyAnnual: process.env.STRIPE_PRICE_AGENCY_ANNUAL,
+      passportMonthly: process.env.STRIPE_PRICE_PASSPORT_MONTHLY,
+      passportAnnual: process.env.STRIPE_PRICE_PASSPORT_ANNUAL,
+      roomBoost: process.env.STRIPE_PRICE_ROOM_BOOST,
+    },
   },
 
   resend: {

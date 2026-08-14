@@ -11,6 +11,7 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ApplicationsModule } from './modules/applications/applications.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { MessagesModule } from './modules/messages/messages.module';
+import { StripeModule } from './modules/stripe/stripe.module';
 
 /**
  * Root module — foundation release.
@@ -36,6 +37,7 @@ import { MessagesModule } from './modules/messages/messages.module';
     ApplicationsModule,
     UploadsModule,
     MessagesModule,
+    StripeModule,
   ],
   controllers: [HealthController],
 })

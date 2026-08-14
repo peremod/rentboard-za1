@@ -7,5 +7,10 @@ export const TENANT_ROUTES: Routes = [
     loadComponent: () => import('./dashboard/tenant-dashboard').then((m) => m.TenantDashboard),
     title: 'Your Dashboard — RentBoard',
   },
+  {
+    path: 'passport',
+    loadComponent: () => import('./passport/passport').then((m) => m.Passport),
+    title: "Renter's Passport — RentBoard",
+  },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];

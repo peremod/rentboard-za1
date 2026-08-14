@@ -9,8 +9,8 @@
 // - Images stored as ImageKit file paths, not full URLs.
 //
 // Growth log: User/LandlordProfile/TenantProfile/Room (v0.1.0) →
-// Application/Message/LandlordWhatsappConfig (v0.5.0, this pass) →
-// Payment/Passport models land in v0.8.0 — see README §Roadmap.
+// Application/Message/LandlordWhatsappConfig (v0.5.0) →
+// RoomBoost/RentersPassport (v0.8.0, this pass) — see README §Roadmap.
 // ═══════════════════════════════════════════════════════════
 
 generator client {
@@ -73,6 +73,7 @@ model User {
   rooms           Room[]
   applications    Application[]
   messagesSent    Message[]
+  rentersPassport RentersPassport?
 
   @@index([email])
   @@index([role])
@@ -87,6 +88,7 @@ model LandlordProfile {
   planTier         PlanTier @default(free)
   planExpiresAt    DateTime?
   stripeCustomerId String?  @unique
+  stripeSubscriptionId String? @unique
   idVerified       Boolean  @default(false)
   rating           Float?
   ratingCount      Int      @default(0)
@@ -153,6 +155,7 @@ model Room {
   publishedAt      DateTime?
 
   applications     Application[]
+  boosts           RoomBoost[]
 
   @@index([status])
   @@index([province, city])
@@ -231,4 +234,55 @@ model LandlordWhatsappConfig {
   totalMessagesSent Int             @default(0)
 
   @@map("landlord_whatsapp_configs")
+}
+
+/// One-off "featured" boost purchase for a single room — separate from the
+/// landlord's recurring plan subscription. stripeSessionId (the Checkout
+/// Session ID, known at creation time) is the idempotency key: the webhook
+/// only ever activates a boost once per session.
+model RoomBoost {
+  id                    String   @id @default(uuid())
+  roomId                String
+  room                  Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  stripeSessionId       String   @unique
+  amountCents           Int
+  durationDays          Int
+  boostedFrom           DateTime?
+  boostedUntil          DateTime?
+  status                String   @default("pending") // pending | active | expired
+  createdAt             DateTime @default(now())
+
+  @@index([roomId])
+  @@map("room_boosts")
+}
+
+enum PassportStatus {
+  pending
+  active
+  expired
+  cancelled
+}
+
+/// Renter's Passport — a tenant's paid, portable pre-verification badge.
+/// idVerified/incomeVerified here are DELIBERATELY separate from the same
+/// flags on TenantProfile: this pass wires the payment + subscription
+/// lifecycle only. Actual document/ID verification is a third-party KYC
+/// integration (e.g. Smile Identity, Youverify) NOT included in this pass
+/// — see README §18. Until that lands, these flags require manual/admin
+/// verification and must not be presented to users as automatic.
+model RentersPassport {
+  id                     String         @id @default(uuid())
+  tenantId               String         @unique
+  tenant                 User           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status                 PassportStatus @default(pending)
+  stripeCustomerId       String?
+  stripeSubscriptionId   String?        @unique
+  idVerified             Boolean        @default(false)
+  incomeVerified         Boolean        @default(false)
+  purchasedAt            DateTime?
+  expiresAt              DateTime?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  @@map("renters_passports")
 }
