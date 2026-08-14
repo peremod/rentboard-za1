@@ -150,7 +150,7 @@ Each pass below has a full reference implementation already written in the proje
 | 0.6.0 ✅ | Create-room wizard (4 steps), ImageKit direct-upload, full room detail + apply UI, real landlord/tenant dashboards | `RentBoard-Sprint2-Code.html` — *v0.6.0 commit* |
 | 0.7.0 ✅ | Applicant manager (shortlist/accept/reject, auto-rejects other applicants on accept), messaging thread (in-app + WhatsApp reply-matching now closed) | `RentBoard-Sprint3-Code.html` — *v0.7.0 commit* |
 | 0.8.0 ✅ | Stripe subscriptions (Pro/Agency plans), one-off room boosts, Renter's Passport payment (verification itself is a placeholder — see §18) | `RentBoard-Sprint4-Code.html` — *v0.8.0 commit* |
-| 0.9.0 | 11-language i18n, capacity hardening (PgBouncer, cache headers, graceful shutdown) | `RentBoard-ZA-i18n-Languages-1.html`, `RentBoard-ZA-Capacity-Analysis.html` |
+| 0.9.0 ✅ | Signal-based i18n engine (11 official SA languages — 2 real translations, 8 honest stubs), graceful shutdown. PgBouncer + cache headers were already done in earlier passes. | `RentBoard-ZA-i18n-Languages-1.html`, `RentBoard-ZA-Capacity-Analysis.html` — *v0.9.0 commit* |
 | 1.0.0 | Audit fixes applied, SAHRC/Information Regulator filings done, launch | `RentBoard-ZA-All-Fixes.html`, `RentBoard-ZA-MVP-Summary.html` |
 
 Operational cadence (on-call, weekly/monthly checks, incident escalation) is documented in `OPERATIONS.md`.
@@ -269,3 +269,25 @@ This adds `Application`, `Message`, and `LandlordWhatsappConfig` — the minimum
 - Room boosts are idempotent on `stripeSessionId` — Stripe retries webhook delivery, and the handler checks `boost.status === 'active'` before ever re-applying it.
 - `onPaymentFailed()` deliberately does **not** downgrade a landlord's plan immediately — Stripe's own dunning/retry schedule runs first; only a final `customer.subscription.deleted` or non-active `customer.subscription.updated` event downgrades. Downgrading on the first failed invoice would punish a landlord over a temporarily-declined card.
 - Test locally with the Stripe CLI: `stripe listen --forward-to localhost:3000/api/stripe/webhook` — it prints a webhook secret to put in `.env` for local testing, separate from your live/test-mode dashboard secret.
+
+## 19. i18n + capacity hardening (v0.9.0)
+
+**Architecture, matching the reference design exactly:** custom signal-based i18n, no `ngx-translate` — Angular's built-in `$localize` is compile-time (a separate build per language), too heavy for one runtime toggle across 11 languages. `I18nService` lazy-loads `/assets/i18n/{code}.json`, always keeps English loaded as a fallback set so a missing key in any language degrades to English rather than a raw `nav.browse_rooms`-looking string, and persists the choice to `localStorage`. `TranslatePipe` is deliberately impure so every instance across the app updates when `setLanguage()` is called.
+
+**One gap versus the full reference design, stated plainly:** the reference also prioritises a logged-in user's saved profile language above `localStorage`, so the choice follows them across devices. That needs a `preferredLanguage` field on `User` plus a `Users` module/endpoint to persist it — neither exists yet. This pass is `localStorage` + browser-detection + `en` default only. Not silently dropped — `I18nService`'s own docblock says so too.
+
+**Translation status — do not treat all 11 as done:**
+
+| Language | Status |
+|---|---|
+| English (`en`) | ✅ Authoritative source — all 34 keys |
+| Afrikaans (`af`) | Real translation attempted — **recommend native-speaker review before launch**, not launch-ready as-is |
+| isiZulu (`zu`) | Real translation attempted, **lower confidence than Afrikaans** — recommend native-speaker review before launch |
+| isiXhosa, Sesotho, Setswana, Sepedi, Xitsonga, siSwati, Tshivenda, isiNdebele (`xh`,`st`,`tn`,`nso`,`ts`,`ss`,`ve`,`nr`) | **English-fallback stubs only** — deliberately not fabricated. Each file is valid JSON with the correct 34 keys (so the app runs correctly today, same fallback behavior as a missing key) plus a `_meta_needs_translation` marker. These 8 need real translation from a professional service or native speakers before the language switcher can honestly claim to support them. |
+
+Applying `TranslatePipe` throughout the rest of the app (room cards, dashboards, legal pages) is mechanical but not yet done everywhere — `Navbar` and `Home`'s hero/search/filters are wired as the working proof-of-concept; the rest is follow-up work, not part of this pass.
+
+**Capacity hardening:**
+- **PgBouncer** — already configured since pass 0.1.0: `backend/.env.example`'s `DATABASE_URL` uses `pgbouncer=true&connection_limit=10` against Supabase's pooled connection port (6543), with `DIRECT_URL` on 5432 for migrations (Prisma requires a direct, non-pooled connection to run `migrate`).
+- **Cache headers on public GETs** — already done since pass 0.3.0: `RoomsController`'s `GET /rooms` and `GET /rooms/:id` carry `Cache-Control: public, s-maxage=...`.
+- **Graceful shutdown** — the actual gap, closed in this pass: `app.enableShutdownHooks()` added to `main.ts`. `PrismaService.onModuleDestroy()` has existed since pass 0.1.0 but never fired without this — Railway/Docker sending `SIGTERM` on every deploy was killing in-flight requests and DB connections mid-operation until now.

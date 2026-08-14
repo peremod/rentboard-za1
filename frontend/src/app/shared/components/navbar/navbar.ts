@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { LangSwitcher } from '../lang-switcher/lang-switcher';
+import { TranslatePipe } from '../../pipes/translate.pipe';
 
 /**
  * Auth-aware navbar. Shows different actions based on AuthService signals —
@@ -9,7 +11,7 @@ import { AuthService } from '../../../core/services/auth.service';
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink, RouterLinkActive, LangSwitcher, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header class="navbar">
@@ -17,21 +19,22 @@ import { AuthService } from '../../../core/services/auth.service';
         <a routerLink="/" class="navbar__logo">Rent<span>Board</span></a>
 
         <nav class="navbar__links" [class.open]="mobileOpen()">
-          <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" (click)="mobileOpen.set(false)">Browse rooms</a>
-          <a routerLink="/legal/terms" routerLinkActive="active" (click)="mobileOpen.set(false)">Legal</a>
+          <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" (click)="mobileOpen.set(false)">{{ 'nav.browse_rooms' | translate }}</a>
+          <a routerLink="/legal/terms" routerLinkActive="active" (click)="mobileOpen.set(false)">{{ 'nav.legal' | translate }}</a>
 
           @if (!auth.isAuthenticated()) {
-            <a routerLink="/auth/login" (click)="mobileOpen.set(false)">Log in</a>
-            <a routerLink="/auth/register" class="navbar__cta" (click)="mobileOpen.set(false)">Get started</a>
+            <a routerLink="/auth/login" (click)="mobileOpen.set(false)">{{ 'nav.login' | translate }}</a>
+            <a routerLink="/auth/register" class="navbar__cta" (click)="mobileOpen.set(false)">{{ 'nav.get_started' | translate }}</a>
           }
           @if (auth.isLandlord()) {
-            <a routerLink="/landlord/dashboard" routerLinkActive="active" (click)="mobileOpen.set(false)">Dashboard</a>
-            <button type="button" (click)="logout()">Log out</button>
+            <a routerLink="/landlord/dashboard" routerLinkActive="active" (click)="mobileOpen.set(false)">{{ 'nav.dashboard' | translate }}</a>
+            <button type="button" (click)="logout()">{{ 'nav.logout' | translate }}</button>
           }
           @if (auth.isTenant()) {
-            <a routerLink="/tenant/dashboard" routerLinkActive="active" (click)="mobileOpen.set(false)">Dashboard</a>
-            <button type="button" (click)="logout()">Log out</button>
+            <a routerLink="/tenant/dashboard" routerLinkActive="active" (click)="mobileOpen.set(false)">{{ 'nav.dashboard' | translate }}</a>
+            <button type="button" (click)="logout()">{{ 'nav.logout' | translate }}</button>
           }
+          <app-lang-switcher/>
         </nav>
 
         <button type="button" class="navbar__hamburger" (click)="mobileOpen.update(v => !v)" [attr.aria-expanded]="mobileOpen()" aria-label="Toggle menu">☰</button>

@@ -57,6 +57,16 @@ async function bootstrap() {
     logger.log('Swagger docs: http://localhost:3000/api/docs');
   }
 
+  /**
+   * Graceful shutdown — important in production. When Railway (or Docker)
+   * sends SIGTERM to stop the container during a deploy or scale-down,
+   * this makes Nest run every registered OnModuleDestroy hook — including
+   * PrismaService's (see prisma/prisma.service.ts, built in pass 0.1.0) —
+   * before the process actually exits. Without it, in-flight requests and
+   * open DB connections get killed mid-operation on every deploy.
+   */
+  app.enableShutdownHooks();
+
   const port = parseInt(process.env.PORT ?? '3000', 10);
   await app.listen(port);
   logger.log(`RentBoard API running on port ${port} [${process.env.NODE_ENV}]`);

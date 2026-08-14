@@ -8,6 +8,7 @@ import { RoomsService } from '../../core/services/rooms.service';
 import { Room, SA_PROVINCES } from '../../core/models/room.model';
 import { RoomCard } from '../../shared/components/room-card/room-card';
 import { SkeletonCard } from '../../shared/components/skeleton-card/skeleton-card';
+import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 
 /**
  * Home — the public notice board. Hero + search bar + sidebar filters +
@@ -20,31 +21,31 @@ import { SkeletonCard } from '../../shared/components/skeleton-card/skeleton-car
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [FormsModule, RouterLink, RoomCard, SkeletonCard],
+  imports: [FormsModule, RouterLink, RoomCard, SkeletonCard, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="hero">
       <div class="hero__inner">
-        <div class="hero__eyebrow">🇿🇦 South Africa's room-letting notice board</div>
-        <h1>Find your next room.<br/><em>Direct from landlords.</em></h1>
-        <p>No estate agents. No fees to apply. Rooms posted directly by landlords across South Africa.</p>
+        <div class="hero__eyebrow">🇿🇦 {{ 'hero.eyebrow' | translate }}</div>
+        <h1>{{ 'hero.title_line1' | translate }}<br/><em>{{ 'hero.title_line2' | translate }}</em></h1>
+        <p>{{ 'hero.subtitle' | translate }}</p>
         <p class="hero__cta">
-          <a routerLink="/auth/register" class="btn-primary">List a room free →</a>
+          <a routerLink="/auth/register" class="btn-primary">{{ 'hero.cta' | translate }}</a>
         </p>
       </div>
     </section>
 
     <div class="search-bar">
       <input
-        type="text" placeholder="Search by city, suburb or area…"
+        type="text" [placeholder]="'search.placeholder' | translate"
         [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()"
       />
       <select [(ngModel)]="province" (ngModelChange)="onFilterChange()">
-        <option value="">All provinces</option>
+        <option value="">{{ 'search.all_provinces' | translate }}</option>
         @for (p of provinces; track p) { <option [value]="p">{{ p }}</option> }
       </select>
       <select [(ngModel)]="roomType" (ngModelChange)="onFilterChange()">
-        <option value="">All room types</option>
+        <option value="">{{ 'search.all_room_types' | translate }}</option>
         <option value="shared_house">Shared house</option>
         <option value="en_suite">En-suite</option>
         <option value="studio">Studio</option>
@@ -54,18 +55,18 @@ import { SkeletonCard } from '../../shared/components/skeleton-card/skeleton-car
 
     <div class="board">
       <aside class="board__sidebar">
-        <h3>Filters</h3>
-        <label><input type="checkbox" [(ngModel)]="billsIncluded" (ngModelChange)="onFilterChange()"/> Bills included</label>
-        <label><input type="checkbox" [(ngModel)]="couplesAllowed" (ngModelChange)="onFilterChange()"/> Couples welcome</label>
-        <label><input type="checkbox" [(ngModel)]="dssAccepted" (ngModelChange)="onFilterChange()"/> DSS / SASSA accepted</label>
-        <label><input type="checkbox" [(ngModel)]="guarantorAccepted" (ngModelChange)="onFilterChange()"/> Guarantor accepted</label>
-        <label><input type="checkbox" [(ngModel)]="petsAllowed" (ngModelChange)="onFilterChange()"/> Pets allowed</label>
+        <h3>{{ 'filters.title' | translate }}</h3>
+        <label><input type="checkbox" [(ngModel)]="billsIncluded" (ngModelChange)="onFilterChange()"/> {{ 'filters.bills_included' | translate }}</label>
+        <label><input type="checkbox" [(ngModel)]="couplesAllowed" (ngModelChange)="onFilterChange()"/> {{ 'filters.couples_welcome' | translate }}</label>
+        <label><input type="checkbox" [(ngModel)]="dssAccepted" (ngModelChange)="onFilterChange()"/> {{ 'filters.dss_accepted' | translate }}</label>
+        <label><input type="checkbox" [(ngModel)]="guarantorAccepted" (ngModelChange)="onFilterChange()"/> {{ 'filters.guarantor_accepted' | translate }}</label>
+        <label><input type="checkbox" [(ngModel)]="petsAllowed" (ngModelChange)="onFilterChange()"/> {{ 'filters.pets_allowed' | translate }}</label>
       </aside>
 
       <main class="board__main">
         <p class="board__count">
           @if (loading() && rooms().length === 0) { Loading rooms… }
-          @else { <strong>{{ total() }}</strong> room{{ total() !== 1 ? 's' : '' }} found }
+          @else { {{ 'found_rooms' | translate:{count: total()} }} }
         </p>
 
         @if (loading() && rooms().length === 0) {
