@@ -20,17 +20,17 @@ Legal counts as much as code here: several of these are compliance-critical, not
 | # | Item | Status | Where |
 |---|---|---|---|
 | 5 | **Git squash-merge not enforced** — `CONTRIBUTING.md` documents the policy, but nothing enforces it. This is a GitHub branch-protection setting, not something fixable in files | ⬜ Open — manual GitHub setup | Repo Settings → Branches → `develop`/`main` protection rules |
-| 6 | **Rebase-before-PR not documented in README** — only in `CONTRIBUTING.md` | ⬜ Open, low effort | `README.md §7` |
+| 6 | ~~Rebase-before-PR not documented in README~~ | ✅ **Not applicable — already present** | `README.md §7` has documented "rebase-before-PR" in prose and a working `git rebase origin/develop` command example since pass 0.1.0. Re-checked against the actual file rather than assumed. |
 | 7 | **Admin guard not wired at module level** | ✅ **Not applicable yet** | No `AdminModule`/admin endpoints exist in this repo at all — nothing to leave unguarded. Flag this again the moment an admin module is built, not before. |
 | 8 | ~~`ZarCentsPipe` not imported in components~~ | ✅ **Already fixed** | Used consistently in `RoomCard`, `RoomDetail`, `LandlordDashboard`, `TenantDashboard` since pass 0.3.0/0.4.0 — verified by grep, not assumed |
-| 9 | **Dashboards not fully mobile-responsive** | ⬜ Open, but smaller than the original finding | `LandlordDashboard`/`TenantDashboard`/`Applicants` use flexbox rows, not the rigid two-column grid the audit describes — but still unverified below ~400px |
+| 9 | ~~Dashboards not fully mobile-responsive~~ | ✅ **Fixed in v0.9.3** | `LandlordDashboard` and `TenantDashboard` converted from inline `style=""` (which can't carry media queries) to real component `styles: []` with a `@media (max-width: 480px)` breakpoint that stacks the row layout. `Applicants` already used real CSS classes — just needed the breakpoint added. |
 
 ## 🟢 Minor — nice to fix
 
 | # | Item | Status | Where |
 |---|---|---|---|
 | 10 | ~~Missing `track` in `@for` loops~~ | ✅ **Already fixed** | Verified by grep — every `@for` in the repo has `track`, zero exceptions |
-| 11 | **No error boundary on lazy-loaded routes** — a failed chunk load (network error) shows a blank screen | ⬜ Open | `frontend/src/app/app.config.ts` |
+| 11 | ~~No error boundary on lazy-loaded routes~~ | ✅ **Fixed in v0.9.3** | `withNavigationErrorHandler` added to `app.config.ts` — a failed chunk load now triggers one hard reload of the attempted URL (resolves the common stale-deploy case) with a `sessionStorage` guard against looping if the underlying route is persistently broken, not just a stale chunk. |
 
 ---
 
@@ -74,7 +74,7 @@ English is authoritative. Afrikaans and isiZulu are real attempts flagged for na
 
 1. ~~Input sanitisation (#3)~~ ✅ Done — v0.9.1
 2. ~~Auth hardening (#1, #2)~~ ✅ Done — v0.9.2
-3. Error boundary on lazy routes (#11) — small
-4. Mobile responsive pass on the three dashboard-style pages (#9) — small
-5. README rebase note (#6) — trivial
-6. Everything else in this file is either a manual step outside the codebase (branch protection, SAHRC filing, Stripe Dashboard config) or a future pass (KYC integration, remaining 8 translations) — not blocked on code changes here.
+3. ~~Error boundary on lazy routes (#11)~~ ✅ Done — v0.9.3
+4. ~~Mobile responsive pass on the three dashboard-style pages (#9)~~ ✅ Done — v0.9.3
+5. ~~README rebase note (#6)~~ ✅ Not applicable — already present, verified against the file rather than assumed
+6. Everything remaining is either a manual step outside the codebase (branch protection, SAHRC filing, Stripe Dashboard config) or explicit future work (KYC integration, remaining 8 translations) — not blocked on code changes. **Every code-fixable item on this checklist is now closed.**

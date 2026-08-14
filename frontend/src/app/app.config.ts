@@ -1,5 +1,5 @@
 import { ApplicationConfig, provideExperimentalZonelessChangeDetection } from '@angular/core';
-import { provideRouter, withComponentInputBinding, withInMemoryScrolling, withPreloading, PreloadAllModules } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withInMemoryScrolling, withPreloading, withNavigationErrorHandler, PreloadAllModules } from '@angular/router';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
 import { IMAGE_LOADER, ImageLoaderConfig } from '@angular/common';
@@ -20,6 +20,27 @@ export const appConfig: ApplicationConfig = {
       withComponentInputBinding(),
       withPreloading(PreloadAllModules),
       withInMemoryScrolling({ scrollPositionRestoration: 'top', anchorScrolling: 'enabled' }),
+      /**
+       * PRE-LAUNCH-CHECKLIST.md #11 — a failed lazy-route chunk load (most
+       * commonly: the person has an old tab open across a new deploy, and
+       * the chunk's hashed filename no longer exists on the server) used to
+       * show a blank screen with no recovery path. A hard reload of the
+       * attempted URL re-fetches the current index.html and bundle
+       * manifest, which resolves the stale-chunk case; any other
+       * navigation error still lands the person on the same URL rather
+       * than a dead blank page, so they can retry or navigate away.
+       */
+      withNavigationErrorHandler((event) => {
+        console.error('Navigation failed:', event.error);
+        const retryKey = `rb_nav_retry_${event.url}`;
+        if (sessionStorage.getItem(retryKey)) {
+          // Already retried this exact URL once this session — reloading again
+          // would loop forever if the failure isn't just a stale chunk.
+          return;
+        }
+        sessionStorage.setItem(retryKey, '1');
+        window.location.href = event.url;
+      }),
     ),
     provideHttpClient(withFetch(), withInterceptors([authInterceptor, errorInterceptor])),
     provideClientHydration(withEventReplay()),

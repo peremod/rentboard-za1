@@ -12,46 +12,42 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
   imports: [RouterLink, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div style="font-family:sans-serif;padding:2rem;max-width:720px;margin:0 auto">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+    <div class="dashboard">
+      <div class="dashboard__header">
         <h1>Welcome, {{ auth.user()?.fullName }} 👋</h1>
         <button type="button" (click)="auth.logout()">Log out</button>
       </div>
 
-      <div style="display:flex;gap:.75rem;margin-bottom:2rem;flex-wrap:wrap">
-        <a routerLink="/landlord/rooms/new" style="background:#C04E28;color:#fff;padding:.6rem 1.1rem;border-radius:6px;text-decoration:none;font-weight:700">
-          + List a new room
-        </a>
-        <a routerLink="/landlord/upgrade" style="background:#1A1410;color:#fff;padding:.6rem 1.1rem;border-radius:6px;text-decoration:none;font-weight:700">
-          ⭐ Upgrade plan
-        </a>
+      <div class="dashboard__actions">
+        <a routerLink="/landlord/rooms/new" class="btn btn--primary">+ List a new room</a>
+        <a routerLink="/landlord/upgrade" class="btn btn--dark">⭐ Upgrade plan</a>
       </div>
 
-      <h2 style="font-size:1rem;margin-bottom:1rem">Your rooms</h2>
+      <h2 class="dashboard__section-title">Your rooms</h2>
 
       @if (loading()) {
         <p>Loading…</p>
       } @else if (rooms().length === 0) {
-        <p style="color:#7A6E60">You haven't listed a room yet. Click "List a new room" to get started — it's free.</p>
+        <p class="muted">You haven't listed a room yet. Click "List a new room" to get started — it's free.</p>
       } @else {
-        <div style="display:flex;flex-direction:column;gap:.75rem">
+        <div class="dashboard__list">
           @for (room of rooms(); track room.id) {
-            <div style="border:1px solid #DDD5C8;border-radius:8px;padding:.9rem;display:flex;justify-content:space-between;align-items:center">
-              <div>
+            <div class="room-row">
+              <div class="room-row__info">
                 <strong>{{ room.title }}</strong>
-                @if (room.isFeatured) { <span style="font-size:.6rem;font-weight:700;background:#D4A853;color:#fff;padding:.1rem .4rem;border-radius:10px;margin-left:.3rem">⭐ Featured</span> }
-                <p style="font-size:.8rem;color:#7A6E60;margin-top:.2rem">
+                @if (room.isFeatured) { <span class="badge">⭐ Featured</span> }
+                <p class="room-row__meta">
                   {{ room.rentCents | zarCents:'monthly' }} · {{ room.locationDisplay }} ·
                   <span [style.color]="room.status === 'active' ? '#3D7040' : '#7A6E60'">{{ room.status }}</span>
                   · {{ room.applicationCount }} applicant{{ room.applicationCount !== 1 ? 's' : '' }}
                 </p>
               </div>
-              <div style="display:flex;gap:.75rem;align-items:center">
+              <div class="room-row__actions">
                 @if (!room.isFeatured && room.status === 'active') {
-                  <button type="button" style="font-size:.78rem;background:none;border:1px solid #D4A853;color:#D4A853;border-radius:6px;padding:.3rem .6rem;cursor:pointer" (click)="boost(room.id)">⭐ Boost R99</button>
+                  <button type="button" class="btn-boost" (click)="boost(room.id)">⭐ Boost R99</button>
                 }
-                <a [routerLink]="['/landlord/rooms', room.id, 'applicants']" style="font-size:.8rem">Applicants →</a>
-                <a [routerLink]="['/rooms', room.id]" style="font-size:.8rem">View →</a>
+                <a [routerLink]="['/landlord/rooms', room.id, 'applicants']">Applicants →</a>
+                <a [routerLink]="['/rooms', room.id]">View →</a>
               </div>
             </div>
           }
@@ -59,6 +55,30 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
       }
     </div>
   `,
+  styles: [`
+    .dashboard { font-family: sans-serif; padding: 2rem 1.25rem; max-width: 720px; margin: 0 auto; }
+    .dashboard__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: .75rem; flex-wrap: wrap; }
+    .dashboard__actions { display: flex; gap: .75rem; margin-bottom: 2rem; flex-wrap: wrap; }
+    .dashboard__section-title { font-size: 1rem; margin-bottom: 1rem; }
+    .dashboard__list { display: flex; flex-direction: column; gap: .75rem; }
+    .muted { color: #7A6E60; }
+    .btn { padding: .6rem 1.1rem; border-radius: 6px; text-decoration: none; font-weight: 700; }
+    .btn--primary { background: #C04E28; color: #fff; }
+    .btn--dark { background: #1A1410; color: #fff; }
+    .badge { font-size: .6rem; font-weight: 700; background: #D4A853; color: #fff; padding: .1rem .4rem; border-radius: 10px; margin-left: .3rem; }
+
+    .room-row { border: 1px solid #DDD5C8; border-radius: 8px; padding: .9rem; display: flex; justify-content: space-between; align-items: center; gap: .75rem; }
+    .room-row__meta { font-size: .8rem; color: #7A6E60; margin-top: .2rem; }
+    .room-row__actions { display: flex; gap: .75rem; align-items: center; flex-shrink: 0; }
+    .room-row__actions a { font-size: .8rem; white-space: nowrap; }
+    .btn-boost { font-size: .78rem; background: none; border: 1px solid #D4A853; color: #D4A853; border-radius: 6px; padding: .3rem .6rem; cursor: pointer; white-space: nowrap; }
+
+    /* Mobile — PRE-LAUNCH-CHECKLIST.md #9: stack rows instead of squeezing them */
+    @media (max-width: 480px) {
+      .room-row { flex-direction: column; align-items: flex-start; }
+      .room-row__actions { width: 100%; justify-content: space-between; }
+    }
+  `],
 })
 export class LandlordDashboard implements OnInit {
   auth = inject(AuthService);

@@ -70,10 +70,16 @@ import { MessageThread } from '../../../shared/components/message-thread/message
     .status--rejected { background: rgba(214,59,59,.1); color: #D63B3B; }
     .applicant-card__body { padding: 0 1rem 1rem; }
     .cover-note { font-style: italic; color: #3A3228; margin: .5rem 0; }
-    .applicant-card__actions { display: flex; gap: .5rem; margin-bottom: .5rem; }
+    .applicant-card__actions { display: flex; gap: .5rem; margin-bottom: .5rem; flex-wrap: wrap; }
     .applicant-card__actions button { padding: .4rem .8rem; border-radius: 6px; border: 1px solid #DDD5C8; background: #fff; cursor: pointer; font-size: .78rem; font-weight: 600; }
     .applicant-card__actions .accept { background: #3D7040; color: #fff; border: none; }
     .applicant-card__actions .reject { background: #D63B3B; color: #fff; border: none; }
+
+    /* Mobile — PRE-LAUNCH-CHECKLIST.md #9 */
+    @media (max-width: 400px) {
+      .applicant-card__header { flex-wrap: wrap; gap: .4rem; }
+      .applicant-card__actions button { flex: 1; min-width: 90px; }
+    }
   `],
 })
 export class Applicants implements OnInit {
