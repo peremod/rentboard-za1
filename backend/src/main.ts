@@ -39,7 +39,7 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'stripe-signature'],
   });
 
-  app.setGlobalPrefix('api', { exclude: ['health'] });
+  app.setGlobalPrefix('api', { exclude: ['health', 'robots.txt', 'sitemap.xml'] });
 
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
