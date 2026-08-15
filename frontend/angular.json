@@ -17,41 +17,75 @@
             "browser": "src/main.ts",
             "server": "src/main.server.ts",
             "prerender": true,
-            "ssr": { "entry": "src/server.ts" },
+            "ssr": {
+              "entry": "src/server.ts"
+            },
             "polyfills": [],
             "tsConfig": "tsconfig.app.json",
-            "assets": ["src/favicon.ico", "src/assets"],
-            "styles": ["src/styles/styles.scss"],
+            "assets": [
+              "src/favicon.ico",
+              "src/assets"
+            ],
+            "styles": [
+              "src/styles/styles.scss"
+            ],
             "scripts": []
           },
           "configurations": {
             "production": {
               "budgets": [
-                { "type": "initial", "maximumWarning": "500kb", "maximumError": "1mb" }
+                {
+                  "type": "initial",
+                  "maximumWarning": "500kb",
+                  "maximumError": "1mb"
+                }
               ],
               "outputHashing": "all",
               "fileReplacements": [
-                { "replace": "src/environments/environment.ts", "with": "src/environments/environment.prod.ts" }
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.prod.ts"
+                }
               ]
             },
             "staging": {
               "outputHashing": "all",
               "fileReplacements": [
-                { "replace": "src/environments/environment.ts", "with": "src/environments/environment.staging.ts" }
+                {
+                  "replace": "src/environments/environment.ts",
+                  "with": "src/environments/environment.staging.ts"
+                }
               ]
             },
-            "development": { "optimization": false, "sourceMap": true }
+            "development": {
+              "optimization": false,
+              "sourceMap": true
+            }
           },
           "defaultConfiguration": "production"
         },
         "serve": {
           "builder": "@angular/build:dev-server",
           "configurations": {
-            "production": { "buildTarget": "rentboard-frontend:build:production" },
-            "staging": { "buildTarget": "rentboard-frontend:build:staging" },
-            "development": { "buildTarget": "rentboard-frontend:build:development" }
+            "production": {
+              "buildTarget": "rentboard-frontend:build:production"
+            },
+            "staging": {
+              "buildTarget": "rentboard-frontend:build:staging"
+            },
+            "development": {
+              "buildTarget": "rentboard-frontend:build:development"
+            }
           },
           "defaultConfiguration": "development"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "tsConfig": "tsconfig.spec.json",
+            "buildTarget": "rentboard-frontend:build:development",
+            "runner": "vitest"
+          }
         }
       }
     }
