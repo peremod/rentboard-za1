@@ -4,7 +4,7 @@
   "private": true,
   "description": "RentBoard ZA — South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
   "scripts": {
-    "prepare": "husky install",
+    "prepare": "husky",
     "frontend": "npm --prefix frontend run start",
     "backend": "npm --prefix backend run start:dev",
     "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install"
