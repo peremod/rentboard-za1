@@ -27,7 +27,7 @@ export class StripeService {
     if (!secretKey) {
       this.logger.warn('STRIPE_SECRET_KEY not set — Stripe endpoints will fail until configured (see .env.example)');
     }
-    this.stripe = new Stripe(secretKey ?? 'sk_test_placeholder', { apiVersion: '2024-12-18.acacia' });
+    this.stripe = new Stripe(secretKey ?? 'sk_test_placeholder', { apiVersion: '2025-02-24.acacia' });
     this.frontendUrl = this.config.get<string>('frontendUrl')!;
     this.webhookSecret = this.config.get<string>('stripe.webhookSecret');
   }

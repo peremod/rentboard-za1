@@ -49,6 +49,7 @@
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
     "@types/bcrypt": "^5.0.2",
+    "@types/compression": "^1.7.5",
     "@types/cookie-parser": "^1.4.7",
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",

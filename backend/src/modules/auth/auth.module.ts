@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
@@ -13,9 +13,13 @@ import { GoogleStrategy } from './strategies/google.strategy';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('jwt.secret'),
-        signOptions: { expiresIn: config.get<string>('jwt.expiresIn') ?? '24h' },
+      // @nestjs/jwt 11 types signOptions.expiresIn as ms's StringValue
+      // template-literal union, so a plain string needs an explicit cast.
+      useFactory: (config: ConfigService): JwtModuleOptions => ({
+        secret: config.get<string>('jwt.secret')!,
+        signOptions: {
+          expiresIn: config.get<string>('jwt.expiresIn') ?? '24h',
+        } as JwtModuleOptions['signOptions'],
       }),
     }),
   ],
