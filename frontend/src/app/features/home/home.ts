@@ -1,6 +1,6 @@
 import {
-  AfterViewInit, ChangeDetectionStrategy, Component, ElementRef, OnInit, ViewChild,
-  inject, signal,
+  ChangeDetectionStrategy, Component, ElementRef, Injector, OnDestroy, OnInit, ViewChild,
+  afterNextRender, inject, signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -117,8 +117,9 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
     @media (max-width: 900px) { .board { flex-direction: column; } .board__sidebar { width: 100%; } }
   `],
 })
-export class Home implements OnInit, AfterViewInit {
+export class Home implements OnInit, OnDestroy {
   private roomsService = inject(RoomsService);
+  private injector = inject(Injector);
 
   rooms = signal<Room[]>([]);
   total = signal(0);
@@ -145,14 +146,26 @@ export class Home implements OnInit, AfterViewInit {
     this.fetchRooms();
   }
 
-  ngAfterViewInit() {
-    this.observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && !this.loading() && this.hasMore()) {
-        this.page++;
-        this.fetchRooms(true);
-      }
-    }, { threshold: 0.1 });
-    this.observer.observe(this.sentinel.nativeElement);
+  constructor() {
+    // IntersectionObserver is a browser-only API. ngAfterViewInit also runs
+    // during server-side rendering, where it is undefined and throws,
+    // crashing the SSR process. afterNextRender only runs in the browser.
+    afterNextRender(() => {
+      if (!this.sentinel?.nativeElement) return;
+      this.observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && !this.loading() && this.hasMore()) {
+          this.page++;
+          this.fetchRooms(true);
+        }
+      }, { threshold: 0.1 });
+      this.observer.observe(this.sentinel.nativeElement);
+    }, { injector: this.injector });
+  }
+
+  ngOnDestroy() {
+    // Both were previously leaked on navigation away from the page.
+    this.observer?.disconnect();
+    clearTimeout(this.searchDebounce);
   }
 
   onSearchChange() {
@@ -186,12 +199,21 @@ export class Home implements OnInit, AfterViewInit {
       petsAllowed: this.petsAllowed || undefined,
       page: this.page,
       limit: 12,
-    }).subscribe((res) => {
+    }).subscribe({
+    next: (res) => {
       this.rooms.update((prev) => (append ? [...prev, ...res.data] : res.data));
       this.total.set(res.total);
       this.hasMore.set(res.hasMore);
       this.loading.set(false);
       this.loadingMore.set(false);
+    },
+    error: () => {
+      // Without an error callback an API failure becomes an unhandled
+      // rejection, which terminates the SSR Node process outright.
+      this.loading.set(false);
+      this.loadingMore.set(false);
+      this.hasMore.set(false);
+    },
     });
   }
 }
