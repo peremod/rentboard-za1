@@ -6,3 +6,27 @@ $color-gold: #D4A853;
 $color-sage: #3D7040;
 $bp-md: 768px;
 $bp-lg: 1024px;
+
+// ── Extended tokens (added when the form/control layer was built) ─────────
+$color-ink-soft:   #4A4034;   // secondary text
+$color-muted:      #7A6E60;   // captions, help text
+$color-border:     #DDD5C8;   // default control border
+$color-border-str: #C4BAA9;   // hover / stronger border
+$color-surface:    #FFFFFF;   // control + card background
+$color-surface-2:  #F2EDE3;   // subtle fill, table headers
+$color-danger:     #B23B3B;
+$color-success:    $color-sage;
+
+// Spacing scale — keeps vertical rhythm consistent across forms
+$sp-1: .25rem;
+$sp-2: .5rem;
+$sp-3: .75rem;
+$sp-4: 1rem;
+$sp-5: 1.5rem;
+$sp-6: 2rem;
+
+$radius:    6px;
+$radius-lg: 10px;
+
+// Minimum touch target (WCAG 2.5.5) — controls never render smaller
+$tap-target: 44px;

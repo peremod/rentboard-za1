@@ -40,3 +40,193 @@ a { color: $color-terracotta; }
   th { background: #F2EDE3; padding: .6rem .9rem; text-align: left; border-bottom: 2px solid #DDD5C8; }
   td { padding: .55rem .9rem; border-bottom: 1px solid #DDD5C8; }
 }
+
+// ═════════════════════════════════════════════════════════════════════════
+// FORM CONTROLS & BUTTONS
+//
+// Every input, select, textarea and label in the app was rendering with
+// browser defaults — none carried a class. These are element selectors on
+// purpose: they fix all 10 feature components without editing each one.
+//
+// Angular's emulated encapsulation makes component-scoped styles more
+// specific than these, so any component that already styles a control
+// keeps its own treatment. This is the floor, not an override.
+// ═════════════════════════════════════════════════════════════════════════
+
+// ── Labels ───────────────────────────────────────────────────────────────
+label {
+  display: block;
+  font-size: .875rem;
+  font-weight: 500;
+  color: $color-ink;
+  margin-bottom: $sp-2;
+
+  // Checkbox/radio labels wrap their control and must stay inline
+  &:has(> input[type='checkbox']),
+  &:has(> input[type='radio']) {
+    display: flex;
+    align-items: center;
+    gap: $sp-2;
+    font-weight: 400;
+    cursor: pointer;
+    margin-bottom: $sp-3;
+  }
+}
+
+// ── Text inputs, selects, textareas ──────────────────────────────────────
+input:not([type='checkbox']):not([type='radio']):not([type='file']),
+select,
+textarea {
+  display: block;
+  width: 100%;
+  min-height: $tap-target;
+  padding: $sp-3 $sp-4;
+  margin-bottom: $sp-4;
+
+  font-family: inherit;
+  font-size: 1rem;              // 16px — prevents iOS zoom-on-focus
+  color: $color-ink;
+  background: $color-surface;
+  border: 1px solid $color-border;
+  border-radius: $radius;
+
+  transition: border-color .15s ease, box-shadow .15s ease;
+
+  &::placeholder { color: $color-muted; }
+
+  &:hover:not(:disabled) { border-color: $color-border-str; }
+
+  &:focus-visible {
+    outline: none;
+    border-color: $color-terracotta;
+    box-shadow: 0 0 0 3px rgba(192, 78, 40, .18);
+  }
+
+  &:disabled {
+    background: $color-surface-2;
+    color: $color-muted;
+    cursor: not-allowed;
+  }
+
+  // Angular Forms invalid state — only after the user has interacted
+  &.ng-invalid.ng-touched {
+    border-color: $color-danger;
+    &:focus-visible { box-shadow: 0 0 0 3px rgba(178, 59, 59, .18); }
+  }
+}
+
+textarea {
+  min-height: 7rem;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+// Native select needs its own affordance once appearance is normalised
+select {
+  appearance: none;
+  padding-right: 2.5rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%237A6E60' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right $sp-4 center;
+  cursor: pointer;
+}
+
+// ── Checkboxes & radios ──────────────────────────────────────────────────
+input[type='checkbox'],
+input[type='radio'] {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+  accent-color: $color-terracotta;
+  cursor: pointer;
+  margin: 0;
+}
+
+// ── Buttons ──────────────────────────────────────────────────────────────
+// Bare <button> gets the primary treatment: 33 of 39 buttons carried no
+// class, and the common case in this app is a primary action.
+button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: $sp-2;
+
+  min-height: $tap-target;
+  padding: $sp-3 $sp-5;
+
+  font-family: inherit;
+  font-size: .9375rem;
+  font-weight: 600;
+  line-height: 1;
+
+  color: #fff;
+  background: $color-terracotta;
+  border: 1px solid transparent;
+  border-radius: $radius;
+  cursor: pointer;
+
+  transition: background-color .15s ease, transform .1s ease, opacity .15s ease;
+
+  &:hover:not(:disabled) { background: #A84424; }
+  &:active:not(:disabled) { transform: translateY(1px); }
+
+  &:focus-visible {
+    outline: 3px solid $color-gold;
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    opacity: .5;
+    cursor: not-allowed;
+  }
+}
+
+// Explicit variants — these win over the bare-button default above
+.btn {
+  &--secondary {
+    color: $color-ink;
+    background: $color-surface;
+    border-color: $color-border-str;
+    &:hover:not(:disabled) { background: $color-surface-2; }
+  }
+
+  &--ghost {
+    color: $color-ink;
+    background: transparent;
+    border-color: transparent;
+    &:hover:not(:disabled) { background: $color-surface-2; }
+  }
+
+  &--danger {
+    background: $color-danger;
+    &:hover:not(:disabled) { background: #9A3232; }
+  }
+
+  &--lg { min-height: 3.25rem; padding: $sp-4 $sp-6; font-size: 1rem; }
+  &--sm { min-height: 2.25rem; padding: $sp-2 $sp-3; font-size: .8125rem; }
+  &--block { width: 100%; }
+}
+
+// Links styled as buttons need the same box model
+a.btn { text-decoration: none; }
+
+// ── Form layout helpers ──────────────────────────────────────────────────
+fieldset { border: none; margin-bottom: $sp-5; }
+legend { font-weight: 600; margin-bottom: $sp-3; }
+
+// Field-level help and error text sit tight under their control
+.field-hint  { font-size: .8125rem; color: $color-muted; margin: -#{$sp-3} 0 $sp-4; }
+.field-error { font-size: .8125rem; color: $color-danger; margin: -#{$sp-3} 0 $sp-4; }
+
+// ── Accessibility floor ──────────────────────────────────────────────────
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+// Skip link target used by the app shell
+#main-content:focus { outline: none; }
