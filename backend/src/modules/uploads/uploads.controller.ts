@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, UseGuards, ServiceUnavailableException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
@@ -21,7 +21,15 @@ export class UploadsController {
   @UseGuards(JwtAuthGuard, LandlordGuard)
   @ApiBearerAuth()
   getImageKitAuth() {
-    const privateKey = this.config.get<string>('imagekit.privateKey')!;
+    const privateKey = this.config.get<string>('imagekit.privateKey');
+    // Without this, crypto.createHmac throws a bare TypeError and the client
+    // sees an opaque 500. Photo upload is the gate on publishing a room, so
+    // the failure needs to say exactly what is missing.
+    if (!privateKey) {
+      throw new ServiceUnavailableException(
+        'Photo upload is not configured on this server. Set IMAGEKIT_PRIVATE_KEY, IMAGEKIT_PUBLIC_KEY and IMAGEKIT_URL_ENDPOINT in the backend .env file.',
+      );
+    }
     const token = crypto.randomUUID();
     const expire = Math.floor(Date.now() / 1000) + 30 * 60; // 30 min
 

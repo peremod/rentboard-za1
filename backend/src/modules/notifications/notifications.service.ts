@@ -21,12 +21,27 @@ import { escapeHtml } from '../../common/utils/escape-html.util';
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  private readonly resend: Resend;
+  /**
+   * Null when RESEND_API_KEY is unset. The Resend constructor throws on a
+   * missing key, which previously killed application bootstrap entirely —
+   * the whole API refused to start just because email was unconfigured.
+   * Email is non-essential infrastructure: local development and self-hosted
+   * deployments must run without it, degrading to logged no-ops.
+   */
+  private readonly resend: Resend | null;
   private readonly from: string;
   private readonly frontend: string;
 
   constructor(private config: ConfigService) {
-    this.resend = new Resend(this.config.get<string>('resend.apiKey'));
+    const apiKey = this.config.get<string>('resend.apiKey');
+    if (apiKey) {
+      this.resend = new Resend(apiKey);
+    } else {
+      this.resend = null;
+      this.logger.warn(
+        'RESEND_API_KEY not set — transactional emails will be logged and skipped, not sent. Set it in .env to enable email.',
+      );
+    }
     this.from = `${this.config.get('resend.fromName')} <${this.config.get('resend.from')}>`;
     this.frontend = this.config.get<string>('frontendUrl')!;
   }
@@ -140,6 +155,10 @@ export class NotificationsService {
   }
 
   private async send(to: string, subject: string, html: string) {
+    if (!this.resend) {
+      this.logger.log(`[email skipped — no API key] would send to ${to}: ${subject}`);
+      return;
+    }
     try {
       await this.resend.emails.send({ from: this.from, to, subject, html });
       this.logger.log(`Email sent to ${to}: ${subject}`);
