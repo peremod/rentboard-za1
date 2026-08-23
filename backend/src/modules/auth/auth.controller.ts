@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Body, Req, Res, Query, UseGuards, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req, Res, Query, UseGuards, UnauthorizedException, Next, ServiceUnavailableException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+import * as passport from 'passport';
+import { GoogleStrategy } from './strategies/google.strategy';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AuthService, AuthResponse } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -33,9 +35,17 @@ export class AuthController {
   }
 
   @Get('google')
-  @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Start Google OAuth flow' })
-  googleAuth() {}
+  googleAuth(@Req() req: Request, @Res() res: Response, @Next() next: NextFunction) {
+    // Fail loudly and clearly when Google credentials are absent, rather than
+    // redirecting the user to Google with a placeholder client_id.
+    if (!GoogleStrategy.isConfigured) {
+      throw new ServiceUnavailableException(
+        'Google sign-in is not configured on this server. Use email and password, or set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in the backend .env file.',
+      );
+    }
+    return passport.authenticate('google', { scope: ['email', 'profile'] })(req, res, next);
+  }
 
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
