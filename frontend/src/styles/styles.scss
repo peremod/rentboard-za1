@@ -3,10 +3,10 @@
 // Authoritative visual spec, ported verbatim from the project's
 // Visual-Preview document, plus the BEM name bridge. Loaded before the
 // app's own rules so anything below can override deliberately.
-@import 'spec';
-@import 'bridge';
+@use 'spec';
+@use 'bridge';
 // Responsive layer last so its media queries override the desktop-only spec.
-@import 'responsive';
+@use 'responsive';
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; scroll-behavior: smooth; }

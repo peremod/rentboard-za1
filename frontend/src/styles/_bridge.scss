@@ -10,6 +10,11 @@
 // delete its entry here — do not add markup-specific styling to this file.
 // ═══════════════════════════════════════════════════════════════════════
 
+// Under the Sass module system an @extend only reaches CSS in this file and
+// in modules this file loads — so the spec must be loaded here, not merely
+// alongside in styles.scss, or every @extend below fails to find its target.
+@use 'spec';
+
 // ── Hero ─────────────────────────────────────────────────────────────────
 .hero__inner   { @extend .hero-inner; }
 .hero__eyebrow { @extend .hero-eyebrow; }

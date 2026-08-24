@@ -20,26 +20,26 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
 
         <div class="nav-links" [class.open]="mobileOpen()">
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
-             (click)="mobileOpen.set(false)">Browse rooms</a>
+             (click)="mobileOpen.set(false)">{{ 'nav.browse_rooms' | translate }}</a>
           @if (auth.isLandlord()) {
             <a routerLink="/landlord/upgrade" routerLinkActive="active" (click)="mobileOpen.set(false)">Pricing</a>
           }
-          <a routerLink="/legal/terms" routerLinkActive="active" (click)="mobileOpen.set(false)">Legal</a>
+          <a routerLink="/legal/terms" routerLinkActive="active" (click)="mobileOpen.set(false)">{{ 'nav.legal' | translate }}</a>
         </div>
 
         <div class="nav-actions">
           <app-lang-switcher/>
           @if (auth.isAuthenticated()) {
             @if (auth.isLandlord()) {
-              <a class="btn btn-ghost btn-sm" routerLink="/landlord/dashboard">My rooms</a>
+              <a class="btn btn-ghost btn-sm" routerLink="/landlord/dashboard">{{ 'nav.dashboard' | translate }}</a>
               <a class="btn btn-primary btn-sm" routerLink="/landlord/rooms/new">+ List a room</a>
             } @else {
-              <a class="btn btn-ghost btn-sm" routerLink="/tenant/dashboard">My applications</a>
+              <a class="btn btn-ghost btn-sm" routerLink="/tenant/dashboard">{{ 'nav.dashboard' | translate }}</a>
             }
-            <button type="button" class="btn btn-ghost btn-sm" (click)="logout()">Log out</button>
+            <button type="button" class="btn btn-ghost btn-sm" (click)="logout()">{{ 'nav.logout' | translate }}</button>
           } @else {
-            <a class="btn btn-ghost btn-sm" routerLink="/auth/login">Log in</a>
-            <a class="btn btn-primary btn-sm" routerLink="/auth/register">Get started free</a>
+            <a class="btn btn-ghost btn-sm" routerLink="/auth/login">{{ 'nav.login' | translate }}</a>
+            <a class="btn btn-primary btn-sm" routerLink="/auth/register">{{ 'nav.get_started' | translate }}</a>
           }
         </div>
 
