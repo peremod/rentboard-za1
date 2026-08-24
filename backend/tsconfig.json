@@ -6,6 +6,10 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
+    // Required for default-importing CommonJS packages that use `export =`
+    // (compression, cookie-parser). Without it TypeScript accepts the import
+    // but emits no interop helper, so the binding is undefined at runtime.
+    "esModuleInterop": true,
     "target": "ES2022",
     "sourceMap": true,
     "outDir": "./dist",
