@@ -1,0 +1,43 @@
+// ═══════════════════════════════════════════════════════════════════════
+// BRIDGE — maps the app's BEM class names onto the spec's flat names.
+//
+// The templates were written with BEM (room-card__body) while the spec in
+// _spec.scss uses flat names (room-body). Mapping here with @extend means
+// the app inherits the spec's design without rewriting a single template,
+// and the spec file stays byte-faithful so it can be re-synced later.
+//
+// When a template is eventually rewritten to use spec class names directly,
+// delete its entry here — do not add markup-specific styling to this file.
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── Room card ────────────────────────────────────────────────────────────
+.room-card__image-wrap { @extend .room-card-thumb; }
+.room-card__body       { @extend .room-body; }
+.room-card__price      { @extend .room-price; }
+.room-card__title      { @extend .room-title; }
+.room-card__location   { @extend .room-location; }
+.room-card__flags      { @extend .room-flags; }
+.room-card__badge      { @extend .room-badges; }
+
+// ── Hero ─────────────────────────────────────────────────────────────────
+.hero__inner   { @extend .hero-inner; }
+.hero__eyebrow { @extend .hero-eyebrow; }
+.hero__cta     { @extend .hero-ctas; }
+.hero__sub     { @extend .hero-sub; }
+
+// ── Notice board ─────────────────────────────────────────────────────────
+.board__main    { @extend .board-main; }
+.board__sidebar { @extend .filter-panel; }
+
+// ── Navbar / footer ──────────────────────────────────────────────────────
+.nav__inner { @extend .nav-inner; }
+.nav__links { @extend .nav-links; }
+
+// ── Buttons ──────────────────────────────────────────────────────────────
+// Templates use both .btn--primary (BEM) and .btn-primary (spec).
+.btn--primary { @extend .btn-primary; }
+.btn--outline { @extend .btn-outline; }
+.btn--ghost   { @extend .btn-ghost; }
+.btn--sage    { @extend .btn-sage; }
+.btn--sm      { @extend .btn-sm; }
+.btn--lg      { @extend .btn-lg; }

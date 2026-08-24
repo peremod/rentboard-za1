@@ -1,5 +1,11 @@
 @use 'variables' as *;
 
+// Authoritative visual spec, ported verbatim from the project's
+// Visual-Preview-v2 document, plus the BEM name bridge. Loaded before the
+// app's own rules so anything below can override deliberately.
+@import 'spec';
+@import 'bridge';
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; scroll-behavior: smooth; }
 body {
@@ -12,7 +18,7 @@ img, picture { display: block; max-width: 100%; }
 a { color: $color-terracotta; }
 
 // ── Legal pages (Privacy, Terms, Disclaimer, Cookies, PAIA) ──────────────
-.legal-page { min-height: 100vh; padding: 2rem 1rem; }
+
 .legal-container {
   max-width: 760px;
   margin: 0 auto;
@@ -25,21 +31,13 @@ a { color: $color-terracotta; }
   address { font-style: normal; line-height: 1.9; }
 }
 .legal-header { margin-bottom: 2.5rem; }
-.legal-meta { font-size: .85rem; color: #7A6E60; margin-bottom: 1rem; }
-.legal-intro {
-  font-size: 1rem; line-height: 1.75; color: #3A3228;
-  background: #F2EDE3; border-left: 3px solid $color-terracotta;
-  padding: 1.1rem; border-radius: 6px;
-}
+
+
 .disclaimer-banner {
   background: rgba(212, 168, 83, .12); border: 1px solid rgba(212, 168, 83, .35);
   border-radius: 8px; padding: 1rem; line-height: 1.7; margin-top: 1rem;
 }
-.legal-table {
-  width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: .88rem;
-  th { background: #F2EDE3; padding: .6rem .9rem; text-align: left; border-bottom: 2px solid #DDD5C8; }
-  td { padding: .55rem .9rem; border-bottom: 1px solid #DDD5C8; }
-}
+
 
 // ═════════════════════════════════════════════════════════════════════════
 // FORM CONTROLS & BUTTONS
@@ -195,39 +193,7 @@ button {
 }
 
 // Explicit variants — these win over the bare-button default above
-.btn {
-  // Outlined — terracotta on transparent, inverts on hover
-  &--outline {
-    color: $color-terracotta;
-    background: transparent;
-    border: 1.5px solid $color-terracotta;
-    &:hover:not(:disabled) {
-      background: $color-terracotta;
-      color: #fff;
-      box-shadow: none;
-    }
-  }
 
-  // Ghost — for use on the dark ink background (navbar, footer)
-  &--ghost {
-    color: rgba(250, 247, 240, .8);
-    background: transparent;
-    border: 1.5px solid rgba(250, 247, 240, .25);
-    &:hover:not(:disabled) {
-      border-color: rgba(250, 247, 240, .6);
-      color: $color-cream;
-      background: transparent;
-      box-shadow: none;
-    }
-  }
-
-  &--sage { background: $color-sage; &:hover:not(:disabled) { background: #346036; } }
-  &--danger { background: $color-danger; &:hover:not(:disabled) { background: #9A3232; } }
-
-  &--lg { padding: .75rem 1.6rem; font-size: 1rem; }
-  &--sm { padding: .38rem .85rem; font-size: .78rem; }
-  &--block { width: 100%; }
-}
 
 // Links styled as buttons need the same box model
 a.btn { text-decoration: none; }
