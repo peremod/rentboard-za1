@@ -212,3 +212,79 @@
 @media (max-width: 600px) {
   .form-row { margin-bottom: .85rem; }
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// PORTAL SHELL ADDITIONS
+// The preview mocks the dashboards as static HTML, so a few pieces the real
+// app needs (logout, nav badges, row actions, status dots) have no spec rule.
+// These follow the spec's visual language rather than inventing a new one.
+// ═══════════════════════════════════════════════════════════════════════
+.portal-nav-cta { padding: .75rem 1.25rem; margin-top: 1rem; }
+.portal-nav-cta .btn { width: 100%; font-size: .82rem; }
+
+.portal-nav-badge {
+  background: var(--terra); color: #fff;
+  font-size: .6rem; font-weight: 700;
+  padding: .1rem .35rem; border-radius: var(--r-full); margin-left: .35rem;
+}
+
+// Logout is a <button> for accessibility but must read as a nav link
+.portal-logout {
+  width: 100%; background: none; border: none; text-align: left;
+  font-family: var(--font-body); margin-top: auto;
+  &:hover { background: rgba(255, 255, 255, .06); }
+}
+
+.portal-thumb {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem; background: var(--cream2);
+}
+
+.portal-row-actions {
+  display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; flex-shrink: 0;
+}
+
+// Ghost variant for light backgrounds — the spec's .btn-ghost assumes dark ink
+.btn-ghost-light {
+  background: transparent; color: var(--slate);
+  border: 1.5px solid var(--border);
+  &:hover { border-color: var(--slate); color: var(--ink); background: transparent; box-shadow: none; }
+}
+
+.status-dot {
+  font-weight: 600; text-transform: capitalize;
+  &--active   { color: var(--sage); }
+  &--reserved { color: var(--gold); }
+  &--draft    { color: var(--slate); }
+  &--let      { color: var(--slate); }
+  &--paused   { color: var(--slate); }
+}
+
+.app-card--archived { background: var(--cream2); }
+.app-card--closed   { opacity: .7; }
+
+// Expanded message thread breaks out of the card's flex row
+.app-card__thread {
+  flex: 1 1 100%;
+  margin-top: .85rem;
+  padding-top: .85rem;
+  border-top: 1px solid var(--border);
+}
+
+.app-card { flex-wrap: wrap; }
+.muted { color: var(--slate); font-size: .88rem; }
+
+@media (max-width: 860px) {
+  // Sidebar is a horizontal strip here, so the CTA and logout do not belong in it
+  .portal-nav-cta, .portal-logout { display: none; }
+}
+
+@media (max-width: 600px) {
+  .portal-row-actions { flex: 1 1 100%; }
+  .portal-row-actions .btn { flex: 1; }
+}
+
+// The spec only styles four of the six application statuses; 'viewed' and
+// 'withdrawn' exist in the model and would otherwise render as bare text.
+.status-viewed    { background: rgba(30, 95, 168, .1); color: #1E5FA8; }
+.status-withdrawn { background: rgba(122, 110, 96, .1); color: var(--slate); }

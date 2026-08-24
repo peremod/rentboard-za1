@@ -6,82 +6,94 @@ import { Application } from '../../../core/models/application.model';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { MessageThread } from '../../../shared/components/message-thread/message-thread';
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
+import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, MessageThread],
+  imports: [RouterLink, ZarCentsPipe, MessageThread, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="dashboard">
-      <div class="dashboard__header">
-        <h1>Welcome, {{ auth.user()?.fullName }} 👋</h1>
-        <button type="button" (click)="auth.logout()">Log out</button>
-      </div>
+    <app-portal-shell [navItems]="navItems" roleLabel="Tenant" avatarColour="var(--sage)">
 
-      <div class="dashboard__links">
-        <a routerLink="/">← Browse more rooms</a>
-        @if (billingEnabled) {
-          <a routerLink="/tenant/passport">🪪 Get your Renter's Passport</a>
-        }
-      </div>
-      <h2 class="dashboard__section-title">Your applications</h2>
-
-      @if (loading()) {
-        <p>Loading…</p>
-      } @else if (applications().length === 0) {
-        <p class="muted">You haven't applied to any rooms yet.</p>
-      } @else {
-        <div class="dashboard__list">
-          @for (app of applications(); track app.id) {
-            <div class="app-card">
-              <div class="app-card__header" (click)="toggle(app.id)">
-                <div>
-                  <strong>{{ app.room?.title }}</strong>
-                  <p class="app-card__meta">
-                    @if (app.room) { {{ app.room.rentCents | zarCents:'monthly' }} · }
-                    <span [style.color]="app.status === 'accepted' ? '#3D7040' : app.status === 'rejected' ? '#D63B3B' : '#7A6E60'">{{ app.status }}</span>
-                  </p>
-                </div>
-                <div class="app-card__actions">
-                  @if (app.room) { <a [routerLink]="['/rooms', app.room.id]" (click)="$event.stopPropagation()">View room →</a> }
-                  <span>{{ openId() === app.id ? '▲' : '▼' }}</span>
-                </div>
-              </div>
-              @if (openId() === app.id) { <app-message-thread [applicationId]="app.id"/> }
-            </div>
-          }
+      @if (shortlistedCount() > 0) {
+        <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
+          🎉
+          <span>
+            You've been <strong>shortlisted</strong> for
+            {{ shortlistedCount() }} {{ shortlistedCount() === 1 ? 'room' : 'rooms' }}.
+            Message the landlord to arrange a viewing.
+          </span>
         </div>
       }
-    </div>
+
+      <div class="stat-row">
+        <div class="stat-box"><div class="val">{{ applications().length }}</div><div class="lbl">Applications</div></div>
+        <div class="stat-box"><div class="val">{{ shortlistedCount() }}</div><div class="lbl">Shortlisted</div></div>
+        <div class="stat-box"><div class="val">{{ pendingCount() }}</div><div class="lbl">Awaiting reply</div></div>
+      </div>
+
+      <section class="dash-section">
+        <div class="dash-section-title">Your applications</div>
+
+        @if (loading()) {
+          <p class="muted">Loading…</p>
+        } @else if (applications().length === 0) {
+          <div class="empty-state">
+            <h3>No applications yet</h3>
+            <p>Browse the notice board and apply — it's free, and always will be.</p>
+            <a class="btn btn-primary" routerLink="/">Browse rooms</a>
+          </div>
+        } @else {
+          @for (app of applications(); track app.id) {
+            <div class="app-card" [class.app-card--closed]="app.status === 'rejected'">
+              <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
+
+              <div class="app-info">
+                <div class="app-room">{{ app.room?.title }}</div>
+                @if (app.room) {
+                  <div class="app-location">{{ app.room.locationDisplay }}</div>
+                  <div class="app-rent">{{ app.room.rentCents | zarCents:'monthly' }}</div>
+                }
+              </div>
+
+              <div class="portal-row-actions">
+                <span class="app-status" [class]="'app-status status-' + app.status">
+                  {{ statusLabel(app.status) }}
+                </span>
+                <button type="button" class="btn btn-sm btn-outline" (click)="toggle(app.id)"
+                        [attr.aria-expanded]="openId() === app.id">
+                  {{ openId() === app.id ? 'Hide messages' : '💬 Messages' }}
+                </button>
+                @if (app.room) {
+                  <a class="btn btn-sm btn-ghost-light" [routerLink]="['/rooms', app.room.id]">View room</a>
+                }
+              </div>
+
+              @if (openId() === app.id) {
+                <div class="app-card__thread">
+                  <app-message-thread [applicationId]="app.id"/>
+                </div>
+              }
+            </div>
+          }
+        }
+      </section>
+    </app-portal-shell>
   `,
-  styles: [`
-    .dashboard { font-family: sans-serif; padding: 2rem 1.25rem; max-width: 640px; margin: 0 auto; }
-    .dashboard__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: .75rem; flex-wrap: wrap; }
-    .dashboard__links { display: flex; gap: 1rem; flex-wrap: wrap; }
-    .dashboard__links a { font-size: .85rem; }
-    .dashboard__section-title { font-size: 1rem; margin: 1.5rem 0 1rem; }
-    .dashboard__list { display: flex; flex-direction: column; gap: .75rem; }
-    .muted { color: #7A6E60; }
-
-    .app-card { border: 1px solid #DDD5C8; border-radius: 8px; padding: .9rem; }
-    .app-card__header { display: flex; justify-content: space-between; align-items: center; cursor: pointer; gap: .75rem; }
-    .app-card__meta { font-size: .8rem; color: #7A6E60; margin-top: .2rem; }
-    .app-card__actions { display: flex; gap: .6rem; align-items: center; flex-shrink: 0; }
-    .app-card__actions a { font-size: .8rem; white-space: nowrap; }
-
-    /* Mobile — PRE-LAUNCH-CHECKLIST.md #9 */
-    @media (max-width: 480px) {
-      .app-card__header { flex-direction: column; align-items: flex-start; }
-      .app-card__actions { width: 100%; justify-content: space-between; }
-    }
-  `],
+  // Layout comes from the global spec + responsive layers.
 })
 export class TenantDashboard implements OnInit {
   auth = inject(AuthService);
   private applicationsService = inject(ApplicationsService);
 
   billingEnabled = BILLING_ENABLED;
+
+  readonly navItems: PortalNavItem[] = [
+    { label: 'Dashboard', icon: '📋', route: '/tenant/dashboard', exact: true },
+    { label: 'Browse rooms', icon: '🔍', route: '/' },
+    ...(BILLING_ENABLED ? [{ label: "Renter's Passport", icon: '🛂', route: '/tenant/passport' }] : []),
+  ];
 
   applications = signal<Application[]>([]);
   loading = signal(true);
@@ -92,6 +104,27 @@ export class TenantDashboard implements OnInit {
       next: (apps) => { this.applications.set(apps); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
+  }
+
+  shortlistedCount() {
+    return this.applications().filter((a) => a.status === 'shortlisted').length;
+  }
+
+  pendingCount() {
+    return this.applications().filter((a) => a.status === 'pending' || a.status === 'viewed').length;
+  }
+
+  /** Human-readable status, matching the spec's pill labels. */
+  statusLabel(status: string): string {
+    const labels: Record<string, string> = {
+      pending: '⏳ Pending',
+      viewed: '👀 Viewed',
+      shortlisted: '⭐ Shortlisted',
+      accepted: '✓ Accepted',
+      rejected: '✕ Not this time',
+      withdrawn: 'Withdrawn',
+    };
+    return labels[status] ?? status;
   }
 
   toggle(id: string) {

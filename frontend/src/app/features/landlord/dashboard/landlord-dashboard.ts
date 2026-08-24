@@ -7,6 +7,7 @@ import { StripeService } from '../../../core/services/stripe.service';
 import { Room } from '../../../core/models/room.model';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
+import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 
 /**
  * Billing (Upgrade link, Boost button) is hidden behind BILLING_ENABLED —
@@ -18,114 +19,111 @@ import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 @Component({
   selector: 'app-landlord-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, DatePipe],
+  imports: [RouterLink, ZarCentsPipe, DatePipe, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="dashboard">
-      <div class="dashboard__header">
-        <h1>Welcome, {{ auth.user()?.fullName }} 👋</h1>
-        <button type="button" (click)="auth.logout()">Log out</button>
+    <app-portal-shell [navItems]="navItems" roleLabel="Landlord"
+                      [primaryAction]="{ label: '+ List a Room', route: '/landlord/rooms/new' }">
+
+      <div class="insight-banner">
+        📊
+        <span>
+          You have <strong>{{ activeCount() }}</strong> active
+          {{ activeCount() === 1 ? 'room' : 'rooms' }} and
+          <strong>{{ totalApplicants() }}</strong> total
+          {{ totalApplicants() === 1 ? 'applicant' : 'applicants' }}.
+          Landlords who reply within 24 hours get far more viewings.
+        </span>
       </div>
 
-      <div class="dashboard__actions">
-        <a routerLink="/landlord/rooms/new" class="btn btn--primary">+ List a new room</a>
-        @if (billingEnabled) {
-          <a routerLink="/landlord/upgrade" class="btn btn--dark">⭐ Upgrade plan</a>
-        }
+      <div class="stat-row">
+        <div class="stat-box"><div class="val">{{ totalViews() }}</div><div class="lbl">Total views</div></div>
+        <div class="stat-box"><div class="val">{{ totalApplicants() }}</div><div class="lbl">Applications</div></div>
+        <div class="stat-box"><div class="val">{{ activeCount() }}</div><div class="lbl">Active rooms</div></div>
+        <div class="stat-box"><div class="val">{{ archivedRooms().length }}</div><div class="lbl">Previously let</div></div>
       </div>
+
       @if (!billingEnabled) {
-        <p class="free-notice">🎉 Free for everyone right now — unlimited listings, up to 20 photos per room, one-click relist.</p>
-      }
-
-      <h2 class="dashboard__section-title">Your rooms</h2>
-
-      @if (loading()) {
-        <p>Loading…</p>
-      } @else if (rooms().length === 0) {
-        <p class="muted">You haven't listed a room yet. Click "List a new room" to get started — it's free.</p>
-      } @else {
-        <div class="dashboard__list">
-          @for (room of rooms(); track room.id) {
-            <div class="room-row">
-              <div class="room-row__info">
-                <strong>{{ room.title }}</strong>
-                @if (room.isFeatured) { <span class="badge">⭐ Featured</span> }
-                <p class="room-row__meta">
-                  {{ room.rentCents | zarCents:'monthly' }} · {{ room.locationDisplay }} ·
-                  <span [style.color]="room.status === 'active' ? '#3D7040' : '#7A6E60'">{{ room.status }}</span>
-                  · {{ room.applicationCount }} applicant{{ room.applicationCount !== 1 ? 's' : '' }}
-                </p>
-              </div>
-              <div class="room-row__actions">
-                @if (billingEnabled && !room.isFeatured && room.status === 'active') {
-                  <button type="button" class="btn-boost" (click)="boost(room.id)">⭐ Boost R99</button>
-                }
-                <a [routerLink]="['/landlord/rooms', room.id, 'applicants']">Applicants →</a>
-                <a [routerLink]="['/rooms', room.id]">View →</a>
-              </div>
-            </div>
-          }
+        <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
+          🎉 <span>Free for everyone right now — unlimited listings, up to 20 photos per room, one-click relist.</span>
         </div>
       }
 
-      <h2 class="dashboard__section-title dashboard__section-title--archived">Let rooms — relist in one click</h2>
-      @if (loadingArchived()) {
-        <p>Loading…</p>
-      } @else if (archivedRooms().length === 0) {
-        <p class="muted">No let rooms yet.</p>
-      } @else {
-        <div class="dashboard__list">
-          @for (room of archivedRooms(); track room.id) {
-            <div class="room-row room-row--archived">
-              <div class="room-row__info">
-                <strong>{{ room.title }}</strong>
-                <p class="room-row__meta">
-                  {{ room.rentCents | zarCents:'monthly' }} · {{ room.locationDisplay }} · let {{ room.letAt ? (room.letAt | date) : '' }}
-                  @if (room.relistCount > 0) { · relisted {{ room.relistCount }}× before }
-                </p>
+      <section class="dash-section">
+        <div class="dash-section-title">Active listings</div>
+
+        @if (loading()) {
+          <p class="muted">Loading…</p>
+        } @else if (rooms().length === 0) {
+          <div class="empty-state">
+            <h3>No rooms listed yet</h3>
+            <p>List your first room — it's free, and takes a couple of minutes.</p>
+            <a class="btn btn-primary" routerLink="/landlord/rooms/new">List a room free</a>
+          </div>
+        } @else {
+          @for (room of rooms(); track room.id) {
+            <div class="app-card">
+              <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
+              <div class="app-info">
+                <div class="app-room">
+                  {{ room.title }}
+                  @if (room.isFeatured) { <span class="badge badge-featured">⭐ Featured</span> }
+                </div>
+                <div class="app-location">{{ room.locationDisplay }}</div>
+                <div class="app-rent">
+                  {{ room.rentCents | zarCents:'monthly' }} ·
+                  <span [class]="'status-dot status-dot--' + room.status">● {{ room.status }}</span>
+                </div>
               </div>
-              <div class="room-row__actions">
-                @if (relistError() === room.id) { <span class="error">Couldn't relist — try again</span> }
-                <button type="button" class="btn-relist" [disabled]="relisting() === room.id" (click)="relist(room.id)">
+              <div class="portal-row-actions">
+                <a class="btn btn-sm btn-outline"
+                   [routerLink]="['/landlord/rooms', room.id, 'applicants']">
+                  {{ room.applicationCount }} applicant{{ room.applicationCount === 1 ? '' : 's' }}
+                </a>
+                <a class="btn btn-sm btn-ghost-light" [routerLink]="['/rooms', room.id]">View</a>
+                @if (billingEnabled && !room.isFeatured && room.status === 'active') {
+                  <button type="button" class="btn btn-sm btn-sage" (click)="boost(room.id)">⭐ Boost R99</button>
+                }
+              </div>
+            </div>
+          }
+        }
+      </section>
+
+      <section class="dash-section">
+        <div class="dash-section-title">Previously let — relist instantly</div>
+
+        @if (loadingArchived()) {
+          <p class="muted">Loading…</p>
+        } @else if (archivedRooms().length === 0) {
+          <p class="muted">No let rooms yet. When you mark a room as let it will appear here, ready to relist.</p>
+        } @else {
+          @for (room of archivedRooms(); track room.id) {
+            <div class="app-card app-card--archived">
+              <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
+              <div class="app-info">
+                <div class="app-room">{{ room.title }}</div>
+                <div class="app-location">
+                  Let {{ room.letAt | date:'MMM yyyy' }} · {{ room.rentCents | zarCents:'monthly' }}
+                </div>
+                @if (relistError() === room.id) {
+                  <div class="field-error" role="alert">Could not relist — please try again.</div>
+                }
+              </div>
+              <div class="portal-row-actions">
+                <button type="button" class="btn btn-sm btn-primary"
+                        [disabled]="relisting() === room.id" (click)="relist(room.id)">
                   {{ relisting() === room.id ? 'Relisting…' : '🔁 Relist' }}
                 </button>
               </div>
             </div>
           }
-        </div>
-      }
-    </div>
+        }
+      </section>
+    </app-portal-shell>
   `,
-  styles: [`
-    .dashboard { font-family: sans-serif; padding: 2rem 1.25rem; max-width: 720px; margin: 0 auto; }
-    .dashboard__header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; gap: .75rem; flex-wrap: wrap; }
-    .dashboard__actions { display: flex; gap: .75rem; margin-bottom: .75rem; flex-wrap: wrap; }
-    .free-notice { font-size: .82rem; background: rgba(61,112,64,.1); color: #3D7040; padding: .6rem .9rem; border-radius: 6px; margin-bottom: 1.5rem; }
-    .dashboard__section-title { font-size: 1rem; margin-bottom: 1rem; }
-    .dashboard__section-title--archived { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid #DDD5C8; }
-    .dashboard__list { display: flex; flex-direction: column; gap: .75rem; }
-    .muted { color: #7A6E60; }
-    .error { font-size: .74rem; color: #D63B3B; }
-    .btn { padding: .6rem 1.1rem; border-radius: 6px; text-decoration: none; font-weight: 700; }
-    .btn--primary { background: #C04E28; color: #fff; }
-    .btn--dark { background: #1A1410; color: #fff; }
-    .badge { font-size: .6rem; font-weight: 700; background: #D4A853; color: #fff; padding: .1rem .4rem; border-radius: 10px; margin-left: .3rem; }
-
-    .room-row { border: 1px solid #DDD5C8; border-radius: 8px; padding: .9rem; display: flex; justify-content: space-between; align-items: center; gap: .75rem; }
-    .room-row--archived { background: #FAF7F1; }
-    .room-row__meta { font-size: .8rem; color: #7A6E60; margin-top: .2rem; }
-    .room-row__actions { display: flex; gap: .75rem; align-items: center; flex-shrink: 0; }
-    .room-row__actions a { font-size: .8rem; white-space: nowrap; }
-    .btn-boost { font-size: .78rem; background: none; border: 1px solid #D4A853; color: #D4A853; border-radius: 6px; padding: .3rem .6rem; cursor: pointer; white-space: nowrap; }
-    .btn-relist { font-size: .78rem; background: #3D7040; color: #fff; border: none; border-radius: 6px; padding: .35rem .7rem; cursor: pointer; font-weight: 700; white-space: nowrap; }
-    .btn-relist:disabled { opacity: .6; cursor: not-allowed; }
-
-    /* Mobile — PRE-LAUNCH-CHECKLIST.md #9: stack rows instead of squeezing them */
-    @media (max-width: 480px) {
-      .room-row { flex-direction: column; align-items: flex-start; }
-      .room-row__actions { width: 100%; justify-content: space-between; }
-    }
-  `],
+  // Layout comes from the global spec + responsive layers. Scoped styles here
+  // would be more specific than those and would break the breakpoints.
 })
 export class LandlordDashboard implements OnInit {
   auth = inject(AuthService);
@@ -133,6 +131,12 @@ export class LandlordDashboard implements OnInit {
   private stripe = inject(StripeService);
 
   billingEnabled = BILLING_ENABLED;
+
+  readonly navItems: PortalNavItem[] = [
+    { label: 'Dashboard', icon: '📊', route: '/landlord/dashboard', exact: true },
+    { label: 'List a room', icon: '🏠', route: '/landlord/rooms/new' },
+    ...(BILLING_ENABLED ? [{ label: 'Billing', icon: '💳', route: '/landlord/upgrade' }] : []),
+  ];
 
   rooms = signal<Room[]>([]);
   loading = signal(true);
@@ -169,6 +173,19 @@ export class LandlordDashboard implements OnInit {
   /** Kept for when BILLING_ENABLED flips back to true — see feature-flags.ts. */
   boost(roomId: string) {
     this.stripe.boostRoom(roomId);
+  }
+
+  /** Derived dashboard counters — computed from the loaded rooms, not stored. */
+  activeCount() {
+    return this.rooms().filter((r) => r.status === 'active').length;
+  }
+
+  totalApplicants() {
+    return this.rooms().reduce((sum, r) => sum + (r.applicationCount ?? 0), 0);
+  }
+
+  totalViews() {
+    return this.rooms().reduce((sum, r) => sum + (r.viewCount ?? 0), 0);
   }
 
   private loadArchived() {
