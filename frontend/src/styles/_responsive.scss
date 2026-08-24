@@ -1,0 +1,214 @@
+// ═══════════════════════════════════════════════════════════════════════
+// RESPONSIVE LAYER
+//
+// The visual preview is a desktop-only mockup — it contains zero media
+// queries — so porting it faithfully produced a desktop-only app. This
+// file adapts the spec's layouts to smaller screens without editing
+// _spec.scss, which must stay a faithful copy for re-syncing.
+//
+// Breakpoints (max-width, mobile-last to match the spec's desktop-first CSS):
+//   1024px  small laptop / large tablet
+//    860px  tablet — sidebars collapse, burger nav appears
+//    600px  phone landscape / large phone
+//    400px  small phone (iPhone SE, older Android)
+//
+// Everything here is layout only: no colours, type scales or spacing that
+// would contradict the design.
+// ═══════════════════════════════════════════════════════════════════════
+
+// ── Elements the app needs that the desktop-only preview never defined ──
+.room-price-per { font-size: .7rem; color: var(--slate); font-weight: 400; }
+
+.nav-burger {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--cream);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: .25rem .5rem;
+}
+
+// Filter drawer toggle — only ever visible once the sidebar collapses
+.filter-toggle-btn { display: none; }
+
+// ── ≤1024px — tighten the desktop grid ───────────────────────────────────
+@media (max-width: 1024px) {
+  .board { grid-template-columns: 220px 1fr; gap: 1.5rem; }
+  .footer-inner { grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 2rem; }
+  .hero { padding: 4rem 1.5rem 3.5rem; }
+  .portal-wrap { grid-template-columns: 200px 1fr; }
+}
+
+// ── ≤860px — tablet: sidebars and multi-column layouts collapse ──────────
+@media (max-width: 860px) {
+  // Nav becomes a burger menu
+  .nav-inner { gap: 1rem; position: relative; }
+  .nav-burger { display: block; order: 3; }
+
+  .nav-links {
+    display: none;
+
+    &.open {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      position: absolute;
+      top: 66px;
+      left: 0;
+      right: 0;
+      background: var(--ink);
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, .1);
+      box-shadow: var(--shadow-lg);
+      z-index: 99;
+    }
+  }
+
+  .nav-actions { margin-left: auto; gap: .4rem; }
+
+  // Notice board: filter panel moves above results and stops sticking
+  .board { grid-template-columns: 1fr; padding: 1.5rem 1rem; gap: 1.25rem; }
+  .filter-panel { position: static; }
+
+  // Portal dashboards: sidebar becomes a horizontal scroller
+  .portal-wrap { grid-template-columns: 1fr; min-height: auto; }
+
+  .portal-nav {
+    display: flex;
+    overflow-x: auto;
+    padding: 0;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, .07);
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  .portal-user { display: none; }   // avatar block is dead weight in a strip
+
+  .portal-nav-link {
+    white-space: nowrap;
+    border-left: none;
+    border-bottom: 3px solid transparent;
+    padding: .85rem 1rem;
+    &:hover, &.active { border-left: none; border-bottom-color: var(--terra); }
+  }
+
+  .portal-main { padding: 1.25rem 1rem; }
+
+  .stat-row { grid-template-columns: repeat(2, 1fr); }
+  .footer-inner { grid-template-columns: 1fr 1fr; gap: 2rem; }
+  .section { padding: 3rem 1.25rem; }
+  .hero { padding: 3.5rem 1.25rem 3rem; }
+}
+
+// ── ≤600px — phone ───────────────────────────────────────────────────────
+@media (max-width: 600px) {
+  // Search controls stack full width rather than squeezing side by side
+  .search-wrap { padding: .85rem 1rem; }
+  .search-bar { flex-direction: column; align-items: stretch; gap: .5rem; }
+  .search-select, .search-input-wrap { width: 100%; min-width: 0; }
+
+  // Single-column room grid — 280px minmax would otherwise overflow
+  .room-grid { grid-template-columns: 1fr; gap: 1rem; }
+
+  .hero {
+    padding: 2.75rem 1rem 2.5rem;
+    h1 { font-size: clamp(1.9rem, 8vw, 2.4rem); }
+  }
+  .hero-sub { font-size: .95rem; }
+  .hero-ctas { flex-direction: column; align-items: stretch; margin-bottom: 2rem; }
+  .hero-ctas .btn { width: 100%; }
+  .hero-stats { gap: 1.25rem 2rem; }
+  .hero-stat strong { font-size: 1.35rem; }
+
+  // Trust strip wraps to a readable two-per-row instead of one long line
+  .trust-strip { gap: 1rem 1.75rem; padding: 1.25rem 1rem; }
+  .trust-item { font-size: .8rem; }
+
+  .results-header { flex-direction: column; align-items: flex-start; }
+  .sort-select { width: 100%; }
+
+  // Application cards: thumb + text + status cannot sit on one row
+  .app-card { flex-wrap: wrap; gap: .75rem; }
+  .app-info { flex: 1 1 100%; order: 2; }
+  .app-thumb { order: 1; }
+  .app-card > div:last-child { order: 3; flex: 1 1 100%; }
+  .app-status { display: inline-block; }
+
+  .footer { padding: 2.5rem 1rem 1.5rem; }
+  .footer-inner { grid-template-columns: 1fr; gap: 1.75rem; }
+  .footer-bottom { flex-direction: column; gap: .85rem; }
+  .footer-bottom > div:last-child { text-align: left !important; }
+
+  .section { padding: 2.5rem 1rem; }
+  .legal-page { padding: 2rem 1rem; }
+  .legal-section h2 { font-size: 1.1rem; }
+
+  // Wide legal tables scroll rather than forcing the page to
+  .legal-table { display: block; overflow-x: auto; white-space: nowrap; }
+
+  .cookie-banner {
+    left: .75rem;
+    right: .75rem;
+    bottom: .75rem;
+    max-width: none;
+    padding: 1.15rem;
+  }
+
+  .pricing-grid, .hiw-grid { grid-template-columns: 1fr; }
+  .plan-card, .hiw-step { padding: 1.35rem; }
+}
+
+// ── ≤400px — small phones ────────────────────────────────────────────────
+@media (max-width: 400px) {
+  .nav-inner { padding: 0 1rem; gap: .5rem; }
+  .nav-logo { font-size: 1.35rem; }
+  .nav-actions .btn { padding: .45rem .7rem; font-size: .78rem; }
+
+  .stat-row { grid-template-columns: 1fr; }
+  .hero-stats { gap: 1rem 1.5rem; }
+  .hero h1 { font-size: 1.75rem; }
+
+  .room-card-body { padding: .85rem .85rem .75rem; }
+  .filter-panel { padding: 1rem; }
+
+  // Keep the two nav actions from wrapping onto separate lines
+  .nav-actions { flex-wrap: nowrap; }
+}
+
+// ── Landscape phones: reclaim vertical space ─────────────────────────────
+@media (max-height: 480px) and (orientation: landscape) {
+  .hero { padding: 2rem 1.25rem; }
+  .hero-ctas { margin-bottom: 1.25rem; }
+  .nav { position: static; }   // sticky nav eats too much of a short viewport
+}
+
+// ── Very wide screens: stop the content from stranding in the middle ─────
+@media (min-width: 1600px) {
+  .nav-inner, .hero-inner, .board, .section-inner, .footer-inner, .search-bar {
+    max-width: 1360px;
+  }
+}
+
+// ── Auth pages (app-specific shell, not in the preview) ──────────────────
+@media (max-width: 600px) {
+  .auth { padding: 1.5rem 1rem 2.5rem; }
+  .auth__card { padding: 1.5rem 1.25rem; }
+  .auth__title { font-size: 1.4rem; }
+
+  // Two role buttons side by side get very cramped under ~360px
+  .auth__roles { gap: .5rem; }
+  .auth__role { font-size: .78rem; min-height: 3.5rem; }
+}
+
+@media (max-width: 360px) {
+  .auth__roles { grid-template-columns: 1fr; }
+  .auth__role { min-height: 2.75rem; }
+}
+
+// ── Create-room wizard form rows ─────────────────────────────────────────
+@media (max-width: 600px) {
+  .form-row { margin-bottom: .85rem; }
+}

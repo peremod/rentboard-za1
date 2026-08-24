@@ -114,6 +114,27 @@ check "GET /auth/me with token" 200 "$STATUS" "$BODY"
 req GET /api/auth/me
 check "GET /auth/me without token blocked" 401 "$STATUS"
 
+# -- 2b. ImageKit upload auth ----------------------------------------------
+# Photo upload gates publishing a room, so verify credentials explicitly
+# rather than discovering the problem inside the create-room wizard.
+head_ "2b. Photo upload (ImageKit)"
+req GET /api/uploads/imagekit-auth "" "$LTOKEN"
+if [[ "$STATUS" == "200" ]]; then
+  HAS_SIG=$(echo "$BODY" | jq -r 'has("signature") and has("token") and has("expire")')
+  PUBKEY=$(echo "$BODY" | jq -r '.publicKey // "null"')
+  if [[ "$HAS_SIG" == "true" && "$PUBKEY" != "null" && -n "$PUBKEY" ]]; then
+    green "  PASS  ImageKit auth returns a signed token  (200)"; PASS=$((PASS+1))
+    grey  "        publicKey ${PUBKEY:0:12}... - credentials are live"
+  else
+    red "  FAIL  ImageKit auth returned 200 but payload incomplete"; FAIL=$((FAIL+1))
+    grey "        $(echo "$BODY" | head -c 300)"
+  fi
+elif [[ "$STATUS" == "503" ]]; then
+  grey "  SKIP  ImageKit not configured - set IMAGEKIT_* in backend/.env"; SKIP=$((SKIP+1))
+else
+  check "ImageKit auth endpoint" 200 "$STATUS" "$BODY"
+fi
+
 # ── 3. Rooms ───────────────────────────────────────────────────────────────
 head_ "3. Rooms — landlord lifecycle"
 AVAIL=$(date -d '+30 days' +%Y-%m-%d 2>/dev/null || date -v+30d +%Y-%m-%d)

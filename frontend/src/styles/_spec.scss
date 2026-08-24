@@ -554,36 +554,3 @@ img{display:block;max-width:100%}
 .wc{background:rgba(30,95,168,.1);color:#1E5FA8}
 .kzn{background:rgba(61,112,64,.1);color:#3D7040}
 .ec{background:rgba(192,78,40,.1);color:var(--terra)}
-
-/* ── App additions to the spec ──────────────────────────────────────────
-   The preview hardcodes the "/mo" suffix with an inline style; the app
-   renders it from a template, so it needs a class. Same visual result. */
-.room-price-per{font-size:.7rem;color:var(--slate);font-weight:400}
-
-/* The preview's nav is desktop-only. The app needs a mobile burger. */
-.nav-burger{
-  display:none;background:none;border:none;color:var(--cream);
-  font-size:1.4rem;cursor:pointer;padding:.25rem .5rem;line-height:1;
-}
-@media (max-width:860px){
-  .nav-links{
-    display:none;
-    &.open{
-      display:flex;flex-direction:column;gap:.85rem;
-      position:absolute;top:66px;left:0;right:0;
-      background:var(--ink);padding:1.25rem 1.5rem;
-      border-bottom:1px solid rgba(255,255,255,.1);
-    }
-  }
-  .nav-burger{display:block;order:3}
-  .nav-actions{margin-left:auto;gap:.4rem}
-  .board{grid-template-columns:1fr}
-  .filter-panel{position:static}
-  .footer-inner{grid-template-columns:1fr 1fr;gap:2rem}
-  .portal-wrap{grid-template-columns:1fr}
-  .stat-row{grid-template-columns:repeat(2,1fr)}
-}
-@media (max-width:560px){
-  .footer-inner{grid-template-columns:1fr}
-  .hero-stats{gap:1.25rem}
-}
