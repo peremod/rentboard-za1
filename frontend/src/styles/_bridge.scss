@@ -10,15 +10,6 @@
 // delete its entry here — do not add markup-specific styling to this file.
 // ═══════════════════════════════════════════════════════════════════════
 
-// ── Room card ────────────────────────────────────────────────────────────
-.room-card__image-wrap { @extend .room-card-thumb; }
-.room-card__body       { @extend .room-body; }
-.room-card__price      { @extend .room-price; }
-.room-card__title      { @extend .room-title; }
-.room-card__location   { @extend .room-location; }
-.room-card__flags      { @extend .room-flags; }
-.room-card__badge      { @extend .room-badges; }
-
 // ── Hero ─────────────────────────────────────────────────────────────────
 .hero__inner   { @extend .hero-inner; }
 .hero__eyebrow { @extend .hero-eyebrow; }
@@ -26,12 +17,10 @@
 .hero__sub     { @extend .hero-sub; }
 
 // ── Notice board ─────────────────────────────────────────────────────────
-.board__main    { @extend .board-main; }
+// This preview lays the results column out as a bare <main> inside .board,
+// so there is no class to extend — the grid child needs no styling of its own.
+.board__main    { min-width: 0; }
 .board__sidebar { @extend .filter-panel; }
-
-// ── Navbar / footer ──────────────────────────────────────────────────────
-.nav__inner { @extend .nav-inner; }
-.nav__links { @extend .nav-links; }
 
 // ── Buttons ──────────────────────────────────────────────────────────────
 // Templates use both .btn--primary (BEM) and .btn-primary (spec).

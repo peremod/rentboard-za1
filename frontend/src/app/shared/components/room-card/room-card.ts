@@ -21,46 +21,62 @@ import { ZarCentsPipe } from '../../pipes/zar-cents.pipe';
   imports: [NgOptimizedImage, RouterLink, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <article class="room-card" [routerLink]="['/rooms', room().id]">
-      <div class="room-card__image-wrap">
-        <img
-          [ngSrc]="heroPath()"
-          [alt]="room().title"
-          width="600" height="400"
-          [priority]="isFirstCard()"
-        />
-        @if (room().isFeatured) { <span class="room-card__badge">⭐ Featured</span> }
-      </div>
-      <div class="room-card__body">
-        <div class="room-card__price">
-          {{ room().rentCents | zarCents:'monthly' }}
-          @if (room().billsIncluded) { <span class="room-card__bills">Bills incl.</span> }
+    <article class="room-card" [class.featured]="room().isFeatured">
+      <a [routerLink]="['/rooms', room().id]" [attr.aria-label]="'View room: ' + room().title">
+
+        @if (room().heroImagePath) {
+          <img class="room-card-img" [ngSrc]="heroPath()" width="280" height="196"
+               [priority]="isFirstCard()" [alt]="room().title"/>
+        } @else {
+          <div class="room-card-img-placeholder" aria-hidden="true">🏠</div>
+        }
+
+        <div class="room-badges">
+          @if (room().isFeatured) { <span class="badge badge-featured">⭐ Featured</span> }
+          @if (isNew()) { <span class="badge badge-new">New</span> }
+          @if (room().status === 'reserved') { <span class="badge badge-reserved">Reserved</span> }
         </div>
-        <h3 class="room-card__title">{{ room().title }}</h3>
-        <p class="room-card__location">{{ room().locationDisplay }}</p>
-        <div class="room-card__flags">
-          @if (room().couplesAllowed) { <span>Couples ✓</span> }
-          @if (room().dssAccepted) { <span>DSS/SASSA ✓</span> }
-          @if (room().guarantorAccepted) { <span>Guarantor ✓</span> }
-          @if (room().petsAllowed) { <span>Pets ✓</span> }
+
+        <div class="room-card-body">
+          <div class="room-price">
+            {{ room().rentCents | zarCents }}<span class="room-price-per">/mo</span>
+            @if (room().billsIncluded) { <span class="bills-tag">Bills incl.</span> }
+          </div>
+
+          <h3 class="room-title">{{ room().title }}</h3>
+
+          <p class="room-location">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" aria-hidden="true">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
+            {{ room().locationDisplay }}
+            <span class="province-badge" [class]="provinceClass()">{{ provinceAbbr() }}</span>
+          </p>
+
+          <div class="room-features">
+            <span class="room-feature">{{ roomTypeLabel() }}</span>
+            @if (room().housematesCount > 0) {
+              <span class="room-feature">👥 {{ room().housematesCount }} housemates</span>
+            }
+          </div>
+
+          <div class="room-flags">
+            @if (room().dssAccepted) { <span class="flag flag-blue">SASSA ✓</span> }
+            @if (room().couplesAllowed) { <span class="flag flag-green">Couples ✓</span> }
+            @if (room().petsAllowed) { <span class="flag flag-green">Pets ✓</span> }
+            @if (room().guarantorAccepted) { <span class="flag flag-blue">Guarantor ✓</span> }
+          </div>
+
+          <div class="room-footer">
+            <div class="landlord-info">
+              <span class="avail-from">Available {{ availableLabel() }}</span>
+            </div>
+          </div>
         </div>
-      </div>
+      </a>
     </article>
   `,
-  styles: [`
-    .room-card { display: block; background: #FDFAF4; border: 1px solid #DDD5C8; border-radius: 12px; overflow: hidden; text-decoration: none; color: inherit; cursor: pointer; transition: transform .15s, box-shadow .15s; }
-    .room-card:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(28,22,14,.12); }
-    .room-card__image-wrap { position: relative; background: #F2EDE3; }
-    .room-card__image-wrap img { width: 100%; height: auto; display: block; }
-    .room-card__badge { position: absolute; top: .6rem; left: .6rem; background: #D4A853; color: #fff; font-size: .65rem; font-weight: 700; padding: .2rem .5rem; border-radius: 20px; }
-    .room-card__body { padding: .9rem; }
-    .room-card__price { font-family: monospace; font-size: 1.05rem; font-weight: 700; color: #C04E28; margin-bottom: .2rem; }
-    .room-card__bills { font-family: sans-serif; font-size: .62rem; font-weight: 700; background: rgba(61,112,64,.12); color: #3D7040; padding: .1rem .4rem; border-radius: 20px; margin-left: .4rem; }
-    .room-card__title { font-size: .88rem; font-weight: 600; margin-bottom: .3rem; }
-    .room-card__location { font-size: .78rem; color: #7A6E60; margin-bottom: .6rem; }
-    .room-card__flags { display: flex; gap: .35rem; flex-wrap: wrap; }
-    .room-card__flags span { font-size: .65rem; font-weight: 700; background: rgba(61,112,64,.1); color: #3D7040; padding: .12rem .42rem; border-radius: 20px; }
-  `],
 })
 export class RoomCard {
   room = input.required<Room>();
@@ -69,4 +85,43 @@ export class RoomCard {
   saved = output<string>();
 
   heroPath = computed(() => this.room().heroImagePath || '/assets/images/room-placeholder.svg');
+
+  /** Listed within the last 7 days — drives the "New" badge in the spec design. */
+  isNew = computed(() => {
+    const published = this.room().publishedAt;
+    if (!published) return false;
+    return Date.now() - new Date(published).getTime() < 7 * 24 * 60 * 60 * 1000;
+  });
+
+  roomTypeLabel = computed(() => {
+    const labels: Record<string, string> = {
+      shared_house: '🏠 Shared house',
+      en_suite: '🚿 En-suite',
+      studio: '🏢 Studio',
+      private: '🔑 Private room',
+    };
+    return labels[this.room().roomType] ?? '🏠 Room';
+  });
+
+  availableLabel = computed(() => {
+    const from = new Date(this.room().availableFrom);
+    return from.getTime() <= Date.now()
+      ? 'now'
+      : from.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
+  });
+
+  /** Province abbreviation + colour class, matching the spec's province badges. */
+  private static readonly PROVINCES: Record<string, [string, string]> = {
+    'Gauteng': ['GP', 'gp'],
+    'Western Cape': ['WC', 'wc'],
+    'KwaZulu-Natal': ['KZN', 'kzn'],
+    'Eastern Cape': ['EC', 'ec'],
+    'Free State': ['FS', 'gp'],
+    'Limpopo': ['LP', 'kzn'],
+    'Mpumalanga': ['MP', 'kzn'],
+    'Northern Cape': ['NC', 'wc'],
+    'North West': ['NW', 'ec'],
+  };
+  provinceAbbr = computed(() => RoomCard.PROVINCES[this.room().province]?.[0] ?? '');
+  provinceClass = computed(() => RoomCard.PROVINCES[this.room().province]?.[1] ?? 'gp');
 }
