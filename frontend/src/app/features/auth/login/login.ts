@@ -15,19 +15,41 @@ import { AuthService } from '../../../core/services/auth.service';
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div style="max-width:360px;margin:3rem auto;font-family:sans-serif">
-      <h1>Welcome back</h1>
-      <button type="button" (click)="continueWithGoogle()">Continue with Google</button>
-      <hr/>
-      <form [formGroup]="form" (ngSubmit)="onSubmit()">
-        <label>Email address<br/><input type="email" formControlName="email"/></label><br/>
-        <label>Password<br/><input type="password" formControlName="password"/></label><br/>
-        @if (error()) { <p style="color:#D63B3B">{{ error() }}</p> }
-        <button type="submit" [disabled]="form.invalid || loading()">
-          {{ loading() ? 'Logging in…' : 'Log in' }}
+    <div class="auth">
+      <div class="auth__card">
+        <h1 class="auth__title">Welcome back</h1>
+        <p class="auth__sub">Log in to manage your rooms and applications.</p>
+
+        <button type="button" class="auth__google" (click)="continueWithGoogle()">
+          Continue with Google
         </button>
-      </form>
-      <p>No account? <a routerLink="/auth/register">Register free</a></p>
+
+        <div class="auth__divider"><span>or</span></div>
+
+        <form [formGroup]="form" (ngSubmit)="onSubmit()">
+          <div class="auth__field">
+            <label for="email">Email address</label>
+            <input id="email" type="email" formControlName="email" autocomplete="email"/>
+          </div>
+
+          <div class="auth__field">
+            <label for="password">Password</label>
+            <input id="password" type="password" formControlName="password" autocomplete="current-password"/>
+          </div>
+
+          @if (error()) {
+            <p class="auth__error" role="alert">{{ error() }}</p>
+          }
+
+          <button type="submit" class="auth__submit" [disabled]="form.invalid || loading()">
+            {{ loading() ? 'Logging in…' : 'Log in' }}
+          </button>
+        </form>
+
+        <p class="auth__foot">
+          No account? <a routerLink="/auth/register">Register free</a>
+        </p>
+      </div>
     </div>
   `,
 })

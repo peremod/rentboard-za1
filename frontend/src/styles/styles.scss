@@ -230,3 +230,142 @@ legend { font-weight: 600; margin-bottom: $sp-3; }
 
 // Skip link target used by the app shell
 #main-content:focus { outline: none; }
+
+// ═════════════════════════════════════════════════════════════════════════
+// AUTH PAGES (login / register)
+// Shared shell so both pages stay identical — they were previously two
+// separate sets of inline styles that had drifted apart.
+// ═════════════════════════════════════════════════════════════════════════
+.auth {
+  display: flex;
+  justify-content: center;
+  padding: $sp-6 $sp-4 $sp-6;
+
+  &__card {
+    width: 100%;
+    max-width: 26rem;
+    background: $color-surface;
+    border: 1px solid $color-border;
+    border-radius: $radius-lg;
+    padding: $sp-6 $sp-5;
+    box-shadow: 0 2px 10px rgba(26, 20, 16, .05);
+  }
+
+  &__title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.65rem;
+    line-height: 1.2;
+    margin-bottom: $sp-2;
+  }
+
+  &__sub {
+    color: $color-muted;
+    font-size: .9rem;
+    margin-bottom: $sp-5;
+  }
+
+  // Segmented control — the two role buttons. Previously two bare buttons
+  // in a plain <div>, which overflowed the container on narrow screens.
+  &__roles {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: $sp-2;
+    margin-bottom: $sp-5;
+  }
+
+  &__role {
+    width: 100%;
+    min-height: 3.25rem;
+    padding: $sp-2 $sp-3;
+    font-size: .8125rem;
+    font-weight: 600;
+    line-height: 1.25;
+    text-align: center;
+    white-space: normal;          // labels are two words wide, must wrap
+    color: $color-ink;
+    background: $color-surface;
+    border: 1.5px solid $color-border;
+
+    &:hover:not(.is-active) { background: $color-surface-2; }
+
+    &.is-active {
+      color: #fff;
+      background: $color-terracotta;
+      border-color: $color-terracotta;
+    }
+  }
+
+  &__field { margin-bottom: $sp-4; }
+
+  // Global control styles already add bottom margin; suppress the double gap
+  &__field input { margin-bottom: 0; }
+  &__field label { margin-bottom: $sp-2; }
+
+  &__error {
+    background: rgba(178, 59, 59, .08);
+    border-left: 3px solid $color-danger;
+    color: $color-danger;
+    font-size: .85rem;
+    padding: $sp-3;
+    border-radius: $radius;
+    margin-bottom: $sp-4;
+  }
+
+  &__submit { width: 100%; margin-top: $sp-2; }
+
+  // Disabled primary buttons were washing out to pale pink at opacity .5.
+  &__submit:disabled {
+    opacity: 1;
+    color: $color-muted;
+    background: $color-surface-2;
+    border-color: $color-border;
+  }
+
+  &__divider {
+    display: flex;
+    align-items: center;
+    gap: $sp-3;
+    margin: $sp-5 0;
+    color: $color-muted;
+    font-size: .8rem;
+
+    &::before, &::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: $color-border;
+    }
+  }
+
+  &__google {
+    width: 100%;
+    color: $color-ink;
+    background: $color-surface;
+    border: 1.5px solid $color-border-str;
+    &:hover:not(:disabled) { background: $color-surface-2; }
+  }
+
+  &__foot {
+    margin-top: $sp-5;
+    font-size: .875rem;
+    text-align: center;
+    color: $color-muted;
+  }
+
+  &__fine {
+    margin-top: $sp-4;
+    font-size: .75rem;
+    line-height: 1.6;
+    color: $color-muted;
+    text-align: center;
+  }
+}
+
+// Generic form row — label above control, single consistent gap.
+// Replaces the <label>Text<br/><input/></label> pattern, which produced
+// doubled spacing once labels became block-level.
+.form-row {
+  margin-bottom: $sp-4;
+  label { margin-bottom: $sp-2; }
+  input, select, textarea { margin-bottom: 0; }
+}

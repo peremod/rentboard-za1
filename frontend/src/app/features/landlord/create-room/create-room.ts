@@ -40,8 +40,8 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
               <option value="private">Private room</option>
             </select>
           </label>
-          <label>Title<br/><input type="text" formControlName="title" placeholder="e.g. Bright en-suite near Gautrain"/></label>
-          <label>Description<br/><textarea formControlName="description" rows="4" placeholder="Describe the room, the house, and who you're looking for (min. 50 characters)"></textarea></label>
+          <div class="form-row"><label>Title</label><input type="text" formControlName="title" placeholder="e.g. Bright en-suite near Gautrain"/></div>
+          <div class="form-row"><label>Description</label><textarea formControlName="description" rows="4" placeholder="Describe the room, the house, and who you're looking for (min. 50 characters)"></textarea></div>
           <p class="muted">{{ basicsForm.get('description')?.value?.length ?? 0 }}/50 characters minimum</p>
           <button type="button" [disabled]="basicsForm.invalid" (click)="step.set(2)">Next →</button>
         </form>
@@ -50,8 +50,8 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
       @if (step() === 2) {
         <form [formGroup]="pricingForm">
           <h2>Pricing &amp; location</h2>
-          <label>Monthly rent (ZAR)<br/><input type="number" formControlName="rent" min="100" placeholder="5500"/></label>
-          <label>Deposit (ZAR, optional)<br/><input type="number" formControlName="deposit" min="0"/></label>
+          <div class="form-row"><label>Monthly rent (ZAR)</label><input type="number" formControlName="rent" min="100" placeholder="5500"/></div>
+          <div class="form-row"><label>Deposit (ZAR, optional)</label><input type="number" formControlName="deposit" min="0"/></div>
           <label><input type="checkbox" formControlName="billsIncluded"/> Bills included</label>
           <label>Province
             <select formControlName="province">
@@ -59,9 +59,9 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
               @for (p of provinces; track p) { <option [value]="p">{{ p }}</option> }
             </select>
           </label>
-          <label>City / suburb<br/><input type="text" formControlName="city" placeholder="Sandton"/></label>
-          <label>Location display<br/><input type="text" formControlName="locationDisplay" placeholder="Sandton, Gauteng"/></label>
-          <label>Available from<br/><input type="date" formControlName="availableFrom"/></label>
+          <div class="form-row"><label>City / suburb</label><input type="text" formControlName="city" placeholder="Sandton"/></div>
+          <div class="form-row"><label>Location display</label><input type="text" formControlName="locationDisplay" placeholder="Sandton, Gauteng"/></div>
+          <div class="form-row"><label>Available from</label><input type="date" formControlName="availableFrom"/></div>
           <div class="wizard__actions">
             <button type="button" (click)="step.set(1)">← Back</button>
             <button type="button" [disabled]="pricingForm.invalid" (click)="step.set(3)">Next →</button>
@@ -72,7 +72,7 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
       @if (step() === 3) {
         <form [formGroup]="preferencesForm">
           <h2>Housemate preferences</h2>
-          <label>Current housemates<br/><input type="number" formControlName="housematesCount" min="0"/></label>
+          <div class="form-row"><label>Current housemates</label><input type="number" formControlName="housematesCount" min="0"/></div>
           <label><input type="checkbox" formControlName="couplesAllowed"/> Couples welcome</label>
           <label><input type="checkbox" formControlName="dssAccepted"/> DSS / SASSA accepted</label>
           <label><input type="checkbox" formControlName="guarantorAccepted"/> Guarantor accepted</label>

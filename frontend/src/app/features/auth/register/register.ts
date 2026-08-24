@@ -10,32 +10,59 @@ import { AuthService } from '../../../core/services/auth.service';
   imports: [CommonModule, ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div style="max-width:360px;margin:3rem auto;font-family:sans-serif">
-      <h1>Create your free account</h1>
-      <p>Free to list. Free to apply. Always.</p>
+    <div class="auth">
+      <div class="auth__card">
+        <h1 class="auth__title">Create your free account</h1>
+        <p class="auth__sub">Free to list. Free to apply. Always.</p>
 
-      <div>
-        <button type="button" [class.active]="role() === 'TENANT'" (click)="role.set('TENANT')">
-          I'm looking for a room
-        </button>
-        <button type="button" [class.active]="role() === 'LANDLORD'" (click)="role.set('LANDLORD')">
-          I have a room to let
-        </button>
+        <div class="auth__roles" role="group" aria-label="What brings you here?">
+          <button type="button" class="auth__role" [class.is-active]="role() === 'TENANT'"
+                  [attr.aria-pressed]="role() === 'TENANT'" (click)="role.set('TENANT')">
+            I'm looking for a room
+          </button>
+          <button type="button" class="auth__role" [class.is-active]="role() === 'LANDLORD'"
+                  [attr.aria-pressed]="role() === 'LANDLORD'" (click)="role.set('LANDLORD')">
+            I have a room to let
+          </button>
+        </div>
+
+        <form [formGroup]="form" (ngSubmit)="onSubmit()">
+          <div class="auth__field">
+            <label for="fullName">Full name</label>
+            <input id="fullName" type="text" formControlName="fullName" autocomplete="name"/>
+          </div>
+
+          <div class="auth__field">
+            <label for="email">Email address</label>
+            <input id="email" type="email" formControlName="email" autocomplete="email"/>
+          </div>
+
+          <div class="auth__field">
+            <label for="password">Password</label>
+            <input id="password" type="password" formControlName="password" autocomplete="new-password"/>
+            <p class="field-hint">At least 8 characters, with one uppercase letter and one number.</p>
+          </div>
+
+          @if (error()) {
+            <p class="auth__error" role="alert">{{ error() }}</p>
+          }
+
+          <button type="submit" class="auth__submit" [disabled]="form.invalid || loading()">
+            {{ loading() ? 'Creating account…' : 'Create account free' }}
+          </button>
+        </form>
+
+        <p class="auth__fine">
+          By registering you agree to our
+          <a routerLink="/legal/terms">Terms</a> and
+          <a routerLink="/legal/privacy">Privacy Policy</a>.
+          Your data is protected under POPIA.
+        </p>
+
+        <p class="auth__foot">
+          Already have an account? <a routerLink="/auth/login">Log in</a>
+        </p>
       </div>
-
-      <form [formGroup]="form" (ngSubmit)="onSubmit()">
-        <label>Full name<br/><input type="text" formControlName="fullName"/></label><br/>
-        <label>Email address<br/><input type="email" formControlName="email"/></label><br/>
-        <label>Password<br/><input type="password" formControlName="password"/></label><br/>
-        @if (error()) { <p style="color:#D63B3B">{{ error() }}</p> }
-        <button type="submit" [disabled]="form.invalid || loading()">
-          {{ loading() ? 'Creating account…' : 'Create account free' }}
-        </button>
-      </form>
-      <p style="font-size:.8rem">
-        By registering you agree to our Terms and Privacy Policy. Your data is protected under POPIA.
-      </p>
-      <p>Already have an account? <a routerLink="/auth/login">Log in</a></p>
     </div>
   `,
 })
