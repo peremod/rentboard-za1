@@ -1,23 +1,56 @@
-// RentBoard ZA design tokens — South African palette (terracotta + warm cream)
-$color-cream: #F5F0E8;
-$color-ink: #1A1410;
-$color-terracotta: #C04E28;
-$color-gold: #D4A853;
-$color-sage: #3D7040;
-$bp-md: 768px;
-$bp-lg: 1024px;
+// ═══════════════════════════════════════════════════════════════════════
+// RentBoard ZA — design tokens
+//
+// Values taken directly from RentBoard-ZA-Visual-Preview-v2.html, which is
+// the authoritative visual spec for this project. Do not adjust these
+// ad hoc — change the preview first, then mirror it here.
+// ═══════════════════════════════════════════════════════════════════════
 
-// ── Extended tokens (added when the form/control layer was built) ─────────
-$color-ink-soft:   #4A4034;   // secondary text
-$color-muted:      #7A6E60;   // captions, help text
-$color-border:     #DDD5C8;   // default control border
-$color-border-str: #C4BAA9;   // hover / stronger border
-$color-surface:    #FFFFFF;   // control + card background
-$color-surface-2:  #F2EDE3;   // subtle fill, table headers
+// ── Palette ──────────────────────────────────────────────────────────────
+$color-cream:      #FAF7F0;   // page background
+$color-cream-2:    #F2EDE3;   // subtle fill, table headers
+$color-ink:        #1C160E;   // primary text
+$color-ink-soft:   #3A3228;   // secondary text
+$color-terracotta: #C04E28;   // primary action
+$color-terra-2:    #E06038;   // primary hover
+$color-gold:       #C8902A;
+$color-sage:       #3D7040;
+$color-slate:      #7A6E60;   // muted text
+$color-border:     #E0D5C4;
+$color-card:       #FDFAF4;   // card surface
+$color-white:      #FFFFFF;   // control surface
+
 $color-danger:     #B23B3B;
 $color-success:    $color-sage;
 
-// Spacing scale — keeps vertical rhythm consistent across forms
+// Aliases kept so existing rules referencing the older names still resolve
+$color-muted:      $color-slate;
+$color-border-str: $color-slate;
+$color-surface:    $color-white;
+$color-surface-2:  $color-cream-2;
+
+// ── Typography ───────────────────────────────────────────────────────────
+$font-display: 'Playfair Display', Georgia, serif;
+$font-body:    'DM Sans', system-ui, sans-serif;
+$font-mono:    'DM Mono', 'Courier New', monospace;
+
+// ── Radii ────────────────────────────────────────────────────────────────
+$r4:  4px;
+$r8:  8px;
+$r12: 12px;
+$r20: 20px;
+$r-full: 9999px;
+
+$radius:    $r4;   // default (buttons, small controls)
+$radius-lg: $r12;
+
+// ── Shadows ──────────────────────────────────────────────────────────────
+$shadow-sm: 0 1px 3px rgba(28, 22, 14, .07);
+$shadow-md: 0 4px 12px rgba(28, 22, 14, .1);
+$shadow-lg: 0 12px 32px rgba(28, 22, 14, .14);
+$shadow-xl: 0 24px 48px rgba(28, 22, 14, .18);
+
+// ── Spacing scale ────────────────────────────────────────────────────────
 $sp-1: .25rem;
 $sp-2: .5rem;
 $sp-3: .75rem;
@@ -25,8 +58,6 @@ $sp-4: 1rem;
 $sp-5: 1.5rem;
 $sp-6: 2rem;
 
-$radius:    6px;
-$radius-lg: 10px;
-
-// Minimum touch target (WCAG 2.5.5) — controls never render smaller
-$tap-target: 44px;
+// ── Breakpoints ──────────────────────────────────────────────────────────
+$bp-md: 768px;
+$bp-lg: 1024px;

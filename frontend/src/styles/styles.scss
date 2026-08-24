@@ -3,7 +3,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; scroll-behavior: smooth; }
 body {
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: $font-body;
   background: $color-cream;
   color: $color-ink;
   line-height: 1.5;
@@ -56,10 +56,10 @@ a { color: $color-terracotta; }
 // ── Labels ───────────────────────────────────────────────────────────────
 label {
   display: block;
-  font-size: .875rem;
-  font-weight: 500;
+  font-size: .8rem;
+  font-weight: 600;
   color: $color-ink;
-  margin-bottom: $sp-2;
+  margin-bottom: .3rem;
 
   // Checkbox/radio labels wrap their control and must stay inline
   &:has(> input[type='checkbox']),
@@ -74,21 +74,21 @@ label {
 }
 
 // ── Text inputs, selects, textareas ──────────────────────────────────────
+// Spec: padding .58rem .8rem, 1.5px border, r8 radius, .88rem text.
 input:not([type='checkbox']):not([type='radio']):not([type='file']),
 select,
 textarea {
   display: block;
   width: 100%;
-  min-height: $tap-target;
-  padding: $sp-3 $sp-4;
-  margin-bottom: $sp-4;
+  padding: .58rem .8rem;
+  margin-bottom: .85rem;
 
-  font-family: inherit;
-  font-size: 1rem;              // 16px — prevents iOS zoom-on-focus
+  font-family: $font-body;
+  font-size: .88rem;
   color: $color-ink;
-  background: $color-surface;
-  border: 1px solid $color-border;
-  border-radius: $radius;
+  background: $color-white;
+  border: 1.5px solid $color-border;
+  border-radius: $r8;
 
   transition: border-color .15s ease, box-shadow .15s ease;
 
@@ -99,7 +99,7 @@ textarea {
   &:focus-visible {
     outline: none;
     border-color: $color-terracotta;
-    box-shadow: 0 0 0 3px rgba(192, 78, 40, .18);
+    box-shadow: 0 0 0 3px rgba(192, 78, 40, .15);
   }
 
   &:disabled {
@@ -119,6 +119,15 @@ textarea {
   min-height: 7rem;
   resize: vertical;
   line-height: 1.6;
+}
+
+// The spec's .88rem control text is below the 16px threshold at which iOS
+// auto-zooms on focus. Raise it on touch devices only; desktop keeps the
+// designed size.
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='file']),
+  select,
+  textarea { font-size: 1rem; }
 }
 
 // Native select needs its own affordance once appearance is normalised
@@ -151,24 +160,28 @@ button {
   justify-content: center;
   gap: $sp-2;
 
-  min-height: $tap-target;
-  padding: $sp-3 $sp-5;
+  padding: .55rem 1.1rem;
 
-  font-family: inherit;
-  font-size: .9375rem;
+  font-family: $font-body;
+  font-size: .875rem;
   font-weight: 600;
   line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
 
   color: #fff;
   background: $color-terracotta;
-  border: 1px solid transparent;
-  border-radius: $radius;
+  border: none;
+  border-radius: $r4;
   cursor: pointer;
 
-  transition: background-color .15s ease, transform .1s ease, opacity .15s ease;
+  transition: all .15s;
 
-  &:hover:not(:disabled) { background: #A84424; }
-  &:active:not(:disabled) { transform: translateY(1px); }
+  &:hover:not(:disabled) {
+    background: $color-terra-2;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(192, 78, 40, .35);
+  }
 
   &:focus-visible {
     outline: 3px solid $color-gold;
@@ -183,27 +196,36 @@ button {
 
 // Explicit variants — these win over the bare-button default above
 .btn {
-  &--secondary {
-    color: $color-ink;
-    background: $color-surface;
-    border-color: $color-border-str;
-    &:hover:not(:disabled) { background: $color-surface-2; }
-  }
-
-  &--ghost {
-    color: $color-ink;
+  // Outlined — terracotta on transparent, inverts on hover
+  &--outline {
+    color: $color-terracotta;
     background: transparent;
-    border-color: transparent;
-    &:hover:not(:disabled) { background: $color-surface-2; }
+    border: 1.5px solid $color-terracotta;
+    &:hover:not(:disabled) {
+      background: $color-terracotta;
+      color: #fff;
+      box-shadow: none;
+    }
   }
 
-  &--danger {
-    background: $color-danger;
-    &:hover:not(:disabled) { background: #9A3232; }
+  // Ghost — for use on the dark ink background (navbar, footer)
+  &--ghost {
+    color: rgba(250, 247, 240, .8);
+    background: transparent;
+    border: 1.5px solid rgba(250, 247, 240, .25);
+    &:hover:not(:disabled) {
+      border-color: rgba(250, 247, 240, .6);
+      color: $color-cream;
+      background: transparent;
+      box-shadow: none;
+    }
   }
 
-  &--lg { min-height: 3.25rem; padding: $sp-4 $sp-6; font-size: 1rem; }
-  &--sm { min-height: 2.25rem; padding: $sp-2 $sp-3; font-size: .8125rem; }
+  &--sage { background: $color-sage; &:hover:not(:disabled) { background: #346036; } }
+  &--danger { background: $color-danger; &:hover:not(:disabled) { background: #9A3232; } }
+
+  &--lg { padding: .75rem 1.6rem; font-size: 1rem; }
+  &--sm { padding: .38rem .85rem; font-size: .78rem; }
   &--block { width: 100%; }
 }
 
@@ -244,15 +266,15 @@ legend { font-weight: 600; margin-bottom: $sp-3; }
   &__card {
     width: 100%;
     max-width: 26rem;
-    background: $color-surface;
+    background: $color-card;
     border: 1px solid $color-border;
-    border-radius: $radius-lg;
+    border-radius: $r12;
     padding: $sp-6 $sp-5;
-    box-shadow: 0 2px 10px rgba(26, 20, 16, .05);
+    box-shadow: $shadow-sm;
   }
 
   &__title {
-    font-family: 'Playfair Display', serif;
+    font-family: $font-display;
     font-size: 1.65rem;
     line-height: 1.2;
     margin-bottom: $sp-2;
@@ -275,7 +297,7 @@ legend { font-weight: 600; margin-bottom: $sp-3; }
 
   &__role {
     width: 100%;
-    min-height: 3.25rem;
+    min-height: 3rem;
     padding: $sp-2 $sp-3;
     font-size: .8125rem;
     font-weight: 600;
@@ -283,10 +305,17 @@ legend { font-weight: 600; margin-bottom: $sp-3; }
     text-align: center;
     white-space: normal;          // labels are two words wide, must wrap
     color: $color-ink;
-    background: $color-surface;
+    background: $color-white;
     border: 1.5px solid $color-border;
+    border-radius: $r8;
+    box-shadow: none;
+    transform: none;
 
-    &:hover:not(.is-active) { background: $color-surface-2; }
+    &:hover:not(.is-active) {
+      background: $color-cream-2;
+      transform: none;
+      box-shadow: none;
+    }
 
     &.is-active {
       color: #fff;
@@ -311,14 +340,15 @@ legend { font-weight: 600; margin-bottom: $sp-3; }
     margin-bottom: $sp-4;
   }
 
-  &__submit { width: 100%; margin-top: $sp-2; }
+  &__submit { width: 100%; margin-top: $sp-2; padding: .75rem; border-radius: $r8; }
 
   // Disabled primary buttons were washing out to pale pink at opacity .5.
   &__submit:disabled {
     opacity: 1;
-    color: $color-muted;
-    background: $color-surface-2;
-    border-color: $color-border;
+    color: $color-slate;
+    background: $color-cream-2;
+    box-shadow: none;
+    transform: none;
   }
 
   &__divider {
@@ -340,9 +370,15 @@ legend { font-weight: 600; margin-bottom: $sp-3; }
   &__google {
     width: 100%;
     color: $color-ink;
-    background: $color-surface;
-    border: 1.5px solid $color-border-str;
-    &:hover:not(:disabled) { background: $color-surface-2; }
+    background: $color-white;
+    border: 1.5px solid $color-border;
+    border-radius: $r8;
+    padding: $sp-3;
+    &:hover:not(:disabled) {
+      background: $color-cream-2;
+      transform: none;
+      box-shadow: none;
+    }
   }
 
   &__foot {
