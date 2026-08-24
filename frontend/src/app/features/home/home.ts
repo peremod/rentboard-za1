@@ -25,49 +25,87 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="hero">
-      <div class="hero__inner">
-        <div class="hero__eyebrow">🇿🇦 {{ 'hero.eyebrow' | translate }}</div>
+      <div class="hero-inner">
+        <div class="hero-eyebrow">🇿🇦 {{ 'hero.eyebrow' | translate }}</div>
         <h1>{{ 'hero.title_line1' | translate }}<br/><em>{{ 'hero.title_line2' | translate }}</em></h1>
-        <p>{{ 'hero.subtitle' | translate }}</p>
-        <p class="hero__cta">
-          <a routerLink="/auth/register" class="btn-primary">{{ 'hero.cta' | translate }}</a>
-        </p>
+        <p class="hero-sub">{{ 'hero.subtitle' | translate }}</p>
+        <div class="hero-ctas">
+          <a routerLink="/auth/register" class="btn btn-primary btn-lg">{{ 'hero.cta' | translate }}</a>
+        </div>
+        <div class="hero-stats">
+          <div class="hero-stat"><strong>{{ total() }}</strong><span>rooms available</span></div>
+          <div class="hero-stat"><strong>Free</strong><span>to apply</span></div>
+          <div class="hero-stat"><strong>9</strong><span>provinces covered</span></div>
+        </div>
       </div>
     </section>
 
-    <div class="search-bar">
-      <input
-        type="text" [placeholder]="'search.placeholder' | translate"
-        [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()"
-      />
-      <select [(ngModel)]="province" (ngModelChange)="onFilterChange()">
-        <option value="">{{ 'search.all_provinces' | translate }}</option>
-        @for (p of provinces; track p) { <option [value]="p">{{ p }}</option> }
-      </select>
-      <select [(ngModel)]="roomType" (ngModelChange)="onFilterChange()">
-        <option value="">{{ 'search.all_room_types' | translate }}</option>
-        <option value="shared_house">Shared house</option>
-        <option value="en_suite">En-suite</option>
-        <option value="studio">Studio</option>
-        <option value="private">Private room</option>
-      </select>
+    <div class="trust-strip">
+      <div class="trust-item"><span class="trust-icon">🔒</span>POPIA Compliant</div>
+      <div class="trust-item"><span class="trust-icon">🏛️</span>Rental Housing Act Aligned</div>
+      <div class="trust-item"><span class="trust-icon">🚫</span>No Agent Fees</div>
+      <div class="trust-item"><span class="trust-icon">📱</span>WhatsApp Notifications</div>
+    </div>
+
+    <div class="search-wrap">
+      <div class="search-bar">
+        <div class="search-input-wrap">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input class="search-input" type="text" [placeholder]="'search.placeholder' | translate"
+                 [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()"/>
+        </div>
+        <select class="search-select" [(ngModel)]="province" (ngModelChange)="onFilterChange()">
+          <option value="">{{ 'search.all_provinces' | translate }}</option>
+          @for (p of provinces; track p) { <option [value]="p">{{ p }}</option> }
+        </select>
+        <select class="search-select" [(ngModel)]="roomType" (ngModelChange)="onFilterChange()">
+          <option value="">{{ 'search.all_room_types' | translate }}</option>
+          <option value="shared_house">Shared house</option>
+          <option value="en_suite">En-suite</option>
+          <option value="studio">Studio</option>
+          <option value="private">Private room</option>
+        </select>
+      </div>
     </div>
 
     <div class="board">
-      <aside class="board__sidebar">
+      <aside class="filter-panel">
         <h3>{{ 'filters.title' | translate }}</h3>
-        <label><input type="checkbox" [(ngModel)]="billsIncluded" (ngModelChange)="onFilterChange()"/> {{ 'filters.bills_included' | translate }}</label>
-        <label><input type="checkbox" [(ngModel)]="couplesAllowed" (ngModelChange)="onFilterChange()"/> {{ 'filters.couples_welcome' | translate }}</label>
-        <label><input type="checkbox" [(ngModel)]="dssAccepted" (ngModelChange)="onFilterChange()"/> {{ 'filters.dss_accepted' | translate }}</label>
-        <label><input type="checkbox" [(ngModel)]="guarantorAccepted" (ngModelChange)="onFilterChange()"/> {{ 'filters.guarantor_accepted' | translate }}</label>
-        <label><input type="checkbox" [(ngModel)]="petsAllowed" (ngModelChange)="onFilterChange()"/> {{ 'filters.pets_allowed' | translate }}</label>
+        <div class="filter-group">
+          <div class="filter-label">I need</div>
+          <label class="filter-check">
+            <input type="checkbox" [(ngModel)]="billsIncluded" (ngModelChange)="onFilterChange()"/>
+            {{ 'filters.bills_included' | translate }}
+          </label>
+          <label class="filter-check">
+            <input type="checkbox" [(ngModel)]="couplesAllowed" (ngModelChange)="onFilterChange()"/>
+            {{ 'filters.couples_welcome' | translate }}
+          </label>
+          <label class="filter-check">
+            <input type="checkbox" [(ngModel)]="dssAccepted" (ngModelChange)="onFilterChange()"/>
+            {{ 'filters.dss_accepted' | translate }}
+          </label>
+          <label class="filter-check">
+            <input type="checkbox" [(ngModel)]="guarantorAccepted" (ngModelChange)="onFilterChange()"/>
+            {{ 'filters.guarantor_accepted' | translate }}
+          </label>
+          <label class="filter-check">
+            <input type="checkbox" [(ngModel)]="petsAllowed" (ngModelChange)="onFilterChange()"/>
+            {{ 'filters.pets_allowed' | translate }}
+          </label>
+        </div>
       </aside>
 
       <main class="board__main">
-        <p class="board__count">
-          @if (loading() && rooms().length === 0) { Loading rooms… }
-          @else { {{ 'found_rooms' | translate:{count: total()} }} }
-        </p>
+        <div class="results-header">
+          <p class="results-count">
+            @if (loading() && rooms().length === 0) { Loading rooms… }
+            @else { {{ 'found_rooms' | translate:{count: total()} }} }
+          </p>
+        </div>
 
         @if (loading() && rooms().length === 0) {
           <div class="room-grid">
@@ -75,8 +113,9 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
           </div>
         } @else if (rooms().length === 0) {
           <div class="empty-state">
-            <p>No rooms match your filters.</p>
-            <button type="button" (click)="clearFilters()">Clear all filters</button>
+            <h3>No rooms match your filters</h3>
+            <p>Try widening your search, or clear the filters to see everything available.</p>
+            <button type="button" class="btn btn-outline" (click)="clearFilters()">Clear all filters</button>
           </div>
         } @else {
           <div class="room-grid">
@@ -95,27 +134,10 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
       </main>
     </div>
   `,
-  styles: [`
-    .hero { background: #1A1410; padding: 3rem 1.25rem; text-align: left; }
-    .hero__inner { max-width: 700px; margin: 0 auto; }
-    .hero__eyebrow { font-size: .75rem; font-weight: 700; color: #C04E28; text-transform: uppercase; letter-spacing: 1px; margin-bottom: .75rem; }
-    .hero h1 { font-family: 'Playfair Display', serif; font-size: clamp(2rem,5vw,3rem); color: #F5F0E8; line-height: 1.1; margin-bottom: 1rem; }
-    .hero h1 em { color: #E06038; font-style: normal; }
-    .hero p { color: rgba(245,240,232,.7); font-size: .95rem; margin-bottom: 1.5rem; }
-    .btn-primary { display: inline-block; background: #C04E28; color: #fff; padding: .65rem 1.25rem; border-radius: 6px; text-decoration: none; font-weight: 700; }
-    .search-bar { background: #F2EDE3; padding: 1rem 1.25rem; display: flex; gap: .6rem; flex-wrap: wrap; }
-    .search-bar input, .search-bar select { padding: .55rem .75rem; border: 1.5px solid #DDD5C8; border-radius: 6px; font-size: .85rem; }
-    .search-bar input { flex: 1; min-width: 200px; }
-    .board { max-width: 1200px; margin: 0 auto; padding: 1.25rem; display: flex; gap: 1.5rem; }
-    .board__sidebar { width: 220px; flex-shrink: 0; }
-    .board__sidebar h3 { font-size: .78rem; text-transform: uppercase; letter-spacing: 1px; color: #7A6E60; margin-bottom: .75rem; }
-    .board__sidebar label { display: block; font-size: .82rem; margin-bottom: .5rem; cursor: pointer; }
-    .board__main { flex: 1; min-width: 0; }
-    .board__count { font-size: .85rem; color: #7A6E60; margin-bottom: 1rem; }
-    .room-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(240px,1fr)); gap: 1rem; }
-    .empty-state { text-align: center; padding: 3rem 1rem; color: #7A6E60; }
-    @media (max-width: 900px) { .board { flex-direction: column; } .board__sidebar { width: 100%; } }
-  `],
+  // No component styles: this page is laid out entirely by the global spec
+  // stylesheet and the responsive layer. Scoped styles here previously
+  // overrode both (Angular's emulated encapsulation makes them more
+  // specific), which is why the board ignored every breakpoint.
 })
 export class Home implements OnInit, OnDestroy {
   private roomsService = inject(RoomsService);
