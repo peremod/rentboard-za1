@@ -222,6 +222,48 @@ if [[ -n "$ROOM_ID" ]]; then
   check "tenant CANNOT edit landlord's room" 403 "$STATUS" "$BODY"
 fi
 
+# ── 7. Cross-tenant isolation (IDOR) ───────────────────────────────────────
+# The sharpest question on a platform handling ID numbers and income data:
+# can one tenant reach a DIFFERENT tenant's application or message thread?
+head_ "7. Cross-tenant isolation (IDOR)"
+INTRUDER_EMAIL="intruder+${STAMP}@rentboard.test"
+req POST /api/auth/register \
+  "{\"email\":\"$INTRUDER_EMAIL\",\"password\":\"$PASSWORD\",\"fullName\":\"Second Tenant\",\"role\":\"TENANT\"}"
+check "register second tenant" 201 "$STATUS" "$BODY"
+ITOKEN=$(echo "$BODY" | jq -r '.accessToken // empty')
+
+if [[ -n "$APP_ID" && -n "$ITOKEN" ]]; then
+  req GET "/api/applications/$APP_ID/messages" "" "$ITOKEN"
+  if [[ "$STATUS" == "403" || "$STATUS" == "404" ]]; then
+    green "  PASS  other tenant CANNOT read the message thread  ($STATUS)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  other tenant READ a private message thread  (got $STATUS)"; FAIL=$((FAIL+1))
+    grey "        $(echo "$BODY" | head -c 300)"
+  fi
+
+  req POST "/api/applications/$APP_ID/messages" '{"body":"intruder probe"}' "$ITOKEN"
+  if [[ "$STATUS" == "403" || "$STATUS" == "404" ]]; then
+    green "  PASS  other tenant CANNOT post into the thread  ($STATUS)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  other tenant POSTED into a private thread  (got $STATUS)"; FAIL=$((FAIL+1))
+  fi
+
+  req POST "/api/applications/$APP_ID/accept" "" "$ITOKEN"
+  if [[ "$STATUS" == "403" || "$STATUS" == "404" ]]; then
+    green "  PASS  non-owner CANNOT accept an application  ($STATUS)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  non-owner ACCEPTED an application  (got $STATUS)"; FAIL=$((FAIL+1))
+  fi
+
+  req GET /api/applications/mine "" "$ITOKEN"
+  MINE=$(echo "$BODY" | jq -r 'if type=="array" then length else (.data|length // 0) end' 2>/dev/null || echo "?")
+  if [[ "$MINE" == "0" ]]; then
+    green "  PASS  second tenant's application list is empty (no leakage)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  second tenant sees $MINE applications that are not theirs"; FAIL=$((FAIL+1))
+  fi
+fi
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"
