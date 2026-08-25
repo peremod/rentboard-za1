@@ -54,7 +54,7 @@ a { color: $color-terracotta; }
 // ═════════════════════════════════════════════════════════════════════════
 
 // ── Labels ───────────────────────────────────────────────────────────────
-label {
+:where(label) {
   display: block;
   font-size: .8rem;
   font-weight: 600;
@@ -75,13 +75,19 @@ label {
 
 // ── Text inputs, selects, textareas ──────────────────────────────────────
 // Spec: padding .58rem .8rem, 1.5px border, r8 radius, .88rem text.
-input:not([type='checkbox']):not([type='radio']):not([type='file']),
-select,
-textarea {
-  display: block;
-  width: 100%;
+//
+// :where() gives these zero specificity, so ANY class-based rule wins —
+// notably the spec's .search-select, .filter-select and .search-input.
+// Without it this element rule beat them and forced every control in the
+// app to display:block / width:100%, which is what stacked the search bar.
+//
+// Layout (width, margin, display) is deliberately NOT set here. It belongs
+// to the container — .form-row, .auth__field — so unstyled controls get
+// sensible visuals without having their layout dictated.
+:where(input:not([type='checkbox']):not([type='radio']):not([type='file'])),
+:where(select),
+:where(textarea) {
   padding: .58rem .8rem;
-  margin-bottom: .85rem;
 
   font-family: $font-body;
   font-size: .88rem;
@@ -93,7 +99,11 @@ textarea {
   transition: border-color .15s ease, box-shadow .15s ease;
 
   &::placeholder { color: $color-muted; }
+}
 
+// State styles apply to every control regardless of which rule set its base
+// look, so these keep normal specificity.
+input, select, textarea {
   &:hover:not(:disabled) { border-color: $color-border-str; }
 
   &:focus-visible {
@@ -131,7 +141,7 @@ textarea {
 }
 
 // Native select needs its own affordance once appearance is normalised
-select {
+:where(select) {
   appearance: none;
   padding-right: 2.5rem;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%237A6E60' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
@@ -154,7 +164,7 @@ input[type='radio'] {
 // ── Buttons ──────────────────────────────────────────────────────────────
 // Bare <button> gets the primary treatment: 33 of 39 buttons carried no
 // class, and the common case in this app is a primary action.
-button {
+:where(button) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -362,6 +372,20 @@ legend { font-weight: 600; margin-bottom: $sp-3; }
     line-height: 1.6;
     color: $color-muted;
     text-align: center;
+  }
+}
+
+// Layout for controls inside a form context. The global element rule no
+// longer sets width/display, so the container supplies it — this is what
+// keeps the spec's inline search controls from being forced full width.
+.form-row,
+.auth__field,
+fieldset {
+  input:not([type='checkbox']):not([type='radio']):not([type='file']),
+  select,
+  textarea {
+    display: block;
+    width: 100%;
   }
 }
 

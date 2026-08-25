@@ -25,6 +25,10 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
             <a routerLink="/landlord/upgrade" routerLinkActive="active" (click)="mobileOpen.set(false)">Pricing</a>
           }
           <a routerLink="/legal/terms" routerLinkActive="active" (click)="mobileOpen.set(false)">{{ 'nav.legal' | translate }}</a>
+
+          <!-- Shown only inside the drawer on small screens, where the
+               header copy of the switcher is hidden for space. -->
+          <div class="nav-links-lang"><app-lang-switcher/></div>
         </div>
 
         <div class="nav-actions">

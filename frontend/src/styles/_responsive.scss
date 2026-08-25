@@ -17,6 +17,8 @@
 // ═══════════════════════════════════════════════════════════════════════
 
 // ── Elements the app needs that the desktop-only preview never defined ──
+// Drawer-only language switcher: hidden until the header copy is dropped.
+.nav-links-lang { display: none; }
 .room-price-per { font-size: .7rem; color: var(--slate); font-weight: 400; }
 
 .nav-burger {
@@ -162,9 +164,17 @@
 }
 
 // ── ≤400px — small phones ────────────────────────────────────────────────
+@media (max-width: 480px) {
+  // Logo + language + two buttons + burger will not fit on one row.
+  // The language switcher and the secondary action move into the drawer.
+  .nav-actions app-lang-switcher { display: none; }
+  .nav-actions .btn-ghost { display: none; }
+  .nav-links-lang { display: block; margin-top: .25rem; }
+}
+
 @media (max-width: 400px) {
-  .nav-inner { padding: 0 1rem; gap: .5rem; }
-  .nav-logo { font-size: 1.35rem; }
+  .nav-inner { padding: 0 .85rem; gap: .5rem; }
+  .nav-logo { font-size: 1.25rem; }
   .nav-actions .btn { padding: .45rem .7rem; font-size: .78rem; }
 
   .stat-row { grid-template-columns: 1fr; }
