@@ -37,9 +37,23 @@ export class UploadsService {
   }
 
   private async attemptUpload(file: File, folder: string): Promise<{ path: string; url: string }> {
-    const auth = await new Promise<ImageKitAuth>((resolve, reject) => {
-      this.http.get<ImageKitAuth>(`${this.api}/uploads/imagekit-auth`).subscribe({ next: resolve, error: reject });
-    });
+    let auth: ImageKitAuth;
+    try {
+      auth = await new Promise<ImageKitAuth>((resolve, reject) => {
+        this.http.get<ImageKitAuth>(`${this.api}/uploads/imagekit-auth`).subscribe({ next: resolve, error: reject });
+      });
+    } catch {
+      // Usually an expired session: the auth endpoint is landlord-guarded, so
+      // a failed token refresh surfaces here first.
+      throw new Error('your session expired. Log in again and retry the upload.');
+    }
+
+    // Guard against a malformed response reaching ImageKit as literal
+    // "undefined" form values, which it answers with an opaque 500.
+    if (!auth?.token || !auth?.signature || !auth?.expire || !auth?.publicKey) {
+      console.error('[ImageKit] incomplete auth payload', auth);
+      throw new Error('upload could not be authorised. Check the server IMAGEKIT_* settings.');
+    }
 
     const form = new FormData();
     form.append('file', file);
@@ -65,7 +79,23 @@ export class UploadsService {
       } catch {
         /* not JSON — use the raw body */
       }
-      console.error('[ImageKit] upload failed', { status: res.status, detail });
+      console.error('[ImageKit] upload failed', {
+        status: res.status,
+        detail,
+        // Enough context to tell a credential fault from a file fault.
+        // The signature is deliberately omitted.
+        request: {
+          fileName: `${Date.now()}-${file.name}`,
+          fileType: file.type,
+          fileSizeKB: Math.round(file.size / 1024),
+          folder,
+          publicKey: auth.publicKey,
+          expiresInSec: auth.expire - Math.floor(Date.now() / 1000),
+        },
+      });
+      if (res.status >= 500) {
+        throw new Error('ImageKit had a server error. Wait a moment and try again.');
+      }
       throw new Error(detail || `ImageKit upload failed (${res.status})`);
     }
 
