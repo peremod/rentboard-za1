@@ -155,7 +155,10 @@ if [[ -n "$ROOM_ID" ]]; then
   if [[ "$STATUS" == "200" ]]; then
     green "  PASS  publish room  (200)"; PASS=$((PASS+1))
   elif [[ "$STATUS" == "400" ]]; then
-    grey  "  SKIP  publish room — needs a cover photo (ImageKit not configured)"; SKIP=$((SKIP+1))
+    # Not an ImageKit problem: this script creates rooms through the API and
+    # never uploads a photo, so there is no heroImagePath to publish with.
+    # Section 2b is what actually verifies the ImageKit credentials.
+    grey  "  SKIP  publish blocked — no cover photo on an API-created room (expected)"; SKIP=$((SKIP+1))
     # force-publish via a direct field update so the rest of the flow can run
     req PATCH "/api/rooms/$ROOM_ID" '{"heroImagePath":"/smoke-test-placeholder.jpg"}' "$LTOKEN"
     req POST "/api/rooms/$ROOM_ID/publish" "" "$LTOKEN"
