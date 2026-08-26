@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { forkJoin, of, catchError } from 'rxjs';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { ApplicationsService } from '../../../core/services/applications.service';
@@ -7,14 +8,18 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { MessageThread } from '../../../shared/components/message-thread/message-thread';
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
+import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
+import { RoomsService } from '../../../core/services/rooms.service';
+import { Room } from '../../../core/models/room.model';
+import { RoomCard } from '../../../shared/components/room-card/room-card';
 
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, MessageThread, PortalShell],
+  imports: [RouterLink, ZarCentsPipe, MessageThread, PortalShell, RoomCard],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Tenant" avatarColour="var(--sage)">
+    <app-portal-shell [navItems]="navItems()" roleLabel="Tenant" avatarColour="var(--sage)">
 
       @if (shortlistedCount() > 0) {
         <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
@@ -79,6 +84,32 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
           }
         }
       </section>
+
+      <section class="dash-section">
+        <div class="dash-section-title">
+          Saved rooms
+          @if (savedRooms.count() > 0) { <span class="dash-count">({{ savedRooms.count() }})</span> }
+        </div>
+
+        @if (savedRooms.count() === 0) {
+          <p class="muted">
+            No saved rooms yet. Tap the ♡ on any room to keep it here while you decide.
+          </p>
+        } @else if (loadingSaved()) {
+          <p class="muted">Loading saved rooms…</p>
+        } @else {
+          <div class="room-grid">
+            @for (room of savedRoomList(); track room.id) {
+              <app-room-card [room]="room"/>
+            }
+          </div>
+          @if (savedRoomList().length < savedRooms.count()) {
+            <p class="muted" style="margin-top:.75rem">
+              Some saved rooms are no longer listed and have been hidden.
+            </p>
+          }
+        }
+      </section>
     </app-portal-shell>
   `,
   // Layout comes from the global spec + responsive layers.
@@ -88,25 +119,56 @@ export class TenantDashboard implements OnInit {
   private applicationsService = inject(ApplicationsService);
 
   billingEnabled = BILLING_ENABLED;
+  savedRooms = inject(SavedRoomsService);
+  private roomsService = inject(RoomsService);
+
+  savedRoomList = signal<Room[]>([]);
+  loadingSaved = signal(false);
 
   /**
-   * Applications, Messages and Saved Rooms are shown because the spec lists
-   * them. Applications and Messages both resolve to the dashboard, which is
-   * where they live today; Saved Rooms has no feature behind it yet, so it is
-   * marked disabled rather than linking somewhere misleading.
+   * Computed rather than static so the Applications and Saved Rooms badges
+   * track live counts. Applications and Messages resolve to this dashboard,
+   * which is where both live today.
    */
-  readonly navItems: PortalNavItem[] = [
+  readonly navItems = computed<PortalNavItem[]>(() => [
     { label: 'Dashboard', icon: '🏠', route: '/tenant/dashboard', exact: true },
-    { label: 'Applications', icon: '📋', route: '/tenant/dashboard' },
+    { label: 'Applications', icon: '📋', route: '/tenant/dashboard', badge: this.activeApplicationCount() },
     { label: 'Messages', icon: '💬', route: '/tenant/dashboard' },
     { label: 'Browse rooms', icon: '🔍', route: '/' },
-    { label: 'Saved Rooms', icon: '♥', route: '/tenant/dashboard', disabled: true },
+    { label: 'Saved Rooms', icon: '♥', route: '/tenant/dashboard', badge: this.savedRooms.count() },
     ...(BILLING_ENABLED ? [{ label: "Renter's Passport", icon: '🛂', route: '/tenant/passport' }] : []),
-  ];
+  ]);
 
   applications = signal<Application[]>([]);
   loading = signal(true);
   openId = signal<string | null>(null);
+
+  /** Pending or viewed — the applications still awaiting a landlord decision. */
+  activeApplicationCount() {
+    return this.applications().filter((a) => a.status === 'pending' || a.status === 'viewed').length;
+  }
+
+  /**
+   * Saved room ids are device-local, so each is fetched individually. Rooms
+   * that 404 (let or removed) are dropped rather than failing the section.
+   */
+  private loadSavedRooms() {
+    const ids = this.savedRooms.ids();
+    if (ids.length === 0) {
+      this.savedRoomList.set([]);
+      return;
+    }
+    this.loadingSaved.set(true);
+    forkJoin(
+      ids.map((id) => this.roomsService.getRoom(id).pipe(catchError(() => of(null)))),
+    ).subscribe({
+      next: (rooms) => {
+        this.savedRoomList.set(rooms.filter((r): r is Room => r !== null));
+        this.loadingSaved.set(false);
+      },
+      error: () => this.loadingSaved.set(false),
+    });
+  }
 
   ngOnInit() {
     this.applicationsService.getMyApplications().subscribe({

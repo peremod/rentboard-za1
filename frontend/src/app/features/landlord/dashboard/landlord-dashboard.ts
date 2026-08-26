@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
@@ -22,7 +22,7 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
   imports: [RouterLink, ZarCentsPipe, DatePipe, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Landlord"
+    <app-portal-shell [navItems]="navItems()" roleLabel="Landlord"
                       [primaryAction]="{ label: '+ List a Room', route: '/landlord/rooms/new' }">
 
       <div class="insight-banner">
@@ -132,11 +132,20 @@ export class LandlordDashboard implements OnInit {
 
   billingEnabled = BILLING_ENABLED;
 
-  readonly navItems: PortalNavItem[] = [
+  /**
+   * Computed so the Applicants badge tracks the live total. My Rooms,
+   * Applicants and Messages all resolve to this dashboard, which is where
+   * each of those views currently lives.
+   */
+  readonly navItems = computed<PortalNavItem[]>(() => [
     { label: 'Dashboard', icon: '📊', route: '/landlord/dashboard', exact: true },
-    { label: 'List a room', icon: '🏠', route: '/landlord/rooms/new' },
-    ...(BILLING_ENABLED ? [{ label: 'Billing', icon: '💳', route: '/landlord/upgrade' }] : []),
-  ];
+    { label: 'My Rooms', icon: '🏠', route: '/landlord/dashboard' },
+    { label: 'Applicants', icon: '👥', route: '/landlord/dashboard', badge: this.totalApplicants() },
+    { label: 'Messages', icon: '💬', route: '/landlord/dashboard' },
+    ...(BILLING_ENABLED
+      ? [{ label: 'Billing', icon: '💳', route: '/landlord/upgrade' }]
+      : []),
+  ]);
 
   rooms = signal<Room[]>([]);
   loading = signal(true);

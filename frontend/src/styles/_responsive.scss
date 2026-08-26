@@ -229,8 +229,14 @@
 // app needs (logout, nav badges, row actions, status dots) have no spec rule.
 // These follow the spec's visual language rather than inventing a new one.
 // ═══════════════════════════════════════════════════════════════════════
+// The save button is a sibling of the card's anchor, so it needs to sit
+// above it in the stacking order to remain clickable.
+.save-btn { z-index: 2; }
+
 .portal-nav-cta { padding: .75rem 1.25rem; margin-top: 1rem; }
 .portal-nav-cta .btn { width: 100%; font-size: .82rem; }
+
+.dash-count { color: var(--slate); font-weight: 400; font-size: .85em; }
 
 .portal-nav-badge {
   background: var(--terra); color: #fff;

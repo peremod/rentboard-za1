@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 import { NgOptimizedImage } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Room } from '../../../core/models/room.model';
 import { ZarCentsPipe } from '../../pipes/zar-cents.pipe';
+import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
 
 /**
  * Room card — the notice-board grid item.
@@ -22,6 +23,14 @@ import { ZarCentsPipe } from '../../pipes/zar-cents.pipe';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <article class="room-card" [class.featured]="room().isFeatured">
+      <!-- Outside the anchor: clicking save must not navigate to the room. -->
+      <button type="button" class="save-btn" [class.saved]="isSaved()"
+              (click)="toggleSaved($event)"
+              [attr.aria-pressed]="isSaved()"
+              [attr.aria-label]="(isSaved() ? 'Remove ' : 'Save ') + room().title">
+        {{ isSaved() ? '♥' : '♡' }}
+      </button>
+
       <a [routerLink]="['/rooms', room().id]" [attr.aria-label]="'View room: ' + room().title">
 
         @if (room().heroImagePath) {
@@ -88,10 +97,20 @@ import { ZarCentsPipe } from '../../pipes/zar-cents.pipe';
   `,
 })
 export class RoomCard {
+  private savedRooms = inject(SavedRoomsService);
+
+  /** Reactive: reflects changes made from any other card or the dashboard. */
+  isSaved = computed(() => this.savedRooms.ids().includes(this.room().id));
+
+  toggleSaved(event: Event) {
+    event.preventDefault();
+    event.stopPropagation();
+    this.savedRooms.toggle(this.room().id);
+  }
+
   room = input.required<Room>();
   /** First card in the grid — gets eager/high-priority image loading (LCP). */
   isFirstCard = input(false);
-  saved = output<string>();
 
   heroPath = computed(() => this.room().heroImagePath || '/assets/images/room-placeholder.svg');
 
