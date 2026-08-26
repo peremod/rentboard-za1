@@ -15,6 +15,12 @@ export interface Application {
   roomId: string;
   tenantId: string;
   status: ApplicationStatus;
+  /** True once the room was relisted or let to someone else. */
+  isArchived?: boolean;
+  /** Human-readable reason, present only when isArchived. */
+  archivedReason?: string | null;
+  /** Letting cycle this application belongs to. */
+  cycle?: number;
   coverNote?: string | null;
   room?: Room;
   tenant?: ApplicationTenant;

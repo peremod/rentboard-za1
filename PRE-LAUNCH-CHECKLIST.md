@@ -114,3 +114,23 @@ The 20-photo cap is enforced in three independent places: `PhotoUpload` (client,
 4. ~~Mobile responsive pass on the three dashboard-style pages (#9)~~ ✅ Done — v0.9.3
 5. ~~README rebase note (#6)~~ ✅ Not applicable — already present, verified against the file rather than assumed
 6. Everything remaining is either a manual step outside the codebase (branch protection, SAHRC filing, Stripe Dashboard config) or explicit future work (KYC integration, remaining 8 translations) — not blocked on code changes. **Every code-fixable item on this checklist is now closed.**
+
+---
+
+## Migration required (v1.6.0)
+
+The Application model gained `cycle` and `archivedAt`, and its unique
+constraint changed from `[roomId, tenantId]` to `[roomId, tenantId, cycle]`.
+Run before starting the API:
+
+```bash
+cd backend
+npx prisma migrate dev --name application_letting_cycles
+npx prisma generate
+```
+
+Existing applications default to `cycle = 0` and `archivedAt = null`, which
+matches rooms that have never been relisted. Rooms with `relistCount > 0`
+before this migration will show their historical applicants as belonging to
+cycle 0 while the room is on a later cycle — those applicants simply drop off
+the current list, which is the intended behaviour.

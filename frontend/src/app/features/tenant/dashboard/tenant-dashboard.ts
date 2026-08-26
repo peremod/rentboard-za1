@@ -33,7 +33,7 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
       }
 
       <div class="stat-row">
-        <div class="stat-box"><div class="val">{{ applications().length }}</div><div class="lbl">Applications</div></div>
+        <div class="stat-box"><div class="val">{{ activeApplications().length }}</div><div class="lbl">Applications</div></div>
         <div class="stat-box"><div class="val">{{ shortlistedCount() }}</div><div class="lbl">Shortlisted</div></div>
         <div class="stat-box"><div class="val">{{ pendingCount() }}</div><div class="lbl">Awaiting reply</div></div>
       </div>
@@ -50,7 +50,7 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
             <a class="btn btn-primary" routerLink="/">Browse rooms</a>
           </div>
         } @else {
-          @for (app of applications(); track app.id) {
+          @for (app of activeApplications(); track app.id) {
             <div class="app-card" [class.app-card--closed]="app.status === 'rejected'">
               <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
 
@@ -84,6 +84,36 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
           }
         }
       </section>
+
+      @if (closedApplications().length > 0) {
+        <section class="dash-section">
+          <div class="dash-section-title">
+            Closed applications
+            <span class="dash-count">({{ closedApplications().length }})</span>
+          </div>
+          @for (app of closedApplications(); track app.id) {
+            <div class="app-card app-card--closed">
+              <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
+              <div class="app-info">
+                <div class="app-room">{{ app.room?.title }}</div>
+                @if (app.room) {
+                  <div class="app-location">{{ app.room.locationDisplay }}</div>
+                }
+                <div class="app-location">{{ app.archivedReason }}</div>
+              </div>
+              <div class="portal-row-actions">
+                @if (app.room && app.room.status === 'active') {
+                  <a class="btn btn-sm btn-outline" [routerLink]="['/rooms', app.room.id]">
+                    Apply again
+                  </a>
+                } @else if (app.room) {
+                  <a class="btn btn-sm btn-ghost-light" [routerLink]="['/rooms', app.room.id]">View room</a>
+                }
+              </div>
+            </div>
+          }
+        </section>
+      }
 
       <section class="dash-section">
         <div class="dash-section-title">
@@ -145,7 +175,7 @@ export class TenantDashboard implements OnInit {
 
   /** Pending or viewed — the applications still awaiting a landlord decision. */
   activeApplicationCount() {
-    return this.applications().filter((a) => a.status === 'pending' || a.status === 'viewed').length;
+    return this.activeApplications().filter((a) => a.status === 'pending' || a.status === 'viewed').length;
   }
 
   /**
@@ -177,12 +207,26 @@ export class TenantDashboard implements OnInit {
     });
   }
 
+  /** Live applications — the ones a tenant can still act on. */
+  activeApplications() {
+    return this.applications().filter((a) => !a.isArchived);
+  }
+
+  /**
+   * Closed because the room was relisted or let to someone else. Kept visible
+   * so a tenant is not left wondering what happened to an application, and so
+   * they can re-apply when the room is back on the board.
+   */
+  closedApplications() {
+    return this.applications().filter((a) => a.isArchived);
+  }
+
   shortlistedCount() {
-    return this.applications().filter((a) => a.status === 'shortlisted').length;
+    return this.activeApplications().filter((a) => a.status === 'shortlisted').length;
   }
 
   pendingCount() {
-    return this.applications().filter((a) => a.status === 'pending' || a.status === 'viewed').length;
+    return this.activeApplications().filter((a) => a.status === 'pending' || a.status === 'viewed').length;
   }
 
   /** Human-readable status, matching the spec's pill labels. */

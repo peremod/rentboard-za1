@@ -91,11 +91,25 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
           <h2>Add photos</h2>
           <app-photo-upload [folder]="'rooms/' + roomId()" (photosChange)="onPhotosChange($event)"/>
           @if (publishError()) { <p class="error">{{ publishError() }}</p> }
+          @if (saveError()) { <p class="error">{{ saveError() }}</p> }
+          @if (savedMessage()) { <p class="field-hint">{{ savedMessage() }}</p> }
+
           <div class="wizard__actions">
-            <button type="button" (click)="step.set(3)">← Back</button>
-            <button type="button" [disabled]="photos().length === 0 || publishing()" (click)="publish()">
-              {{ publishing() ? 'Publishing…' : 'Publish listing 🎉' }}
-            </button>
+            <button type="button" class="btn btn-outline" (click)="step.set(3)">← Back</button>
+
+            @if (isPublished()) {
+              <!-- Live listing: saving keeps it on the board rather than
+                   re-publishing it, which would reset publishedAt. -->
+              <button type="button" class="btn btn-primary"
+                      [disabled]="photos().length === 0 || saving()" (click)="saveChanges()">
+                {{ saving() ? 'Saving…' : 'Save changes' }}
+              </button>
+            } @else {
+              <button type="button" class="btn btn-primary"
+                      [disabled]="photos().length === 0 || publishing()" (click)="publish()">
+                {{ publishing() ? 'Publishing…' : 'Publish listing 🎉' }}
+              </button>
+            }
           </div>
         </div>
       }
@@ -129,12 +143,62 @@ export class CreateRoom implements OnInit {
 
   /** True when resuming an existing draft via /landlord/rooms/:roomId/edit. */
   isEditing = signal(false);
+  /** Editing a live listing rather than a draft — changes the save action. */
+  isPublished = signal(false);
+  saving = signal(false);
+  saveError = signal<string | null>(null);
+  savedMessage = signal<string | null>(null);
   loadingDraft = signal(false);
 
   creatingDraft = signal(false);
   createError = signal<string | null>(null);
   publishing = signal(false);
   publishError = signal<string | null>(null);
+
+  /**
+   * Saves edits to a live listing without taking it off the board. Details and
+   * gallery go in separate calls because photos have their own endpoint, which
+   * enforces that a published room keeps at least one image.
+   */
+  saveChanges() {
+    const id = this.roomId();
+    if (!id) return;
+
+    this.saving.set(true);
+    this.saveError.set(null);
+    this.savedMessage.set(null);
+
+    const basics = this.basicsForm.getRawValue();
+    const pricing = this.pricingForm.getRawValue();
+
+    this.roomsService.updateRoom(id, {
+      roomType: basics.roomType as any,
+      title: basics.title!,
+      description: basics.description!,
+      rentCents: Math.round((pricing.rent ?? 0) * 100),
+      depositCents: pricing.deposit ? Math.round(pricing.deposit * 100) : undefined,
+      billsIncluded: !!pricing.billsIncluded,
+      province: pricing.province!,
+      city: pricing.city!,
+    }).subscribe({
+      next: () => {
+        this.roomsService.updatePhotos(id, this.photos().map((p) => p.path)).subscribe({
+          next: () => {
+            this.saving.set(false);
+            this.savedMessage.set('Changes saved. Your listing is still live.');
+          },
+          error: (err) => {
+            this.saving.set(false);
+            this.saveError.set(err?.error?.message ?? 'Photos could not be saved.');
+          },
+        });
+      },
+      error: (err) => {
+        this.saving.set(false);
+        this.saveError.set(err?.error?.message ?? 'Changes could not be saved.');
+      },
+    });
+  }
 
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('roomId');
@@ -158,12 +222,18 @@ export class CreateRoom implements OnInit {
           province: room.province,
           city: room.city,
         });
-        if (room.heroImagePath) {
-          this.photos.set([{ path: room.heroImagePath, url: room.heroImagePath }]);
-        }
-        // Straight to photos: the earlier steps are already filled in, and
-        // a missing cover photo is the usual reason a draft was abandoned.
-        this.step.set(4);
+        // Cover first, then the rest of the gallery.
+        const gallery = [
+          ...(room.heroImagePath ? [room.heroImagePath] : []),
+          ...(room.imagePaths ?? []),
+        ];
+        this.photos.set(gallery.map((path) => ({ path, url: path })));
+
+        this.isPublished.set(room.status !== 'draft');
+        // A draft opens at photos, since a missing cover is the usual reason it
+        // stalled. A live listing opens at step 1, because the landlord is more
+        // often correcting a detail than adding an image.
+        this.step.set(room.status === 'draft' ? 4 : 1);
         this.loadingDraft.set(false);
       },
       error: () => {

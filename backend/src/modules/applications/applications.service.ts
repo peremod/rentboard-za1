@@ -30,14 +30,23 @@ export class ApplicationsService {
     if (room.status !== 'active') throw new BadRequestException('This room is no longer accepting applications');
     if (room.landlordId === tenantId) throw new ForbiddenException('You cannot apply to your own listing');
 
+    // Applications are scoped to the room's current letting cycle, so a tenant
+    // who applied before a relist may apply again to the new cycle.
     const existing = await this.prisma.application.findUnique({
-      where: { roomId_tenantId: { roomId: dto.roomId, tenantId } },
+      where: {
+        roomId_tenantId_cycle: { roomId: dto.roomId, tenantId, cycle: room.relistCount },
+      },
     });
     if (existing) throw new ConflictException('You have already applied for this room');
 
     const [application, tenant] = await Promise.all([
       this.prisma.application.create({
-        data: { roomId: dto.roomId, tenantId, coverNote: dto.coverNote ? sanitizeText(dto.coverNote) : dto.coverNote },
+        data: {
+          roomId: dto.roomId,
+          tenantId,
+          cycle: room.relistCount,
+          coverNote: dto.coverNote ? sanitizeText(dto.coverNote) : dto.coverNote,
+        },
       }),
       this.prisma.user.findUniqueOrThrow({ where: { id: tenantId } }),
     ]);
@@ -60,19 +69,40 @@ export class ApplicationsService {
     return application;
   }
 
-  getMyApplications(tenantId: string) {
-    return this.prisma.application.findMany({
+  /**
+   * Returns active applications first, then closed ones. `isArchived` tells the
+   * tenant an application ended because the room was relisted or let to someone
+   * else, rather than leaving a stale 'pending' or 'accepted' on screen.
+   */
+  async getMyApplications(tenantId: string) {
+    const applications = await this.prisma.application.findMany({
       where: { tenantId },
       include: { room: true },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ archivedAt: 'asc' }, { createdAt: 'desc' }],
     });
+
+    return applications.map((a) => ({
+      ...a,
+      isArchived: a.archivedAt !== null,
+      // Only meaningful when archived; drives the label on the tenant card.
+      archivedReason:
+        a.archivedAt === null
+          ? null
+          : a.status === 'accepted'
+            ? 'This tenancy ended and the room has been relisted.'
+            : 'The landlord relisted this room, so this application was closed.',
+    }));
   }
 
   /** Landlord's applicant list for one of their own rooms. */
+  /**
+   * Current-cycle applicants only. Applications from before a relist are
+   * archived, not deleted, so they never resurface as new applicants.
+   */
   async getRoomApplications(roomId: string, landlordId: string) {
-    await this.assertRoomOwner(roomId, landlordId);
+    const room = await this.assertRoomOwner(roomId, landlordId);
     return this.prisma.application.findMany({
-      where: { roomId },
+      where: { roomId, cycle: room.relistCount, archivedAt: null },
       include: { tenant: { select: { id: true, fullName: true, email: true, avatarPath: true, isVerified: true } } },
       orderBy: { createdAt: 'desc' },
     });

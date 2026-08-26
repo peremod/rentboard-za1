@@ -80,7 +80,16 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
                    [routerLink]="['/landlord/rooms', room.id, 'applicants']">
                   {{ room.applicationCount }} applicant{{ room.applicationCount === 1 ? '' : 's' }}
                 </a>
+                <a class="btn btn-sm btn-ghost-light" [routerLink]="['/landlord/rooms', room.id, 'edit']">
+                  Edit
+                </a>
                 <a class="btn btn-sm btn-ghost-light" [routerLink]="['/rooms', room.id]">View</a>
+                @if (room.status === 'active') {
+                  <button type="button" class="btn btn-sm btn-sage"
+                          [disabled]="marking() === room.id" (click)="markLet(room)">
+                    {{ marking() === room.id ? 'Saving…' : 'Mark as Let ✓' }}
+                  </button>
+                }
                 @if (billingEnabled && !room.isFeatured && room.status === 'active') {
                   <button type="button" class="btn btn-sm btn-sage" (click)="boost(room.id)">⭐ Boost R99</button>
                 }
@@ -190,6 +199,7 @@ export class LandlordDashboard implements OnInit {
   loadingArchived = signal(true);
   relisting = signal<string | null>(null);
   relistError = signal<string | null>(null);
+  marking = signal<string | null>(null);
   discarding = signal<string | null>(null);
   discardError = signal<string | null>(null);
 
@@ -220,6 +230,23 @@ export class LandlordDashboard implements OnInit {
   /** Kept for when BILLING_ENABLED flips back to true — see feature-flags.ts. */
   boost(roomId: string) {
     this.stripe.boostRoom(roomId);
+  }
+
+  /**
+   * Marking a room let closes the current cycle: it leaves the public board and
+   * moves to the relist section. Confirmed because outstanding applicants are
+   * notified, which cannot be undone after the 30-minute window.
+   */
+  markLet(room: Room) {
+    if (!confirm(`Mark "${room.title}" as let? Applicants will be told the room has gone.`)) return;
+    this.marking.set(room.id);
+    this.roomsService.markLet(room.id).subscribe({
+      next: () => {
+        this.marking.set(null);
+        this.ngOnInit();   // reload both lists, as relist does
+      },
+      error: () => this.marking.set(null),
+    });
   }
 
   /** my-rooms returns active, reserved and drafts together; split for display. */

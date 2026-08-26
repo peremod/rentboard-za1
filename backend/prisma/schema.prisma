@@ -187,14 +187,28 @@ model Application {
   viewedAt   DateTime?
   decidedAt  DateTime?
 
+  /// Which letting cycle this application belongs to — mirrors Room.relistCount
+  /// at the time it was submitted. Relisting a room starts a new cycle so its
+  /// old applicants do not reappear as new ones.
+  cycle      Int      @default(0)
+
+  /// Set when the room is relisted or let to someone else. Archived
+  /// applications stay visible to the tenant (with the reason) and are hidden
+  /// from the landlord's current applicant list. Never deleted: the privacy
+  /// policy commits to retaining applications for 2 years after outcome.
+  archivedAt DateTime?
+
   messages   Message[]
 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@unique([roomId, tenantId])
+  // Scoped to the cycle: a tenant who missed out may apply again after a
+  // relist. The old constraint locked them out of the room permanently.
+  @@unique([roomId, tenantId, cycle])
   @@index([tenantId])
   @@index([roomId, status])
+  @@index([roomId, cycle])
   @@map("applications")
 }
 

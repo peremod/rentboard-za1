@@ -10,6 +10,7 @@ import { RoomsService } from './rooms.service';
 import { RoomFiltersDto } from './dto/room-filters.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
+import { UpdatePhotosDto } from './dto/update-photos.dto';
 import { RelistDto } from './dto/relist.dto';
 
 @ApiTags('rooms')
@@ -64,6 +65,18 @@ export class RoomsController {
   @ApiBearerAuth()
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateRoomDto, @CurrentUser() user: { id: string }) {
     return this.roomsService.update(id, dto, user.id);
+  }
+
+  @Patch(':id/photos')
+  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Replace a room gallery — first path becomes the cover' })
+  updatePhotos(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePhotosDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.roomsService.updatePhotos(id, dto.paths, user.id);
   }
 
   @Post(':id/publish')

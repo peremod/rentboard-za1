@@ -80,6 +80,12 @@ export class RoomsService {
     return this.http.post<Room>(`${this.api}/rooms/${id}/undo-let`, {});
   }
 
+  /** Replaces a room's gallery; the first path becomes the cover. */
+  updatePhotos(id: string, paths: string[]) {
+    this.bustCache();
+    return this.http.patch<Room>(`${this.api}/rooms/${id}/photos`, { paths });
+  }
+
   /** Permanently deletes a draft. The API rejects this for published rooms. */
   discardDraft(id: string) {
     this.bustCache();

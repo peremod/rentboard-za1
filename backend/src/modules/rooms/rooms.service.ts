@@ -183,17 +183,30 @@ export class RoomsService {
     }
     // Billing paused — no plan-limit check here either. See file header comment.
 
-    return this.prisma.room.update({
-      where: { id },
-      data: {
-        status: 'active',
-        rentCents: dto.rentCents ?? room.rentCents,
-        availableFrom: dto.availableFrom ? new Date(dto.availableFrom) : room.availableFrom,
-        publishedAt: new Date(),
-        letAt: null,
-        relistCount: { increment: 1 },
-      },
-    });
+    // Close out the previous cycle before starting a new one. Without this the
+    // old applicants reappear on the dashboard as if they were new, and an
+    // already-accepted application keeps the room looking let.
+    const [, updated] = await this.prisma.$transaction([
+      this.prisma.application.updateMany({
+        where: { roomId: id, archivedAt: null },
+        data: { archivedAt: new Date() },
+      }),
+      this.prisma.room.update({
+        where: { id },
+        data: {
+          status: 'active',
+          rentCents: dto.rentCents ?? room.rentCents,
+          availableFrom: dto.availableFrom ? new Date(dto.availableFrom) : room.availableFrom,
+          publishedAt: new Date(),
+          letAt: null,
+          relistCount: { increment: 1 },
+          // Counter tracks the current cycle, matching the applicant list.
+          applicationCount: 0,
+        },
+      }),
+    ]);
+
+    return updated;
   }
 
   getLandlordRooms(landlordId: string) {
@@ -225,6 +238,31 @@ export class RoomsService {
     }
     await this.prisma.room.delete({ where: { id } });
     return { deleted: true, id };
+  }
+
+  /**
+   * Replaces a room's gallery. The first path is the cover image.
+   *
+   * Works on active listings, not just drafts — a landlord needs to swap a
+   * poor photo or add one without taking the room off the board. Publishing
+   * requires a cover image, so an active room may not be left with none.
+   */
+  async updatePhotos(id: string, paths: string[], landlordId: string) {
+    const room = await this.assertOwner(id, landlordId);
+
+    if (room.status !== 'draft' && paths.length === 0) {
+      throw new BadRequestException(
+        'A published room must keep at least one photo. Mark it as let if you want it off the board.',
+      );
+    }
+
+    return this.prisma.room.update({
+      where: { id },
+      data: {
+        heroImagePath: paths[0] ?? null,
+        imagePaths: paths.slice(1),
+      },
+    });
   }
 
   private async assertOwner(roomId: string, landlordId: string) {
