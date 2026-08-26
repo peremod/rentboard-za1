@@ -25,7 +25,6 @@ import { RouterLink } from '@angular/router';
           <h4>For Landlords</h4>
           <ul>
             <li><a routerLink="/auth/register">Post a room free</a></li>
-            <li><a routerLink="/landlord/upgrade">Pricing plans (ZAR)</a></li>
                         <li><a routerLink="/landlord/dashboard">Landlord portal</a></li>
           </ul>
         </div>

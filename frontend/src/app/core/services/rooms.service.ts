@@ -80,6 +80,12 @@ export class RoomsService {
     return this.http.post<Room>(`${this.api}/rooms/${id}/undo-let`, {});
   }
 
+  /** Permanently deletes a draft. The API rejects this for published rooms. */
+  discardDraft(id: string) {
+    this.bustCache();
+    return this.http.delete<{ deleted: boolean; id: string }>(`${this.api}/rooms/${id}`);
+  }
+
   relistRoom(id: string, payload: RelistPayload = {}): Observable<Room> {
     this.bustCache();
     return this.http.post<Room>(`${this.api}/rooms/${id}/relist`, payload);

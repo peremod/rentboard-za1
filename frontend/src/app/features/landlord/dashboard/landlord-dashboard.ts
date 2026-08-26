@@ -61,7 +61,7 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
             <a class="btn btn-primary" routerLink="/landlord/rooms/new">List a room free</a>
           </div>
         } @else {
-          @for (room of rooms(); track room.id) {
+          @for (room of activeRooms(); track room.id) {
             <div class="app-card">
               <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
               <div class="app-info">
@@ -84,6 +84,42 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
                 @if (billingEnabled && !room.isFeatured && room.status === 'active') {
                   <button type="button" class="btn btn-sm btn-sage" (click)="boost(room.id)">⭐ Boost R99</button>
                 }
+              </div>
+            </div>
+          }
+        }
+      </section>
+
+      <section class="dash-section">
+        <div class="dash-section-title">
+          Drafts
+          @if (draftRooms().length > 0) { <span class="dash-count">({{ draftRooms().length }})</span> }
+        </div>
+
+        @if (draftRooms().length === 0) {
+          <p class="muted">No drafts. Rooms you start but do not publish appear here.</p>
+        } @else {
+          @for (room of draftRooms(); track room.id) {
+            <div class="app-card app-card--archived">
+              <div class="app-thumb portal-thumb" aria-hidden="true">📝</div>
+              <div class="app-info">
+                <div class="app-room">{{ room.title || 'Untitled draft' }}</div>
+                <div class="app-location">
+                  {{ room.locationDisplay }} · not visible to tenants
+                </div>
+                <div class="app-rent">{{ room.rentCents | zarCents:'monthly' }}</div>
+                @if (discardError() === room.id) {
+                  <div class="field-error" role="alert">Could not discard this draft.</div>
+                }
+              </div>
+              <div class="portal-row-actions">
+                <a class="btn btn-sm btn-primary" [routerLink]="['/landlord/rooms', room.id, 'edit']">
+                  Continue editing
+                </a>
+                <button type="button" class="btn btn-sm btn-ghost-light"
+                        [disabled]="discarding() === room.id" (click)="discard(room)">
+                  {{ discarding() === room.id ? 'Discarding…' : 'Discard' }}
+                </button>
               </div>
             </div>
           }
@@ -154,6 +190,8 @@ export class LandlordDashboard implements OnInit {
   loadingArchived = signal(true);
   relisting = signal<string | null>(null);
   relistError = signal<string | null>(null);
+  discarding = signal<string | null>(null);
+  discardError = signal<string | null>(null);
 
   ngOnInit() {
     this.roomsService.getLandlordRooms().subscribe({
@@ -182,6 +220,35 @@ export class LandlordDashboard implements OnInit {
   /** Kept for when BILLING_ENABLED flips back to true — see feature-flags.ts. */
   boost(roomId: string) {
     this.stripe.boostRoom(roomId);
+  }
+
+  /** my-rooms returns active, reserved and drafts together; split for display. */
+  activeRooms() {
+    return this.rooms().filter((r) => r.status !== 'draft');
+  }
+
+  draftRooms() {
+    return this.rooms().filter((r) => r.status === 'draft');
+  }
+
+  /**
+   * Drafts are never seen by tenants and carry no applications, so discarding
+   * is a hard delete. Confirmed first because it cannot be undone.
+   */
+  discard(room: Room) {
+    if (!confirm(`Discard "${room.title || 'this draft'}"? This cannot be undone.`)) return;
+    this.discarding.set(room.id);
+    this.discardError.set(null);
+    this.roomsService.discardDraft(room.id).subscribe({
+      next: () => {
+        this.rooms.update((list) => list.filter((r) => r.id !== room.id));
+        this.discarding.set(null);
+      },
+      error: () => {
+        this.discardError.set(room.id);
+        this.discarding.set(null);
+      },
+    });
   }
 
   /** Derived dashboard counters — computed from the loaded rooms, not stored. */

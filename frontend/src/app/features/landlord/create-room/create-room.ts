@@ -1,6 +1,6 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { SA_PROVINCES } from '../../../core/models/room.model';
 import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upload/photo-upload';
@@ -116,20 +116,62 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
     button:disabled { opacity: .5; cursor: not-allowed; }
   `],
 })
-export class CreateRoom {
+export class CreateRoom implements OnInit {
   private fb = inject(FormBuilder);
   private roomsService = inject(RoomsService);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
   provinces = SA_PROVINCES;
   step = signal(1);
   roomId = signal<string | null>(null);
   photos = signal<UploadedPhoto[]>([]);
 
+  /** True when resuming an existing draft via /landlord/rooms/:roomId/edit. */
+  isEditing = signal(false);
+  loadingDraft = signal(false);
+
   creatingDraft = signal(false);
   createError = signal<string | null>(null);
   publishing = signal(false);
   publishError = signal<string | null>(null);
+
+  ngOnInit() {
+    const id = this.route.snapshot.paramMap.get('roomId');
+    if (!id) return;   // creating a new listing
+
+    this.isEditing.set(true);
+    this.loadingDraft.set(true);
+    this.roomId.set(id);
+
+    this.roomsService.getRoom(id).subscribe({
+      next: (room) => {
+        this.basicsForm.patchValue({
+          roomType: room.roomType,
+          title: room.title,
+          description: room.description ?? '',
+        });
+        this.pricingForm.patchValue({
+          rent: room.rentCents / 100,
+          deposit: room.depositCents ? room.depositCents / 100 : null,
+          billsIncluded: room.billsIncluded,
+          province: room.province,
+          city: room.city,
+        });
+        if (room.heroImagePath) {
+          this.photos.set([{ path: room.heroImagePath, url: room.heroImagePath }]);
+        }
+        // Straight to photos: the earlier steps are already filled in, and
+        // a missing cover photo is the usual reason a draft was abandoned.
+        this.step.set(4);
+        this.loadingDraft.set(false);
+      },
+      error: () => {
+        this.loadingDraft.set(false);
+        this.createError.set('Could not load this draft. It may have been discarded.');
+      },
+    });
+  }
 
   basicsForm = this.fb.group({
     roomType: ['shared_house', Validators.required],

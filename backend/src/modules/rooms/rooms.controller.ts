@@ -1,9 +1,10 @@
 import {
-  Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Header, ParseUUIDPipe, HttpCode, HttpStatus,
+  Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Header, ParseUUIDPipe, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LandlordGuard } from '../../common/guards/landlord.guard';
+import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RoomsService } from './rooms.service';
 import { RoomFiltersDto } from './dto/room-filters.dto';
@@ -42,10 +43,11 @@ export class RoomsController {
   }
 
   @Get(':id')
+  @UseGuards(OptionalJwtAuthGuard)
   @Header('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=60')
   @ApiOperation({ summary: 'Single room listing' })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.roomsService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user?: { id: string }) {
+    return this.roomsService.findOne(id, user?.id);
   }
 
   // ── Landlord: CRUD + lifecycle ──
@@ -94,6 +96,14 @@ export class RoomsController {
   @HttpCode(HttpStatus.OK)
   undoLet(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
     return this.roomsService.undoLet(id, user.id);
+  }
+
+  @Delete(':id')
+  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Discard a draft listing (drafts only)' })
+  discardDraft(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.roomsService.discardDraft(id, user.id);
   }
 
   @Post(':id/relist')

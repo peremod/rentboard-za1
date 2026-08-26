@@ -86,12 +86,18 @@ export class RoomsService {
     return { data, total, page, limit, hasMore: skip + data.length < total };
   }
 
-  /** Single room — increments viewCount fire-and-forget, never blocks the response. */
-  async findOne(id: string) {
+  /**
+   * @param viewerId  when the viewer is the owner, the view is not counted —
+   *                  a landlord checking their own listing should not inflate
+   *                  the number they use to judge how it is performing.
+   */
+  async findOne(id: string, viewerId?: string) {
     const room = await this.prisma.room.findUnique({ where: { id } });
     if (!room) throw new NotFoundException(`Room ${id} not found`);
 
-    this.prisma.room.update({ where: { id }, data: { viewCount: { increment: 1 } } }).catch(() => {});
+    if (!viewerId || viewerId !== room.landlordId) {
+      this.prisma.room.update({ where: { id }, data: { viewCount: { increment: 1 } } }).catch(() => {});
+    }
     return room;
   }
 
@@ -203,6 +209,22 @@ export class RoomsService {
       orderBy: { letAt: 'desc' },
       take: 20,
     });
+  }
+
+  /**
+   * Permanently removes a draft. Only drafts can be discarded: a room that has
+   * ever been published may have applications and messages attached to it, so
+   * those are archived via markLet instead of deleted.
+   */
+  async discardDraft(id: string, landlordId: string) {
+    const room = await this.assertOwner(id, landlordId);
+    if (room.status !== 'draft') {
+      throw new BadRequestException(
+        'Only drafts can be discarded. Published rooms should be marked as let so their applications are preserved.',
+      );
+    }
+    await this.prisma.room.delete({ where: { id } });
+    return { deleted: true, id };
   }
 
   private async assertOwner(roomId: string, landlordId: string) {

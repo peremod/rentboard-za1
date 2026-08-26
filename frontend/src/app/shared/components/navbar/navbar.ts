@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { LangSwitcher } from '../lang-switcher/lang-switcher';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 
@@ -21,7 +22,9 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
         <div class="nav-links" [class.open]="mobileOpen()">
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
              (click)="mobileOpen.set(false)">{{ 'nav.browse_rooms' | translate }}</a>
-          @if (auth.isLandlord()) {
+          <!-- Pricing is guarded by billingEnabledGuard; with billing paused
+               that guard redirects home, so linking to it looks broken. -->
+          @if (auth.isLandlord() && billingEnabled) {
             <a routerLink="/landlord/upgrade" routerLinkActive="active" (click)="mobileOpen.set(false)">Pricing</a>
           }
           <a routerLink="/legal/privacy" routerLinkActive="active" (click)="mobileOpen.set(false)">Privacy</a>
@@ -56,6 +59,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
   `,
 })
 export class Navbar {
+  readonly billingEnabled = BILLING_ENABLED;
   auth = inject(AuthService);
   mobileOpen = signal(false);
 

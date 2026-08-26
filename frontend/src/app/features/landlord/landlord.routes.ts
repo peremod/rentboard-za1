@@ -14,6 +14,12 @@ export const LANDLORD_ROUTES: Routes = [
     title: 'List a Room — RentBoard',
   },
   {
+    // Resumes an existing draft in the same wizard used to create one.
+    path: 'rooms/:roomId/edit',
+    loadComponent: () => import('./create-room/create-room').then((m) => m.CreateRoom),
+    title: 'Continue Your Listing — RentBoard',
+  },
+  {
     path: 'rooms/:roomId/applicants',
     loadComponent: () => import('./applicants/applicants').then((m) => m.Applicants),
     title: 'Applicants — RentBoard',
