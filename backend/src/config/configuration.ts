@@ -20,9 +20,12 @@ export default () => ({
   },
 
   imagekit: {
-    publicKey: process.env.IMAGEKIT_PUBLIC_KEY,
-    privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
-    urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT,
+    // Trimmed because a stray trailing space or newline in .env silently
+    // produces a wrong HMAC, and ImageKit then rejects every upload with a
+    // 400 that says nothing about the key.
+    publicKey: process.env.IMAGEKIT_PUBLIC_KEY?.trim(),
+    privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim(),
+    urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT?.trim(),
   },
 
   stripe: {

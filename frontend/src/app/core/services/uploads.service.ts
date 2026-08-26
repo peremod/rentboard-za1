@@ -36,7 +36,22 @@ export class UploadsService {
     form.append('useUniqueFileName', 'true');
 
     const res = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: form });
-    if (!res.ok) throw new Error(`ImageKit upload failed: ${res.status} ${await res.text()}`);
+
+    if (!res.ok) {
+      // ImageKit returns a JSON body naming the exact problem (invalid
+      // signature, expired token, bad folder). Surface it rather than a bare
+      // status code — a 400 here is otherwise indistinguishable between a
+      // malformed key, a clock skew and an invalid folder path.
+      const raw = await res.text();
+      let detail = raw;
+      try {
+        detail = (JSON.parse(raw) as { message?: string }).message ?? raw;
+      } catch {
+        /* not JSON — use the raw body */
+      }
+      console.error('[ImageKit] upload failed', { status: res.status, detail });
+      throw new Error(detail || `ImageKit upload failed (${res.status})`);
+    }
 
     const data = await res.json();
     // Store the path relative to urlEndpoint — never the full URL — so the

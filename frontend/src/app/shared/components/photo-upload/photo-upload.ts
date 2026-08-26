@@ -104,8 +104,11 @@ export class PhotoUpload {
         const uploaded = await this.uploadsService.uploadImage(file, this.folder());
         this.photos.update((p) => [...p, uploaded]);
         this.photosChange.emit(this.photos());
-      } catch {
-        this.error.set(`Failed to upload ${file.name}. Please try again.`);
+      } catch (err) {
+        // Show what actually went wrong — "please try again" is useless when
+        // the cause is a misconfigured key that retrying will never fix.
+        const reason = err instanceof Error && err.message ? err.message : 'Please try again.';
+        this.error.set(`Could not upload ${file.name}: ${reason}`);
       } finally {
         this.uploading.set(false);
       }
