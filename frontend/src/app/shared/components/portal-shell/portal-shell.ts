@@ -10,6 +10,8 @@ export interface PortalNavItem {
   badge?: number;
   /** Match the route exactly rather than by prefix (used for dashboard roots). */
   exact?: boolean;
+  /** Listed for parity with the design, but the feature does not exist yet. */
+  disabled?: boolean;
 }
 
 /**
@@ -34,13 +36,21 @@ export interface PortalNavItem {
           <div class="portal-user-role">{{ roleLabel() }}</div>
         </div>
 
-        @for (item of navItems(); track item.route) {
-          <a class="portal-nav-link" [routerLink]="item.route" routerLinkActive="active"
-             [routerLinkActiveOptions]="{ exact: !!item.exact }">
-            <span class="portal-nav-icon" aria-hidden="true">{{ item.icon }}</span>
-            {{ item.label }}
-            @if (item.badge) { <span class="portal-nav-badge">{{ item.badge }}</span> }
-          </a>
+        @for (item of navItems(); track item.label) {
+          @if (item.disabled) {
+            <span class="portal-nav-link is-disabled" aria-disabled="true" title="Coming soon">
+              <span class="portal-nav-icon" aria-hidden="true">{{ item.icon }}</span>
+              {{ item.label }}
+              <span class="portal-nav-soon">Soon</span>
+            </span>
+          } @else {
+            <a class="portal-nav-link" [routerLink]="item.route" routerLinkActive="active"
+               [routerLinkActiveOptions]="{ exact: !!item.exact }">
+              <span class="portal-nav-icon" aria-hidden="true">{{ item.icon }}</span>
+              {{ item.label }}
+              @if (item.badge) { <span class="portal-nav-badge">{{ item.badge }}</span> }
+            </a>
+          }
         }
 
         @if (primaryAction(); as action) {

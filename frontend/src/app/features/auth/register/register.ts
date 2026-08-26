@@ -12,17 +12,22 @@ import { AuthService } from '../../../core/services/auth.service';
   template: `
     <div class="auth">
       <div class="auth__card">
+        <div class="auth__brand">Rent<span>Board</span></div>
         <h1 class="auth__title">Create your free account</h1>
         <p class="auth__sub">Free to list. Free to apply. Always.</p>
 
         <div class="auth__roles" role="group" aria-label="What brings you here?">
           <button type="button" class="auth__role" [class.is-active]="role() === 'TENANT'"
                   [attr.aria-pressed]="role() === 'TENANT'" (click)="role.set('TENANT')">
-            I'm looking for a room
+            <span class="auth__role-icon" aria-hidden="true">🏠</span>
+            <span class="auth__role-title">I'm looking for a room</span>
+            <span class="auth__role-sub">Tenant</span>
           </button>
           <button type="button" class="auth__role" [class.is-active]="role() === 'LANDLORD'"
                   [attr.aria-pressed]="role() === 'LANDLORD'" (click)="role.set('LANDLORD')">
-            I have a room to let
+            <span class="auth__role-icon" aria-hidden="true">🔑</span>
+            <span class="auth__role-title">I have a room to let</span>
+            <span class="auth__role-sub">Landlord</span>
           </button>
         </div>
 

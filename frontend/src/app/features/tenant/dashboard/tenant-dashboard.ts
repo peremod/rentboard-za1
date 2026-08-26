@@ -89,9 +89,18 @@ export class TenantDashboard implements OnInit {
 
   billingEnabled = BILLING_ENABLED;
 
+  /**
+   * Applications, Messages and Saved Rooms are shown because the spec lists
+   * them. Applications and Messages both resolve to the dashboard, which is
+   * where they live today; Saved Rooms has no feature behind it yet, so it is
+   * marked disabled rather than linking somewhere misleading.
+   */
   readonly navItems: PortalNavItem[] = [
-    { label: 'Dashboard', icon: '📋', route: '/tenant/dashboard', exact: true },
+    { label: 'Dashboard', icon: '🏠', route: '/tenant/dashboard', exact: true },
+    { label: 'Applications', icon: '📋', route: '/tenant/dashboard' },
+    { label: 'Messages', icon: '💬', route: '/tenant/dashboard' },
     { label: 'Browse rooms', icon: '🔍', route: '/' },
+    { label: 'Saved Rooms', icon: '♥', route: '/tenant/dashboard', disabled: true },
     ...(BILLING_ENABLED ? [{ label: "Renter's Passport", icon: '🛂', route: '/tenant/passport' }] : []),
   ];
 

@@ -7,9 +7,23 @@ export const SA_PROVINCES = [
 ] as const;
 export type SAProvince = (typeof SA_PROVINCES)[number];
 
+/** Public landlord summary attached to a room by the rooms API. */
+export interface RoomLandlord {
+  id: string;
+  fullName: string;
+  avatarPath?: string | null;
+  landlordProfile?: {
+    rating?: number | null;
+    ratingCount?: number;
+    idVerified?: boolean;
+  } | null;
+}
+
 export interface Room {
   id: string;
   landlordId: string;
+  /** Populated on list and detail responses; absent on landlord-owned queries. */
+  landlord?: RoomLandlord | null;
   roomType: RoomType;
   title: string;
   description?: string | null;

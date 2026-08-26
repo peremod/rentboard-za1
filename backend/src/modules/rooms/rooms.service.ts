@@ -62,7 +62,24 @@ export class RoomsService {
 
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([
-      this.prisma.room.findMany({ where, orderBy, skip, take: limit }),
+      this.prisma.room.findMany({
+        where,
+        orderBy,
+        skip,
+        take: limit,
+        // The room card shows the landlord's name, avatar and rating, so the
+        // relation is loaded here rather than fetched per card by the client.
+      include: {
+        landlord: {
+          select: {
+            id: true,
+            fullName: true,
+            avatarPath: true,
+            landlordProfile: { select: { rating: true, ratingCount: true, idVerified: true } },
+          },
+        },
+      },
+      }),
       this.prisma.room.count({ where }),
     ]);
 

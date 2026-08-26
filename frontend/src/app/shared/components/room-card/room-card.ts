@@ -70,8 +70,17 @@ import { ZarCentsPipe } from '../../pipes/zar-cents.pipe';
 
           <div class="room-footer">
             <div class="landlord-info">
-              <span class="avail-from">Available {{ availableLabel() }}</span>
+              <div class="avatar" [style.background]="avatarColour()">{{ landlordInitial() }}</div>
+              <div>
+                <div class="landlord-name">{{ landlordName() }}</div>
+                @if (room().landlord?.landlordProfile?.rating; as rating) {
+                  <div class="rating">★ {{ rating.toFixed(1) }}</div>
+                } @else {
+                  <div class="rating rating--none">New landlord</div>
+                }
+              </div>
             </div>
+            <div class="avail-from">From {{ availableLabel() }}</div>
           </div>
         </div>
       </a>
@@ -122,6 +131,25 @@ export class RoomCard {
     'Northern Cape': ['NC', 'wc'],
     'North West': ['NW', 'ec'],
   };
+  /** Surname is withheld on the public board — first name plus initial only. */
+  landlordName = computed(() => {
+    const full = this.room().landlord?.fullName?.trim();
+    if (!full) return 'Landlord';
+    const [first, ...rest] = full.split(/\s+/);
+    return rest.length ? `${first} ${rest[rest.length - 1].charAt(0)}.` : first;
+  });
+
+  landlordInitial = computed(() => this.landlordName().charAt(0).toUpperCase());
+
+  /** Deterministic avatar colour from the spec palette, keyed on landlord id. */
+  avatarColour = computed(() => {
+    const palette = ['#C04E28', '#3D7040', '#C8902A', '#7A6E60'];
+    const id = this.room().landlordId ?? '';
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) hash = (hash + id.charCodeAt(i)) % palette.length;
+    return palette[hash];
+  });
+
   provinceAbbr = computed(() => RoomCard.PROVINCES[this.room().province]?.[0] ?? '');
   provinceClass = computed(() => RoomCard.PROVINCES[this.room().province]?.[1] ?? 'gp');
 }

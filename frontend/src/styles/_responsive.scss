@@ -298,3 +298,40 @@
 // 'withdrawn' exist in the model and would otherwise render as bare text.
 .status-viewed    { background: rgba(30, 95, 168, .1); color: #1E5FA8; }
 .status-withdrawn { background: rgba(122, 110, 96, .1); color: var(--slate); }
+
+.portal-nav-link.is-disabled {
+  opacity: .45;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+.portal-nav-soon {
+  margin-left: auto;
+  font-size: .6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  border: 1px solid rgba(250, 247, 240, .25);
+  border-radius: var(--r-full);
+  padding: .05rem .35rem;
+}
+
+// Trust strip: the spec sets a fixed 3rem gap and nowrap-ish row, which
+// overflows on phones. Wrap it into a readable grid instead.
+@media (max-width: 860px) {
+  .trust-strip { gap: 1rem 2rem; padding: 1.5rem 1.25rem; }
+}
+@media (max-width: 600px) {
+  .trust-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .85rem 1rem;
+    padding: 1.25rem 1rem;
+  }
+  .trust-item { font-size: .78rem; gap: .45rem; }
+  .trust-icon { font-size: 1.05rem; }
+}
+@media (max-width: 380px) {
+  .trust-strip { grid-template-columns: 1fr; }
+}

@@ -28,14 +28,19 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
       <div class="hero-inner">
         <div class="hero-eyebrow">🇿🇦 {{ 'hero.eyebrow' | translate }}</div>
         <h1>{{ 'hero.title_line1' | translate }}<br/><em>{{ 'hero.title_line2' | translate }}</em></h1>
-        <p class="hero-sub">{{ 'hero.subtitle' | translate }}</p>
+        <p class="hero-sub">
+          No estate agents. No fees to apply. Shared houses, en-suites, studios and private
+          rooms — posted directly by landlords across South Africa.
+        </p>
         <div class="hero-ctas">
-          <a routerLink="/auth/register" class="btn btn-primary btn-lg">{{ 'hero.cta' | translate }}</a>
+          <a href="#board" class="btn btn-primary btn-lg" (click)="scrollToBoard($event)">Browse rooms</a>
+          <a routerLink="/auth/register" class="btn btn-ghost btn-lg">List a room free →</a>
         </div>
         <div class="hero-stats">
           <div class="hero-stat"><strong>{{ total() }}</strong><span>rooms available</span></div>
+          <div class="hero-stat"><strong>{{ landlordCount() }}</strong><span>verified landlords</span></div>
           <div class="hero-stat"><strong>Free</strong><span>to apply</span></div>
-          <div class="hero-stat"><strong>9</strong><span>provinces covered</span></div>
+          <div class="hero-stat"><strong>9 provinces</strong><span>and growing</span></div>
         </div>
       </div>
     </section>
@@ -63,17 +68,43 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
         </select>
         <select class="search-select" [(ngModel)]="roomType" (ngModelChange)="onFilterChange()">
           <option value="">{{ 'search.all_room_types' | translate }}</option>
-          <option value="shared_house">Shared house</option>
-          <option value="en_suite">En-suite</option>
-          <option value="studio">Studio</option>
-          <option value="private">Private room</option>
+          <option value="shared_house">🏠 Shared house</option>
+          <option value="en_suite">🚿 En-suite</option>
+          <option value="studio">🏢 Studio</option>
+          <option value="private">🔑 Private room</option>
+        </select>
+        <select class="search-select" [(ngModel)]="maxRentCents" (ngModelChange)="onFilterChange()">
+          @for (p of priceOptions; track p.value) {
+            <option [value]="p.value">{{ p.label }}</option>
+          }
         </select>
       </div>
     </div>
 
-    <div class="board">
+    <div class="board" id="board">
       <aside class="filter-panel">
         <h3>{{ 'filters.title' | translate }}</h3>
+
+        <div class="filter-group">
+          <div class="filter-label">Province</div>
+          <div class="filter-pill-wrap">
+            @for (p of provincePills; track p.value) {
+              <button type="button" class="filter-pill" [class.active]="province === p.value"
+                      (click)="province = p.value; onFilterChange()">{{ p.label }}</button>
+            }
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-label">Room type</div>
+          <div class="filter-pill-wrap">
+            @for (t of roomTypePills; track t.value) {
+              <button type="button" class="filter-pill" [class.active]="roomType === t.value"
+                      (click)="roomType = t.value; onFilterChange()">{{ t.label }}</button>
+            }
+          </div>
+        </div>
+
         <div class="filter-group">
           <div class="filter-label">I need</div>
           <label class="filter-check">
@@ -96,6 +127,27 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
             <input type="checkbox" [(ngModel)]="petsAllowed" (ngModelChange)="onFilterChange()"/>
             {{ 'filters.pets_allowed' | translate }}
           </label>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-label">Housemates</div>
+          <select class="filter-select" [(ngModel)]="housemates" (ngModelChange)="onFilterChange()">
+            <option value="">Any</option>
+            <option value="0">Living alone</option>
+            <option value="1-2">1–2 housemates</option>
+            <option value="3-4">3–4 housemates</option>
+            <option value="5">5 or more</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-label">Sort by</div>
+          <select class="filter-select" [(ngModel)]="sortBy" (ngModelChange)="onFilterChange()">
+            <option value="newest">Newest first</option>
+            <option value="price_asc">Price: low to high</option>
+            <option value="price_desc">Price: high to low</option>
+            <option value="featured">Featured first</option>
+          </select>
         </div>
       </aside>
 
@@ -159,6 +211,35 @@ export class Home implements OnInit, OnDestroy {
   dssAccepted = false;
   guarantorAccepted = false;
   petsAllowed = false;
+  studentsWelcome = false;
+  maxRentCents = '';
+  housemates = '';
+  sortBy: 'newest' | 'price_asc' | 'price_desc' | 'featured' = 'newest';
+
+  /** Province pills use short labels; the API needs the full name. */
+  readonly provincePills: { label: string; value: string }[] = [
+    { label: 'All', value: '' },
+    { label: 'Gauteng', value: 'Gauteng' },
+    { label: 'W. Cape', value: 'Western Cape' },
+    { label: 'KZN', value: 'KwaZulu-Natal' },
+    { label: 'E. Cape', value: 'Eastern Cape' },
+  ];
+
+  readonly roomTypePills: { label: string; value: string }[] = [
+    { label: 'All', value: '' },
+    { label: 'Shared', value: 'shared_house' },
+    { label: 'En-suite', value: 'en_suite' },
+    { label: 'Studio', value: 'studio' },
+    { label: 'Private', value: 'private' },
+  ];
+
+  readonly priceOptions: { label: string; value: string }[] = [
+    { label: 'Any price', value: '' },
+    { label: 'Up to R3,000/mo', value: '300000' },
+    { label: 'Up to R5,000/mo', value: '500000' },
+    { label: 'Up to R8,000/mo', value: '800000' },
+    { label: 'Up to R12,000/mo', value: '1200000' },
+  ];
 
   @ViewChild('scrollSentinel') sentinel!: ElementRef;
   private observer?: IntersectionObserver;
@@ -166,6 +247,17 @@ export class Home implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.fetchRooms();
+  }
+
+  /** Distinct landlords across the loaded rooms — the spec's second hero stat. */
+  landlordCount() {
+    return new Set(this.rooms().map((r) => r.landlordId)).size;
+  }
+
+  /** Hero "Browse rooms" jumps to the board rather than navigating away. */
+  scrollToBoard(event: Event) {
+    event.preventDefault();
+    document.getElementById('board')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
   constructor() {
@@ -219,6 +311,8 @@ export class Home implements OnInit, OnDestroy {
       dssAccepted: this.dssAccepted || undefined,
       guarantorAccepted: this.guarantorAccepted || undefined,
       petsAllowed: this.petsAllowed || undefined,
+      maxRentCents: this.maxRentCents ? +this.maxRentCents : undefined,
+      sortBy: this.sortBy,
       page: this.page,
       limit: 12,
     }).subscribe({

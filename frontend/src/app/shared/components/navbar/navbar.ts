@@ -24,7 +24,9 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
           @if (auth.isLandlord()) {
             <a routerLink="/landlord/upgrade" routerLinkActive="active" (click)="mobileOpen.set(false)">Pricing</a>
           }
-          <a routerLink="/legal/terms" routerLinkActive="active" (click)="mobileOpen.set(false)">{{ 'nav.legal' | translate }}</a>
+          <a routerLink="/legal/privacy" routerLinkActive="active" (click)="mobileOpen.set(false)">Privacy</a>
+          <a routerLink="/legal/terms" routerLinkActive="active" (click)="mobileOpen.set(false)">Terms</a>
+          <a routerLink="/legal/disclaimer" routerLinkActive="active" (click)="mobileOpen.set(false)">Disclaimer</a>
 
           <!-- Shown only inside the drawer on small screens, where the
                header copy of the switcher is hidden for space. -->
