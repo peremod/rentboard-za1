@@ -329,15 +329,118 @@
   .trust-strip { gap: 1rem 2rem; padding: 1.5rem 1.25rem; }
 }
 @media (max-width: 600px) {
-  .trust-strip {
+  // The design keeps this a wrapping row on mobile, not a stacked grid.
+  .trust-strip { gap: .6rem 1.25rem; padding: 1rem .85rem; }
+  .trust-item  { font-size: .74rem; gap: .35rem; }
+  .trust-icon  { font-size: 1rem; }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+// MOBILE FILTER DRAWER
+// Below 860px the filter sidebar becomes a bottom sheet opened from a
+// Filters button in the results header, matching the mobile design.
+// ═══════════════════════════════════════════════════════════════════════
+.filter-drawer-overlay { display: none; }
+.filter-drawer-handle,
+.filter-drawer-header,
+.filter-drawer-close,
+.filter-drawer-actions { display: none; }
+
+.filter-toggle-btn {
+  display: none;
+  align-items: center;
+  gap: .5rem;
+  padding: .55rem 1rem;
+  background: var(--white);
+  color: var(--ink);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r8);
+  font-size: .875rem;
+  font-weight: 600;
+  &:hover { background: var(--cream2); box-shadow: none; transform: none; }
+}
+
+.filter-toggle-count {
+  background: var(--terra); color: #fff;
+  font-size: .68rem; font-weight: 700;
+  min-width: 1.15rem; height: 1.15rem;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-full); padding: 0 .3rem;
+}
+
+@media (max-width: 860px) {
+  .filter-toggle-btn { display: inline-flex; }
+
+  .results-header {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    flex-wrap: wrap;
+  }
+  .results-count { order: -1; flex: 1 1 100%; }
+  .sort-select { flex: 1; min-width: 0; }
+
+  .filter-drawer-overlay {
+    display: block;
+    position: fixed; inset: 0;
+    background: rgba(28, 22, 14, .5);
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s ease;
+    z-index: 998;
+    &.open { opacity: 1; pointer-events: auto; }
+  }
+
+  // The sidebar becomes the sheet itself — one set of controls, no duplicates
+  .filter-panel {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 999;
+    max-height: 85vh;
+    overflow-y: auto;
+    border-radius: var(--r20) var(--r20) 0 0;
+    border: none;
+    padding: .75rem 1.25rem 1.25rem;
+    transform: translateY(100%);
+    transition: transform .28s cubic-bezier(.16, 1, .3, 1);
+    box-shadow: var(--shadow-xl);
+
+    &.open { transform: translateY(0); }
+  }
+
+  .filter-drawer-handle {
+    display: block;
+    width: 44px; height: 4px;
+    margin: 0 auto .85rem;
+    border-radius: var(--r-full);
+    background: var(--border);
+  }
+
+  .filter-drawer-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1rem;
+    h3 { margin-bottom: 0; font-size: 1.15rem; text-transform: none; letter-spacing: 0; color: var(--ink); }
+  }
+
+  .filter-drawer-close {
+    display: block;
+    background: none; border: none; color: var(--slate);
+    font-size: 1.1rem; padding: .25rem .5rem; line-height: 1;
+    &:hover { background: none; color: var(--ink); box-shadow: none; transform: none; }
+  }
+
+  .filter-drawer-actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: .85rem 1rem;
-    padding: 1.25rem 1rem;
+    gap: .75rem;
+    position: sticky; bottom: 0;
+    margin: 1.25rem -1.25rem -1.25rem;
+    padding: 1rem 1.25rem;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    .btn { width: 100%; padding: .7rem; }
   }
-  .trust-item { font-size: .78rem; gap: .45rem; }
-  .trust-icon { font-size: 1.05rem; }
-}
-@media (max-width: 380px) {
-  .trust-strip { grid-template-columns: 1fr; }
+
+  // Sheet is open: stop the page behind it scrolling
+  body:has(.filter-panel.open) { overflow: hidden; }
 }

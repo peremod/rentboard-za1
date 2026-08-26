@@ -285,6 +285,136 @@ if [[ -n "$APP_ID" && -n "$ITOKEN" ]]; then
   fi
 fi
 
+# -- 8. Landlord dashboard --------------------------------------------------
+# Every endpoint the landlord portal calls on load, plus the full room
+# lifecycle its buttons trigger.
+head_ "8. Landlord dashboard"
+req GET /api/rooms/my-rooms "" "$LTOKEN"
+check "my-rooms loads" 200 "$STATUS" "$BODY"
+MY_COUNT=$(echo "$BODY" | jq -r 'if type=="array" then length else 0 end')
+grey "        active/draft rooms: $MY_COUNT"
+
+req GET /api/rooms/my-rooms/archived "" "$LTOKEN"
+check "archived rooms loads" 200 "$STATUS" "$BODY"
+
+req GET /api/rooms/my-rooms "" "$TTOKEN"
+check "tenant CANNOT load landlord rooms" 403 "$STATUS" "$BODY"
+
+if [[ -n "$ROOM_ID" ]]; then
+  req GET "/api/applications/room/$ROOM_ID" "" "$LTOKEN"
+  check "applicants list (Applicants nav)" 200 "$STATUS" "$BODY"
+
+  # Lifecycle the dashboard buttons drive: reserve -> let -> undo -> relist
+  req POST "/api/rooms/$ROOM_ID/reserve" "" "$LTOKEN"
+  check "Mark as Reserved" 200 "$STATUS" "$BODY"
+
+  req POST "/api/rooms/$ROOM_ID/let" "" "$LTOKEN"
+  check "Mark as Let" 200 "$STATUS" "$BODY"
+
+  req GET "/api/rooms/$ROOM_ID"
+  LET_STATUS=$(echo "$BODY" | jq -r '.status')
+  if [[ "$LET_STATUS" == "let" ]]; then
+    green "  PASS  let room leaves the public board"; PASS=$((PASS+1))
+  else
+    red "  FAIL  room status after let: $LET_STATUS"; FAIL=$((FAIL+1))
+  fi
+
+  req POST "/api/rooms/$ROOM_ID/undo-let" "" "$LTOKEN"
+  check "Undo let (30-minute window)" 200 "$STATUS" "$BODY"
+
+  req POST "/api/rooms/$ROOM_ID/let" "" "$LTOKEN"
+  req POST "/api/rooms/$ROOM_ID/relist" '{}' "$LTOKEN"
+  check "Relist archived room" 200 "$STATUS" "$BODY"
+  RELISTED=$(echo "$BODY" | jq -r '.status')
+  if [[ "$RELISTED" == "active" ]]; then
+    green "  PASS  relisted room is active again"; PASS=$((PASS+1))
+  else
+    red "  FAIL  status after relist: $RELISTED"; FAIL=$((FAIL+1))
+  fi
+
+  req POST "/api/rooms/$ROOM_ID/let" "" "$ITOKEN"
+  check "non-owner CANNOT mark a room as let" 403 "$STATUS" "$BODY"
+fi
+
+# -- 9. Tenant dashboard ----------------------------------------------------
+head_ "9. Tenant dashboard"
+req GET /api/applications/mine "" "$TTOKEN"
+check "my applications loads" 200 "$STATUS" "$BODY"
+
+req GET /api/applications/mine
+check "applications require auth" 401 "$STATUS"
+
+req GET /api/auth/me "" "$TTOKEN"
+check "profile loads (portal header)" 200 "$STATUS" "$BODY"
+
+# Saved Rooms is device-local, but the dashboard resolves each saved id
+# through the public room endpoint, so that path must work unauthenticated.
+if [[ -n "$ROOM_ID" ]]; then
+  req GET "/api/rooms/$ROOM_ID"
+  check "saved room resolves by id" 200 "$STATUS" "$BODY"
+fi
+req GET /api/rooms/00000000-0000-0000-0000-000000000000
+if [[ "$STATUS" == "404" ]]; then
+  green "  PASS  removed saved room returns 404 (dashboard drops it)"; PASS=$((PASS+1))
+else
+  red "  FAIL  expected 404 for a missing room, got $STATUS"; FAIL=$((FAIL+1))
+fi
+
+# -- 10. Listing a room (create-room wizard) --------------------------------
+head_ "10. Listing a room"
+WIZ=$(cat <<JSON
+{"roomType":"studio","title":"Wizard test studio in Rosebank","description":"A bright studio with its own entrance, fibre, prepaid electricity and secure off-street parking for one vehicle.","rentCents":720000,"depositCents":720000,"billsIncluded":false,"province":"Gauteng","city":"Rosebank","locationDisplay":"Rosebank, Gauteng","availableFrom":"$AVAIL","housematesCount":0,"couplesAllowed":true,"dssAccepted":false,"petsAllowed":true}
+JSON
+)
+req POST /api/rooms "$WIZ" "$LTOKEN"
+check "wizard step 1-4: create draft" 201 "$STATUS" "$BODY"
+WIZ_ID=$(echo "$BODY" | jq -r '.id // empty')
+
+if [[ -n "$WIZ_ID" ]]; then
+  DRAFT_STATUS=$(echo "$BODY" | jq -r '.status')
+  if [[ "$DRAFT_STATUS" == "draft" ]]; then
+    green "  PASS  new room starts as a draft"; PASS=$((PASS+1))
+  else
+    red "  FAIL  expected draft, got $DRAFT_STATUS"; FAIL=$((FAIL+1))
+  fi
+
+  req GET /api/rooms
+  if echo "$BODY" | jq -e --arg id "$WIZ_ID" '.data[]? | select(.id==$id)' >/dev/null 2>&1; then
+    red "  FAIL  draft room is visible on the public board"; FAIL=$((FAIL+1))
+  else
+    green "  PASS  draft is hidden from the public board"; PASS=$((PASS+1))
+  fi
+
+  req PATCH "/api/rooms/$WIZ_ID" '{"rentCents":690000,"title":"Wizard test studio in Rosebank (updated)"}' "$LTOKEN"
+  check "wizard edit saves changes" 200 "$STATUS" "$BODY"
+
+  req POST /api/rooms '{"roomType":"studio","title":"short","rentCents":500,"province":"Gauteng","city":"X","locationDisplay":"X","availableFrom":"not-a-date"}' "$LTOKEN"
+  check "wizard rejects invalid input" 400 "$STATUS" "$BODY"
+
+  req POST /api/rooms '{"roomType":"studio","title":"Valid title for a room here","description":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","rentCents":500000,"province":"Atlantis","city":"X","locationDisplay":"X","availableFrom":"'"$AVAIL"'"}' "$LTOKEN"
+  check "wizard rejects a non-SA province" 400 "$STATUS" "$BODY"
+
+  req PATCH "/api/rooms/$WIZ_ID" '{"heroImagePath":"/smoke-test-placeholder.jpg"}' "$LTOKEN"
+  req POST "/api/rooms/$WIZ_ID/publish" "" "$LTOKEN"
+  check "wizard publish makes the room live" 200 "$STATUS" "$BODY"
+
+  req GET /api/rooms
+  if echo "$BODY" | jq -e --arg id "$WIZ_ID" '.data[]? | select(.id==$id)' >/dev/null 2>&1; then
+    green "  PASS  published room appears on the public board"; PASS=$((PASS+1))
+  else
+    red "  FAIL  published room is missing from the public board"; FAIL=$((FAIL+1))
+  fi
+
+  # Room cards render the landlord block, so the list must carry that relation
+  req GET /api/rooms
+  if echo "$BODY" | jq -e '.data[0].landlord.fullName' >/dev/null 2>&1; then
+    green "  PASS  room list includes landlord data (card footer)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  room list has no landlord relation — card footer will be empty"; FAIL=$((FAIL+1))
+  fi
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

@@ -1,25 +1,44 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { AuthService } from './auth.service';
 
-const STORAGE_KEY = 'rb_saved_rooms';
+const KEY_PREFIX = 'rb_saved_rooms';
+/** Saves made before signing in, migrated to the account on login. */
+const ANON_KEY = `${KEY_PREFIX}:anon`;
 
 /**
- * Saved rooms — the heart button on each room card.
+ * Saved rooms — the ♡ button on each room card.
  *
- * PERSISTENCE: device-local (localStorage), not server-side. There is no
- * SavedRoom model in the Prisma schema and no endpoint behind it, so saves
- * do not follow a user across devices or survive clearing site data.
- * Promoting this to the backend is a small change (join table + two routes)
- * and is tracked in the README follow-ups.
+ * SCOPED PER USER. An earlier version used a single global key, which meant
+ * that on a shared device a landlord signing in after a tenant saw the
+ * tenant's saved rooms. That is a personal-information leak under POPIA, not
+ * merely a display bug, so storage is now keyed by user id and the in-memory
+ * set is swapped whenever the signed-in user changes.
  *
- * Reads are guarded because this service is constructed during SSR, where
- * localStorage does not exist.
+ * PERSISTENCE: still device-local. There is no SavedRoom model in the schema
+ * and no endpoint behind it, so saves do not follow a user across devices.
+ * Promoting this to the backend is a join table plus two routes.
  */
 @Injectable({ providedIn: 'root' })
 export class SavedRoomsService {
-  private readonly _ids = signal<string[]>(this.load());
+  private auth = inject(AuthService);
+  private readonly _ids = signal<string[]>([]);
 
   readonly ids = this._ids.asReadonly();
   readonly count = computed(() => this._ids().length);
+
+  constructor() {
+    // One-off cleanup: the pre-fix build stored every user's saves under a
+    // single global key. Remove it so nobody inherits another account's data.
+    this.remove(KEY_PREFIX);
+
+    // Re-read from the correct bucket whenever the signed-in user changes,
+    // including logout (which falls back to the anonymous bucket).
+    effect(() => {
+      const userId = this.auth.user()?.id ?? null;
+      this.migrateAnonymousSaves(userId);
+      this._ids.set(this.load(this.keyFor(userId)));
+    });
+  }
 
   isSaved(roomId: string): boolean {
     return this._ids().includes(roomId);
@@ -38,9 +57,32 @@ export class SavedRoomsService {
     this.persist();
   }
 
-  private load(): string[] {
+  private keyFor(userId: string | null): string {
+    return userId ? `${KEY_PREFIX}:${userId}` : ANON_KEY;
+  }
+
+  /**
+   * Rooms saved while logged out are moved onto the account on first sign-in,
+   * so browsing anonymously then registering does not silently lose them.
+   */
+  private migrateAnonymousSaves(userId: string | null) {
+    if (!userId) return;
+    const anon = this.load(ANON_KEY);
+    if (anon.length === 0) return;
+
+    const key = this.keyFor(userId);
+    const merged = Array.from(new Set([...this.load(key), ...anon]));
+    this.write(key, merged);
+    this.remove(ANON_KEY);
+  }
+
+  private persist() {
+    this.write(this.keyFor(this.auth.user()?.id ?? null), this._ids());
+  }
+
+  private load(key: string): string[] {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(key);
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
     } catch {
@@ -48,11 +90,19 @@ export class SavedRoomsService {
     }
   }
 
-  private persist() {
+  private write(key: string, ids: string[]) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this._ids()));
+      localStorage.setItem(key, JSON.stringify(ids));
     } catch {
       /* storage unavailable — saves stay in memory for this session */
+    }
+  }
+
+  private remove(key: string) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* no-op */
     }
   }
 }

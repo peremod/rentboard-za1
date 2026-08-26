@@ -82,8 +82,16 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
     </div>
 
     <div class="board" id="board">
-      <aside class="filter-panel">
-        <h3>{{ 'filters.title' | translate }}</h3>
+      <div class="filter-drawer-overlay" [class.open]="filtersOpen()"
+           (click)="filtersOpen.set(false)" aria-hidden="true"></div>
+
+      <aside class="filter-panel" id="filter-panel" [class.open]="filtersOpen()">
+        <div class="filter-drawer-handle" aria-hidden="true"></div>
+        <div class="filter-drawer-header">
+          <h3>{{ 'filters.title' | translate }}</h3>
+          <button type="button" class="filter-drawer-close" (click)="filtersOpen.set(false)"
+                  aria-label="Close filters">✕</button>
+        </div>
 
         <div class="filter-group">
           <div class="filter-label">Province</div>
@@ -114,6 +122,10 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
           <label class="filter-check">
             <input type="checkbox" [(ngModel)]="couplesAllowed" (ngModelChange)="onFilterChange()"/>
             {{ 'filters.couples_welcome' | translate }}
+          </label>
+          <label class="filter-check">
+            <input type="checkbox" [(ngModel)]="studentsWelcome" (ngModelChange)="onFilterChange()"/>
+            Students welcome
           </label>
           <label class="filter-check">
             <input type="checkbox" [(ngModel)]="dssAccepted" (ngModelChange)="onFilterChange()"/>
@@ -149,10 +161,39 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
             <option value="featured">Featured first</option>
           </select>
         </div>
+
+        <!-- Drawer actions: visible only while the panel is a bottom sheet. -->
+        <div class="filter-drawer-actions">
+          <button type="button" class="btn btn-outline" (click)="clearFilters()">Clear</button>
+          <button type="button" class="btn btn-primary" (click)="filtersOpen.set(false)">
+            Show results
+          </button>
+        </div>
       </aside>
 
       <main class="board__main">
         <div class="results-header">
+          <button type="button" class="filter-toggle-btn" (click)="filtersOpen.set(true)"
+                  [attr.aria-expanded]="filtersOpen()" aria-controls="filter-panel">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" aria-hidden="true">
+              <line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/>
+              <line x1="10" y1="18" x2="14" y2="18"/>
+            </svg>
+            Filters
+            @if (activeFilterCount() > 0) {
+              <span class="filter-toggle-count">{{ activeFilterCount() }}</span>
+            }
+          </button>
+
+          <select class="sort-select" [(ngModel)]="sortBy" (ngModelChange)="onFilterChange()"
+                  aria-label="Sort results">
+            <option value="newest">Newest first</option>
+            <option value="price_asc">Price: low to high</option>
+            <option value="price_desc">Price: high to low</option>
+            <option value="featured">Featured first</option>
+          </select>
+
           <p class="results-count">
             @if (loading() && rooms().length === 0) { Loading rooms… }
             @else { {{ 'found_rooms' | translate:{count: total()} }} }
@@ -201,6 +242,8 @@ export class Home implements OnInit, OnDestroy {
   loadingMore = signal(false);
   hasMore = signal(true);
   page = 1;
+  /** Mobile filter drawer. Ignored above 860px, where the panel is a sidebar. */
+  filtersOpen = signal(false);
 
   provinces = SA_PROVINCES;
   searchTerm = '';
@@ -211,6 +254,11 @@ export class Home implements OnInit, OnDestroy {
   dssAccepted = false;
   guarantorAccepted = false;
   petsAllowed = false;
+  /**
+   * UI-only for now: there is no students flag on the Room model or the
+   * filters DTO, and the API runs forbidNonWhitelisted, so sending it would
+   * 400. Shown because the design lists it; wire it up when the field exists.
+   */
   studentsWelcome = false;
   maxRentCents = '';
   housemates = '';
@@ -247,6 +295,31 @@ export class Home implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.fetchRooms();
+  }
+
+  /** Count of non-default filters — shown on the mobile Filters button. */
+  activeFilterCount(): number {
+    return [
+      this.province, this.roomType, this.maxRentCents, this.housemates,
+      this.billsIncluded, this.couplesAllowed, this.studentsWelcome,
+      this.dssAccepted, this.guarantorAccepted, this.petsAllowed,
+    ].filter(Boolean).length;
+  }
+
+  clearFilters() {
+    this.province = '';
+    this.roomType = '';
+    this.maxRentCents = '';
+    this.housemates = '';
+    this.searchTerm = '';
+    this.billsIncluded = false;
+    this.couplesAllowed = false;
+    this.studentsWelcome = false;
+    this.dssAccepted = false;
+    this.guarantorAccepted = false;
+    this.petsAllowed = false;
+    this.sortBy = 'newest';
+    this.onFilterChange();
   }
 
   /** Distinct landlords across the loaded rooms — the spec's second hero stat. */
