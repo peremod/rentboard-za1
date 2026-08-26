@@ -20,7 +20,23 @@ export class UploadsService {
   private http = inject(HttpClient);
   private api = environment.apiUrl;
 
+  /**
+   * Uploads with one retry. A dropped connection mid-upload surfaces as a
+   * TypeError('Failed to fetch') with no status, which is worth retrying
+   * once; an HTTP error from ImageKit is a real rejection and is not.
+   */
   async uploadImage(file: File, folder: string): Promise<{ path: string; url: string }> {
+    try {
+      return await this.attemptUpload(file, folder);
+    } catch (err) {
+      const transient = err instanceof TypeError || /failed to fetch|network/i.test(String(err));
+      if (!transient) throw err;
+      console.warn('[ImageKit] upload dropped, retrying once', err);
+      return this.attemptUpload(file, folder);
+    }
+  }
+
+  private async attemptUpload(file: File, folder: string): Promise<{ path: string; url: string }> {
     const auth = await new Promise<ImageKitAuth>((resolve, reject) => {
       this.http.get<ImageKitAuth>(`${this.api}/uploads/imagekit-auth`).subscribe({ next: resolve, error: reject });
     });
@@ -58,6 +74,51 @@ export class UploadsService {
     // IMAGE_LOADER can apply per-context transforms (thumb/card/detail) later.
     const path = (data.filePath as string).replace(/^\//, '');
     return { path, url: data.url };
+  }
+
+  /**
+   * Downscale and re-encode before upload.
+   *
+   * Phone photos are routinely 4–8MB and 4000px wide, while the largest slot
+   * the app renders is an 800px hero. Uploading the original wastes the
+   * landlord's mobile data — a real cost in South Africa — and long uploads
+   * on an unstable connection fail outright (ERR_HTTP2_PING_FAILED) rather
+   * than returning an error we can report.
+   *
+   * Returns the original untouched if it is already small, or if anything in
+   * the canvas path fails, so this can never block an upload that would
+   * otherwise have worked.
+   */
+  async compressImage(file: File, maxDimension = 1600, quality = 0.82): Promise<File> {
+    if (file.size < 600 * 1024) return file;      // already small enough
+    if (file.type === 'image/webp') return file;  // usually already efficient
+
+    try {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+      if (scale === 1 && file.size < 2 * 1024 * 1024) return file;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return file;
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close?.();
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/jpeg', quality),
+      );
+      if (!blob || blob.size >= file.size) return file;   // no benefit
+
+      return new File([blob], file.name.replace(/\.(png|jpe?g)$/i, '.jpg'), {
+        type: 'image/jpeg',
+        lastModified: Date.now(),
+      });
+    } catch {
+      return file;   // canvas unavailable or image undecodable
+    }
   }
 
   validateImage(file: File): string | null {

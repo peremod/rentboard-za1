@@ -101,13 +101,20 @@ export class PhotoUpload {
       }
       this.uploading.set(true);
       try {
-        const uploaded = await this.uploadsService.uploadImage(file, this.folder());
+        // Shrink before sending: phone photos are far larger than any slot
+        // the app renders, and big uploads are what fail on poor connections.
+        const prepared = await this.uploadsService.compressImage(file);
+        const uploaded = await this.uploadsService.uploadImage(prepared, this.folder());
         this.photos.update((p) => [...p, uploaded]);
         this.photosChange.emit(this.photos());
       } catch (err) {
         // Show what actually went wrong — "please try again" is useless when
         // the cause is a misconfigured key that retrying will never fix.
-        const reason = err instanceof Error && err.message ? err.message : 'Please try again.';
+        let reason = err instanceof Error && err.message ? err.message : 'Please try again.';
+        // 'Failed to fetch' is accurate but meaningless to a landlord.
+        if (/failed to fetch|network/i.test(reason)) {
+          reason = 'the connection dropped. Check your signal and try again.';
+        }
         this.error.set(`Could not upload ${file.name}: ${reason}`);
       } finally {
         this.uploading.set(false);
