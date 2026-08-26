@@ -319,7 +319,7 @@ export class Home implements OnInit, OnDestroy {
     this.guarantorAccepted = false;
     this.petsAllowed = false;
     this.sortBy = 'newest';
-    this.onFilterChange();
+    this.onFilterChange();   // resets page and refetches
   }
 
   /** Distinct landlords across the loaded rooms — the spec's second hero stat. */
@@ -361,13 +361,6 @@ export class Home implements OnInit, OnDestroy {
   }
 
   onFilterChange() {
-    this.page = 1;
-    this.fetchRooms();
-  }
-
-  clearFilters() {
-    this.searchTerm = this.province = this.roomType = '';
-    this.billsIncluded = this.couplesAllowed = this.dssAccepted = this.guarantorAccepted = this.petsAllowed = false;
     this.page = 1;
     this.fetchRooms();
   }
