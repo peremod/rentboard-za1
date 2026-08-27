@@ -32,6 +32,14 @@ export class ApplicationsController {
     return this.applicationsService.getRoomApplications(roomId, user.id);
   }
 
+  @Post(':id/withdraw')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Tenant withdraws their own application' })
+  withdraw(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.applicationsService.withdraw(id, user.id);
+  }
+
   @Post(':id/view')
   @UseGuards(LandlordGuard)
   @HttpCode(HttpStatus.OK)

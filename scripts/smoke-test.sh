@@ -418,6 +418,55 @@ if [[ -n "$WIZ_ID" ]]; then
 fi
 
 
+# -- 11. Application lifecycle edge cases ----------------------------------
+head_ "11. Application lifecycle"
+if [[ -n "$WIZ_ID" ]]; then
+  req POST /api/applications "{\"roomId\":\"$WIZ_ID\",\"coverNote\":\"Interested in this studio.\"}" "$TTOKEN"
+  check "tenant applies to the wizard room" 201 "$STATUS" "$BODY"
+  WIZ_APP=$(echo "$BODY" | jq -r '.id // empty')
+
+  if [[ -n "$WIZ_APP" ]]; then
+    req POST "/api/applications/$WIZ_APP/withdraw" "" "$ITOKEN"
+    check "other tenant CANNOT withdraw it" 403 "$STATUS" "$BODY"
+
+    req POST "/api/applications/$WIZ_APP/withdraw" "" "$TTOKEN"
+    check "tenant withdraws own application" 201 "$STATUS" "$BODY"
+
+    req POST "/api/applications/$WIZ_APP/withdraw" "" "$TTOKEN"
+    check "cannot withdraw twice" 400 "$STATUS" "$BODY"
+  fi
+
+  # Letting a room must close everyone still waiting, not leave them pending
+  req POST /api/applications "{\"roomId\":\"$WIZ_ID\",\"coverNote\":\"Also interested.\"}" "$ITOKEN"
+  WAITING=$(echo "$BODY" | jq -r '.id // empty')
+  req POST "/api/rooms/$WIZ_ID/let" "" "$LTOKEN"
+  check "mark wizard room as let" 200 "$STATUS" "$BODY"
+
+  if [[ -n "$WAITING" ]]; then
+    req GET /api/applications/mine "" "$ITOKEN"
+    LEFT_PENDING=$(echo "$BODY" | jq -r --arg id "$WAITING" '[.[]? | select(.id==$id and .status=="pending")] | length')
+    if [[ "$LEFT_PENDING" == "0" ]]; then
+      green "  PASS  letting the room closed the waiting applicant"; PASS=$((PASS+1))
+    else
+      red "  FAIL  applicant left pending on a room that is already let"; FAIL=$((FAIL+1))
+    fi
+  fi
+
+  # A relisted room must accept a fresh application from the same tenant
+  req POST "/api/rooms/$WIZ_ID/relist" '{}' "$LTOKEN"
+  req POST /api/applications "{\"roomId\":\"$WIZ_ID\",\"coverNote\":\"Applying again after relist.\"}" "$TTOKEN"
+  check "same tenant can re-apply after a relist" 201 "$STATUS" "$BODY"
+
+  req GET "/api/applications/room/$WIZ_ID" "" "$LTOKEN"
+  CUR=$(echo "$BODY" | jq -r 'if type=="array" then length else 0 end')
+  if [[ "$CUR" == "1" ]]; then
+    green "  PASS  applicant list shows only the new cycle (1)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  applicant list shows $CUR — old cycle applicants leaked through"; FAIL=$((FAIL+1))
+  fi
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

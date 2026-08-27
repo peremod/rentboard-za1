@@ -26,6 +26,11 @@ export class ApplicationsService {
     return this.http.post<Application>(`${this.api}/applications/${applicationId}/view`, {});
   }
 
+  /** Tenant withdraws their own application. Not available once accepted. */
+  withdraw(id: string) {
+    return this.http.post<Application>(`${this.api}/applications/${id}/withdraw`, {});
+  }
+
   shortlist(applicationId: string): Observable<Application> {
     return this.http.post<Application>(`${this.api}/applications/${applicationId}/shortlist`, {});
   }

@@ -73,6 +73,12 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
                 @if (app.room) {
                   <a class="btn btn-sm btn-ghost-light" [routerLink]="['/rooms', app.room.id]">View room</a>
                 }
+                @if (canWithdraw(app)) {
+                  <button type="button" class="btn btn-sm btn-ghost-light"
+                          [disabled]="withdrawing() === app.id" (click)="withdraw(app)">
+                    {{ withdrawing() === app.id ? 'Withdrawing…' : 'Withdraw' }}
+                  </button>
+                }
               </div>
 
               @if (openId() === app.id) {
@@ -154,6 +160,7 @@ export class TenantDashboard implements OnInit {
 
   savedRoomList = signal<Room[]>([]);
   loadingSaved = signal(false);
+  withdrawing = signal<string | null>(null);
 
   /**
    * Computed rather than static so the Applications and Saved Rooms badges
@@ -204,6 +211,26 @@ export class TenantDashboard implements OnInit {
     this.applicationsService.getMyApplications().subscribe({
       next: (apps) => { this.applications.set(apps); this.loading.set(false); },
       error: () => this.loading.set(false),
+    });
+  }
+
+  /**
+   * An accepted application cannot be withdrawn here — the landlord has already
+   * committed, so that conversation belongs in messages, not a button.
+   */
+  canWithdraw(app: Application): boolean {
+    return !app.isArchived && ['pending', 'viewed', 'shortlisted'].includes(app.status);
+  }
+
+  withdraw(app: Application) {
+    if (!confirm('Withdraw this application? The landlord will see you are no longer interested.')) return;
+    this.withdrawing.set(app.id);
+    this.applicationsService.withdraw(app.id).subscribe({
+      next: (updated) => {
+        this.applications.update((list) => list.map((a) => (a.id === app.id ? { ...a, ...updated } : a)));
+        this.withdrawing.set(null);
+      },
+      error: () => this.withdrawing.set(null),
     });
   }
 

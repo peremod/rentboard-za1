@@ -185,6 +185,8 @@ to run repeatedly against a dev database. Never run it against production.
 | "Back to all rooms" | Returns to the board but loses scroll position and filters |
 | Saved rooms persistence | Device-local (localStorage), correctly scoped per user since v1.4.2. A join table plus two routes would make it follow the account across devices |
 | Renter's Passport | Payment only — no KYC provider integrated. The UI says so |
+| Tenant alerts for new listings | **Not built.** No saved searches, no digest, no push. A tenant must return to the board and re-run their filters. This is the single biggest retention gap: most rooms are let within days, so a tenant who checks weekly misses everything. Needs a SavedSearch model, a scheduled matcher, and email/WhatsApp delivery |
+| Landlord verification | **Not built.** `LandlordProfile.idVerified` exists as a boolean and is shown on room cards, but nothing sets it — there is no document upload, no KYC provider, no admin review queue. The disclaimer already tells tenants listings are unverified, which is honest, but the flag implies a check that does not happen |
 | Students-welcome filter | Present in the UI per the design, but there is no field on the Room model, so it does not filter |
 
 ## Migration required (v1.6.0)

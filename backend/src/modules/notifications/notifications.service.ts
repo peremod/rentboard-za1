@@ -85,6 +85,25 @@ export class NotificationsService {
   }
 
   /** 4. Tenant — accepted, with move-in partner offers (broadband/insurance/removals). */
+  /**
+   * Sent when a room is let to someone else, or otherwise taken off the board,
+   * while this tenant's application was still open. Deliberately warm: a
+   * rejection with no explanation is the main complaint tenants have about
+   * every other letting platform.
+   */
+  async sendRoomUnavailableEmail(to: string, d: { tenantName: string; roomTitle: string }) {
+    await this.send(
+      to,
+      `Update on your application — ${d.roomTitle}`,
+      `<p>Hi ${d.tenantName},</p>
+       <p>The landlord has let <strong>${d.roomTitle}</strong>, so your application has been closed.
+       It wasn't a reflection on you — the room simply went to someone who applied around the same time.</p>
+       <p>There are other rooms on the board, and applying is always free.</p>
+       <p><a href="${this.frontend}">Browse rooms on RentBoard</a></p>
+       <p>— The RentBoard team</p>`,
+    );
+  }
+
   async sendAcceptedEmail(to: string, d: { tenantName: string; roomTitle: string; rentCents: number; city: string }) {
     const tenantName = escapeHtml(d.tenantName);
     const roomTitle = escapeHtml(d.roomTitle);

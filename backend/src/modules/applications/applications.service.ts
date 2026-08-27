@@ -193,6 +193,47 @@ export class ApplicationsService {
     return updated;
   }
 
+  /**
+   * Tenant withdraws their own application.
+   *
+   * Not a delete: the landlord may already have shortlisted this person and
+   * needs to see why they disappeared, and the privacy policy commits to
+   * retaining applications for 2 years after outcome.
+   */
+  async withdraw(applicationId: string, tenantId: string) {
+    const application = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      include: { room: true },
+    });
+    if (!application) throw new NotFoundException('Application not found');
+    if (application.tenantId !== tenantId) {
+      throw new ForbiddenException('You can only withdraw your own application');
+    }
+    if (application.status === 'withdrawn') {
+      throw new BadRequestException('This application has already been withdrawn');
+    }
+    if (application.status === 'accepted') {
+      throw new BadRequestException(
+        'This application was accepted. Contact the landlord directly to let them know your plans have changed.',
+      );
+    }
+    if (application.archivedAt) {
+      throw new BadRequestException('This application is already closed');
+    }
+
+    const updated = await this.prisma.application.update({
+      where: { id: applicationId },
+      data: { status: 'withdrawn', decidedAt: new Date() },
+    });
+
+    // Keep the room's counter honest — the landlord's list no longer shows this one.
+    await this.prisma.room
+      .update({ where: { id: application.roomId }, data: { applicationCount: { decrement: 1 } } })
+      .catch(() => {});
+
+    return updated;
+  }
+
   private async autoRejectOthers(roomId: string, exceptApplicationId: string, reason: string) {
     const others = await this.prisma.application.findMany({
       where: { roomId, id: { not: exceptApplicationId }, status: { in: ['pending', 'viewed', 'shortlisted'] } },

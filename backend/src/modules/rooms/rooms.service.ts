@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RoomFiltersDto } from './dto/room-filters.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
@@ -22,7 +23,10 @@ const UNDO_LET_WINDOW_MINUTES = 30;
 
 @Injectable()
 export class RoomsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+  ) {}
 
   /** Public notice-board search — only ever returns status = 'active' rooms. */
   async findAll(filters: RoomFiltersDto) {
@@ -160,7 +164,38 @@ export class RoomsService {
     if (room.status !== 'active' && room.status !== 'reserved') {
       throw new BadRequestException(`Cannot mark a ${room.status} room as let`);
     }
-    return this.prisma.room.update({ where: { id }, data: { status: 'let', letAt: new Date() } });
+    // Close out everyone still waiting. Without this their applications stay
+    // 'pending' forever on a room that is no longer available — the tenant is
+    // left refreshing a dashboard for a decision that will never come.
+    const stillOpen = await this.prisma.application.findMany({
+      where: {
+        roomId: id,
+        cycle: room.relistCount,
+        archivedAt: null,
+        status: { in: ['pending', 'viewed', 'shortlisted'] },
+      },
+      include: { tenant: { select: { email: true, fullName: true } } },
+    });
+
+    const [, updated] = await this.prisma.$transaction([
+      this.prisma.application.updateMany({
+        where: { id: { in: stillOpen.map((a) => a.id) } },
+        data: { status: 'rejected', decidedAt: new Date(), archivedAt: new Date() },
+      }),
+      this.prisma.room.update({ where: { id }, data: { status: 'let', letAt: new Date() } }),
+    ]);
+
+    // Best-effort: a failed email must not roll back the letting.
+    for (const application of stillOpen) {
+      this.notifications
+        .sendRoomUnavailableEmail(application.tenant.email, {
+          tenantName: application.tenant.fullName,
+          roomTitle: room.title,
+        })
+        .catch(() => {});
+    }
+
+    return updated;
   }
 
   /** 30-minute undo window after markLet(). */
