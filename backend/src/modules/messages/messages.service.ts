@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -31,7 +31,20 @@ export class MessagesService {
   }
 
   async send(applicationId: string, senderId: string, dto: SendMessageDto) {
+    // A closed application is a closed conversation. Without this, a landlord
+    // who let the room weeks ago keeps receiving messages about it, and a
+    // rejected tenant has no signal that the thread is over.
     const application = await this.getParticipantApplication(applicationId, senderId);
+
+    if (application.archivedAt) {
+      throw new BadRequestException(
+        'This conversation is closed because the listing was relisted or removed. The thread stays readable.',
+      );
+    }
+    if (application.status === 'rejected' || application.status === 'withdrawn') {
+      throw new BadRequestException('This conversation is closed. The thread stays readable.');
+    }
+
     const isTenantSending = senderId === application.tenantId;
     const recipient = isTenantSending ? application.room.landlord : application.tenant;
     const body = sanitizeText(dto.body);

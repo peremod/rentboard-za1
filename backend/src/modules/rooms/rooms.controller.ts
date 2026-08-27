@@ -95,6 +95,33 @@ export class RoomsController {
     return this.roomsService.markReserved(id, user.id);
   }
 
+  @Post(':id/unreserve')
+  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reserved back to active, when a prospect falls through' })
+  unreserve(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.roomsService.unreserve(id, user.id);
+  }
+
+  @Post(':id/pause')
+  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Take a listing off the board without closing applications' })
+  pause(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.roomsService.pause(id, user.id);
+  }
+
+  @Post(':id/remove')
+  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove a published listing; open applicants are closed and told' })
+  softDelete(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.roomsService.softDelete(id, user.id);
+  }
+
   @Post(':id/let')
   @UseGuards(JwtAuthGuard, LandlordGuard)
   @ApiBearerAuth()

@@ -27,7 +27,18 @@ export class ApplicationsService {
       include: { landlord: { include: { landlordProfile: true } } },
     });
     if (!room) throw new NotFoundException('Room not found');
-    if (room.status !== 'active') throw new BadRequestException('This room is no longer accepting applications');
+    if (room.status !== 'active') {
+      // A specific reason beats a generic refusal — a tenant who sees
+      // "reserved" knows to check back, one who sees "let" knows not to.
+      const reason: Record<string, string> = {
+        reserved: 'This room is reserved for another tenant while they finalise. It may become available again.',
+        paused: 'The landlord has paused this listing. It may reopen shortly.',
+        let: 'This room has been let.',
+        deleted: 'This listing has been removed.',
+        draft: 'This listing is not published yet.',
+      };
+      throw new BadRequestException(reason[room.status] ?? 'This room is no longer accepting applications');
+    }
     if (room.landlordId === tenantId) throw new ForbiddenException('You cannot apply to your own listing');
 
     // Applications are scoped to the room's current letting cycle, so a tenant

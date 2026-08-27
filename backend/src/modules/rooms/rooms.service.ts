@@ -163,9 +163,80 @@ export class RoomsService {
     return published;
   }
 
+  /**
+   * Reserved: a tenant is lined up but nothing is signed.
+   *
+   * The room stays visible so the landlord keeps a fallback if the deal falls
+   * through, but it no longer accepts new applications and the board shows a
+   * Reserved badge. Existing applicants are left open deliberately — that is
+   * the fallback.
+   */
   async markReserved(id: string, landlordId: string) {
-    await this.assertOwner(id, landlordId);
+    const room = await this.assertOwner(id, landlordId);
+    if (room.status !== 'active') {
+      throw new BadRequestException(`Only an active room can be reserved (this one is ${room.status})`);
+    }
     return this.prisma.room.update({ where: { id }, data: { status: 'reserved' } });
+  }
+
+  /** Reserved → active, when a prospective tenant falls through. */
+  async unreserve(id: string, landlordId: string) {
+    const room = await this.assertOwner(id, landlordId);
+    if (room.status !== 'reserved') {
+      throw new BadRequestException('This room is not reserved');
+    }
+    return this.prisma.room.update({ where: { id }, data: { status: 'active' } });
+  }
+
+  /**
+   * Pause: off the board temporarily, without closing anyone's application.
+   *
+   * Previously a landlord who needed to stop enquiries for a week had only
+   * 'mark as let', which closes and emails every applicant — a destructive
+   * action used for a non-destructive reason.
+   */
+  async pause(id: string, landlordId: string) {
+    const room = await this.assertOwner(id, landlordId);
+    if (room.status !== 'active' && room.status !== 'reserved') {
+      throw new BadRequestException(`Cannot pause a ${room.status} room`);
+    }
+    return this.prisma.room.update({ where: { id }, data: { status: 'paused' } });
+  }
+
+  /**
+   * Soft-delete a published room. Kept as a row rather than removed because
+   * applications and messages reference it, and the privacy policy commits to
+   * retaining application records for 2 years after outcome.
+   */
+  async softDelete(id: string, landlordId: string) {
+    const room = await this.assertOwner(id, landlordId);
+    if (room.status === 'draft') {
+      throw new BadRequestException('Use discard for drafts — they are removed outright');
+    }
+
+    const stillOpen = await this.prisma.application.findMany({
+      where: { roomId: id, cycle: room.relistCount, archivedAt: null, status: { in: ['pending', 'viewed', 'shortlisted'] } },
+      include: { tenant: { select: { email: true, fullName: true } } },
+    });
+
+    const [, updated] = await this.prisma.$transaction([
+      this.prisma.application.updateMany({
+        where: { id: { in: stillOpen.map((a) => a.id) } },
+        data: { status: 'rejected', decidedAt: new Date(), archivedAt: new Date() },
+      }),
+      this.prisma.room.update({ where: { id }, data: { status: 'deleted' } }),
+    ]);
+
+    for (const application of stillOpen) {
+      this.notifications
+        .sendRoomUnavailableEmail(application.tenant.email, {
+          tenantName: application.tenant.fullName,
+          roomTitle: room.title,
+        })
+        .catch(() => {});
+    }
+
+    return updated;
   }
 
   /** Removes the room from the public board and archives it for the landlord. */
@@ -223,8 +294,8 @@ export class RoomsService {
   /** One-click relist — restores an archived room to active, preserving all details. */
   async relist(id: string, dto: RelistDto, landlordId: string) {
     const room = await this.assertOwner(id, landlordId);
-    if (room.status !== 'let' && room.status !== 'paused') {
-      throw new BadRequestException('Only let or paused rooms can be relisted');
+    if (!['let', 'paused', 'deleted'].includes(room.status)) {
+      throw new BadRequestException('Only let, paused or removed rooms can be relisted');
     }
     // Billing paused — no plan-limit check here either. See file header comment.
 

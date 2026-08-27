@@ -530,6 +530,66 @@ req GET /api/verification/pending "" "$LTOKEN"
 check "non-admin CANNOT see the review queue" 403 "$STATUS" "$BODY"
 
 
+# -- 14. Room lifecycle: reserve / pause / remove ---------------------------
+head_ "14. Reserve, pause, remove"
+req POST /api/rooms "$ROOM_JSON" "$LTOKEN"
+LIFE_ID=$(echo "$BODY" | jq -r '.id // empty')
+if [[ -n "$LIFE_ID" ]]; then
+  req PATCH "/api/rooms/$LIFE_ID" '{"heroImagePath":"/smoke-test-placeholder.jpg"}' "$LTOKEN"
+  req POST "/api/rooms/$LIFE_ID/publish" "" "$LTOKEN"
+
+  req POST "/api/rooms/$LIFE_ID/reserve" "" "$LTOKEN"
+  check "reserve an active room" 200 "$STATUS" "$BODY"
+
+  req POST /api/applications "{\"roomId\":\"$LIFE_ID\",\"coverNote\":\"Still interested\"}" "$ITOKEN"
+  if [[ "$STATUS" == "400" ]] && echo "$BODY" | grep -qi "reserved"; then
+    green "  PASS  reserved room refuses new applications, with a reason"; PASS=$((PASS+1))
+  else
+    red "  FAIL  reserved room accepted an application (got $STATUS)"; FAIL=$((FAIL+1))
+  fi
+
+  req POST "/api/rooms/$LIFE_ID/unreserve" "" "$LTOKEN"
+  check "unreserve back to active" 200 "$STATUS" "$BODY"
+
+  req POST "/api/rooms/$LIFE_ID/pause" "" "$LTOKEN"
+  check "pause a listing" 200 "$STATUS" "$BODY"
+
+  req GET /api/rooms
+  if echo "$BODY" | jq -e --arg id "$LIFE_ID" '.data[]? | select(.id==$id)' >/dev/null 2>&1; then
+    red "  FAIL  paused room still on the public board"; FAIL=$((FAIL+1))
+  else
+    green "  PASS  paused room is off the public board"; PASS=$((PASS+1))
+  fi
+
+  req POST "/api/rooms/$LIFE_ID/relist" '{}' "$LTOKEN"
+  check "relist a paused room" 200 "$STATUS" "$BODY"
+
+  req POST "/api/rooms/$LIFE_ID/remove" "" "$LTOKEN"
+  check "remove a published listing" 200 "$STATUS" "$BODY"
+
+  req GET /api/rooms
+  if echo "$BODY" | jq -e --arg id "$LIFE_ID" '.data[]? | select(.id==$id)' >/dev/null 2>&1; then
+    red "  FAIL  removed room still on the public board"; FAIL=$((FAIL+1))
+  else
+    green "  PASS  removed room is off the public board"; PASS=$((PASS+1))
+  fi
+
+  req POST "/api/rooms/$LIFE_ID/pause" "" "$ITOKEN"
+  check "non-owner CANNOT pause" 403 "$STATUS" "$BODY"
+fi
+
+# -- 15. Closed conversations ----------------------------------------------
+head_ "15. Closed conversations"
+if [[ -n "$APP_ID" ]]; then
+  req POST "/api/applications/$APP_ID/reject" '{"reason":"Went with someone else"}' "$LTOKEN"
+  req POST "/api/applications/$APP_ID/messages" '{"body":"Are you still there?"}' "$TTOKEN"
+  check "cannot message on a rejected application" 400 "$STATUS" "$BODY"
+
+  req GET "/api/applications/$APP_ID/messages" "" "$TTOKEN"
+  check "thread stays readable after closure" 200 "$STATUS" "$BODY"
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

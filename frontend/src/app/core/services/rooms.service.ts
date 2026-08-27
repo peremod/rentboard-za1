@@ -80,6 +80,29 @@ export class RoomsService {
     return this.http.post<Room>(`${this.api}/rooms/${id}/undo-let`, {});
   }
 
+  /** Reserved: visible with a badge, but closed to new applications. */
+  reserve(id: string) {
+    this.bustCache();
+    return this.http.post<Room>(`${this.api}/rooms/${id}/reserve`, {});
+  }
+
+  unreserve(id: string) {
+    this.bustCache();
+    return this.http.post<Room>(`${this.api}/rooms/${id}/unreserve`, {});
+  }
+
+  /** Off the board, applications left open — unlike marking it let. */
+  pause(id: string) {
+    this.bustCache();
+    return this.http.post<Room>(`${this.api}/rooms/${id}/pause`, {});
+  }
+
+  /** Removes a published listing. Open applicants are closed and emailed. */
+  removelisting(id: string) {
+    this.bustCache();
+    return this.http.post<Room>(`${this.api}/rooms/${id}/remove`, {});
+  }
+
   /** Replaces a room's gallery; the first path becomes the cover. */
   updatePhotos(id: string, paths: string[]) {
     this.bustCache();
