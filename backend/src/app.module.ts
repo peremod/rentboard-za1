@@ -8,6 +8,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { VerificationModule } from './modules/verification/verification.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { SeoModule } from './modules/seo/seo.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
@@ -41,6 +42,7 @@ import { MessagesModule } from './modules/messages/messages.module';
     RoomsModule,
     AlertsModule,
     VerificationModule,
+    AdminModule,
     SeoModule,
     NotificationsModule,
     WhatsappModule,

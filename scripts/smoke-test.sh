@@ -590,6 +590,45 @@ if [[ -n "$APP_ID" ]]; then
 fi
 
 
+# -- 16. Admin surface -----------------------------------------------------
+# No admin token here by design: this section proves the admin API is closed to
+# ordinary accounts. Seed an admin (npm run db:seed) and set ADMIN_TOKEN to
+# exercise the authorised paths.
+head_ "16. Admin surface"
+req GET /api/admin/stats "" "$LTOKEN"
+check "landlord CANNOT read admin stats" 403 "$STATUS" "$BODY"
+
+req GET /api/admin/stats "" "$TTOKEN"
+check "tenant CANNOT read admin stats" 403 "$STATUS" "$BODY"
+
+req GET /api/admin/stats
+check "admin stats require auth" 401 "$STATUS"
+
+req GET /api/admin/users "" "$TTOKEN"
+check "tenant CANNOT list users" 403 "$STATUS" "$BODY"
+
+req PATCH "/api/admin/users/$(echo "$BODY" | jq -r '.id // "00000000-0000-0000-0000-000000000000"')/active" \
+  '{"isActive":false,"reason":"probe"}' "$TTOKEN"
+check "tenant CANNOT suspend an account" 403 "$STATUS" "$BODY"
+
+req GET /api/verification/pending "" "$TTOKEN"
+check "tenant CANNOT read the verification queue" 403 "$STATUS" "$BODY"
+
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  req GET /api/admin/stats "" "$ADMIN_TOKEN"
+  check "admin reads stats" 200 "$STATUS" "$BODY"
+
+  req GET /api/verification/pending "" "$ADMIN_TOKEN"
+  check "admin reads the verification queue" 200 "$STATUS" "$BODY"
+
+  req PATCH "/api/admin/users/00000000-0000-0000-0000-000000000000/active" \
+    '{"isActive":false}' "$ADMIN_TOKEN"
+  check "suspension requires a reason" 400 "$STATUS" "$BODY"
+else
+  grey "  SKIP  authorised admin paths — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

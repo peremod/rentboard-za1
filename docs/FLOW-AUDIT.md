@@ -105,7 +105,7 @@ waiting on a decision for a room whose rent went up R800.
 | Two-way messaging within an application | ✅ verified |
 | New matching room → tenant alerted | ⚠️ instant only; **`daily` sends nothing** — the digest job does not exist |
 | Saved room is let → tenant told | ❌ **gap X1** — a saved room silently becomes unavailable |
-| Landlord verified → badge appears | ✅ backend verified; ❌ no submission UI, no admin queue UI |
+| Landlord verified → badge appears | ✅ backend and admin queue (v1.8.0); ❌ landlord-facing submission UI still to build |
 
 **X1 — saved rooms go stale silently.** The dashboard drops rooms that 404,
 but a tenant is never told the room they saved has gone. This is the same
@@ -116,7 +116,21 @@ other cannot.
 
 ## 4. Admin
 
-❌ **There is no admin surface at all.** `AdminGuard` and the `ADMIN` role
+✅ **Built in v1.8.0.** `/admin/dashboard` (platform counts, account search,
+suspend and restore) and `/admin/verifications` (the review queue). Admins are
+created with `npm run db:seed`, deliberately not through an API — a "create the
+first admin" endpoint is a standing privilege-escalation risk, and requiring
+database credentials to mint an admin is the safer trade.
+
+Scope is intentionally narrow: no access to private messages between a landlord
+and tenant. POPIA's minimality principle (s.10) means a power we do not need is
+itself a liability. Suspension is reversible and destroys nothing — a suspended
+landlord's rooms are paused, while applications and messages survive because a
+tenant may need that history in a dispute.
+
+Previously:
+
+❌ ~~There is no admin surface at all.~~ `AdminGuard` and the `ADMIN` role
 exist, `GET /verification/pending` is admin-only, but:
 
 - there is no admin route in the frontend

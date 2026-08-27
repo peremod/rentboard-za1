@@ -1,0 +1,54 @@
+import { Controller, Get, Patch, Body, Param, Query, UseGuards, ParseUUIDPipe } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { AdminGuard } from '../../common/guards/admin.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AdminService } from './admin.service';
+
+class SetActiveDto {
+  @IsBoolean() isActive!: boolean;
+
+  /** Required when suspending — recorded in the log for accountability. */
+  @IsOptional() @IsString() @MaxLength(300) reason?: string;
+}
+
+@ApiTags('admin')
+@Controller('admin')
+@UseGuards(JwtAuthGuard, AdminGuard)
+@ApiBearerAuth()
+export class AdminController {
+  constructor(private adminService: AdminService) {}
+
+  @Get('stats')
+  @ApiOperation({ summary: 'Platform counts for the admin dashboard' })
+  stats() {
+    return this.adminService.getStats();
+  }
+
+  @Get('users')
+  @ApiOperation({ summary: 'Search users by email or name' })
+  users(
+    @Query('q') q?: string,
+    @Query('role') role?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.adminService.findUsers(q, role, limit ? +limit : 50);
+  }
+
+  @Patch('users/:id/active')
+  @ApiOperation({ summary: 'Suspend or restore an account' })
+  setActive(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetActiveDto,
+    @CurrentUser() admin: { id: string },
+  ) {
+    return this.adminService.setUserActive(id, dto.isActive, admin.id, dto.reason);
+  }
+
+  @Get('rooms')
+  @ApiOperation({ summary: 'Recently published rooms, for a moderation sweep' })
+  rooms(@Query('limit') limit?: string) {
+    return this.adminService.recentRooms(limit ? +limit : 30);
+  }
+}

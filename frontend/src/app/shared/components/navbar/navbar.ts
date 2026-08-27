@@ -38,6 +38,10 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
 
         <div class="nav-actions">
           <app-lang-switcher/>
+          @if (auth.isAdmin()) {
+            <a routerLink="/admin/dashboard" routerLinkActive="active"
+               (click)="mobileOpen.set(false)">Admin</a>
+          }
           @if (auth.isAuthenticated()) {
             @if (auth.isLandlord()) {
               <a class="btn btn-ghost btn-sm" routerLink="/landlord/dashboard">{{ 'nav.dashboard' | translate }}</a>

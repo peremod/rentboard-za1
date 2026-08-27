@@ -3,6 +3,7 @@ import { RenderMode, ServerRoute } from '@angular/ssr';
 import { authGuard } from './core/guards/auth.guard';
 import { landlordGuard } from './core/guards/landlord.guard';
 import { tenantGuard } from './core/guards/tenant.guard';
+import { adminGuard } from './core/guards/admin.guard';
 
 /**
  * Application routes — all feature routes are lazy-loaded.
@@ -42,6 +43,11 @@ export const routes: Routes = [
     loadChildren: () => import('./features/landlord/landlord.routes').then((m) => m.LANDLORD_ROUTES),
   },
   {
+    path: 'admin',
+    canActivate: [authGuard, adminGuard],
+    loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
+  },
+  {
     path: '**',
     loadComponent: () => import('./shared/components/error-page/error-page').then((m) => m.ErrorPage),
     title: 'Page not found — RentBoard',
@@ -61,5 +67,6 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'auth/**', renderMode: RenderMode.Client },
   { path: 'tenant/**', renderMode: RenderMode.Client },
   { path: 'landlord/**', renderMode: RenderMode.Client },
+  { path: 'admin/**', renderMode: RenderMode.Client },
   { path: '**', renderMode: RenderMode.Prerender },
 ];
