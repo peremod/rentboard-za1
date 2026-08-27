@@ -1,8 +1,51 @@
 # RentBoard ZA — Pre-Launch Checklist
 
-## Launch readiness summary (v1.0.0)
+## Launch readiness summary (v1.6.0)
 
-**Everything fixable inside this repo is done.** Ten builds (`v0.1.0` → `v0.9.3`), each verified before commit — every relative import resolved, every lazy-loaded export matched, and a specific, named bug caught and fixed at least once in most passes (not just claimed clean). What's left is entirely outside the codebase:
+**Corrected 26 Aug 2026.** The previous version of this summary claimed
+"everything fixable inside this repo is done… each verified before commit."
+That was written before the project had ever been executed. Those pre-commit
+checks only proved that imports resolved and exported names matched — they
+never ran the code. When it was first run end to end, roughly twenty real
+defects surfaced that this checklist did not list:
+
+- `@angular/vitest` — a package that does not exist on npm
+- Five dependency majors incompatible with their own cores (TypeScript,
+  vitest, `@nestjs/config`/`jwt`/`passport`/`swagger`)
+- An SSR crash on every page load (`IntersectionObserver` during server render)
+- Three services that aborted API bootstrap when optional credentials were
+  absent (Resend, Google OAuth, and `esModuleInterop` for compression)
+- A cross-user data leak: saved rooms shared one global storage key, so on a
+  shared device one account saw another's saved rooms
+- Applications had no letting cycle, and a unique constraint that locked a
+  tenant out of a room permanently after one application
+- Placeholder ImageKit URLs (`rentboard-dev`) that 404'd every image
+- The visual spec was never wired up: 15 of 132 class names matched, so the
+  design in `RentBoard-ZA-Visual-Preview.html` had never actually applied
+
+**Treat this document as a map of known gaps, not as evidence of working
+software.** The distinction matters: it is the reason the above went unnoticed.
+
+### What is now genuinely verified
+
+| Area | Evidence |
+|---|---|
+| API end to end | `./scripts/smoke-test.sh` — 64 checks: auth, room lifecycle, applications, messaging, both dashboards, listing wizard validation |
+| Cross-tenant isolation | Four IDOR checks: a second tenant cannot read, post into, accept or list another tenant's application |
+| ImageKit | `./scripts/test-imagekit.sh` — live credentials, signed upload confirmed |
+| Full UI flow | Manually walked: register → post room → upload photo → publish → browse → apply → message |
+| Responsive | Ported from `Visual-Preview-v2.html` (900/768/480), verified in device emulation |
+
+### What is still unverified
+
+- No deployment has been done — staging and production are untested
+- No automated test coverage beyond one pipe spec; the smoke test is an
+  integration check against a running server, not a unit suite
+- Email is unconfigured, so the apply → notify → respond loop has never
+  completed with a real message reaching a landlord
+- Load, backup and restore have never been exercised
+
+---
 
 | Category | What's left | Blocking launch? |
 |---|---|---|
@@ -18,7 +61,11 @@ Full detail on every row above is in the tables below — this summary is the ma
 
 ---
 
-Consolidates every `[PLACEHOLDER]`, deferred item, and audit finding scattered across `README.md §1–19` and your `RentBoard-ZA-Audit-Report.html`, in one place. Nothing here is new — it's a merge. Each item was checked against the actual repo (not assumed) before being listed, so "already fixed" means genuinely verified, not guessed.
+Consolidates every `[PLACEHOLDER]`, deferred item, and audit finding scattered across `README.md §1–19` and your `RentBoard-ZA-Audit-Report.html`, in one place.
+
+A caution on the tables below: "already fixed" in the original text meant the
+code had been read, not run. Where a row has not been re-confirmed against a
+running system since 26 Aug 2026, treat it as unverified.
 
 Legal counts as much as code here: several of these are compliance-critical, not just security-critical.
 
@@ -41,7 +88,7 @@ Legal counts as much as code here: several of these are compliance-critical, not
 | 6 | ~~Rebase-before-PR not documented in README~~ | ✅ **Not applicable — already present** | `README.md §7` has documented "rebase-before-PR" in prose and a working `git rebase origin/develop` command example since pass 0.1.0. Re-checked against the actual file rather than assumed. |
 | 7 | **Admin guard not wired at module level** | ✅ **Not applicable yet** | No `AdminModule`/admin endpoints exist in this repo at all — nothing to leave unguarded. Flag this again the moment an admin module is built, not before. |
 | 8 | ~~`ZarCentsPipe` not imported in components~~ | ✅ **Already fixed** | Used consistently in `RoomCard`, `RoomDetail`, `LandlordDashboard`, `TenantDashboard` since pass 0.3.0/0.4.0 — verified by grep, not assumed |
-| 9 | ~~Dashboards not fully mobile-responsive~~ | ✅ **Fixed in v0.9.3** | `LandlordDashboard` and `TenantDashboard` converted from inline `style=""` (which can't carry media queries) to real component `styles: []` with a `@media (max-width: 480px)` breakpoint that stacks the row layout. `Applicants` already used real CSS classes — just needed the breakpoint added. |
+| 9 | Dashboards not fully mobile-responsive | ⚠️ **Superseded — re-done in v1.3.2–v1.4.3** | The v0.9.3 fix (component `styles: []` with a 480px breakpoint) was itself the problem: Angular's emulated encapsulation makes component styles *more specific* than global CSS, so they silently overrode the entire responsive layer and every breakpoint was ignored. Those styles were removed and both dashboards rebuilt on a shared `PortalShell`. Responsive rules now live in `_responsive.scss`, ported from `Visual-Preview-v2.html` (900/768/480). |
 
 ## 🟢 Minor — nice to fix
 
@@ -76,8 +123,8 @@ Legal counts as much as code here: several of these are compliance-critical, not
 |---|---|---|
 | Supabase Postgres | `DATABASE_URL`, `DIRECT_URL` | Pooled (6543) vs direct (5432) — see `README.md §19` |
 | Google OAuth | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL` | Optional — email/password login works without it |
-| ImageKit | `IMAGEKIT_PUBLIC_KEY`, `IMAGEKIT_PRIVATE_KEY`, `IMAGEKIT_URL_ENDPOINT` | Required for the photo-upload flow (pass 0.6.0) to actually work |
-| Resend | `RESEND_API_KEY` | Required for any of the 6 email templates (pass 0.5.0) to actually send |
+| ImageKit | `IMAGEKIT_PUBLIC_KEY`, `IMAGEKIT_PRIVATE_KEY`, `IMAGEKIT_URL_ENDPOINT` | ✅ **Configured and verified 26 Aug 2026** — uploads confirmed working end to end. `IMAGEKIT_URL_ENDPOINT` must match `imagekitUrl` in the frontend environment files exactly, or every image 404s |
+| Resend | `RESEND_API_KEY` | ❌ **Not set.** The API boots and logs `[email skipped]` instead of sending, so nothing breaks — but a landlord is never told an application arrived, which breaks the core loop in practice. Highest-value remaining credential |
 | WhatsApp Business API | `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFY_TOKEN` | Optional — email notifications never depend on this |
 | Stripe | see table above | Required for pass 0.8.0's payment flows |
 | Vercel / Railway deploy secrets | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `RAILWAY_TOKEN` | GitHub Actions secrets, not `.env` |
@@ -111,11 +158,34 @@ The 20-photo cap is enforced in three independent places: `PhotoUpload` (client,
 1. ~~Input sanitisation (#3)~~ ✅ Done — v0.9.1
 2. ~~Auth hardening (#1, #2)~~ ✅ Done — v0.9.2
 3. ~~Error boundary on lazy routes (#11)~~ ✅ Done — v0.9.3
-4. ~~Mobile responsive pass on the three dashboard-style pages (#9)~~ ✅ Done — v0.9.3
+4. ~~Mobile responsive pass on the three dashboard-style pages (#9)~~ ⚠️ Superseded — the v0.9.3 approach broke responsiveness; re-done properly in v1.3.2–v1.4.3
 5. ~~README rebase note (#6)~~ ✅ Not applicable — already present, verified against the file rather than assumed
 6. Everything remaining is either a manual step outside the codebase (branch protection, SAHRC filing, Stripe Dashboard config) or explicit future work (KYC integration, remaining 8 translations) — not blocked on code changes. **Every code-fixable item on this checklist is now closed.**
 
 ---
+
+## Verification scripts
+
+Two scripts exist so readiness can be re-checked rather than assumed. Run both
+after any dependency change, schema migration, or deploy.
+
+```bash
+./scripts/smoke-test.sh      # 64 API checks against a running backend
+./scripts/test-imagekit.sh   # ImageKit credentials and signed upload
+```
+
+`smoke-test.sh` creates real rows using timestamped test emails, so it is safe
+to run repeatedly against a dev database. Never run it against production.
+
+## Outstanding product gaps (not bugs)
+
+| Gap | Notes |
+|---|---|
+| "How it works" and Pricing pages | Fully designed in `Visual-Preview-v2.html`; no routes exist. Pricing links were removed rather than left pointing at a guard that redirects home while billing is paused |
+| "Back to all rooms" | Returns to the board but loses scroll position and filters |
+| Saved rooms persistence | Device-local (localStorage), correctly scoped per user since v1.4.2. A join table plus two routes would make it follow the account across devices |
+| Renter's Passport | Payment only — no KYC provider integrated. The UI says so |
+| Students-welcome filter | Present in the UI per the design, but there is no field on the Room model, so it does not filter |
 
 ## Migration required (v1.6.0)
 
