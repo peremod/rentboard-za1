@@ -109,6 +109,7 @@ export class AdminVerifications implements OnInit {
   readonly navItems: PortalNavItem[] = [
     { label: 'Overview', icon: '📊', route: '/admin/dashboard', exact: true },
     { label: 'Verifications', icon: '📄', route: '/admin/verifications' },
+    { label: 'Reports', icon: '🚩', route: '/admin/reports' },
   ];
 
   requests = signal<PendingVerification[]>([]);

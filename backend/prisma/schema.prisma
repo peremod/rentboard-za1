@@ -70,6 +70,8 @@ model User {
   lastLoginAt    DateTime?
 
   authTokens      AuthToken[]
+  reportsFiled    Report[]  @relation("ReportsFiled")
+  reportsAgainst  Report[]  @relation("ReportsAgainst")
   savedSearches   SavedSearch[]
   verifications   VerificationRequest[]
 
@@ -166,6 +168,8 @@ model Room {
   @@index([status])
   @@index([province, city])
   @@index([rentCents])
+  reports          Report[]
+
   @@index([landlordId])
   @@map("rooms")
 }
@@ -238,6 +242,65 @@ model AuthToken {
   @@index([userId, type])
   @@index([expiresAt])
   @@map("auth_tokens")
+}
+
+/// A safety report against a listing or a user.
+///
+/// The disclaimer warns tenants about agents posing as landlords, deposit
+/// scams and discriminatory listings, and tells them to report — so there has
+/// to be somewhere for that to go, with a record. Reports are retained after
+/// resolution because a pattern across several reports is usually what shows a
+/// scammer, not any single one.
+model Report {
+  id        String       @id @default(uuid())
+
+  /// Null when reported by a signed-out visitor.
+  reporterId String?
+  reporter   User?        @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  /// One of these is set. Reporting a room implicates its landlord, but the
+  /// landlord may also be reported directly (e.g. off-platform conduct).
+  roomId    String?
+  room      Room?        @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  reportedUserId String?
+  reportedUser   User?    @relation("ReportsAgainst", fields: [reportedUserId], references: [id], onDelete: SetNull)
+
+  reason    ReportReason
+  details   String
+  /// Contact address for signed-out reporters, so we can follow up.
+  contactEmail String?
+
+  status    ReportStatus @default(open)
+  /// What the admin did and why. Shown to nobody but admins.
+  resolutionNote String?
+  reviewedById   String?
+  reviewedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([roomId])
+  @@index([reportedUserId])
+  @@map("reports")
+}
+
+enum ReportReason {
+  not_a_real_listing      // room does not exist, or photos are stolen
+  agent_posing_as_landlord
+  upfront_payment_demanded // deposit before viewing — the biggest scam pattern
+  discriminatory           // PEPUDA / Constitution s.9
+  misleading_details       // price, size or condition materially wrong
+  harassment
+  already_let              // still advertised after being taken
+  other
+}
+
+enum ReportStatus {
+  open
+  investigating
+  actioned      // listing removed, account suspended, or similar
+  dismissed
 }
 
 enum AuthTokenType {

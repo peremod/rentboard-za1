@@ -121,6 +121,23 @@ export class NotificationsService {
   }
 
   /** Daily digest of new rooms matching a saved search. Sent only when there are matches. */
+  /**
+   * Internal alert for reports that suggest someone is about to lose money.
+   * Goes to the safety address published in the disclaimer, so the promise
+   * made there is actually wired to something.
+   */
+  async sendUrgentReportAlert(d: { reportId: string; reason: string; roomId?: string }) {
+    await this.send(
+      'safety@rentboard.co.za',
+      `URGENT report: ${d.reason.replace(/_/g, ' ')}`,
+      `<p>A report was filed that matches a money-loss pattern.</p>
+       <p><strong>Reason:</strong> ${d.reason.replace(/_/g, ' ')}<br/>
+          <strong>Report:</strong> ${d.reportId}<br/>
+          ${d.roomId ? `<strong>Listing:</strong> <a href="${this.frontend}/rooms/${d.roomId}">${d.roomId}</a>` : ''}</p>
+       <p><a href="${this.frontend}/admin/reports">Open the report queue</a></p>`,
+    );
+  }
+
   async sendPasswordResetEmail(to: string, d: { fullName: string; token: string; ttlMinutes: number }) {
     const link = `${this.frontend}/auth/reset-password?token=${encodeURIComponent(d.token)}`;
     await this.send(

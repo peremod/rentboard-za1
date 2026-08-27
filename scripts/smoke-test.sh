@@ -674,6 +674,40 @@ req POST /api/auth/confirm-email-change '{"token":"invalid"}'
 check "rejects an invalid confirmation token" 400 "$STATUS" "$BODY"
 
 
+# -- 18. Safety reports ----------------------------------------------------
+head_ "18. Safety reports"
+if [[ -n "$ROOM_ID" ]]; then
+  # Anonymous reporting is deliberate: requiring an account suppresses exactly
+  # the reports worth having.
+  req POST /api/reports "{\"roomId\":\"$ROOM_ID\",\"reason\":\"upfront_payment_demanded\",\"details\":\"They asked for a R2000 deposit via EFT before letting me view the room.\",\"contactEmail\":\"worried@example.co.za\"}"
+  check "signed-out visitor can report" 201 "$STATUS" "$BODY"
+
+  req POST /api/reports "{\"roomId\":\"$ROOM_ID\",\"reason\":\"misleading_details\",\"details\":\"The advertised rent does not match what the landlord told me on the phone.\"}" "$TTOKEN"
+  check "signed-in tenant can report" 201 "$STATUS" "$BODY"
+
+  req POST /api/reports "{\"roomId\":\"$ROOM_ID\",\"reason\":\"other\",\"details\":\"too short\",\"contactEmail\":\"a@b.co\"}"
+  check "rejects details that are too short" 400 "$STATUS" "$BODY"
+
+  req POST /api/reports "{\"roomId\":\"$ROOM_ID\",\"reason\":\"not_a_real_listing\",\"details\":\"These photos appear on another listing in a different city entirely.\"}"
+  check "anonymous report requires a contact email" 400 "$STATUS" "$BODY"
+
+  req POST /api/reports '{"reason":"other","details":"Something is wrong but I have not said what with.","contactEmail":"a@b.co"}'
+  check "rejects a report with no subject" 400 "$STATUS" "$BODY"
+
+  req POST /api/reports "{\"roomId\":\"$ROOM_ID\",\"reason\":\"nonsense\",\"details\":\"A valid length of detail goes here for the test.\",\"contactEmail\":\"a@b.co\"}"
+  check "rejects an unknown reason" 400 "$STATUS" "$BODY"
+fi
+
+req GET /api/reports "" "$TTOKEN"
+check "tenant CANNOT read the report queue" 403 "$STATUS" "$BODY"
+
+req GET /api/reports "" "$LTOKEN"
+check "landlord CANNOT read the report queue" 403 "$STATUS" "$BODY"
+
+req GET /api/reports
+check "report queue requires auth" 401 "$STATUS"
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

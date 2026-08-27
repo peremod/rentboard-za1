@@ -16,5 +16,10 @@ export const ADMIN_ROUTES: Routes = [
     loadComponent: () => import('./verifications/admin-verifications').then((m) => m.AdminVerifications),
     title: 'Verification queue — RentBoard',
   },
+  {
+    path: 'reports',
+    loadComponent: () => import('./reports/admin-reports').then((m) => m.AdminReports),
+    title: 'Reports — RentBoard',
+  },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];

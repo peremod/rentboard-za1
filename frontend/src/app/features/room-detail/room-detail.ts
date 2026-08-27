@@ -7,6 +7,7 @@ import { ApplicationsService } from '../../core/services/applications.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Room } from '../../core/models/room.model';
 import { ZarCentsPipe } from '../../shared/pipes/zar-cents.pipe';
+import { ReportDialog } from '../../shared/components/report-dialog/report-dialog';
 
 /**
  * Room detail — gallery, full description, and the apply flow.
@@ -16,7 +17,7 @@ import { ZarCentsPipe } from '../../shared/pipes/zar-cents.pipe';
 @Component({
   selector: 'app-room-detail',
   standalone: true,
-  imports: [NgOptimizedImage, FormsModule, RouterLink, ZarCentsPipe],
+  imports: [NgOptimizedImage, FormsModule, RouterLink, ZarCentsPipe, ReportDialog],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="room-detail">
@@ -64,6 +65,22 @@ import { ZarCentsPipe } from '../../shared/pipes/zar-cents.pipe';
             </button>
           }
         </div>
+
+        <aside class="detail__safety">
+          <h2>Stay safe</h2>
+          <p>
+            Never pay a deposit before viewing the room in person and signing a
+            written lease. Deposits must be held in an interest-bearing account
+            under the Rental Housing Act 50 of 1999.
+          </p>
+          <button type="button" class="btn btn-sm btn-ghost-light" (click)="reportOpen.set(true)">
+            🚩 Report this listing
+          </button>
+        </aside>
+
+        @if (reportOpen()) {
+          <app-report-dialog [roomId]="r.id" (close)="reportOpen.set(false)"/>
+        }
       } @else if (notFound()) {
         <p>Room not found. <a routerLink="/">Back to all rooms</a></p>
       } @else {
@@ -93,6 +110,9 @@ import { ZarCentsPipe } from '../../shared/pipes/zar-cents.pipe';
   `],
 })
 export class RoomDetail implements OnInit {
+  /** Report dialog visibility. Available signed out — see ReportDialog. */
+  reportOpen = signal(false);
+
   /** Bound from the :id route segment. */
   id = input.required<string>();
 

@@ -177,7 +177,25 @@ Hard parts, which is why this is not a quick build:
   exposure in South Africa. Needs a moderation and right-of-reply path, which
   ties into the admin surface.
 
-### 5.3 Reporting fraudulent listings — ❌ not built
+### 5.3 Reporting fraudulent listings — ✅ built in v1.10.0
+`Report` model, a report button on every room detail page, and an admin queue
+at `/admin/reports`. Reasons are written in plain language and ordered by the
+South African scam patterns the disclaimer warns about — "they asked for money
+before I viewed the room" is first because it is the one that costs people
+money.
+
+Deliberately open to signed-out visitors: requiring an account suppresses
+exactly the reports worth having. Rate limited to 5 per hour instead.
+
+Urgent reasons (upfront payment demanded, agent posing as landlord, listing not
+real) are escalated by email to the safety address published in the disclaimer,
+rather than waiting in a queue. The admin view shows prior-report counts for
+the same room and the same landlord, because a single report is weak evidence
+and a pattern across several is the actual signal.
+
+Previously:
+
+### 5.3 ~~Reporting fraudulent listings~~ — ~~not built~~
 The disclaimer tells tenants to email `safety@rentboard.co.za`, so the promise
 is kept, but there is no in-app report button, no `Report` model and no admin
 queue. Given the disclaimer explicitly warns about agents posing as landlords
