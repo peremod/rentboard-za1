@@ -202,10 +202,19 @@ queue. Given the disclaimer explicitly warns about agents posing as landlords
 and deposit scams, an in-app path with an audit trail is the more serious gap
 of the two remaining.
 
-### 5.4 How it works / Pricing pages — ❌ not built
-Both fully designed in `Visual-Preview-v2.html`. Pricing is now simpler than
-the design assumes: **free for landlords, with a once-off verification fee**,
-so the three-tier table in the preview no longer reflects the model.
+### 5.4 How it works / Pricing pages — ✅ built in v1.9.1
+`/how-it-works` and `/pricing`, both prerendered and linked from the navbar and
+footer.
+
+Pricing deliberately does **not** follow the three-tier table in the visual
+spec, which predates the decision. The model is: free for tenants, free for
+landlords, one once-off verification fee (R149). The page states what the fee
+buys and what it does not — verification means a person checked a document, not
+a credit or criminal check.
+
+The How it works page carries the deposit-safety guidance from the disclaimer,
+because a tenant reading it is the one most likely to be about to pay money to
+a stranger.
 
 ---
 

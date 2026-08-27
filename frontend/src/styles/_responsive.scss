@@ -283,3 +283,45 @@
 @media (min-width: 1600px) {
   .nav-inner, .hero-inner, .board, .section-inner, .footer-inner, .search-bar { max-width: 1360px; }
 }
+
+// ── How it works / Pricing (not in the desktop-only spec) ────────────────
+.hiw-audience {
+  font-size: 1rem; font-weight: 700; color: var(--ink);
+  margin-bottom: 1.5rem; text-transform: uppercase; letter-spacing: 1px;
+}
+.hiw-cta {
+  display: flex; gap: .75rem; justify-content: center;
+  margin-top: 2.5rem; flex-wrap: wrap;
+}
+.hiw-safety {
+  margin-top: 2.5rem; padding: 1.5rem;
+  background: rgba(200, 144, 42, .08);
+  border: 1px solid rgba(200, 144, 42, .3);
+  border-radius: var(--r12);
+
+  h2 { font-size: 1.05rem; margin-bottom: .75rem; }
+  p  { font-size: .9rem; line-height: 1.7; margin-bottom: .75rem; color: var(--ink2); }
+  ul { padding-left: 1.2rem; }
+  li { font-size: .88rem; line-height: 1.75; margin-bottom: .5rem; color: var(--ink2); }
+}
+.hiw-safety-note { font-size: .82rem !important; color: var(--slate) !important; margin-top: 1rem; }
+
+.pricing-faq {
+  margin-top: 3.5rem;
+  h2 { font-family: var(--font-display); font-size: 1.5rem; margin-bottom: 1.5rem; }
+}
+.faq-item {
+  padding: 1.1rem 0;
+  border-bottom: 1px solid var(--border);
+  h3 { font-size: .95rem; font-weight: 700; margin-bottom: .4rem; color: var(--ink); }
+  p  { font-size: .9rem; line-height: 1.75; color: var(--ink2); }
+}
+.pricing-note {
+  margin-top: 2rem; text-align: center;
+  font-size: .8rem; color: var(--slate);
+}
+
+@media (max-width: 600px) {
+  .hiw-cta .btn { width: 100%; }
+  .hiw-safety { padding: 1.1rem; }
+}

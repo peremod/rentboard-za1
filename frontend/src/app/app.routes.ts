@@ -29,6 +29,10 @@ export const routes: Routes = [
     loadChildren: () => import('./features/auth/auth.routes').then((m) => m.AUTH_ROUTES),
   },
   {
+    path: '',
+    loadChildren: () => import('./features/pages/pages.routes').then((m) => m.PAGES_ROUTES),
+  },
+  {
     path: 'legal',
     loadChildren: () => import('./features/legal/legal.routes').then((m) => m.LEGAL_ROUTES),
   },
@@ -64,6 +68,8 @@ export const serverRoutes: ServerRoute[] = [
   { path: '', renderMode: RenderMode.Prerender },
   { path: 'rooms/:id', renderMode: RenderMode.Server },
   { path: 'legal/**', renderMode: RenderMode.Prerender },
+  { path: 'how-it-works', renderMode: RenderMode.Prerender },
+  { path: 'pricing', renderMode: RenderMode.Prerender },
   { path: 'auth/**', renderMode: RenderMode.Client },
   { path: 'tenant/**', renderMode: RenderMode.Client },
   { path: 'landlord/**', renderMode: RenderMode.Client },

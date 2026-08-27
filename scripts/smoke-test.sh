@@ -708,6 +708,51 @@ req GET /api/reports
 check "report queue requires auth" 401 "$STATUS"
 
 
+# -- 18. Reporting ---------------------------------------------------------
+head_ "18. Reporting"
+if [[ -n "$ROOM_ID" ]]; then
+  req POST /api/reports "{\"roomId\":\"$ROOM_ID\",\"reason\":\"upfront_payment_demanded\",\"details\":\"Asked for a deposit before any viewing.\",\"contactEmail\":\"anon@rentboard.test\"}"
+  if [[ "$STATUS" == "201" || "$STATUS" == "200" ]]; then
+    green "  PASS  anonymous report accepted  ($STATUS)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  anonymous report rejected  ($STATUS)"; FAIL=$((FAIL+1))
+    grey "        $(echo "$BODY" | head -c 300)"
+  fi
+
+  req POST /api/reports "{\"roomId\":\"$ROOM_ID\",\"reason\":\"not_a_real_listing\",\"details\":\"Photos appear to be stolen from another site.\"}" "$TTOKEN"
+  if [[ "$STATUS" == "201" || "$STATUS" == "200" ]]; then
+    green "  PASS  signed-in report accepted  ($STATUS)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  signed-in report rejected  ($STATUS)"; FAIL=$((FAIL+1))
+  fi
+
+  req POST /api/reports "{\"roomId\":\"$ROOM_ID\",\"reason\":\"made_up_reason\",\"details\":\"x\"}" "$TTOKEN"
+  check "rejects an unknown reason" 400 "$STATUS" "$BODY"
+fi
+
+req GET /api/reports "" "$TTOKEN"
+check "tenant CANNOT read the report queue" 403 "$STATUS" "$BODY"
+
+req GET /api/reports "" "$LTOKEN"
+check "landlord CANNOT read the report queue" 403 "$STATUS" "$BODY"
+
+# -- 19. Public pages ------------------------------------------------------
+head_ "19. Public pages"
+# Served by the frontend, not the API — checked here so a broken prerender is
+# caught by the same run rather than discovered in the browser.
+FE="${FRONTEND_URL:-http://localhost:4200}"
+for path in "/how-it-works" "/pricing"; do
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' "$FE$path" 2>/dev/null || echo "000")
+  if [[ "$CODE" == "200" ]]; then
+    green "  PASS  $path renders  (200)"; PASS=$((PASS+1))
+  elif [[ "$CODE" == "000" ]]; then
+    grey "  SKIP  $path — frontend not running at $FE"; SKIP=$((SKIP+1))
+  else
+    red "  FAIL  $path returned $CODE"; FAIL=$((FAIL+1))
+  fi
+done
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

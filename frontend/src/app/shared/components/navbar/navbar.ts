@@ -22,11 +22,10 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
         <div class="nav-links" [class.open]="mobileOpen()">
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
              (click)="mobileOpen.set(false)">{{ 'nav.browse_rooms' | translate }}</a>
-          <!-- Pricing is guarded by billingEnabledGuard; with billing paused
-               that guard redirects home, so linking to it looks broken. -->
-          @if (auth.isLandlord() && billingEnabled) {
-            <a routerLink="/landlord/upgrade" routerLinkActive="active" (click)="mobileOpen.set(false)">Pricing</a>
-          }
+          <a routerLink="/how-it-works" routerLinkActive="active"
+             (click)="mobileOpen.set(false)">How it works</a>
+          <a routerLink="/pricing" routerLinkActive="active"
+             (click)="mobileOpen.set(false)">Pricing</a>
           <a routerLink="/legal/privacy" routerLinkActive="active" (click)="mobileOpen.set(false)">Privacy</a>
           <a routerLink="/legal/terms" routerLinkActive="active" (click)="mobileOpen.set(false)">Terms</a>
           <a routerLink="/legal/disclaimer" routerLinkActive="active" (click)="mobileOpen.set(false)">Disclaimer</a>
