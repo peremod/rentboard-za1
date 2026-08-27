@@ -103,9 +103,9 @@ waiting on a decision for a room whose rent went up R800.
 | Landlord relists → old cycle archived, tenant sees why | ✅ verified |
 | Tenant withdraws → landlord's list updates | ✅ verified |
 | Two-way messaging within an application | ✅ verified |
-| New matching room → tenant alerted | ⚠️ instant only; **`daily` sends nothing** — the digest job does not exist |
+| New matching room → tenant alerted | ✅ instant on publish and relist; ✅ daily digest at 07:00 SAST (v1.8.1). A digest with no matches is not sent — a daily "nothing today" is how people learn to ignore, then unsubscribe |
 | Saved room is let → tenant told | ❌ **gap X1** — a saved room silently becomes unavailable |
-| Landlord verified → badge appears | ✅ backend and admin queue (v1.8.0); ❌ landlord-facing submission UI still to build |
+| Landlord verified → badge appears | ✅ end to end (v1.8.1): landlord submits at /landlord/verification, admin reviews at /admin/verifications, approval sets idVerified and the badge appears |
 
 **X1 — saved rooms go stale silently.** The dashboard drops rooms that 404,
 but a tenant is never told the room they saved has gone. This is the same

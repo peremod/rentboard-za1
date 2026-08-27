@@ -9,6 +9,8 @@ import { MessageThread } from '../../../shared/components/message-thread/message
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
+import { AlertsService } from '../../../core/services/alerts.service';
+import { SavedSearch } from '../../../core/models/alerts.model';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { Room } from '../../../core/models/room.model';
 import { RoomCard } from '../../../shared/components/room-card/room-card';
@@ -123,6 +125,52 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
 
       <section class="dash-section">
         <div class="dash-section-title">
+          Room alerts
+          @if (alerts.searches().length > 0) {
+            <span class="dash-count">({{ alerts.searches().length }})</span>
+          }
+        </div>
+
+        @if (alerts.searches().length === 0) {
+          <div class="empty-state">
+            <h3>No alerts set up</h3>
+            <p>
+              Rooms are often taken within days. Save a search and we'll email you
+              the moment a matching room is listed.
+            </p>
+            <a class="btn btn-primary" routerLink="/">Search rooms</a>
+          </div>
+        } @else {
+          @for (search of alerts.searches(); track search.id) {
+            <div class="app-card" [class.app-card--closed]="!search.isActive">
+              <div class="app-thumb portal-thumb" aria-hidden="true">🔔</div>
+              <div class="app-info">
+                <div class="app-room">{{ search.name }}</div>
+                <div class="app-location">{{ describe(search) }}</div>
+                <div class="app-location">
+                  {{ search.isActive ? frequencyLabel(search.frequency) : 'Paused' }}
+                  @if (search.matchCount > 0) {
+                    · {{ search.matchCount }} match{{ search.matchCount === 1 ? '' : 'es' }} so far
+                  }
+                </div>
+              </div>
+              <div class="portal-row-actions">
+                <button type="button" class="btn btn-sm btn-ghost-light"
+                        [disabled]="busySearch() === search.id" (click)="togglePaused(search)">
+                  {{ search.isActive ? 'Pause' : 'Resume' }}
+                </button>
+                <button type="button" class="btn btn-sm btn-ghost-light"
+                        [disabled]="busySearch() === search.id" (click)="deleteSearch(search)">
+                  Delete
+                </button>
+              </div>
+            </div>
+          }
+        }
+      </section>
+
+      <section class="dash-section">
+        <div class="dash-section-title">
           Saved rooms
           @if (savedRooms.count() > 0) { <span class="dash-count">({{ savedRooms.count() }})</span> }
         </div>
@@ -161,6 +209,8 @@ export class TenantDashboard implements OnInit {
   savedRoomList = signal<Room[]>([]);
   loadingSaved = signal(false);
   withdrawing = signal<string | null>(null);
+  alerts = inject(AlertsService);
+  busySearch = signal<string | null>(null);
 
   /**
    * Computed rather than static so the Applications and Saved Rooms badges
@@ -173,6 +223,7 @@ export class TenantDashboard implements OnInit {
     { label: 'Messages', icon: '💬', route: '/tenant/dashboard' },
     { label: 'Browse rooms', icon: '🔍', route: '/' },
     { label: 'Saved Rooms', icon: '♥', route: '/tenant/dashboard', badge: this.savedRooms.count() },
+    { label: 'Alerts', icon: '🔔', route: '/tenant/dashboard', badge: this.alerts.searches().length },
     ...(BILLING_ENABLED ? [{ label: "Renter's Passport", icon: '🛂', route: '/tenant/passport' }] : []),
   ]);
 

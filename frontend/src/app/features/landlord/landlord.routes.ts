@@ -25,6 +25,11 @@ export const LANDLORD_ROUTES: Routes = [
     title: 'Applicants — RentBoard',
   },
   {
+    path: 'verification',
+    loadComponent: () => import('./verification/landlord-verification').then((m) => m.LandlordVerification),
+    title: 'Verification — RentBoard',
+  },
+  {
     path: 'upgrade',
     canActivate: [billingEnabledGuard],
     loadComponent: () => import('./upgrade/upgrade').then((m) => m.Upgrade),

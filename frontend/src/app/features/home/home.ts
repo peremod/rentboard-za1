@@ -5,6 +5,8 @@ import {
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { RoomsService } from '../../core/services/rooms.service';
+import { AlertsService } from '../../core/services/alerts.service';
+import { AuthService } from '../../core/services/auth.service';
 import { Room, SA_PROVINCES } from '../../core/models/room.model';
 import { RoomCard } from '../../shared/components/room-card/room-card';
 import { SkeletonCard } from '../../shared/components/skeleton-card/skeleton-card';
@@ -162,6 +164,28 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
           </select>
         </div>
 
+        <!-- Turns the current filters into a standing alert. Only offered to
+             signed-in tenants: a landlord does not want alerts about rooms,
+             and a signed-out visitor has nowhere to send them. -->
+        @if (auth.isTenant()) {
+          <div class="filter-group">
+            @if (searchSaved()) {
+              <p class="field-hint">
+                ✅ Alert saved. Manage it in
+                <a routerLink="/tenant/dashboard">your dashboard</a>.
+              </p>
+            } @else {
+              <button type="button" class="btn btn-outline" style="width:100%"
+                      [disabled]="savingSearch()" (click)="saveCurrentSearch()">
+                {{ savingSearch() ? 'Saving…' : '🔔 Alert me about rooms like this' }}
+              </button>
+              @if (saveSearchError()) {
+                <p class="field-error" role="alert">{{ saveSearchError() }}</p>
+              }
+            }
+          </div>
+        }
+
         <!-- Drawer actions: visible only while the panel is a bottom sheet. -->
         <div class="filter-drawer-actions">
           <button type="button" class="btn btn-outline" (click)="clearFilters()">Clear</button>
@@ -234,6 +258,8 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 })
 export class Home implements OnInit, OnDestroy {
   private roomsService = inject(RoomsService);
+  private alerts = inject(AlertsService);
+  auth = inject(AuthService);
   private injector = inject(Injector);
 
   rooms = signal<Room[]>([]);
@@ -244,6 +270,9 @@ export class Home implements OnInit, OnDestroy {
   page = 1;
   /** Mobile filter drawer. Ignored above 860px, where the panel is a sidebar. */
   filtersOpen = signal(false);
+  savingSearch = signal(false);
+  searchSaved = signal(false);
+  saveSearchError = signal<string | null>(null);
 
   provinces = SA_PROVINCES;
   searchTerm = '';
@@ -295,6 +324,60 @@ export class Home implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.fetchRooms();
+  }
+
+  /**
+   * Saves the current filter set as a standing alert. The name is generated
+   * from the filters so the tenant is not made to invent one — they can see
+   * what it means at a glance in the dashboard.
+   */
+  saveCurrentSearch() {
+    this.savingSearch.set(true);
+    this.saveSearchError.set(null);
+
+    this.alerts.create({
+      name: this.describeCurrentFilters(),
+      province: this.province || undefined,
+      city: this.searchTerm.trim() || undefined,
+      roomType: (this.roomType || undefined) as any,
+      maxRentCents: this.maxRentCents ? +this.maxRentCents : undefined,
+      billsIncluded: this.billsIncluded || undefined,
+      couplesAllowed: this.couplesAllowed || undefined,
+      dssAccepted: this.dssAccepted || undefined,
+      guarantorAccepted: this.guarantorAccepted || undefined,
+      petsAllowed: this.petsAllowed || undefined,
+      frequency: 'instant',
+      isActive: true,
+      notifyEmail: true,
+      notifyWhatsapp: false,
+    } as any).subscribe({
+      next: () => {
+        this.savingSearch.set(false);
+        this.searchSaved.set(true);
+      },
+      error: (err) => {
+        this.savingSearch.set(false);
+        this.saveSearchError.set(err?.error?.message ?? 'Could not save that alert.');
+      },
+    });
+  }
+
+  private describeCurrentFilters(): string {
+    const bits: string[] = [];
+    if (this.roomType) {
+      bits.push({
+        shared_house: 'Shared house',
+        en_suite: 'En-suite',
+        studio: 'Studio',
+        private: 'Private room',
+      }[this.roomType] ?? 'Room');
+    } else {
+      bits.push('Rooms');
+    }
+    if (this.searchTerm.trim()) bits.push(`in ${this.searchTerm.trim()}`);
+    else if (this.province) bits.push(`in ${this.province}`);
+    if (this.maxRentCents) bits.push(`under R${(+this.maxRentCents / 100).toLocaleString('en-ZA')}`);
+    return bits.join(' ').slice(0, 80);
   }
 
   /** Count of non-default filters — shown on the mobile Filters button. */
@@ -361,6 +444,8 @@ export class Home implements OnInit, OnDestroy {
   }
 
   onFilterChange() {
+    // The saved confirmation belongs to the old filter set.
+    this.searchSaved.set(false);
     this.page = 1;
     this.fetchRooms();
   }

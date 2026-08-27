@@ -22,11 +22,12 @@
   },
   "dependencies": {
     "@nestjs/common": "^11.1.23",
-    "@nestjs/core": "^11.1.23",
     "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.1.23",
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/passport": "^11.0.0",
     "@nestjs/platform-express": "^11.1.23",
+    "@nestjs/schedule": "^4.1.0",
     "@nestjs/swagger": "^11.0.0",
     "@nestjs/throttler": "^6.2.1",
     "@prisma/client": "^6.0.0",

@@ -120,6 +120,36 @@ export class NotificationsService {
     );
   }
 
+  /** Daily digest of new rooms matching a saved search. Sent only when there are matches. */
+  async sendDailyDigestEmail(
+    to: string,
+    d: { tenantName: string; searchName: string; rooms: { id: string; title: string; rentCents: number; locationDisplay: string }[] },
+  ) {
+    const zar = (cents: number) =>
+      new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 0 }).format(cents / 100);
+
+    const rows = d.rooms
+      .map(
+        (r) => `<li style="margin-bottom:.6rem">
+            <a href="${this.frontend}/rooms/${r.id}"><strong>${r.title}</strong></a><br/>
+            ${r.locationDisplay} · ${zar(r.rentCents)}/mo
+          </li>`,
+      )
+      .join('');
+
+    await this.send(
+      to,
+      `${d.rooms.length} new room${d.rooms.length === 1 ? '' : 's'} matching "${d.searchName}"`,
+      `<p>Hi ${d.tenantName},</p>
+       <p>New rooms matching your saved search <strong>${d.searchName}</strong>:</p>
+       <ul style="padding-left:1.1rem">${rows}</ul>
+       <p>Applying is free, and rooms are often taken within days.</p>
+       <p style="font-size:.8rem;color:#7A6E60">
+         <a href="${this.frontend}/tenant/dashboard">Manage or turn off these alerts</a>.
+       </p>`,
+    );
+  }
+
   async sendRoomUnavailableEmail(to: string, d: { tenantName: string; roomTitle: string }) {
     await this.send(
       to,

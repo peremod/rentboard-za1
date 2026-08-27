@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 import configuration from './config/configuration';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthController } from './modules/health/health.controller';
@@ -37,6 +38,8 @@ import { MessagesModule } from './modules/messages/messages.module';
     ThrottlerModule.forRoot([
       { name: 'global', ttl: 15 * 60 * 1000, limit: 150 },
     ]),
+    // Required for @Cron in AlertsDigest to run at all.
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     RoomsModule,
