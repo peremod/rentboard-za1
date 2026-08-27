@@ -6,6 +6,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { HealthController } from './modules/health/health.controller';
 import { AuthModule } from './modules/auth/auth.module';
 import { RoomsModule } from './modules/rooms/rooms.module';
+import { AlertsModule } from './modules/alerts/alerts.module';
+import { VerificationModule } from './modules/verification/verification.module';
 import { SeoModule } from './modules/seo/seo.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
@@ -37,6 +39,8 @@ import { MessagesModule } from './modules/messages/messages.module';
     PrismaModule,
     AuthModule,
     RoomsModule,
+    AlertsModule,
+    VerificationModule,
     SeoModule,
     NotificationsModule,
     WhatsappModule,

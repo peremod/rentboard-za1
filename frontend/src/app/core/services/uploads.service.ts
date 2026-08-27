@@ -25,18 +25,29 @@ export class UploadsService {
    * TypeError('Failed to fetch') with no status, which is worth retrying
    * once; an HTTP error from ImageKit is a real rejection and is not.
    */
-  async uploadImage(file: File, folder: string): Promise<{ path: string; url: string }> {
+  async uploadImage(file: File, folder: string, isPrivate = false): Promise<{ path: string; url: string }> {
     try {
-      return await this.attemptUpload(file, folder);
+      return await this.attemptUpload(file, folder, isPrivate);
     } catch (err) {
       const transient = err instanceof TypeError || /failed to fetch|network/i.test(String(err));
       if (!transient) throw err;
       console.warn('[ImageKit] upload dropped, retrying once', err);
-      return this.attemptUpload(file, folder);
+      return this.attemptUpload(file, folder, isPrivate);
     }
   }
 
-  private async attemptUpload(file: File, folder: string): Promise<{ path: string; url: string }> {
+  /**
+   * Uploads an identity document privately.
+   *
+   * isPrivateFile keeps the file out of the public URL space — an ID document
+   * is special personal information under POPIA s.26 and must not be
+   * addressable by anyone who guesses the path.
+   */
+  uploadPrivate(file: File, folder: string) {
+    return this.uploadImage(file, folder, true);
+  }
+
+  private async attemptUpload(file: File, folder: string, isPrivate = false): Promise<{ path: string; url: string }> {
     let auth: ImageKitAuth;
     try {
       auth = await new Promise<ImageKitAuth>((resolve, reject) => {
@@ -64,6 +75,7 @@ export class UploadsService {
     form.append('expire', String(auth.expire));
     form.append('signature', auth.signature);
     form.append('useUniqueFileName', 'true');
+    if (isPrivate) form.append('isPrivateFile', 'true');
 
     const res = await fetch('https://upload.imagekit.io/api/v1/files/upload', { method: 'POST', body: form });
 

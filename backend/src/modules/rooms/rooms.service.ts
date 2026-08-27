@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AlertsService } from '../alerts/alerts.service';
 import { RoomFiltersDto } from './dto/room-filters.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
@@ -26,6 +27,7 @@ export class RoomsService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private alerts: AlertsService,
   ) {}
 
   /** Public notice-board search — only ever returns status = 'active' rooms. */
@@ -150,7 +152,15 @@ export class RoomsService {
     if (!room.description || room.description.length < 50) {
       throw new BadRequestException('Description must be at least 50 characters');
     }
-    return this.prisma.room.update({ where: { id }, data: { status: 'active', publishedAt: new Date() } });
+    const published = await this.prisma.room.update({
+      where: { id },
+      data: { status: 'active', publishedAt: new Date() },
+    });
+
+    // Fire-and-forget: alerting tenants must never block or fail a publish.
+    this.alerts.notifyMatchingTenants(id).catch(() => {});
+
+    return published;
   }
 
   async markReserved(id: string, landlordId: string) {
@@ -240,6 +250,9 @@ export class RoomsService {
         },
       }),
     ]);
+
+    // A relisted room is new to anyone who was not watching last time.
+    this.alerts.notifyMatchingTenants(id).catch(() => {});
 
     return updated;
   }

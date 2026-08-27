@@ -91,6 +91,35 @@ export class NotificationsService {
    * rejection with no explanation is the main complaint tenants have about
    * every other letting platform.
    */
+  /**
+   * "A room matching your saved search just went live." Sent within moments of
+   * publication — rooms are often let within days, so timing is the whole
+   * value of this alert.
+   */
+  async sendNewMatchEmail(
+    to: string,
+    d: { tenantName: string; searchName: string; roomTitle: string; roomId: string; rentCents: number; locationDisplay: string },
+  ) {
+    const rand = new Intl.NumberFormat('en-ZA', {
+      style: 'currency', currency: 'ZAR', maximumFractionDigits: 0,
+    }).format(d.rentCents / 100);
+
+    await this.send(
+      to,
+      `New room in ${d.locationDisplay} — ${rand}/mo`,
+      `<p>Hi ${d.tenantName},</p>
+       <p>A room matching your saved search <strong>${d.searchName}</strong> has just been listed:</p>
+       <p style="font-size:1.1rem"><strong>${d.roomTitle}</strong><br/>
+          ${d.locationDisplay} · ${rand}/mo</p>
+       <p>Rooms on RentBoard are often taken within days, so it is worth applying early. Applying is free.</p>
+       <p><a href="${this.frontend}/rooms/${d.roomId}">View this room</a></p>
+       <p style="font-size:.8rem;color:#7A6E60">
+         You are receiving this because you saved a search on RentBoard.
+         <a href="${this.frontend}/tenant/dashboard">Manage or turn off your alerts</a>.
+       </p>`,
+    );
+  }
+
   async sendRoomUnavailableEmail(to: string, d: { tenantName: string; roomTitle: string }) {
     await this.send(
       to,

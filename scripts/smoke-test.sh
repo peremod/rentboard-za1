@@ -467,6 +467,69 @@ if [[ -n "$WIZ_ID" ]]; then
 fi
 
 
+# -- 12. Tenant alerts (saved searches) ------------------------------------
+head_ "12. Tenant alerts"
+req GET /api/alerts/saved-searches "" "$TTOKEN"
+check "saved searches list" 200 "$STATUS" "$BODY"
+
+req POST /api/alerts/saved-searches \
+  '{"name":"Gauteng under R6000","province":"Gauteng","maxRentCents":600000,"frequency":"instant"}' "$TTOKEN"
+check "create a saved search" 201 "$STATUS" "$BODY"
+SEARCH_ID=$(echo "$BODY" | jq -r '.id // empty')
+
+req POST /api/alerts/saved-searches '{"name":"Bad province","province":"Atlantis"}' "$TTOKEN"
+check "rejects a non-SA province" 400 "$STATUS" "$BODY"
+
+req GET /api/alerts/saved-searches
+check "saved searches require auth" 401 "$STATUS"
+
+if [[ -n "$SEARCH_ID" ]]; then
+  req PATCH "/api/alerts/saved-searches/$SEARCH_ID" '{"isActive":false}' "$TTOKEN"
+  check "pause a saved search" 200 "$STATUS" "$BODY"
+
+  req PATCH "/api/alerts/saved-searches/$SEARCH_ID" '{"isActive":true}' "$ITOKEN"
+  check "another tenant CANNOT edit it" 403 "$STATUS" "$BODY"
+
+  # Publishing a matching room must not fail even though alerts fire
+  req POST /api/rooms "$ROOM_JSON" "$LTOKEN"
+  ALERT_ROOM=$(echo "$BODY" | jq -r '.id // empty')
+  if [[ -n "$ALERT_ROOM" ]]; then
+    req PATCH "/api/rooms/$ALERT_ROOM" '{"heroImagePath":"/smoke-test-placeholder.jpg"}' "$LTOKEN"
+    req POST "/api/rooms/$ALERT_ROOM/publish" "" "$LTOKEN"
+    check "publish still succeeds while alerts fire" 200 "$STATUS" "$BODY"
+  fi
+
+  req DELETE "/api/alerts/saved-searches/$SEARCH_ID" "" "$TTOKEN"
+  check "delete a saved search" 200 "$STATUS" "$BODY"
+fi
+
+# -- 13. Landlord verification ---------------------------------------------
+head_ "13. Landlord verification"
+req GET /api/verification/mine "" "$LTOKEN"
+check "landlord verification list" 200 "$STATUS" "$BODY"
+
+req GET /api/verification/mine "" "$TTOKEN"
+check "tenant CANNOT access verification" 403 "$STATUS" "$BODY"
+
+req POST /api/verification '{"type":"identity","documentPath":"private/verification/smoke-test.jpg"}' "$LTOKEN"
+check "submit an identity document" 201 "$STATUS" "$BODY"
+
+if echo "$BODY" | jq -e 'has("documentPath")' >/dev/null 2>&1; then
+  red "  FAIL  response exposed documentPath — POPIA s.26 special personal information"; FAIL=$((FAIL+1))
+else
+  green "  PASS  documentPath withheld from the response"; PASS=$((PASS+1))
+fi
+
+req POST /api/verification '{"type":"identity","documentPath":"private/verification/again.jpg"}' "$LTOKEN"
+check "rejects a duplicate pending request" 400 "$STATUS" "$BODY"
+
+req POST /api/verification '{"type":"nonsense","documentPath":"x"}' "$LTOKEN"
+check "rejects an unknown document type" 400 "$STATUS" "$BODY"
+
+req GET /api/verification/pending "" "$LTOKEN"
+check "non-admin CANNOT see the review queue" 403 "$STATUS" "$BODY"
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"
