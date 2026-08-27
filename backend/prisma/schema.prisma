@@ -69,6 +69,7 @@ model User {
   updatedAt      DateTime @updatedAt
   lastLoginAt    DateTime?
 
+  authTokens      AuthToken[]
   savedSearches   SavedSearch[]
   verifications   VerificationRequest[]
 
@@ -213,6 +214,35 @@ model Application {
   @@index([roomId, status])
   @@index([roomId, cycle])
   @@map("applications")
+}
+
+/// Single-use, short-lived token for password reset and email change.
+///
+/// Only a SHA-256 hash of the token is stored: a leaked database must not hand
+/// an attacker working reset links. The raw token exists only in the email.
+model AuthToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash String   @unique
+  type      AuthTokenType
+  /// For email-change requests: the address being moved to, confirmed by the
+  /// token before it is written to the account.
+  newEmail  String?
+
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, type])
+  @@index([expiresAt])
+  @@map("auth_tokens")
+}
+
+enum AuthTokenType {
+  password_reset
+  email_change
 }
 
 enum AlertFrequency {

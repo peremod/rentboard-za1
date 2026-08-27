@@ -8,6 +8,12 @@ import { ConfigService } from '@nestjs/config';
 import { AuthService, AuthResponse } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import {
+  ForgotPasswordDto, ResetPasswordDto, ChangePasswordDto,
+  RequestEmailChangeDto, ConfirmEmailChangeDto,
+} from './dto/account-recovery.dto';
+import { AccountRecoveryService } from './account-recovery.service';
+import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -18,7 +24,9 @@ const REFRESH_COOKIE_PATH = '/api/auth';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService, private config: ConfigService) {}
+  constructor(
+    private recovery: AccountRecoveryService,
+    private authService: AuthService, private config: ConfigService) {}
 
   @Post('register')
   @ApiOperation({ summary: 'Create a new account (tenant or landlord)' })
@@ -88,6 +96,51 @@ export class AuthController {
     if (rawToken) await this.authService.revokeToken(rawToken);
     res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
     return { loggedOut: true };
+  }
+
+  // ── Account recovery ────────────────────────────────────────────────────
+  // Rate limited harder than the defaults: these endpoints accept an email and
+  // send mail, so they are the obvious target for enumeration and spam.
+
+  @Post('forgot-password')
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request a reset link. Always reports success, existing account or not.' })
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.recovery.requestPasswordReset(dto.email);
+  }
+
+  @Post('reset-password')
+  @Throttle({ default: { limit: 10, ttl: 15 * 60 * 1000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Set a new password using a reset token' })
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.recovery.resetPassword(dto.token, dto.newPassword);
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Change password while signed in. Requires the current one.' })
+  changePassword(@Body() dto: ChangePasswordDto, @CurrentUser() user: { id: string }) {
+    return this.recovery.changePassword(user.id, dto.currentPassword, dto.newPassword);
+  }
+
+  @Post('change-email')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Start an email change. Confirmed at the new address.' })
+  requestEmailChange(@Body() dto: RequestEmailChangeDto, @CurrentUser() user: { id: string }) {
+    return this.recovery.requestEmailChange(user.id, dto.newEmail, dto.currentPassword);
+  }
+
+  @Post('confirm-email-change')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm an email change from the link sent to the new address' })
+  confirmEmailChange(@Body() dto: ConfirmEmailChangeDto) {
+    return this.recovery.confirmEmailChange(dto.token);
   }
 
   @Get('me')

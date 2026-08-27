@@ -629,6 +629,51 @@ else
 fi
 
 
+# -- 17. Account recovery --------------------------------------------------
+head_ "17. Account recovery"
+req POST /api/auth/forgot-password "{\"email\":\"$LANDLORD_EMAIL\"}"
+check "forgot-password for a real account" 200 "$STATUS" "$BODY"
+REAL_MSG=$(echo "$BODY" | jq -r '.message')
+
+req POST /api/auth/forgot-password '{"email":"definitely-not-registered@rentboard.test"}'
+check "forgot-password for an unknown account" 200 "$STATUS" "$BODY"
+FAKE_MSG=$(echo "$BODY" | jq -r '.message')
+
+# The whole point: the response must not reveal whether an account exists.
+if [[ "$REAL_MSG" == "$FAKE_MSG" ]]; then
+  green "  PASS  response is identical either way (no membership oracle)"; PASS=$((PASS+1))
+else
+  red "  FAIL  responses differ — the endpoint reveals whether an account exists"; FAIL=$((FAIL+1))
+fi
+
+req POST /api/auth/forgot-password '{"email":"not-an-email"}'
+check "rejects a malformed address" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/reset-password '{"token":"clearly-invalid-token","newPassword":"NewPass123"}'
+check "rejects an invalid reset token" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/reset-password '{"token":"whatever","newPassword":"weak"}'
+check "reset enforces password strength" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/change-password '{"currentPassword":"wrong","newPassword":"NewPass123"}' "$LTOKEN"
+check "change-password rejects a wrong current password" 401 "$STATUS" "$BODY"
+
+req POST /api/auth/change-password "{\"currentPassword\":\"$PASSWORD\",\"newPassword\":\"$PASSWORD\"}" "$LTOKEN"
+check "rejects reusing the same password" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/change-password '{"currentPassword":"x","newPassword":"NewPass123"}'
+check "change-password requires auth" 401 "$STATUS"
+
+req POST /api/auth/change-email "{\"newEmail\":\"$TENANT_EMAIL\",\"currentPassword\":\"$PASSWORD\"}" "$LTOKEN"
+check "cannot move to an address already in use" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/change-email "{\"newEmail\":\"$LANDLORD_EMAIL\",\"currentPassword\":\"$PASSWORD\"}" "$LTOKEN"
+check "cannot change to your own address" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/confirm-email-change '{"token":"invalid"}'
+check "rejects an invalid confirmation token" 400 "$STATUS" "$BODY"
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

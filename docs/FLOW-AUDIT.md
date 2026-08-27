@@ -143,7 +143,55 @@ being complete.
 
 ---
 
-## 5. What "verified" means here
+## 5. Not built — enumerated so they are not mistaken for oversights
+
+These are known absences, not bugs. Listed in the order I would build them.
+
+### 5.1 Account recovery — ✅ built in v1.9.0
+Password reset, signed-in password change, and email change with confirmation
+at the new address. Before this, a forgotten password meant a permanently lost
+account with no recovery path at all.
+
+### 5.2 Reviews — ❌ not built
+`LandlordProfile.rating` and `ratingCount` exist and **the room card renders a
+star rating**, but there is no `Review` model and nothing can ever set them.
+This is the same shape of problem `idVerified` had before v1.8.0: a field that
+implies a system behind it.
+
+Three distinct review types are needed, and they are not symmetric:
+
+| Review | Written by | About | When |
+|---|---|---|---|
+| Room review | Tenant | The room and the house | After the tenancy ends |
+| Landlord review | Tenant | The landlord's conduct | After the tenancy ends |
+| Tenant review | Landlord | The tenant | After the tenancy ends |
+
+Hard parts, which is why this is not a quick build:
+- **There is no tenancy record.** An accepted application is the closest thing,
+  but nothing marks a tenancy as having *ended*, so nothing can decide when a
+  review becomes due.
+- **Retaliation.** If each side sees the other's review before writing, ratings
+  become negotiation. The usual answer is double-blind: neither is published
+  until both are in, or a window closes.
+- **Defamation.** A landlord review naming an individual carries real legal
+  exposure in South Africa. Needs a moderation and right-of-reply path, which
+  ties into the admin surface.
+
+### 5.3 Reporting fraudulent listings — ❌ not built
+The disclaimer tells tenants to email `safety@rentboard.co.za`, so the promise
+is kept, but there is no in-app report button, no `Report` model and no admin
+queue. Given the disclaimer explicitly warns about agents posing as landlords
+and deposit scams, an in-app path with an audit trail is the more serious gap
+of the two remaining.
+
+### 5.4 How it works / Pricing pages — ❌ not built
+Both fully designed in `Visual-Preview-v2.html`. Pricing is now simpler than
+the design assumes: **free for landlords, with a once-off verification fee**,
+so the three-tier table in the preview no longer reflects the model.
+
+---
+
+## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: 70+ checks
 across auth, room lifecycle, applications, messaging, alerts, verification,

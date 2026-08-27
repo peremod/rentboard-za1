@@ -121,6 +121,66 @@ export class NotificationsService {
   }
 
   /** Daily digest of new rooms matching a saved search. Sent only when there are matches. */
+  async sendPasswordResetEmail(to: string, d: { fullName: string; token: string; ttlMinutes: number }) {
+    const link = `${this.frontend}/auth/reset-password?token=${encodeURIComponent(d.token)}`;
+    await this.send(
+      to,
+      'Reset your RentBoard password',
+      `<p>Hi ${d.fullName},</p>
+       <p>Use the link below to set a new password. It works once and expires in ${d.ttlMinutes} minutes.</p>
+       <p><a href="${link}">Set a new password</a></p>
+       <p>If you did not ask for this, you can ignore this email — your password has not changed.</p>`,
+    );
+  }
+
+  /** Sent when a Google-only account asks for a password reset. */
+  async sendGoogleOnlyAccountEmail(to: string, d: { fullName: string }) {
+    await this.send(
+      to,
+      'About your RentBoard sign-in',
+      `<p>Hi ${d.fullName},</p>
+       <p>Someone asked to reset the password for this address, but your account signs in with Google,
+       so there is no password to reset.</p>
+       <p><a href="${this.frontend}/auth/login">Continue with Google</a></p>`,
+    );
+  }
+
+  /** Security notice — the point is that an unexpected one is a warning. */
+  async sendPasswordChangedEmail(to: string, d: { fullName: string }) {
+    await this.send(
+      to,
+      'Your RentBoard password was changed',
+      `<p>Hi ${d.fullName},</p>
+       <p>Your password was changed just now.</p>
+       <p><strong>If this was not you</strong>, reset your password immediately and contact
+       support&#64;rentboard.co.za.</p>`,
+    );
+  }
+
+  async sendEmailChangeConfirmation(to: string, d: { fullName: string; token: string }) {
+    const link = `${this.frontend}/auth/confirm-email?token=${encodeURIComponent(d.token)}`;
+    await this.send(
+      to,
+      'Confirm your new RentBoard email address',
+      `<p>Hi ${d.fullName},</p>
+       <p>Confirm this address to finish moving your RentBoard account to it. The link expires in an hour.</p>
+       <p><a href="${link}">Confirm this address</a></p>`,
+    );
+  }
+
+  /** Sent to the OLD address, so a takeover cannot move an account silently. */
+  async sendEmailChangeAlert(to: string, d: { fullName: string; newEmail: string }) {
+    await this.send(
+      to,
+      'Someone asked to change your RentBoard email',
+      `<p>Hi ${d.fullName},</p>
+       <p>A request was made to move this account to <strong>${d.newEmail}</strong>. It only takes effect
+       once that address is confirmed.</p>
+       <p><strong>If this was not you</strong>, change your password now and contact
+       support&#64;rentboard.co.za — someone may have access to your account.</p>`,
+    );
+  }
+
   async sendDailyDigestEmail(
     to: string,
     d: { tenantName: string; searchName: string; rooms: { id: string; title: string; rentCents: number; locationDisplay: string }[] },
