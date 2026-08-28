@@ -152,7 +152,7 @@ Password reset, signed-in password change, and email change with confirmation
 at the new address. Before this, a forgotten password meant a permanently lost
 account with no recovery path at all.
 
-### 5.2 Reviews — ⚠️ foundation built (v1.10.0), reviews themselves pending
+### 5.2 Reviews — ✅ built (v1.11.0 / v1.12.0)
 
 The blocker is resolved: `Tenancy` now records a letting that actually
 happened, so there is something for a review to hang off.
@@ -176,14 +176,34 @@ Decisions worth keeping:
 - **A 30-day review window** stops a grudge review appearing two years later
   and gives the double-blind reveal a deadline.
 
-The `Review` model is in the schema with double-blind publishing
-(`publishedAt` withheld until both sides submit or the window closes), a
-`response` field so a subject can reply, and `isHidden` for moderation. The
-service, endpoints and UI are not built.
+**Visibility differs by type, and that is the important decision:**
 
-Still to decide before building them: whether a landlord's review of a tenant
-is published at all, or only visible to future landlords who are considering
-that applicant. Publishing it openly is the higher defamation exposure.
+| Type | Written by | Visible to |
+|---|---|---|
+| Room | Tenant | Public, on the room page |
+| Landlord | Tenant | Public; feeds `LandlordProfile.rating` |
+| Tenant | Landlord | **Only a landlord with a live application from that person** |
+
+A landlord's review of a tenant is a *reference*, not a public record. It does
+not appear on any profile, cannot be browsed, and becomes unavailable again
+once the application is decided. Publishing it openly would attach a permanent,
+searchable judgement to an individual that follows them between lettings — the
+platform's largest defamation exposure, and the harder thing to defend under
+PEPUDA if it were ever used to screen people out.
+
+Where there are no references, the API says so explicitly, so a landlord does
+not read "none" as a negative signal.
+
+**Double-blind** holds until both sides submit. A nightly job releases whatever
+exists once the 30-day window closes, because otherwise simply never writing
+your own review would suppress the other person's forever — exactly what
+someone expecting a bad review would do.
+
+**Moderation**: admins can hide a review with a recorded reason, and hiding
+recalculates the landlord rating. The subject of any review may post one reply,
+which does not change the rating.
+
+Not built: the review UI. The API is complete.
 
 Previously:
 

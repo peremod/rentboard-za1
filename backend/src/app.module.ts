@@ -11,6 +11,7 @@ import { AlertsModule } from './modules/alerts/alerts.module';
 import { VerificationModule } from './modules/verification/verification.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { TenanciesModule } from './modules/tenancies/tenancies.module';
+import { ReviewsModule } from './modules/reviews/reviews.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SeoModule } from './modules/seo/seo.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -49,6 +50,7 @@ import { MessagesModule } from './modules/messages/messages.module';
     VerificationModule,
     AdminModule,
     TenanciesModule,
+    ReviewsModule,
     ReportsModule,
     SeoModule,
     NotificationsModule,

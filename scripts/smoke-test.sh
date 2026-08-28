@@ -92,6 +92,7 @@ req POST /api/auth/register \
   "{\"email\":\"$TENANT_EMAIL\",\"password\":\"$PASSWORD\",\"fullName\":\"Test Tenant\",\"role\":\"TENANT\"}"
 check "register tenant" 201 "$STATUS" "$BODY"
 TTOKEN=$(echo "$BODY" | jq -r '.accessToken // empty')
+TENANT_ID=$(echo "$BODY" | jq -r '.user.id // empty')
 
 req POST /api/auth/login "{\"email\":\"$LANDLORD_EMAIL\",\"password\":\"$PASSWORD\"}"
 check "login with correct password" 201 "$STATUS" "$BODY"
@@ -839,6 +840,74 @@ if [[ -n "$TEN_ROOM" ]]; then
       red "  FAIL  accepting did not open a tenancy"; FAIL=$((FAIL+1))
     fi
   fi
+fi
+
+
+# -- 21. Reviews -----------------------------------------------------------
+# The interesting assertions are the negative ones: double-blind holding, and
+# that tenant reviews are references rather than a public record.
+head_ "21. Reviews"
+if [[ -n "${TEN_ID:-}" ]]; then
+  req POST /api/reviews "{\"tenancyId\":\"$TEN_ID\",\"type\":\"tenant\",\"rating\":5,\"comment\":\"Paid on time every month and left the room spotless.\"}" "$TTOKEN"
+  check "tenant CANNOT write the tenant review" 400 "$STATUS" "$BODY"
+
+  req POST /api/reviews "{\"tenancyId\":\"$TEN_ID\",\"type\":\"room\",\"rating\":4,\"comment\":\"Good\"}" "$TTOKEN"
+  check "rejects a too-short comment" 400 "$STATUS" "$BODY"
+
+  req POST /api/reviews "{\"tenancyId\":\"$TEN_ID\",\"type\":\"room\",\"rating\":9,\"comment\":\"Rating is out of range but long enough to pass length.\"}" "$TTOKEN"
+  check "rejects a rating outside 1-5" 400 "$STATUS" "$BODY"
+
+  req POST /api/reviews "{\"tenancyId\":\"$TEN_ID\",\"type\":\"room\",\"rating\":4,\"comment\":\"Bright room, good water pressure, quiet street. Housemates were easy to live with.\"}" "$TTOKEN"
+  check "tenant writes the room review" 201 "$STATUS" "$BODY"
+  ROOM_REVIEW=$(echo "$BODY" | jq -r '.id // empty')
+
+  req POST /api/reviews "{\"tenancyId\":\"$TEN_ID\",\"type\":\"room\",\"rating\":5,\"comment\":\"Trying to write the same review a second time to check it is refused.\"}" "$TTOKEN"
+  check "cannot write the same review twice" 400 "$STATUS" "$BODY"
+
+  # Double-blind: nothing is public until both sides are done.
+  req GET "/api/reviews/room/$TEN_ROOM"
+  VISIBLE=$(echo "$BODY" | jq -r 'length')
+  if [[ "$VISIBLE" == "0" ]]; then
+    green "  PASS  review held — not published while the other side is outstanding"; PASS=$((PASS+1))
+  else
+    red "  FAIL  review published early ($VISIBLE visible) — double-blind broken"; FAIL=$((FAIL+1))
+  fi
+
+  req POST /api/reviews "{\"tenancyId\":\"$TEN_ID\",\"type\":\"landlord\",\"rating\":5,\"comment\":\"Responsive landlord, fixed the geyser within a day of reporting it.\"}" "$TTOKEN"
+  check "tenant writes the landlord review" 201 "$STATUS" "$BODY"
+
+  req POST /api/reviews "{\"tenancyId\":\"$TEN_ID\",\"type\":\"tenant\",\"rating\":5,\"comment\":\"Reliable tenant, always paid on time and communicated well.\"}" "$LTOKEN"
+  check "landlord writes the tenant review" 201 "$STATUS" "$BODY"
+
+  # Both sides done — everything should now be released together.
+  req GET "/api/reviews/room/$TEN_ROOM"
+  VISIBLE=$(echo "$BODY" | jq -r 'length')
+  if [[ "$VISIBLE" == "1" ]]; then
+    green "  PASS  reviews released once both sides submitted"; PASS=$((PASS+1))
+  else
+    red "  FAIL  expected 1 published room review, found $VISIBLE"; FAIL=$((FAIL+1))
+  fi
+
+  # The tenant review must NOT be public anywhere.
+  if [[ -n "$TENANT_ID" ]]; then
+    req GET "/api/reviews/landlord/$TENANT_ID"
+    PUBLIC_TENANT=$(echo "$BODY" | jq -r 'length' 2>/dev/null || echo 0)
+    if [[ "$PUBLIC_TENANT" == "0" ]]; then
+      green "  PASS  tenant review is not publicly listed"; PASS=$((PASS+1))
+    else
+      red "  FAIL  tenant review is publicly visible"; FAIL=$((FAIL+1))
+    fi
+
+    # References need a LIVE application, and this tenancy's is long decided.
+    req GET "/api/reviews/tenant/$TENANT_ID/references" "" "$LTOKEN"
+    check "references refused without a live application" 403 "$STATUS" "$BODY"
+
+    req GET "/api/reviews/tenant/$TENANT_ID/references" "" "$TTOKEN"
+    check "tenant CANNOT read references about themselves this way" 403 "$STATUS" "$BODY"
+  fi
+
+  req GET /api/reviews/mine "" "$TTOKEN"
+  check "tenant sees their own reviews" 200 "$STATUS" "$BODY"
 fi
 
 

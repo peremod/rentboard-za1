@@ -381,9 +381,17 @@ enum TenancyStatus {
 /// or the review window closes. If each party could read the other's first,
 /// ratings become a negotiation and honest criticism stops.
 ///
-/// Landlord-written reviews of a tenant name an individual and carry real
-/// defamation exposure in South Africa, so they are moderatable and the
-/// subject can respond.
+/// VISIBILITY DIFFERS BY TYPE, and this is deliberate:
+///
+///   room, landlord  -> public. Tenants are choosing where to live and need
+///                      to see what previous tenants said.
+///   tenant          -> NOT public. Visible only to a landlord who has a live
+///                      application from that person, i.e. someone with a
+///                      present reason to know. This makes it a reference
+///                      rather than a permanent public record following an
+///                      individual between lettings, which is both fairer and
+///                      a much smaller defamation exposure under South African
+///                      law. A tenant can always see their own.
 model Review {
   id          String       @id @default(uuid())
 
