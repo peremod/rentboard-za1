@@ -213,6 +213,57 @@ export class TenantDashboard implements OnInit {
   loadingSaved = signal(false);
   withdrawing = signal<string | null>(null);
   alerts = inject(AlertsService);
+
+  /** Plain-language summary of a saved search's filters. */
+  describe(search: SavedSearch): string {
+    const parts: string[] = [];
+    if (search.roomType) {
+      parts.push({
+        shared_house: 'Room in a shared house',
+        en_suite: 'En-suite',
+        studio: 'Studio',
+        private: 'Private room',
+      }[search.roomType] ?? 'Room');
+    }
+    if (search.city) parts.push(`in ${search.city}`);
+    else if (search.province) parts.push(`in ${search.province}`);
+    if (search.maxRentCents) {
+      parts.push(`up to ${new Intl.NumberFormat('en-ZA', {
+        style: 'currency', currency: 'ZAR', maximumFractionDigits: 0,
+      }).format(search.maxRentCents / 100)}/mo`);
+    }
+    if (search.billsIncluded) parts.push('bills included');
+    if (search.dssAccepted) parts.push('SASSA welcome');
+    if (search.petsAllowed) parts.push('pets allowed');
+    return parts.length ? parts.join(' · ') : 'Any room, anywhere';
+  }
+
+  frequencyLabel(frequency: string): string {
+    return {
+      instant: 'Emailed as soon as a room matches',
+      daily: 'Daily summary',
+      off: 'Alerts off',
+    }[frequency] ?? frequency;
+  }
+
+  /** Pausing keeps the search — consent can be withdrawn without losing setup. */
+  togglePaused(search: SavedSearch) {
+    this.busySearch.set(search.id);
+    this.alerts.togglePaused(search).subscribe({
+      next: () => this.busySearch.set(null),
+      error: () => this.busySearch.set(null),
+    });
+  }
+
+  deleteSearch(search: SavedSearch) {
+    if (!confirm(`Delete the alert "${search.name}"?`)) return;
+    this.busySearch.set(search.id);
+    this.alerts.remove(search.id).subscribe({
+      next: () => this.busySearch.set(null),
+      error: () => this.busySearch.set(null),
+    });
+  }
+
   busySearch = signal<string | null>(null);
 
   /**
@@ -266,6 +317,10 @@ export class TenantDashboard implements OnInit {
       next: (apps) => { this.applications.set(apps); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
+
+    // Neither of these may break the dashboard if they fail.
+    this.alerts.load().subscribe({ error: () => {} });
+    this.loadSavedRooms();
   }
 
   /**

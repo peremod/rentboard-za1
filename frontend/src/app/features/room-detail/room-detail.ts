@@ -131,6 +131,7 @@ export class RoomDetail implements OnInit {
   id = input.required<string>();
 
   private roomsService = inject(RoomsService);
+  private reviewsService = inject(ReviewsService);
   private applicationsService = inject(ApplicationsService);
   auth = inject(AuthService);
 
@@ -148,14 +149,15 @@ export class RoomDetail implements OnInit {
   loadingReviews = signal(true);
 
   ngOnInit() {
-    const reviewRoomId = this.route.snapshot.paramMap.get('id');
-    if (reviewRoomId) {
-      this.reviews.getRoomReviews(reviewRoomId).subscribe({
-        next: (list) => { this.roomReviews.set(list); this.loadingReviews.set(false); },
-        // A missing review list must never break the page.
-        error: () => this.loadingReviews.set(false),
-      });
-    }
+    // The room id arrives as a routed input signal, not via ActivatedRoute.
+    this.reviewsService.getRoomReviews(this.id()).subscribe({
+      next: (list: Review[]) => {
+        this.roomReviews.set(list);
+        this.loadingReviews.set(false);
+      },
+      // A missing review list must never break the page.
+      error: () => this.loadingReviews.set(false),
+    });
 
     this.roomsService.getRoom(this.id()).subscribe({
       next: (r) => this.room.set(r),

@@ -1,8 +1,8 @@
-import { Controller, Get, Post, Body, Req, Res, Query, UseGuards, UnauthorizedException, Next, ServiceUnavailableException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req, Res, Query, UseGuards, UnauthorizedException, Next, ServiceUnavailableException, HttpCode, HttpStatus } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import * as passport from 'passport';
 import { GoogleStrategy } from './strategies/google.strategy';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import type { Request, Response, NextFunction } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AuthService, AuthResponse } from './auth.service';

@@ -44,6 +44,30 @@ npm run db:push          # or: npm run db:migrate -- --name init
 npm run db:studio        # optional — visual DB browser at http://localhost:5555
 ```
 
+### After pulling schema changes
+
+Prisma Client is generated code. If it is stale, every new model appears as
+"Property 'x' does not exist on type 'PrismaService'" — dozens of errors that
+all have one cause. Run these in order:
+
+```bash
+cd backend
+npm install                  # picks up new dependencies
+npx prisma migrate dev       # applies schema changes
+npx prisma generate          # REGENERATES THE CLIENT — do not skip
+```
+
+If `migrate dev` reports drift and offers to reset, that is expected on a
+database first created with `db push`: there is no migration history to
+compare against. On a dev database with only test data:
+
+```bash
+npx prisma migrate reset --force
+npx prisma migrate dev --name init
+```
+
+Commit `prisma/migrations/` — it is how staging and production get the schema.
+
 ## 4. Run locally
 
 ```bash
