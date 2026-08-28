@@ -22,6 +22,7 @@ export class ApplicationsService {
     private notifications: NotificationsService,
     private whatsapp: WhatsappService,
     private config: ConfigService,
+    private tenancies: TenanciesService,
   ) {}
 
   async create(dto: CreateApplicationDto, tenantId: string) {
@@ -188,8 +189,11 @@ export class ApplicationsService {
     // move-in actually happened — accepted lettings fall through often, and an
     // unconfirmed one must not generate review prompts or feed a rating.
     // Never allowed to fail the acceptance itself.
-    this.tenancies.createFromApplication(applicationId).catch((err) =>
-      this.logger.error(`Could not open a tenancy for application ${applicationId}`, err),
+    this.tenancies.createFromApplication(applicationId).catch((err: unknown) =>
+      this.logger.error(
+        `Could not open a tenancy for application ${applicationId}`,
+        err instanceof Error ? err.stack : String(err),
+      ),
     );
 
     return updated;
