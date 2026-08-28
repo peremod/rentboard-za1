@@ -3,6 +3,9 @@ import { RouterLink } from '@angular/router';
 import { ApplicationsService } from '../../../core/services/applications.service';
 import { Application } from '../../../core/models/application.model';
 import { MessageThread } from '../../../shared/components/message-thread/message-thread';
+import { ReviewList } from '../../../shared/components/review-list/review-list';
+import { ReviewsService } from '../../../core/services/reviews.service';
+import { TenantReferences } from '../../../core/models/review.model';
 
 /**
  * Applicant manager — one room's full applicant list, with shortlist/accept/
@@ -13,7 +16,7 @@ import { MessageThread } from '../../../shared/components/message-thread/message
 @Component({
   selector: 'app-applicants',
   standalone: true,
-  imports: [RouterLink, MessageThread],
+  imports: [RouterLink, MessageThread, ReviewList],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="applicants">
@@ -50,6 +53,29 @@ import { MessageThread } from '../../../shared/components/message-thread/message
                   </div>
                 }
 
+                <div class="applicant-card__refs">
+                  <button type="button" class="refs-toggle" (click)="toggleRefs(app)">
+                    {{ openRefs() === app.id ? 'Hide references' : '📄 References' }}
+                  </button>
+
+                  @if (openRefs() === app.id) {
+                    @if (refsLoading()) {
+                      <p class="muted">Loading…</p>
+                    } @else if (refsError()) {
+                      <p class="field-error">{{ refsError() }}</p>
+                    } @else if (refs(); as data) {
+                      @if (data.note) {
+                        <p class="muted">{{ data.note }}</p>
+                      }
+                      <app-review-list [reviews]="data.reviews" emptyMessage=""/>
+                      <p class="refs-note">
+                        References are shown only while this application is open, and only to you.
+                        They are not public and do not appear on this person's profile.
+                      </p>
+                    }
+                  }
+                </div>
+
                 <app-message-thread [applicationId]="app.id"/>
               </div>
             }
@@ -70,6 +96,10 @@ import { MessageThread } from '../../../shared/components/message-thread/message
     .status--rejected { background: rgba(214,59,59,.1); color: #D63B3B; }
     .applicant-card__body { padding: 0 1rem 1rem; }
     .cover-note { font-style: italic; color: #3A3228; margin: .5rem 0; }
+    .applicant-card__refs { margin: .75rem 0; padding: .75rem 0; border-top: 1px solid #E0D5C4; }
+    .refs-toggle { background: none; border: 1px solid #E0D5C4; border-radius: 6px; padding: .35rem .75rem;
+                   font-size: .78rem; font-weight: 600; cursor: pointer; color: #3A3228; }
+    .refs-note { font-size: .72rem; color: #7A6E60; line-height: 1.6; margin-top: .6rem; }
     .applicant-card__actions { display: flex; gap: .5rem; margin-bottom: .5rem; flex-wrap: wrap; }
     .applicant-card__actions button { padding: .4rem .8rem; border-radius: 6px; border: 1px solid #DDD5C8; background: #fff; cursor: pointer; font-size: .78rem; font-weight: 600; }
     .applicant-card__actions .accept { background: #3D7040; color: #fff; border: none; }
@@ -83,6 +113,41 @@ import { MessageThread } from '../../../shared/components/message-thread/message
   `],
 })
 export class Applicants implements OnInit {
+  private reviewsService = inject(ReviewsService);
+
+  openRefs = signal<string | null>(null);
+  refs = signal<TenantReferences | null>(null);
+  refsLoading = signal(false);
+  refsError = signal<string | null>(null);
+
+  /**
+   * References are fetched on demand rather than with the applicant list: the
+   * API only permits them while the application is live, and pulling them
+   * eagerly would mean requesting personal information about people whose
+   * applications the landlord may never open.
+   */
+  toggleRefs(app: { id: string; tenant?: { id: string } }) {
+    if (this.openRefs() === app.id) {
+      this.openRefs.set(null);
+      return;
+    }
+    const tenantId = app.tenant?.id;
+    if (!tenantId) return;
+
+    this.openRefs.set(app.id);
+    this.refs.set(null);
+    this.refsError.set(null);
+    this.refsLoading.set(true);
+
+    this.reviewsService.getTenantReferences(tenantId).subscribe({
+      next: (data) => { this.refs.set(data); this.refsLoading.set(false); },
+      error: (err) => {
+        this.refsLoading.set(false);
+        this.refsError.set(err?.error?.message ?? 'References are not available for this applicant.');
+      },
+    });
+  }
+
   /** Bound from :roomId route segment. */
   roomId = input.required<string>();
 

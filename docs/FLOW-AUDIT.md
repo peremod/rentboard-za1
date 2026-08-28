@@ -203,7 +203,12 @@ someone expecting a bad review would do.
 recalculates the landlord rating. The subject of any review may post one reply,
 which does not change the rating.
 
-Not built: the review UI. The API is complete.
+**UI (v1.13.0):** a prompt on both dashboards after a tenancy ends, showing the
+review window's closing date because a deadline that passes silently is one
+people miss; published reviews on the room detail page; and references behind a
+toggle on the applicants page, fetched on demand rather than eagerly — pulling
+them with the list would mean requesting personal information about people
+whose applications the landlord may never open.
 
 Previously:
 

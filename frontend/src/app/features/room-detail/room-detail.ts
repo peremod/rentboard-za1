@@ -8,6 +8,9 @@ import { AuthService } from '../../core/services/auth.service';
 import { Room } from '../../core/models/room.model';
 import { ZarCentsPipe } from '../../shared/pipes/zar-cents.pipe';
 import { ReportDialog } from '../../shared/components/report-dialog/report-dialog';
+import { ReviewList } from '../../shared/components/review-list/review-list';
+import { ReviewsService } from '../../core/services/reviews.service';
+import { Review } from '../../core/models/review.model';
 
 /**
  * Room detail — gallery, full description, and the apply flow.
@@ -17,7 +20,7 @@ import { ReportDialog } from '../../shared/components/report-dialog/report-dialo
 @Component({
   selector: 'app-room-detail',
   standalone: true,
-  imports: [NgOptimizedImage, FormsModule, RouterLink, ZarCentsPipe, ReportDialog],
+  imports: [NgOptimizedImage, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="room-detail">
@@ -65,6 +68,17 @@ import { ReportDialog } from '../../shared/components/report-dialog/report-dialo
             </button>
           }
         </div>
+
+        <section class="detail__section">
+          <h2>What previous tenants said</h2>
+          @if (loadingReviews()) {
+            <p class="muted">Loading reviews…</p>
+          } @else {
+            <app-review-list
+              [reviews]="roomReviews()"
+              emptyMessage="No reviews yet. This room has not been let through RentBoard before, which is not a bad sign — most listings start here."/>
+          }
+        </section>
 
         <aside class="detail__safety">
           <h2>Stay safe</h2>
@@ -130,7 +144,19 @@ export class RoomDetail implements OnInit {
   heroPath = computed(() => this.room()?.heroImagePath || '/assets/images/room-placeholder.svg');
   galleryPaths = computed(() => this.room()?.imagePaths ?? []);
 
+  roomReviews = signal<Review[]>([]);
+  loadingReviews = signal(true);
+
   ngOnInit() {
+    const reviewRoomId = this.route.snapshot.paramMap.get('id');
+    if (reviewRoomId) {
+      this.reviews.getRoomReviews(reviewRoomId).subscribe({
+        next: (list) => { this.roomReviews.set(list); this.loadingReviews.set(false); },
+        // A missing review list must never break the page.
+        error: () => this.loadingReviews.set(false),
+      });
+    }
+
     this.roomsService.getRoom(this.id()).subscribe({
       next: (r) => this.room.set(r),
       error: () => this.notFound.set(true),

@@ -8,6 +8,7 @@ import { Room } from '../../../core/models/room.model';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
+import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
 
 /**
  * Billing (Upgrade link, Boost button) is hidden behind BILLING_ENABLED —
@@ -19,7 +20,7 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
 @Component({
   selector: 'app-landlord-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, DatePipe, PortalShell],
+  imports: [RouterLink, ZarCentsPipe, DatePipe, PortalShell, ReviewPrompt],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems()" roleLabel="Landlord"
@@ -48,6 +49,8 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
           🎉 <span>Free for everyone right now — unlimited listings, up to 20 photos per room, one-click relist.</span>
         </div>
       }
+
+      <app-review-prompt/>
 
       <section class="dash-section">
         <div class="dash-section-title">Active listings</div>

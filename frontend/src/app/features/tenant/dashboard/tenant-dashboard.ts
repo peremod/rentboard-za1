@@ -8,6 +8,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { MessageThread } from '../../../shared/components/message-thread/message-thread';
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
+import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
 import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
 import { AlertsService } from '../../../core/services/alerts.service';
 import { SavedSearch } from '../../../core/models/alerts.model';
@@ -18,7 +19,7 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, MessageThread, PortalShell, RoomCard],
+  imports: [RouterLink, ZarCentsPipe, MessageThread, PortalShell, RoomCard, ReviewPrompt],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems()" roleLabel="Tenant" avatarColour="var(--sage)">
@@ -39,6 +40,8 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
         <div class="stat-box"><div class="val">{{ shortlistedCount() }}</div><div class="lbl">Shortlisted</div></div>
         <div class="stat-box"><div class="val">{{ pendingCount() }}</div><div class="lbl">Awaiting reply</div></div>
       </div>
+
+      <app-review-prompt/>
 
       <section class="dash-section">
         <div class="dash-section-title">Your applications</div>
