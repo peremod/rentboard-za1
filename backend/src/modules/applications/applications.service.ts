@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { TenanciesService } from '../tenancies/tenancies.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
@@ -14,6 +15,8 @@ import { sanitizeText } from '../../common/utils/sanitize.util';
  */
 @Injectable()
 export class ApplicationsService {
+  private readonly logger = new Logger(ApplicationsService.name);
+
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
@@ -180,6 +183,15 @@ export class ApplicationsService {
     });
 
     await this.autoRejectOthers(application.roomId, applicationId, 'Another applicant was chosen for this room.');
+
+    // Open a tenancy record. It stays 'pending' until someone confirms the
+    // move-in actually happened — accepted lettings fall through often, and an
+    // unconfirmed one must not generate review prompts or feed a rating.
+    // Never allowed to fail the acceptance itself.
+    this.tenancies.createFromApplication(applicationId).catch((err) =>
+      this.logger.error(`Could not open a tenancy for application ${applicationId}`, err),
+    );
+
     return updated;
   }
 

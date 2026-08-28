@@ -152,7 +152,42 @@ Password reset, signed-in password change, and email change with confirmation
 at the new address. Before this, a forgotten password meant a permanently lost
 account with no recovery path at all.
 
-### 5.2 Reviews — ❌ not built
+### 5.2 Reviews — ⚠️ foundation built (v1.10.0), reviews themselves pending
+
+The blocker is resolved: `Tenancy` now records a letting that actually
+happened, so there is something for a review to hang off.
+
+```
+accepted application -> pending -> active -> ended -> reviews open 30 days
+                           \-> cancelled (never produces reviews)
+```
+
+Decisions worth keeping:
+
+- **Confirmed, not automatic.** A tenancy is created `pending` on acceptance
+  and only becomes `active` when a party confirms the move-in. Accepted
+  lettings fall through often, and an unconfirmed one must not prompt for
+  reviews or feed a rating.
+- **Either party may confirm or end it.** This records a fact, not a mutual
+  decision. Requiring both would leave tenancies stuck whenever one side stops
+  logging in, and would let either side block the other from ever reviewing.
+- **Rent is snapshotted** onto the tenancy, because the room's rent changes on
+  relist and a review should reflect what was actually paid.
+- **A 30-day review window** stops a grudge review appearing two years later
+  and gives the double-blind reveal a deadline.
+
+The `Review` model is in the schema with double-blind publishing
+(`publishedAt` withheld until both sides submit or the window closes), a
+`response` field so a subject can reply, and `isHidden` for moderation. The
+service, endpoints and UI are not built.
+
+Still to decide before building them: whether a landlord's review of a tenant
+is published at all, or only visible to future landlords who are considering
+that applicant. Publishing it openly is the higher defamation exposure.
+
+Previously:
+
+### 5.2 ~~Reviews~~ — ❌ not built
 `LandlordProfile.rating` and `ratingCount` exist and **the room card renders a
 star rating**, but there is no `Review` model and nothing can ever set them.
 This is the same shape of problem `idVerified` had before v1.8.0: a field that

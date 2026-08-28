@@ -70,6 +70,10 @@ model User {
   lastLoginAt    DateTime?
 
   authTokens      AuthToken[]
+  tenanciesAsLandlord Tenancy[] @relation("TenanciesAsLandlord")
+  tenanciesAsTenant   Tenancy[] @relation("TenanciesAsTenant")
+  reviewsWritten      Review[]  @relation("ReviewsWritten")
+  reviewsReceived     Review[]  @relation("ReviewsReceived")
   reportsFiled    Report[]  @relation("ReportsFiled")
   reportsAgainst  Report[]  @relation("ReportsAgainst")
   savedSearches   SavedSearch[]
@@ -164,6 +168,8 @@ model Room {
 
   applications     Application[]
   boosts           RoomBoost[]
+  tenancies        Tenancy[]
+  reviews          Review[]
 
   @@index([status])
   @@index([province, city])
@@ -213,6 +219,8 @@ model Application {
 
   // Scoped to the cycle: a tenant who missed out may apply again after a
   // relist. The old constraint locked them out of the room permanently.
+  tenancy    Tenancy?
+
   @@unique([roomId, tenantId, cycle])
   @@index([tenantId])
   @@index([roomId, status])
@@ -301,6 +309,125 @@ enum ReportStatus {
   investigating
   actioned      // listing removed, account suspended, or similar
   dismissed
+}
+
+/// A letting that actually happened.
+///
+/// WHY THIS EXISTS: reviews need something to hang off. An accepted
+/// application says a landlord chose someone; it does not say anyone moved in,
+/// how long they stayed, or when it ended. Without that, nothing can decide
+/// when a review becomes due, or stop someone reviewing a room they never
+/// lived in.
+///
+/// Created when an application is accepted, then confirmed by the parties.
+/// Deliberately NOT auto-started: an accepted application often falls through
+/// before move-in, and a tenancy nobody confirms should not generate a review
+/// prompt or a rating.
+model Tenancy {
+  id            String        @id @default(uuid())
+
+  roomId        String
+  room          Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  landlordId    String
+  landlord      User          @relation("TenanciesAsLandlord", fields: [landlordId], references: [id], onDelete: Cascade)
+  tenantId      String
+  tenant        User          @relation("TenanciesAsTenant", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// The application this came from. One tenancy per accepted application.
+  applicationId String        @unique
+  application   Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  status        TenancyStatus @default(pending)
+
+  /// Agreed move-in date. Null until confirmed.
+  startDate     DateTime?
+  /// Actual move-out. Set when the tenancy is ended by either party.
+  endDate       DateTime?
+
+  /// Rent at the time, in ZAR cents. Copied rather than referenced because the
+  /// room's rent changes on relist and a review should reflect what was paid.
+  rentCents     Int
+
+  /// Either party may end it — this is a record of fact, not a negotiation.
+  endedById     String?
+  endReason     String?
+
+  /// Reviews open when the tenancy ends and close after this. A window stops
+  /// a grudge review appearing two years later, and gives the double-blind
+  /// reveal a definite deadline.
+  reviewsCloseAt DateTime?
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  reviews       Review[]
+
+  @@index([landlordId, status])
+  @@index([tenantId, status])
+  @@index([roomId])
+  @@map("tenancies")
+}
+
+enum TenancyStatus {
+  pending    // accepted, not yet confirmed as moved in
+  active     // confirmed, currently living there
+  ended      // completed normally
+  cancelled  // fell through before move-in — never generates reviews
+}
+
+/// A review written after a tenancy ends.
+///
+/// DOUBLE-BLIND: neither side's review is visible until both have submitted,
+/// or the review window closes. If each party could read the other's first,
+/// ratings become a negotiation and honest criticism stops.
+///
+/// Landlord-written reviews of a tenant name an individual and carry real
+/// defamation exposure in South Africa, so they are moderatable and the
+/// subject can respond.
+model Review {
+  id          String       @id @default(uuid())
+
+  tenancyId   String
+  tenancy     Tenancy      @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+
+  authorId    String
+  author      User         @relation("ReviewsWritten", fields: [authorId], references: [id], onDelete: Cascade)
+  /// The person being reviewed. Null for a room review — the subject is the room.
+  subjectId   String?
+  subject     User?        @relation("ReviewsReceived", fields: [subjectId], references: [id], onDelete: SetNull)
+  /// Set for room reviews, so a room carries its history across tenancies.
+  roomId      String?
+  room        Room?        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  type        ReviewType
+  /// 1-5. Averaged into LandlordProfile.rating for landlord reviews only.
+  rating      Int
+  comment     String
+
+  /// Withheld until both sides have submitted or the window closes.
+  publishedAt DateTime?
+  /// The subject's reply. One per review, and it does not affect the rating.
+  response       String?
+  respondedAt    DateTime?
+
+  /// Moderation, for the defamation exposure noted above.
+  isHidden       Boolean   @default(false)
+  hiddenReason   String?
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  /// One review of each type per author per tenancy.
+  @@unique([tenancyId, authorId, type])
+  @@index([roomId, publishedAt])
+  @@index([subjectId, publishedAt])
+  @@map("reviews")
+}
+
+enum ReviewType {
+  room       // tenant -> the room and house
+  landlord   // tenant -> the landlord's conduct
+  tenant     // landlord -> the tenant
 }
 
 enum AuthTokenType {

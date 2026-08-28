@@ -753,6 +753,95 @@ for path in "/how-it-works" "/pricing"; do
 done
 
 
+# -- 20. Tenancies ---------------------------------------------------------
+# The record reviews will hang off. The lifecycle is confirmed rather than
+# automatic, so most of what matters here is what is NOT allowed.
+head_ "20. Tenancies"
+req GET /api/tenancies/mine "" "$TTOKEN"
+check "tenant lists own tenancies" 200 "$STATUS" "$BODY"
+
+req GET /api/tenancies/mine
+check "tenancies require auth" 401 "$STATUS"
+
+req GET /api/tenancies/reviewable "" "$LTOKEN"
+check "reviewable list loads" 200 "$STATUS" "$BODY"
+
+# Accepting an application should have opened a pending tenancy.
+req POST /api/rooms "$ROOM_JSON" "$LTOKEN"
+TEN_ROOM=$(echo "$BODY" | jq -r '.id // empty')
+if [[ -n "$TEN_ROOM" ]]; then
+  req PATCH "/api/rooms/$TEN_ROOM" '{"heroImagePath":"/smoke-test-placeholder.jpg"}' "$LTOKEN"
+  req POST "/api/rooms/$TEN_ROOM/publish" "" "$LTOKEN"
+  req POST /api/applications "{\"roomId\":\"$TEN_ROOM\",\"coverNote\":\"Would love this room.\"}" "$TTOKEN"
+  TEN_APP=$(echo "$BODY" | jq -r '.id // empty')
+
+  if [[ -n "$TEN_APP" ]]; then
+    req POST "/api/applications/$TEN_APP/accept" "" "$LTOKEN"
+    check "landlord accepts the application" 200 "$STATUS" "$BODY"
+
+    sleep 1   # the tenancy is opened without blocking the response
+    req GET /api/tenancies/mine "" "$TTOKEN"
+    TEN_ID=$(echo "$BODY" | jq -r --arg r "$TEN_ROOM" '[.[]? | select(.roomId==$r)][0].id // empty')
+    TEN_STATUS=$(echo "$BODY" | jq -r --arg r "$TEN_ROOM" '[.[]? | select(.roomId==$r)][0].status // empty')
+
+    if [[ -n "$TEN_ID" ]]; then
+      green "  PASS  accepting opened a tenancy"; PASS=$((PASS+1))
+      if [[ "$TEN_STATUS" == "pending" ]]; then
+        green "  PASS  it starts pending, not active"; PASS=$((PASS+1))
+      else
+        red "  FAIL  new tenancy status is '$TEN_STATUS', expected pending"; FAIL=$((FAIL+1))
+      fi
+
+      req POST "/api/tenancies/$TEN_ID/end" '{}' "$TTOKEN"
+      check "cannot end a tenancy that never started" 400 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/confirm-start" '{}' "$ITOKEN"
+      check "outsider CANNOT confirm a tenancy" 403 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/confirm-start" '{"startDate":"2099-01-01"}' "$TTOKEN"
+      check "rejects a future move-in date" 400 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/confirm-start" '{}' "$TTOKEN"
+      check "tenant confirms move-in" 200 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/cancel" '{}' "$TTOKEN"
+      check "cannot cancel once active" 400 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/end" '{"reason":"Moved closer to work"}' "$LTOKEN"
+      check "landlord ends the tenancy" 200 "$STATUS" "$BODY"
+
+      CLOSES=$(echo "$BODY" | jq -r '.reviewsCloseAt // empty')
+      if [[ -n "$CLOSES" ]]; then
+        green "  PASS  ending opened a review window"; PASS=$((PASS+1))
+      else
+        red "  FAIL  no review window set on ending"; FAIL=$((FAIL+1))
+      fi
+
+      req POST "/api/tenancies/$TEN_ID/end" '{}' "$LTOKEN"
+      check "cannot end twice" 400 "$STATUS" "$BODY"
+
+      req GET /api/tenancies/reviewable "" "$TTOKEN"
+      OWED=$(echo "$BODY" | jq -r --arg id "$TEN_ID" '[.[]? | select(.tenancy.id==$id)][0].outstanding | length')
+      if [[ "$OWED" == "2" ]]; then
+        green "  PASS  tenant owes 2 reviews (room and landlord)"; PASS=$((PASS+1))
+      else
+        red "  FAIL  tenant owes '$OWED' reviews, expected 2"; FAIL=$((FAIL+1))
+      fi
+
+      req GET /api/tenancies/reviewable "" "$LTOKEN"
+      LOWED=$(echo "$BODY" | jq -r --arg id "$TEN_ID" '[.[]? | select(.tenancy.id==$id)][0].outstanding | length')
+      if [[ "$LOWED" == "1" ]]; then
+        green "  PASS  landlord owes 1 review (the tenant)"; PASS=$((PASS+1))
+      else
+        red "  FAIL  landlord owes '$LOWED' reviews, expected 1"; FAIL=$((FAIL+1))
+      fi
+    else
+      red "  FAIL  accepting did not open a tenancy"; FAIL=$((FAIL+1))
+    fi
+  fi
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"
