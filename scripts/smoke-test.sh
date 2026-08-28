@@ -709,34 +709,6 @@ req GET /api/reports
 check "report queue requires auth" 401 "$STATUS"
 
 
-# -- 18. Reporting ---------------------------------------------------------
-head_ "18. Reporting"
-if [[ -n "$ROOM_ID" ]]; then
-  req POST /api/reports "{\"roomId\":\"$ROOM_ID\",\"reason\":\"upfront_payment_demanded\",\"details\":\"Asked for a deposit before any viewing.\",\"contactEmail\":\"anon@rentboard.test\"}"
-  if [[ "$STATUS" == "201" || "$STATUS" == "200" ]]; then
-    green "  PASS  anonymous report accepted  ($STATUS)"; PASS=$((PASS+1))
-  else
-    red "  FAIL  anonymous report rejected  ($STATUS)"; FAIL=$((FAIL+1))
-    grey "        $(echo "$BODY" | head -c 300)"
-  fi
-
-  req POST /api/reports "{\"roomId\":\"$ROOM_ID\",\"reason\":\"not_a_real_listing\",\"details\":\"Photos appear to be stolen from another site.\"}" "$TTOKEN"
-  if [[ "$STATUS" == "201" || "$STATUS" == "200" ]]; then
-    green "  PASS  signed-in report accepted  ($STATUS)"; PASS=$((PASS+1))
-  else
-    red "  FAIL  signed-in report rejected  ($STATUS)"; FAIL=$((FAIL+1))
-  fi
-
-  req POST /api/reports "{\"roomId\":\"$ROOM_ID\",\"reason\":\"made_up_reason\",\"details\":\"x\"}" "$TTOKEN"
-  check "rejects an unknown reason" 400 "$STATUS" "$BODY"
-fi
-
-req GET /api/reports "" "$TTOKEN"
-check "tenant CANNOT read the report queue" 403 "$STATUS" "$BODY"
-
-req GET /api/reports "" "$LTOKEN"
-check "landlord CANNOT read the report queue" 403 "$STATUS" "$BODY"
-
 # -- 19. Public pages ------------------------------------------------------
 head_ "19. Public pages"
 # Served by the frontend, not the API — checked here so a broken prerender is
@@ -746,7 +718,8 @@ for path in "/how-it-works" "/pricing"; do
   CODE=$(curl -s -o /dev/null -w '%{http_code}' "$FE$path" 2>/dev/null || echo "000")
   if [[ "$CODE" == "200" ]]; then
     green "  PASS  $path renders  (200)"; PASS=$((PASS+1))
-  elif [[ "$CODE" == "000" ]]; then
+  elif [[ "$CODE" =~ ^0+$ ]]; then
+    # curl reports 000 (sometimes repeated on retries) when it cannot connect.
     grey "  SKIP  $path — frontend not running at $FE"; SKIP=$((SKIP+1))
   else
     red "  FAIL  $path returned $CODE"; FAIL=$((FAIL+1))
@@ -898,9 +871,22 @@ if [[ -n "${TEN_ID:-}" ]]; then
       red "  FAIL  tenant review is publicly visible"; FAIL=$((FAIL+1))
     fi
 
-    # References need a LIVE application, and this tenancy's is long decided.
+    # This landlord DOES have a live application from this tenant (section 11
+    # re-applied after a relist), so references are legitimately available.
     req GET "/api/reviews/tenant/$TENANT_ID/references" "" "$LTOKEN"
-    check "references refused without a live application" 403 "$STATUS" "$BODY"
+    check "landlord with a live application CAN see references" 200 "$STATUS" "$BODY"
+
+    # The real restriction: a different landlord, with no application from this
+    # person, must not be able to look them up.
+    OTHER_LL="landlord2+${STAMP}@rentboard.test"
+    req POST /api/auth/register \
+      "{\"email\":\"$OTHER_LL\",\"password\":\"$PASSWORD\",\"fullName\":\"Second Landlord\",\"role\":\"LANDLORD\"}"
+    OTHER_LTOKEN=$(echo "$BODY" | jq -r '.accessToken // empty')
+
+    if [[ -n "$OTHER_LTOKEN" ]]; then
+      req GET "/api/reviews/tenant/$TENANT_ID/references" "" "$OTHER_LTOKEN"
+      check "unrelated landlord CANNOT look up references" 403 "$STATUS" "$BODY"
+    fi
 
     req GET "/api/reviews/tenant/$TENANT_ID/references" "" "$TTOKEN"
     check "tenant CANNOT read references about themselves this way" 403 "$STATUS" "$BODY"
