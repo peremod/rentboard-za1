@@ -28,12 +28,12 @@ or ❌ is not, and should not be assumed to work.
 | → draft | `POST /rooms` | ✅ verified |
 | draft → active | `POST /rooms/:id/publish` | ✅ verified (cover photo + 50-char description enforced) |
 | draft → deleted | `DELETE /rooms/:id` | ✅ verified (drafts only) |
-| active → reserved | `POST /rooms/:id/reserve` | ⚠️ **endpoint exists, no UI, no semantics** — see gap R1 |
+| active → reserved | `POST /rooms/:id/reserve` | ✅ verified (v1.7.1) — stays visible, refuses new applications, `/unreserve` reverses it |
 | active/reserved → let | `POST /rooms/:id/let` | ✅ verified — closes and notifies open applicants |
 | let → active | `POST /rooms/:id/undo-let` | ✅ verified (30-minute window) |
 | let/paused → active | `POST /rooms/:id/relist` | ✅ verified — archives the old cycle, increments `relistCount` |
-| any → paused | *none* | ❌ **gap R2** — `paused` is accepted by relist but nothing sets it |
-| any → deleted | *none* | ❌ **gap R3** — the `deleted` status is never used; drafts are hard-deleted instead |
+| active/reserved → paused | `POST /rooms/:id/pause` | ✅ verified (v1.7.1) — off the board, applications left open |
+| published → deleted | `POST /rooms/:id/remove` | ✅ verified (v1.7.1) — soft delete; open applicants closed and emailed |
 
 ### Gaps
 
@@ -104,7 +104,7 @@ waiting on a decision for a room whose rent went up R800.
 | Tenant withdraws → landlord's list updates | ✅ verified |
 | Two-way messaging within an application | ✅ verified |
 | New matching room → tenant alerted | ✅ instant on publish and relist; ✅ daily digest at 07:00 SAST (v1.8.1). A digest with no matches is not sent — a daily "nothing today" is how people learn to ignore, then unsubscribe |
-| Saved room is let → tenant told | ❌ **gap X1** — a saved room silently becomes unavailable |
+| Saved room is let → tenant told | ❌ **gap X1** — still open. The dashboard drops rooms that 404, but nobody is told the room they saved has gone |
 | Landlord verified → badge appears | ✅ end to end (v1.8.1): landlord submits at /landlord/verification, admin reviews at /admin/verifications, approval sets idVerified and the badge appears |
 
 **X1 — saved rooms go stale silently.** The dashboard drops rooms that 404,
@@ -212,7 +212,7 @@ whose applications the landlord may never open.
 
 Previously:
 
-### 5.2 ~~Reviews~~ — ❌ not built
+### 5.2 Reviews — superseded, see above
 `LandlordProfile.rating` and `ratingCount` exist and **the room card renders a
 star rating**, but there is no `Review` model and nothing can ever set them.
 This is the same shape of problem `idVerified` had before v1.8.0: a field that
