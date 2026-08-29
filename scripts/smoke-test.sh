@@ -993,6 +993,66 @@ else
 fi
 
 
+# -- 25. Verification payment ----------------------------------------------
+# The security-critical assertions are the negative ones: a forged ITN must not
+# mark anything paid, and an unpaid request must not reach the review queue.
+head_ "25. Verification payment"
+req POST /api/verification '{"type":"identity","documentPath":"private/verification/pay-test.jpg"}' "$LTOKEN"
+if [[ "$STATUS" == "201" ]]; then
+  PAY_VR=$(echo "$BODY" | jq -r '.id // empty')
+  VR_STATUS=$(echo "$BODY" | jq -r '.status')
+  if [[ "$VR_STATUS" == "pending_payment" ]]; then
+    green "  PASS  identity request starts as pending_payment"; PASS=$((PASS+1))
+  else
+    red "  FAIL  identity request status is '$VR_STATUS', expected pending_payment"; FAIL=$((FAIL+1))
+  fi
+else
+  grey "  SKIP  landlord already has an identity request from an earlier section"; SKIP=$((SKIP+1))
+  PAY_VR=""
+fi
+
+if [[ -n "$PAY_VR" ]]; then
+  req POST "/api/payments/verification/$PAY_VR" "" "$TTOKEN"
+  check "tenant CANNOT start a landlord payment" 403 "$STATUS" "$BODY"
+
+  req POST "/api/payments/verification/$PAY_VR" "" "$LTOKEN"
+  if [[ "$STATUS" == "201" || "$STATUS" == "200" ]]; then
+    HAS_SIG=$(echo "$BODY" | jq -r '.fields.signature // "none"')
+    AMOUNT=$(echo "$BODY" | jq -r '.fields.amount // "none"')
+    if [[ "$HAS_SIG" != "none" && "$AMOUNT" == "149.00" ]]; then
+      green "  PASS  signed PayFast form returned, amount R149.00"; PASS=$((PASS+1))
+    else
+      red "  FAIL  form incomplete (signature=$HAS_SIG amount=$AMOUNT)"; FAIL=$((FAIL+1))
+    fi
+  elif [[ "$STATUS" == "400" ]]; then
+    grey "  SKIP  PayFast not configured on this server"; SKIP=$((SKIP+1))
+  else
+    check "start verification payment" 201 "$STATUS" "$BODY"
+  fi
+fi
+
+# A forged ITN with no valid signature must never mark a payment paid.
+req POST /api/payments/payfast/notify '{"m_payment_id":"RBV-forged","payment_status":"COMPLETE","amount_gross":"149.00"}'
+check "forged ITN is accepted but ignored" 200 "$STATUS" "$BODY"
+
+req GET /api/payments/mine "" "$LTOKEN"
+check "landlord reads own payment history" 200 "$STATUS" "$BODY"
+
+req GET /api/payments/mine
+check "payment history requires auth" 401 "$STATUS"
+
+# Unpaid identity requests must stay out of the admin queue.
+if [[ -n "${ADMIN_TOKEN:-}" && -n "$PAY_VR" ]]; then
+  req GET /api/verification/pending "" "$ADMIN_TOKEN"
+  IN_QUEUE=$(echo "$BODY" | jq -r --arg id "$PAY_VR" '[.[]? | select(.id==$id)] | length')
+  if [[ "$IN_QUEUE" == "0" ]]; then
+    green "  PASS  unpaid request is not in the review queue"; PASS=$((PASS+1))
+  else
+    red "  FAIL  unpaid request reached the review queue"; FAIL=$((FAIL+1))
+  fi
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

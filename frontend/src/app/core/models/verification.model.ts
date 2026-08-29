@@ -1,5 +1,10 @@
 export type VerificationType = 'identity' | 'proof_of_address' | 'proof_of_ownership';
-export type VerificationStatus = 'pending' | 'approved' | 'rejected';
+export type VerificationStatus =
+  /** Document uploaded, R149 fee not yet paid. Not in the admin queue. */
+  | 'pending_payment'
+  | 'pending'
+  | 'approved'
+  | 'rejected';
 
 /**
  * A landlord's verification request.

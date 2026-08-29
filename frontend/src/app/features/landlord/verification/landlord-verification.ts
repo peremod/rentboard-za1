@@ -3,6 +3,8 @@ import { DatePipe } from '@angular/common';
 import { VerificationService } from '../../../core/services/verification.service';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { PaymentsService } from '../../../core/services/payments.service';
+import { ActivatedRoute } from '@angular/router';
 import { VerificationType } from '../../../core/models/verification.model';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 
@@ -38,6 +40,24 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
         </div>
       }
 
+      @if (paymentOutcome() === 'success') {
+        <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
+          ✅
+          <span>
+            Payment received. Your document is in the review queue — we usually
+            decide within 2 business days and will email you either way.
+          </span>
+        </div>
+      } @else if (paymentOutcome() === 'cancelled') {
+        <div class="insight-banner">
+          ↩️ <span>Payment cancelled. Your document is saved — you can pay whenever you're ready.</span>
+        </div>
+      }
+
+      @if (payError()) {
+        <p class="field-error" role="alert">{{ payError() }}</p>
+      }
+
       <section class="dash-section">
         <div class="dash-section-title">What happens to your document</div>
         <ul class="verify-facts">
@@ -45,6 +65,8 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
           <li>Seen only by a RentBoard reviewer</li>
           <li><strong>Deleted as soon as it is reviewed</strong>, approved or not. We keep the outcome, not the document</li>
           <li>Verification means a person checked your document. It is not a credit or criminal check</li>
+          <li><strong>R149 once off</strong> for the identity check — not a subscription.
+              Refunded in full if we cannot verify you. Proof of address and ownership are free</li>
         </ul>
       </section>
 
@@ -76,7 +98,12 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
             </div>
 
             <div class="portal-row-actions">
-              @if (isPending(type.value)) {
+              @if (awaitingPayment(type.value)) {
+                <button type="button" class="btn btn-sm btn-primary"
+                        [disabled]="paying()" (click)="pay(type.value)">
+                  {{ paying() ? 'Opening PayFast…' : 'Pay R149 to continue' }}
+                </button>
+              } @else if (isPending(type.value)) {
                 <span class="muted">Awaiting review</span>
               } @else if (isApproved(type.value)) {
                 <span class="muted">✓ Approved</span>
@@ -104,6 +131,8 @@ export class LandlordVerification implements OnInit {
   verification = inject(VerificationService);
   private uploads = inject(UploadsService);
   private auth = inject(AuthService);
+  private payments = inject(PaymentsService);
+  private route = inject(ActivatedRoute);
 
   readonly navItems: PortalNavItem[] = [
     { label: 'Dashboard', icon: '📊', route: '/landlord/dashboard', exact: true },
@@ -132,11 +161,44 @@ export class LandlordVerification implements OnInit {
   ];
 
   uploading = signal<VerificationType | null>(null);
+  paying = signal(false);
+  payError = signal<string | null>(null);
+  paymentOutcome = signal<'success' | 'cancelled' | null>(null);
   error = signal<VerificationType | null>(null);
   errorMessage = signal('');
 
   ngOnInit() {
+    // PayFast returns the browser here; the ITN webhook is what actually
+    // confirms payment, so this only sets the message the landlord sees.
+    const outcome = this.route.snapshot.queryParamMap.get('payment');
+    if (outcome === 'success' || outcome === 'cancelled') {
+      this.paymentOutcome.set(outcome);
+    }
     this.verification.load().subscribe({ error: () => {} });
+  }
+
+  /** True once a document is uploaded but the fee has not been paid. */
+  awaitingPayment(type: VerificationType): boolean {
+    return this.verification.requests().some(
+      (r) => r.type === type && r.status === 'pending_payment',
+    );
+  }
+
+  pay(type: VerificationType) {
+    const request = this.verification.requests().find(
+      (r) => r.type === type && r.status === 'pending_payment',
+    );
+    if (!request) return;
+
+    this.paying.set(true);
+    this.payError.set(null);
+    this.payments.startVerificationPayment(request.id).subscribe({
+      next: (session) => this.payments.redirectToPayfast(session),
+      error: (err) => {
+        this.paying.set(false);
+        this.payError.set(err?.error?.message ?? 'Could not start the payment. Please try again.');
+      },
+    });
   }
 
   statusFor(type: VerificationType) {

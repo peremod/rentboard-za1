@@ -81,6 +81,7 @@ model User {
   reportsFiled    Report[]  @relation("ReportsFiled")
   reportsAgainst  Report[]  @relation("ReportsAgainst")
   emailLogs       EmailLog[]
+  payments        Payment[]
   savedRooms      SavedRoom[]
   savedSearches   SavedSearch[]
   verifications   VerificationRequest[]
@@ -547,6 +548,65 @@ enum SuppressionReason {
   manual
 }
 
+/// A payment attempt. Currently only the once-off verification fee, but kept
+/// generic because room boosts will need the same shape.
+///
+/// The ITN webhook is the source of truth, not the browser return: a user who
+/// closes the tab after paying must still get what they paid for.
+model Payment {
+  id          String        @id @default(uuid())
+
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  purpose     PaymentPurpose
+  /// What this paid for, e.g. a VerificationRequest id.
+  referenceId String?
+
+  /// ZAR cents, to match every other monetary value in the schema.
+  amountCents Int
+  status      PaymentStatus @default(pending)
+
+  provider    String        @default("payfast")
+  /// Our reference, sent as m_payment_id and echoed back by the ITN.
+  merchantReference String  @unique
+  /// PayFast's pf_payment_id, only known once they confirm.
+  providerReference String?
+
+  /// The raw ITN payload, kept for dispute resolution. PayFast does not send
+  /// card numbers, so there is nothing sensitive here to avoid storing.
+  itnPayload  Json?
+
+  paidAt      DateTime?
+  failedAt    DateTime?
+  failureReason String?
+
+  /// Set when a refund is issued — the pricing page promises one if
+  /// verification fails, so this must be recordable.
+  refundedAt  DateTime?
+  refundReason String?
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@map("payments")
+}
+
+enum PaymentPurpose {
+  landlord_verification
+  room_boost
+}
+
+enum PaymentStatus {
+  pending    // created, user sent to PayFast
+  paid       // ITN confirmed and validated
+  failed
+  cancelled  // user backed out
+  refunded
+}
+
 enum AuthTokenType {
   password_reset
   email_change
@@ -565,6 +625,10 @@ enum VerificationType {
 }
 
 enum VerificationStatus {
+  /// Document uploaded, fee not yet paid. Not visible in the admin queue —
+  /// reviewing before payment means chasing money from someone you just
+  /// told no.
+  pending_payment
   pending
   approved
   rejected

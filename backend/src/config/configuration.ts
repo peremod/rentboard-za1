@@ -28,6 +28,18 @@ export default () => ({
     urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT?.trim(),
   },
 
+  payfast: {
+    merchantId: process.env.PAYFAST_MERCHANT_ID?.trim(),
+    merchantKey: process.env.PAYFAST_MERCHANT_KEY?.trim(),
+    // Optional in PayFast, but if set on the account it MUST be included in
+    // the signature or every payment is rejected.
+    passphrase: process.env.PAYFAST_PASSPHRASE?.trim(),
+    sandbox: process.env.PAYFAST_SANDBOX !== 'false',
+  },
+
+  /// Public base URL of this API, used to build the ITN notify_url.
+  apiUrl: process.env.API_URL?.trim(),
+
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY,
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,

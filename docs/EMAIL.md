@@ -158,3 +158,15 @@ arriving is more important than any digest.
 **Suppressions are permanent** until removed manually in the database. That is
 deliberate — an address that hard-bounced last month has not started working
 because a user tried again.
+
+---
+
+## 6. Related: payment notifications
+
+The PayFast ITN is a separate webhook from Resend's and is documented in
+`docs/PAYMENTS.md`. The two are easy to confuse when configuring a deploy:
+
+| Webhook | URL | Secret |
+|---|---|---|
+| Resend delivery events | `/api/notifications/webhook/resend` | `RESEND_WEBHOOK_SECRET` |
+| PayFast payment ITN | `/api/payments/payfast/notify` | signature, not a secret |

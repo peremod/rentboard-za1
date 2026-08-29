@@ -36,7 +36,7 @@ export class VerificationService {
 
   async submit(dto: SubmitVerificationDto, userId: string) {
     const existing = await this.prisma.verificationRequest.findFirst({
-      where: { userId, type: dto.type, status: 'pending' },
+      where: { userId, type: dto.type, status: { in: ['pending', 'pending_payment'] } },
     });
     if (existing) {
       throw new BadRequestException(
@@ -45,7 +45,14 @@ export class VerificationService {
     }
 
     const request = await this.prisma.verificationRequest.create({
-      data: { userId, type: dto.type, documentPath: dto.documentPath },
+      data: {
+        userId,
+        type: dto.type,
+        documentPath: dto.documentPath,
+        // Identity checks carry the fee and wait for payment before review.
+        // The other document types are free and go straight to the queue.
+        status: dto.type === 'identity' ? 'pending_payment' : 'pending',
+      },
     });
 
     this.logger.log(`Verification submitted: ${dto.type} by user ${userId}`);
@@ -56,6 +63,8 @@ export class VerificationService {
   /** Admin queue. Includes documentPath — reviewers must see the document. */
   listPending() {
     return this.prisma.verificationRequest.findMany({
+      // pending_payment is deliberately excluded: reviewing before payment
+      // means chasing money from someone you have just told no.
       where: { status: 'pending' },
       include: { user: { select: { id: true, fullName: true, email: true, createdAt: true } } },
       orderBy: { createdAt: 'asc' },
