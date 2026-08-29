@@ -10,6 +10,7 @@ import { RoomsModule } from './modules/rooms/rooms.module';
 import { AlertsModule } from './modules/alerts/alerts.module';
 import { VerificationModule } from './modules/verification/verification.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { UsersModule } from './modules/users/users.module';
 import { TenanciesModule } from './modules/tenancies/tenancies.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { ReportsModule } from './modules/reports/reports.module';
@@ -49,6 +50,7 @@ import { MessagesModule } from './modules/messages/messages.module';
     AlertsModule,
     VerificationModule,
     AdminModule,
+    UsersModule,
     TenanciesModule,
     ReviewsModule,
     ReportsModule,

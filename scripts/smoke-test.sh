@@ -897,6 +897,60 @@ if [[ -n "${TEN_ID:-}" ]]; then
 fi
 
 
+# -- 22. Profile settings --------------------------------------------------
+head_ "22. Profile settings"
+req PATCH /api/users/me '{"fullName":"Renamed Landlord"}' "$LTOKEN"
+check "update own name" 200 "$STATUS" "$BODY"
+NEWNAME=$(echo "$BODY" | jq -r '.fullName')
+if [[ "$NEWNAME" == "Renamed Landlord" ]]; then
+  green "  PASS  the change persisted"; PASS=$((PASS+1))
+else
+  red "  FAIL  name came back as '$NEWNAME'"; FAIL=$((FAIL+1))
+fi
+
+req PATCH /api/users/me '{"phone":"0821234567"}' "$LTOKEN"
+check "set a valid SA mobile number" 200 "$STATUS" "$BODY"
+
+req PATCH /api/users/me '{"phone":"12345"}' "$LTOKEN"
+check "rejects a malformed phone number" 400 "$STATUS" "$BODY"
+
+req PATCH /api/users/me '{"phone":""}' "$LTOKEN"
+check "empty string clears the number" 200 "$STATUS" "$BODY"
+
+req PATCH /api/users/me '{"fullName":"X"}' "$LTOKEN"
+check "rejects a one-character name" 400 "$STATUS" "$BODY"
+
+# Email and password must not be changeable through the profile endpoint —
+# both require the current password and email needs confirmation.
+req PATCH /api/users/me "{\"email\":\"hijack+${STAMP}@rentboard.test\"}" "$LTOKEN"
+check "cannot change email via the profile endpoint" 400 "$STATUS" "$BODY"
+
+req PATCH /api/users/me '{"role":"ADMIN"}' "$TTOKEN"
+check "cannot escalate role via the profile endpoint" 400 "$STATUS" "$BODY"
+
+req PATCH /api/users/me '{"fullName":"Nobody"}'
+check "profile update requires auth" 401 "$STATUS"
+
+# -- 23. Verified badge data ------------------------------------------------
+# The badge on a room card reads landlord.landlordProfile.idVerified, so the
+# public list must actually carry that field or the badge can never render.
+head_ "23. Verified badge data"
+req GET /api/rooms
+if echo "$BODY" | jq -e '.data[0].landlord.landlordProfile' >/dev/null 2>&1; then
+  green "  PASS  room list includes landlordProfile (badge can render)"; PASS=$((PASS+1))
+else
+  red "  FAIL  room list has no landlordProfile — the verified badge cannot render"; FAIL=$((FAIL+1))
+  grey "        $(echo "$BODY" | jq -c '.data[0].landlord // "no landlord"' 2>/dev/null | head -c 200)"
+fi
+
+VERIFIED=$(echo "$BODY" | jq -r '.data[0].landlord.landlordProfile.idVerified // "missing"')
+if [[ "$VERIFIED" == "false" || "$VERIFIED" == "true" ]]; then
+  green "  PASS  idVerified present on the public payload ($VERIFIED)"; PASS=$((PASS+1))
+else
+  red "  FAIL  idVerified is $VERIFIED"; FAIL=$((FAIL+1))
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

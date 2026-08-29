@@ -325,3 +325,7 @@
   .hiw-cta .btn { width: 100%; }
   .hiw-safety { padding: 1.1rem; }
 }
+
+// Verified landlord badge. The spec predates verification existing, so it has
+// no rule for this; sage keeps it distinct from Featured (gold) and New.
+.badge-verified { background: var(--sage); color: #fff; }

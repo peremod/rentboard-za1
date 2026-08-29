@@ -5,6 +5,7 @@ export interface User {
   email: string;
   role: UserRole;
   fullName: string;
+  phone?: string | null;
   avatarPath?: string | null;
   isVerified: boolean;
   createdAt?: string;
@@ -24,5 +25,6 @@ export interface RegisterDto {
   email: string;
   password: string;
   fullName: string;
+  phone?: string | null;
   role: 'TENANT' | 'LANDLORD';
 }

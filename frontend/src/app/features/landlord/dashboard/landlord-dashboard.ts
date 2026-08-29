@@ -191,6 +191,7 @@ export class LandlordDashboard implements OnInit {
     { label: 'Applicants', icon: '👥', route: '/landlord/dashboard', badge: this.totalApplicants() },
     { label: 'Messages', icon: '💬', route: '/landlord/dashboard' },
     { label: 'Verification', icon: '🪪', route: '/landlord/verification' },
+    { label: 'Settings', icon: '⚙️', route: '/account/settings' },
     ...(BILLING_ENABLED
       ? [{ label: 'Billing', icon: '💳', route: '/landlord/upgrade' }]
       : []),

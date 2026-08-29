@@ -44,6 +44,11 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
           @if (room().isFeatured) { <span class="badge badge-featured">⭐ Featured</span> }
           @if (isNew()) { <span class="badge badge-new">New</span> }
           @if (room().status === 'reserved') { <span class="badge badge-reserved">Reserved</span> }
+          <!-- Set only by an approved identity check in the admin queue.
+               Nothing else can produce it, which is the point. -->
+          @if (room().landlord?.landlordProfile?.idVerified) {
+            <span class="badge badge-verified" title="This landlord's identity has been checked">✓ Verified</span>
+          }
         </div>
 
         <div class="room-card-body">

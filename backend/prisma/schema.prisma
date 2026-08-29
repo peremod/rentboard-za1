@@ -76,6 +76,7 @@ model User {
   reviewsReceived     Review[]  @relation("ReviewsReceived")
   reportsFiled    Report[]  @relation("ReportsFiled")
   reportsAgainst  Report[]  @relation("ReportsAgainst")
+  savedRooms      SavedRoom[]
   savedSearches   SavedSearch[]
   verifications   VerificationRequest[]
 
@@ -170,6 +171,7 @@ model Room {
   boosts           RoomBoost[]
   tenancies        Tenancy[]
   reviews          Review[]
+  savedBy          SavedRoom[]
 
   @@index([status])
   @@index([province, city])
@@ -436,6 +438,32 @@ enum ReviewType {
   room       // tenant -> the room and house
   landlord   // tenant -> the landlord's conduct
   tenant     // landlord -> the tenant
+}
+
+/// A room a tenant has saved with the heart button.
+///
+/// Server-side rather than localStorage. The device-local version could not be
+/// told when a saved room was let — the server had no idea who had saved what —
+/// so a tenant would return to a dashboard that had silently dropped the room
+/// they were deciding on. It also means saves follow the account across
+/// devices, which is what people expect.
+model SavedRoom {
+  id       String   @id @default(uuid())
+  tenantId String
+  tenant   User     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  roomId   String
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  /// Set when the room stops being available, so the tenant can be told once
+  /// and the entry can stay visible as "no longer available" rather than
+  /// vanishing without explanation.
+  notifiedUnavailableAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, roomId])
+  @@index([roomId])
+  @@map("saved_rooms")
 }
 
 enum AuthTokenType {

@@ -47,6 +47,11 @@ export const routes: Routes = [
     loadChildren: () => import('./features/landlord/landlord.routes').then((m) => m.LANDLORD_ROUTES),
   },
   {
+    path: 'account',
+    canActivate: [authGuard],
+    loadChildren: () => import('./features/account/account.routes').then((m) => m.ACCOUNT_ROUTES),
+  },
+  {
     path: 'admin',
     canActivate: [authGuard, adminGuard],
     loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
@@ -74,5 +79,6 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'tenant/**', renderMode: RenderMode.Client },
   { path: 'landlord/**', renderMode: RenderMode.Client },
   { path: 'admin/**', renderMode: RenderMode.Client },
+  { path: 'account/**', renderMode: RenderMode.Client },
   { path: '**', renderMode: RenderMode.Prerender },
 ];

@@ -75,6 +75,38 @@ export class AuthService {
     ) as unknown as Observable<User | null>;
   }
 
+  /**
+   * Name and phone only. Email and password have their own endpoints because
+   * both require the current password.
+   */
+  updateProfile(data: { fullName: string; phone?: string }) {
+    return this.http.patch<User>(`${this.api}/users/me`, data).pipe(
+      tap((updated) => this._user.set({ ...this._user()!, ...updated })),
+    );
+  }
+
+  /** Always resolves the same way, existing account or not. */
+  forgotPassword(email: string) {
+    return this.http.post<{ message: string }>(`${this.api}/auth/forgot-password`, { email });
+  }
+
+  resetPassword(token: string, newPassword: string) {
+    return this.http.post<{ message: string }>(`${this.api}/auth/reset-password`, { token, newPassword });
+  }
+
+  /** Signed in. Requires the current password — a live session alone is not enough. */
+  changePassword(currentPassword: string, newPassword: string) {
+    return this.http.post<{ message: string }>(`${this.api}/auth/change-password`, {
+      currentPassword, newPassword,
+    });
+  }
+
+  requestEmailChange(newEmail: string, currentPassword: string) {
+    return this.http.post<{ message: string }>(`${this.api}/auth/change-email`, {
+      newEmail, currentPassword,
+    });
+  }
+
   logout() {
     // Best-effort — revoke server-side even though we clear local state regardless.
     this.http.post(`${this.api}/auth/logout`, {}, { withCredentials: true }).subscribe({ error: () => {} });
