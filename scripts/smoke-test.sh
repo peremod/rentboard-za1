@@ -1053,6 +1053,97 @@ if [[ -n "${ADMIN_TOKEN:-}" && -n "$PAY_VR" ]]; then
 fi
 
 
+# -- 26. Board advertising -------------------------------------------------
+# The assertions that matter are about what the ad endpoint does NOT do: it
+# must not require or accept identity, and must not return anything that could
+# be tied back to a viewer.
+head_ "26. Board advertising"
+req GET "/api/ads?placement=board_sidebar&province=Gauteng"
+check "ads endpoint is public" 200 "$STATUS" "$BODY"
+
+if echo "$BODY" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  green "  PASS  returns an array, empty is valid"; PASS=$((PASS+1))
+else
+  red "  FAIL  unexpected shape"; FAIL=$((FAIL+1))
+fi
+
+# No identifiers may appear in an ad payload.
+if echo "$BODY" | jq -e 'any(.[]?; has("userId") or has("sessionId") or has("trackingId"))' >/dev/null 2>&1; then
+  red "  FAIL  ad payload contains a viewer identifier"; FAIL=$((FAIL+1))
+else
+  green "  PASS  no viewer identifiers in the ad payload"; PASS=$((PASS+1))
+fi
+
+req POST /api/ads/campaigns '{"advertiserId":"00000000-0000-0000-0000-000000000000","name":"x"}' "$LTOKEN"
+check "landlord CANNOT create a campaign" 403 "$STATUS" "$BODY"
+
+req GET /api/ads/advertisers "" "$TTOKEN"
+check "tenant CANNOT list advertisers" 403 "$STATUS" "$BODY"
+
+req GET /api/ads/campaigns
+check "campaign list requires auth" 401 "$STATUS"
+
+# Impression counting must not require or record identity.
+req POST /api/ads/impressions '{"campaignIds":[]}'
+if [[ "$STATUS" == "204" || "$STATUS" == "200" ]]; then
+  green "  PASS  impressions accepted anonymously  ($STATUS)"; PASS=$((PASS+1))
+else
+  red "  FAIL  impressions returned $STATUS"; FAIL=$((FAIL+1))
+fi
+
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  req POST /api/ads/advertisers \
+    "{\"companyName\":\"Smoke Fibre Co\",\"contactName\":\"Test Buyer\",\"contactEmail\":\"ads+${STAMP}@rentboard.test\"}" "$ADMIN_TOKEN"
+  check "admin creates an advertiser" 201 "$STATUS" "$BODY"
+  ADV_ID=$(echo "$BODY" | jq -r '.id // empty')
+
+  if [[ -n "$ADV_ID" ]]; then
+    req POST /api/ads/campaigns \
+      "{\"advertiserId\":\"$ADV_ID\",\"name\":\"Gauteng fibre\",\"placement\":\"board_sidebar\",\"headline\":\"Fibre at your new place\",\"targetUrl\":\"https://example.co.za\",\"province\":\"Gauteng\",\"startsAt\":\"$AVAIL\",\"endsAt\":\"2099-01-01\",\"monthlyRateCents\":250000}" "$ADMIN_TOKEN"
+    check "admin creates a campaign" 201 "$STATUS" "$BODY"
+    CAMP_ID=$(echo "$BODY" | jq -r '.id // empty')
+    CAMP_STATUS=$(echo "$BODY" | jq -r '.status')
+
+    if [[ "$CAMP_STATUS" == "pending_review" ]]; then
+      green "  PASS  campaign starts in review, not live"; PASS=$((PASS+1))
+    else
+      red "  FAIL  campaign status is '$CAMP_STATUS', expected pending_review"; FAIL=$((FAIL+1))
+    fi
+
+    req POST /api/ads/campaigns \
+      "{\"advertiserId\":\"$ADV_ID\",\"name\":\"Insecure\",\"placement\":\"board_sidebar\",\"headline\":\"Plain http link\",\"targetUrl\":\"http://example.co.za\",\"startsAt\":\"$AVAIL\",\"endsAt\":\"2099-01-01\",\"monthlyRateCents\":100}" "$ADMIN_TOKEN"
+    check "rejects a non-https destination" 400 "$STATUS" "$BODY"
+
+    if [[ -n "$CAMP_ID" ]]; then
+      req PATCH "/api/ads/campaigns/$CAMP_ID/review" '{"status":"rejected"}' "$ADMIN_TOKEN"
+      check "rejection requires a reason" 400 "$STATUS" "$BODY"
+
+      req PATCH "/api/ads/campaigns/$CAMP_ID/review" '{"status":"approved"}' "$ADMIN_TOKEN"
+      check "admin approves the campaign" 200 "$STATUS" "$BODY"
+
+      req GET "/api/ads?placement=board_sidebar&province=Gauteng"
+      if echo "$BODY" | jq -e --arg id "$CAMP_ID" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then
+        green "  PASS  approved campaign appears for its province"; PASS=$((PASS+1))
+      else
+        red "  FAIL  approved campaign not served"; FAIL=$((FAIL+1))
+      fi
+
+      req GET "/api/ads?placement=board_sidebar&province=Western%20Cape"
+      if echo "$BODY" | jq -e --arg id "$CAMP_ID" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then
+        red "  FAIL  Gauteng campaign served on a Western Cape page"; FAIL=$((FAIL+1))
+      else
+        green "  PASS  not served outside its target province"; PASS=$((PASS+1))
+      fi
+
+      req GET "/api/ads/campaigns/$CAMP_ID/stats" "" "$ADMIN_TOKEN"
+      check "campaign stats load" 200 "$STATUS" "$BODY"
+    fi
+  fi
+else
+  grey "  SKIP  admin ad management — set ADMIN_TOKEN to include it"; SKIP=$((SKIP+1))
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

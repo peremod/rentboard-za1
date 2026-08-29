@@ -1,0 +1,183 @@
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { PrismaService } from '../../prisma/prisma.service';
+import { CreateCampaignDto, ReviewCampaignDto, CreateAdvertiserDto } from './dto/ads.dto';
+
+@Injectable()
+export class AdsService {
+  private readonly logger = new Logger(AdsService.name);
+
+  constructor(private prisma: PrismaService) {}
+
+  /**
+   * Ads for the page being viewed.
+   *
+   * Matching is on the CONTEXT — which province and room type the visitor is
+   * looking at — not on the visitor. Nothing about who they are is read, and
+   * the response carries no identifiers, so an advertiser learns only that
+   * their ad was shown on Gauteng searches.
+   *
+   * More specific campaigns win: a Sandton advertiser should outrank a
+   * national one on a Sandton page, having paid for that precision.
+   */
+  async getForContext(params: {
+    placement: string;
+    province?: string;
+    city?: string;
+    roomType?: string;
+    limit?: number;
+  }) {
+    const now = new Date();
+
+    const campaigns = await this.prisma.adCampaign.findMany({
+      where: {
+        status: 'active',
+        placement: params.placement as any,
+        startsAt: { lte: now },
+        endsAt: { gte: now },
+        AND: [
+          { OR: [{ province: null }, ...(params.province ? [{ province: params.province }] : [])] },
+          { OR: [{ city: null }, ...(params.city ? [{ city: { equals: params.city, mode: 'insensitive' as const } }] : [])] },
+          { OR: [{ roomType: null }, ...(params.roomType ? [{ roomType: params.roomType as any }] : [])] },
+        ],
+      },
+      select: {
+        id: true, headline: true, body: true, imagePath: true,
+        ctaLabel: true, targetUrl: true, placement: true,
+        province: true, city: true, roomType: true,
+        advertiser: { select: { companyName: true } },
+      },
+      take: 20,
+    });
+
+    // Specificity score, then rotate so one campaign does not monopolise a slot.
+    const scored = campaigns
+      .map((c) => ({
+        campaign: c,
+        specificity: (c.city ? 4 : 0) + (c.province ? 2 : 0) + (c.roomType ? 1 : 0),
+      }))
+      .sort((a, b) => b.specificity - a.specificity);
+
+    const top = scored.filter((s) => s.specificity === scored[0]?.specificity);
+    const chosen = top.length > 1
+      ? [top[Math.floor(Math.random() * top.length)], ...scored.filter((s) => !top.includes(s))]
+      : scored;
+
+    return chosen.slice(0, params.limit ?? 1).map(({ campaign }) => ({
+      id: campaign.id,
+      headline: campaign.headline,
+      body: campaign.body,
+      imagePath: campaign.imagePath,
+      ctaLabel: campaign.ctaLabel,
+      advertiser: campaign.advertiser.companyName,
+      // Clicks route through us so they can be counted without a tracker on
+      // the page; the destination is not exposed until the click happens.
+      clickUrl: `/api/ads/${campaign.id}/click`,
+    }));
+  }
+
+  /** Fire-and-forget counter. No user, no session, no timestamp per view. */
+  async recordImpressions(campaignIds: string[]) {
+    if (campaignIds.length === 0) return;
+    await this.prisma.adCampaign
+      .updateMany({ where: { id: { in: campaignIds } }, data: { impressions: { increment: 1 } } })
+      .catch(() => {});
+  }
+
+  /** Returns the destination so the controller can redirect. */
+  async recordClick(campaignId: string): Promise<string | null> {
+    const campaign = await this.prisma.adCampaign.findUnique({
+      where: { id: campaignId },
+      select: { targetUrl: true, status: true },
+    });
+    if (!campaign || campaign.status !== 'active') return null;
+
+    await this.prisma.adCampaign
+      .update({ where: { id: campaignId }, data: { clicks: { increment: 1 } } })
+      .catch(() => {});
+
+    return campaign.targetUrl;
+  }
+
+  // ── Admin ────────────────────────────────────────────────────────────────
+
+  createAdvertiser(dto: CreateAdvertiserDto) {
+    return this.prisma.advertiser.create({ data: dto });
+  }
+
+  listAdvertisers() {
+    return this.prisma.advertiser.findMany({
+      include: { _count: { select: { campaigns: true } } },
+      orderBy: { companyName: 'asc' },
+    });
+  }
+
+  async createCampaign(dto: CreateCampaignDto) {
+    const advertiser = await this.prisma.advertiser.findUnique({ where: { id: dto.advertiserId } });
+    if (!advertiser) throw new NotFoundException('Advertiser not found');
+
+    const startsAt = new Date(dto.startsAt);
+    const endsAt = new Date(dto.endsAt);
+    if (endsAt <= startsAt) throw new BadRequestException('The end date must be after the start date.');
+
+    return this.prisma.adCampaign.create({
+      data: { ...dto, startsAt, endsAt, status: 'pending_review' },
+    });
+  }
+
+  listCampaigns(status?: string) {
+    return this.prisma.adCampaign.findMany({
+      where: status ? { status: status as any } : {},
+      include: { advertiser: { select: { companyName: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Approve or reject a creative before it runs.
+   *
+   * Not a formality: a scam ad on a rental platform, seen by people about to
+   * pay deposits to strangers, does far more damage than the placement earns.
+   */
+  async reviewCampaign(id: string, dto: ReviewCampaignDto, adminId: string) {
+    const campaign = await this.prisma.adCampaign.findUnique({ where: { id } });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+    if (dto.status === 'rejected' && !dto.rejectionReason) {
+      throw new BadRequestException('A reason is required when rejecting a campaign.');
+    }
+
+    const updated = await this.prisma.adCampaign.update({
+      where: { id },
+      data: {
+        status: dto.status === 'approved' ? 'active' : 'rejected',
+        approvedById: adminId,
+        approvedAt: new Date(),
+        rejectionReason: dto.rejectionReason,
+      },
+    });
+
+    this.logger.log(`Campaign ${id} ${dto.status} by admin ${adminId}`);
+    return updated;
+  }
+
+  async setStatus(id: string, status: 'active' | 'paused' | 'ended') {
+    return this.prisma.adCampaign.update({ where: { id }, data: { status } });
+  }
+
+  /** What an advertiser is shown: their own aggregates, nothing about viewers. */
+  async getCampaignStats(id: string) {
+    const c = await this.prisma.adCampaign.findUnique({
+      where: { id },
+      select: {
+        id: true, name: true, impressions: true, clicks: true,
+        startsAt: true, endsAt: true, monthlyRateCents: true, status: true,
+        advertiser: { select: { companyName: true } },
+      },
+    });
+    if (!c) throw new NotFoundException('Campaign not found');
+
+    return {
+      ...c,
+      clickThroughRate: c.impressions > 0 ? +((c.clicks / c.impressions) * 100).toFixed(2) : 0,
+    };
+  }
+}

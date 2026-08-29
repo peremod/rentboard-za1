@@ -9,6 +9,7 @@ import { Room } from '../../core/models/room.model';
 import { ZarCentsPipe } from '../../shared/pipes/zar-cents.pipe';
 import { ReportDialog } from '../../shared/components/report-dialog/report-dialog';
 import { ReviewList } from '../../shared/components/review-list/review-list';
+import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
 import { ReviewsService } from '../../core/services/reviews.service';
 import { Review } from '../../core/models/review.model';
 
@@ -20,7 +21,7 @@ import { Review } from '../../core/models/review.model';
 @Component({
   selector: 'app-room-detail',
   standalone: true,
-  imports: [NgOptimizedImage, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList],
+  imports: [NgOptimizedImage, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="room-detail">
@@ -79,6 +80,10 @@ import { Review } from '../../core/models/review.model';
               emptyMessage="No reviews yet. This room has not been let through RentBoard before, which is not a bad sign — most listings start here."/>
           }
         </section>
+
+        <app-ad-slot placement="room_detail"
+                     [province]="room()?.province"
+                     [roomType]="room()?.roomType"/>
 
         <aside class="detail__safety">
           <h2>Stay safe</h2>

@@ -75,7 +75,29 @@ Regulator has been actively enforcing since 2023.
 
 ## 3. Monetisation, sorted by whether it is lawful
 
-### ✅ Advertising on the board — clean, do this first
+### ✅ Advertising on the board — **built in v1.17.0**
+
+Implemented exactly as described below: contextual only, no personal data
+leaves the platform, sold as flat monthly placement.
+
+- Three placements: `board_sidebar`, `board_inline`, `room_detail`
+- Targeting is province / city / room type — matched against the **page**, never
+  the viewer. No profile is built and no identifier is sent
+- Every ad carries an "Advertisement" label. The CPA requires advertising to be
+  identifiable, and on a platform where people decide who to trust with a
+  deposit, an ad that reads like a listing is actively dangerous
+- Clicks route through `/ads/:id/click` so they can be counted without a
+  third-party tracking script, with `Referrer-Policy: no-referrer` so the
+  advertiser does not learn which page sent the visitor
+- Impressions and clicks are **aggregate counters on the campaign row**. There
+  are deliberately no per-view records: knowing which tenant saw which ad is
+  information we have no need for, and s.10 minimality says do not collect it
+- Creatives are reviewed before going live, and destinations must be https
+
+What an advertiser can see: their own impressions, clicks and click-through
+rate. Nothing about who saw it.
+
+#### Original reasoning
 
 Selling placement is not a data question at all. Nothing about a user is
 disclosed to an advertiser.

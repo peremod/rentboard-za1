@@ -607,6 +607,95 @@ enum PaymentStatus {
   refunded
 }
 
+/// A business buying placement on the board.
+model Advertiser {
+  id           String     @id @default(uuid())
+  companyName  String
+  contactName  String
+  contactEmail String
+  contactPhone String?
+  /// Free text: agency, invoicing reference, who introduced them.
+  notes        String?
+  isActive     Boolean    @default(true)
+
+  campaigns    AdCampaign[]
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@map("advertisers")
+}
+
+/// A bought placement.
+///
+/// TARGETING IS CONTEXTUAL ONLY — province, city, room type. It matches the
+/// page being viewed, never the person viewing it. No behavioural profile is
+/// built and no personal information is disclosed to an advertiser, which is
+/// what keeps this outside POPIA s.69 and lets the platform keep saying it
+/// runs no third-party trackers.
+model AdCampaign {
+  id           String       @id @default(uuid())
+  advertiserId String
+  advertiser   Advertiser   @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+
+  name         String
+  placement    AdPlacement
+
+  // Creative
+  headline     String
+  body         String?
+  /// ImageKit path. Optional — text-only ads perform fine in a sidebar.
+  imagePath    String?
+  ctaLabel     String       @default("Learn more")
+  targetUrl    String
+
+  // Contextual targeting. Null means "any".
+  province     String?
+  city         String?
+  roomType     RoomType?
+
+  startsAt     DateTime
+  endsAt       DateTime
+  /// Flat monthly rate in ZAR cents. Impressions-based pricing is not credible
+  /// until there is volume to report honestly.
+  monthlyRateCents Int
+
+  status       AdStatus     @default(draft)
+  /// Creatives are reviewed before going live: a scam ad on a rental platform
+  /// does more damage than the placement is worth.
+  approvedById String?
+  approvedAt   DateTime?
+  rejectionReason String?
+
+  /// Aggregate counters only. Deliberately not per-user rows — knowing which
+  /// tenant saw which ad is information we have no need for, and s.10
+  /// minimality says do not collect it.
+  impressions  Int          @default(0)
+  clicks       Int          @default(0)
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([status, startsAt, endsAt])
+  @@index([placement, status])
+  @@map("ad_campaigns")
+}
+
+enum AdPlacement {
+  board_sidebar   // under the filter panel
+  board_inline    // between room cards in the grid
+  room_detail     // below a listing
+}
+
+enum AdStatus {
+  draft
+  pending_review
+  active
+  paused
+  rejected
+  ended
+}
+
 enum AuthTokenType {
   password_reset
   email_change

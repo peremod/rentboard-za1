@@ -9,6 +9,7 @@ import { AlertsService } from '../../core/services/alerts.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Room, SA_PROVINCES } from '../../core/models/room.model';
 import { RoomCard } from '../../shared/components/room-card/room-card';
+import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
 import { SkeletonCard } from '../../shared/components/skeleton-card/skeleton-card';
 import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 
@@ -23,7 +24,7 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [FormsModule, RouterLink, RoomCard, SkeletonCard, TranslatePipe],
+  imports: [FormsModule, RouterLink, RoomCard, SkeletonCard, TranslatePipe, AdSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="hero">
@@ -185,6 +186,12 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
             }
           </div>
         }
+
+        <!-- Contextual placement: matches the province and room type being
+             browsed, never the person browsing. -->
+        <app-ad-slot placement="board_sidebar"
+                     [province]="province || undefined"
+                     [roomType]="roomType || undefined"/>
 
         <!-- Drawer actions: visible only while the panel is a bottom sheet. -->
         <div class="filter-drawer-actions">
