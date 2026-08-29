@@ -44,6 +44,20 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
       </section>
 
       <section class="dash-section">
+        <div class="dash-section-title">Emails</div>
+        <p class="muted">
+          We'll always email you about your own applications, messages and
+          account — that's part of the service. This controls room alerts and
+          digests only.
+        </p>
+        <label class="filter-check" style="margin-top:.75rem">
+          <input type="checkbox" [checked]="marketingOn()" (change)="toggleMarketing($event)"/>
+          Send me room alerts and summaries
+        </label>
+        @if (marketingMessage()) { <p class="field-hint">{{ marketingMessage() }}</p> }
+      </section>
+
+      <section class="dash-section">
         <div class="dash-section-title">Password</div>
         <form [formGroup]="passwordForm" (ngSubmit)="savePassword()" class="settings-form">
           <div class="form-row">
@@ -138,6 +152,9 @@ export class AccountSettings {
     currentPassword: ['', Validators.required],
   });
 
+  marketingOn = signal(this.auth.user()?.marketingEmails ?? true);
+  marketingMessage = signal<string | null>(null);
+
   savingProfile = signal(false);
   profileMessage = signal<string | null>(null);
   profileError = signal<string | null>(null);
@@ -149,6 +166,20 @@ export class AccountSettings {
   savingEmail = signal(false);
   emailMessage = signal<string | null>(null);
   emailError = signal<string | null>(null);
+
+  /** Opting out here is what the unsubscribe footer in every marketing email links to. */
+  toggleMarketing(event: Event) {
+    const on = (event.target as HTMLInputElement).checked;
+    this.marketingOn.set(on);
+    this.marketingMessage.set(null);
+    this.auth.updateProfile({ marketingEmails: on }).subscribe({
+      next: () => this.marketingMessage.set(on ? 'Alerts on.' : 'Alerts off. You will still get emails about your applications.'),
+      error: () => {
+        this.marketingOn.set(!on);   // roll back the checkbox
+        this.marketingMessage.set('Could not save that. Please try again.');
+      },
+    });
+  }
 
   saveProfile() {
     if (this.profileForm.invalid) return;

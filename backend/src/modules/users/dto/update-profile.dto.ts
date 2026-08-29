@@ -1,7 +1,13 @@
-import { IsOptional, IsString, MinLength, MaxLength, Matches } from 'class-validator';
+import { IsOptional, IsString, IsBoolean, MinLength, MaxLength, Matches } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateProfileDto {
+  @ApiPropertyOptional({
+    description: 'Marketing email consent (room alerts and digests). Transactional mail about your applications is unaffected.',
+  })
+  @IsOptional() @IsBoolean()
+  marketingEmails?: boolean;
+
   @ApiPropertyOptional({ example: 'Sarah Mokoena' })
   @IsOptional() @IsString() @MinLength(2) @MaxLength(100)
   fullName?: string;

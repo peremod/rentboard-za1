@@ -79,7 +79,7 @@ export class AuthService {
    * Name and phone only. Email and password have their own endpoints because
    * both require the current password.
    */
-  updateProfile(data: { fullName: string; phone?: string }) {
+  updateProfile(data: { fullName?: string; phone?: string; marketingEmails?: boolean }) {
     return this.http.patch<User>(`${this.api}/users/me`, data).pipe(
       tap((updated) => this._user.set({ ...this._user()!, ...updated })),
     );

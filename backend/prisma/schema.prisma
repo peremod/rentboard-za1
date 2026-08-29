@@ -69,6 +69,10 @@ model User {
   updatedAt      DateTime @updatedAt
   lastLoginAt    DateTime?
 
+  /// POPIA s.69: marketing needs consent and a working opt-out. Transactional
+  /// mail about a room you applied for is unaffected by this.
+  marketingEmails Boolean @default(true)
+
   authTokens      AuthToken[]
   tenanciesAsLandlord Tenancy[] @relation("TenanciesAsLandlord")
   tenanciesAsTenant   Tenancy[] @relation("TenanciesAsTenant")
@@ -76,6 +80,7 @@ model User {
   reviewsReceived     Review[]  @relation("ReviewsReceived")
   reportsFiled    Report[]  @relation("ReportsFiled")
   reportsAgainst  Report[]  @relation("ReportsAgainst")
+  emailLogs       EmailLog[]
   savedRooms      SavedRoom[]
   savedSearches   SavedSearch[]
   verifications   VerificationRequest[]
@@ -464,6 +469,82 @@ model SavedRoom {
   @@unique([tenantId, roomId])
   @@index([roomId])
   @@map("saved_rooms")
+}
+
+/// Every email the platform attempts to send.
+///
+/// Exists for three reasons: a landlord asking "did you tell me about that
+/// application?" needs an answer; bounces and complaints have to be acted on
+/// or the sending domain's reputation degrades and legitimate mail stops
+/// arriving; and POPIA s.69 requires being able to show that marketing was
+/// consented to and that opt-outs were honoured.
+model EmailLog {
+  id         String       @id @default(uuid())
+
+  /// Null when sent to an address with no account (e.g. an anonymous reporter).
+  userId     String?
+  user       User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  toEmail    String
+
+  template   String       /// e.g. 'new_application', 'password_reset'
+  category   EmailCategory
+  subject    String
+
+  status     EmailStatus  @default(queued)
+  /// Resend's message id, so a delivery event can be matched back.
+  providerId String?      @unique
+  error      String?
+
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  bouncedAt   DateTime?
+  complainedAt DateTime?
+
+  createdAt  DateTime     @default(now())
+
+  @@index([userId, createdAt])
+  @@index([toEmail])
+  @@index([status])
+  @@map("email_logs")
+}
+
+/// Transactional mail is part of the service and is not opt-out-able: someone
+/// who applied for a room must be told the outcome. Marketing is, and must be.
+enum EmailCategory {
+  transactional
+  marketing
+}
+
+enum EmailStatus {
+  queued
+  sent
+  delivered
+  bounced
+  complained
+  failed
+  suppressed   // not attempted: the address is on the suppression list
+}
+
+/// Addresses that must not be emailed again.
+///
+/// A hard bounce means the address does not exist; a complaint means someone
+/// pressed "spam". Continuing to send to either is how a sending domain gets
+/// blacklisted, at which point password resets stop arriving for everyone.
+model EmailSuppression {
+  id        String              @id @default(uuid())
+  email     String              @unique
+  reason    SuppressionReason
+  detail    String?
+  createdAt DateTime            @default(now())
+
+  @@map("email_suppressions")
+}
+
+enum SuppressionReason {
+  hard_bounce
+  complaint
+  unsubscribed
+  manual
 }
 
 enum AuthTokenType {

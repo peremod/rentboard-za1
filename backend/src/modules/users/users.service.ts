@@ -21,10 +21,11 @@ export class UsersService {
         ...(dto.fullName !== undefined ? { fullName: dto.fullName.trim() } : {}),
         // An empty string clears the number rather than storing "".
         ...(dto.phone !== undefined ? { phone: dto.phone.trim() || null } : {}),
+        ...(dto.marketingEmails !== undefined ? { marketingEmails: dto.marketingEmails } : {}),
       },
       select: {
         id: true, email: true, fullName: true, phone: true,
-        role: true, avatarPath: true, isVerified: true,
+        role: true, avatarPath: true, isVerified: true, marketingEmails: true,
       },
     });
     return user;

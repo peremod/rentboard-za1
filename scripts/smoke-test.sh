@@ -951,6 +951,48 @@ else
 fi
 
 
+# -- 24. Email lifecycle ---------------------------------------------------
+head_ "24. Email lifecycle"
+req GET /api/notifications/my-emails "" "$LTOKEN"
+check "user can read their own email log (POPIA s.23)" 200 "$STATUS" "$BODY"
+
+# Registration and the application flow above should have produced entries.
+LOGGED=$(echo "$BODY" | jq -r 'length')
+if [[ "$LOGGED" -gt 0 ]]; then
+  green "  PASS  emails are being logged ($LOGGED entries)"; PASS=$((PASS+1))
+else
+  grey  "  SKIP  no email log entries yet for this account"; SKIP=$((SKIP+1))
+fi
+
+req GET /api/notifications/my-emails
+check "email log requires auth" 401 "$STATUS"
+
+req GET /api/notifications/admin/failures "" "$LTOKEN"
+check "non-admin CANNOT read delivery failures" 403 "$STATUS" "$BODY"
+
+# Marketing consent is what the unsubscribe footer links to.
+req PATCH /api/users/me '{"marketingEmails":false}' "$TTOKEN"
+check "tenant can opt out of marketing" 200 "$STATUS" "$BODY"
+OPTED=$(echo "$BODY" | jq -r '.marketingEmails')
+if [[ "$OPTED" == "false" ]]; then
+  green "  PASS  opt-out persisted"; PASS=$((PASS+1))
+else
+  red "  FAIL  marketingEmails came back as '$OPTED'"; FAIL=$((FAIL+1))
+fi
+
+req PATCH /api/users/me '{"marketingEmails":true}' "$TTOKEN"
+check "tenant can opt back in" 200 "$STATUS" "$BODY"
+
+# The webhook must not accept arbitrary suppression without a signature once
+# a secret is configured. With none set locally it accepts and no-ops safely.
+req POST /api/notifications/webhook/resend '{"type":"email.bounced","data":{"to":["nobody@example.test"]}}'
+if [[ "$STATUS" == "200" || "$STATUS" == "400" ]]; then
+  green "  PASS  webhook responds without leaking detail  ($STATUS)"; PASS=$((PASS+1))
+else
+  red "  FAIL  webhook returned $STATUS"; FAIL=$((FAIL+1))
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

@@ -6,6 +6,8 @@ export interface User {
   role: UserRole;
   fullName: string;
   phone?: string | null;
+  /** Marketing consent. Transactional mail is unaffected by this. */
+  marketingEmails?: boolean;
   avatarPath?: string | null;
   isVerified: boolean;
   createdAt?: string;
@@ -26,5 +28,7 @@ export interface RegisterDto {
   password: string;
   fullName: string;
   phone?: string | null;
+  /** Marketing consent. Transactional mail is unaffected by this. */
+  marketingEmails?: boolean;
   role: 'TENANT' | 'LANDLORD';
 }

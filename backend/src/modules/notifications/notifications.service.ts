@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EmailCategory } from '@prisma/client';
+import { PrismaService } from '../../prisma/prisma.service';
 import { Resend } from 'resend';
 import { escapeHtml } from '../../common/utils/escape-html.util';
 
@@ -32,7 +34,10 @@ export class NotificationsService {
   private readonly from: string;
   private readonly frontend: string;
 
-  constructor(private config: ConfigService) {
+  constructor(
+    private config: ConfigService,
+    private prisma: PrismaService,
+  ) {
     const apiKey = this.config.get<string>('resend.apiKey');
     if (apiKey) {
       this.resend = new Resend(apiKey);
@@ -57,7 +62,9 @@ export class NotificationsService {
       <p><strong>${tenantName}</strong> has applied for: <strong>${roomTitle}</strong></p>
       <a href="${this.frontend}/landlord/dashboard" class="btn">View application →</a>
       <p class="muted">💡 Landlords who reply within 24 hours receive 3× more applications.</p>
-    `));
+    `),
+      { template: 'new_application' },
+    );
   }
 
   /** 2. Tenant — landlord viewed the application. */
@@ -69,7 +76,9 @@ export class NotificationsService {
       <p>Hi ${tenantName},</p>
       <p>The landlord has viewed your application for <strong>${roomTitle}</strong>.</p>
       <a href="${this.frontend}/tenant/dashboard" class="btn">View your application →</a>
-    `));
+    `),
+      { template: 'application_viewed' },
+    );
   }
 
   /** 3. Tenant — shortlisted. */
@@ -81,7 +90,9 @@ export class NotificationsService {
       <p>Hi ${tenantName},</p>
       <p>The landlord has shortlisted you for <strong>${roomTitle}</strong>. Message them to arrange a viewing.</p>
       <a href="${this.frontend}/tenant/dashboard" class="btn btn--green">💬 Message the landlord →</a>
-    `));
+    `),
+      { template: 'shortlisted' },
+    );
   }
 
   /** 4. Tenant — accepted, with move-in partner offers (broadband/insurance/removals). */
@@ -116,7 +127,8 @@ export class NotificationsService {
        <p style="font-size:.8rem;color:#7A6E60">
          You are receiving this because you saved a search on RentBoard.
          <a href="${this.frontend}/tenant/dashboard">Manage or turn off your alerts</a>.
-       </p>`,
+       </p>`,,
+      { template: 'new_match', category: 'marketing' },
     );
   }
 
@@ -134,7 +146,8 @@ export class NotificationsService {
        <p><strong>Reason:</strong> ${d.reason.replace(/_/g, ' ')}<br/>
           <strong>Report:</strong> ${d.reportId}<br/>
           ${d.roomId ? `<strong>Listing:</strong> <a href="${this.frontend}/rooms/${d.roomId}">${d.roomId}</a>` : ''}</p>
-       <p><a href="${this.frontend}/admin/reports">Open the report queue</a></p>`,
+       <p><a href="${this.frontend}/admin/reports">Open the report queue</a></p>`,,
+      { template: 'urgent_report_alert' },
     );
   }
 
@@ -146,7 +159,8 @@ export class NotificationsService {
       `<p>Hi ${d.fullName},</p>
        <p>Use the link below to set a new password. It works once and expires in ${d.ttlMinutes} minutes.</p>
        <p><a href="${link}">Set a new password</a></p>
-       <p>If you did not ask for this, you can ignore this email — your password has not changed.</p>`,
+       <p>If you did not ask for this, you can ignore this email — your password has not changed.</p>`,,
+      { template: 'password_reset' },
     );
   }
 
@@ -158,7 +172,8 @@ export class NotificationsService {
       `<p>Hi ${d.fullName},</p>
        <p>Someone asked to reset the password for this address, but your account signs in with Google,
        so there is no password to reset.</p>
-       <p><a href="${this.frontend}/auth/login">Continue with Google</a></p>`,
+       <p><a href="${this.frontend}/auth/login">Continue with Google</a></p>`,,
+      { template: 'google_only_account' },
     );
   }
 
@@ -170,7 +185,8 @@ export class NotificationsService {
       `<p>Hi ${d.fullName},</p>
        <p>Your password was changed just now.</p>
        <p><strong>If this was not you</strong>, reset your password immediately and contact
-       support&#64;rentboard.co.za.</p>`,
+       support&#64;rentboard.co.za.</p>`,,
+      { template: 'password_changed' },
     );
   }
 
@@ -181,7 +197,8 @@ export class NotificationsService {
       'Confirm your new RentBoard email address',
       `<p>Hi ${d.fullName},</p>
        <p>Confirm this address to finish moving your RentBoard account to it. The link expires in an hour.</p>
-       <p><a href="${link}">Confirm this address</a></p>`,
+       <p><a href="${link}">Confirm this address</a></p>`,,
+      { template: 'change_confirmation' },
     );
   }
 
@@ -194,7 +211,8 @@ export class NotificationsService {
        <p>A request was made to move this account to <strong>${d.newEmail}</strong>. It only takes effect
        once that address is confirmed.</p>
        <p><strong>If this was not you</strong>, change your password now and contact
-       support&#64;rentboard.co.za — someone may have access to your account.</p>`,
+       support&#64;rentboard.co.za — someone may have access to your account.</p>`,,
+      { template: 'change_alert' },
     );
   }
 
@@ -223,7 +241,8 @@ export class NotificationsService {
        <p>Applying is free, and rooms are often taken within days.</p>
        <p style="font-size:.8rem;color:#7A6E60">
          <a href="${this.frontend}/tenant/dashboard">Manage or turn off these alerts</a>.
-       </p>`,
+       </p>`,,
+      { template: 'daily_digest', category: 'marketing' },
     );
   }
 
@@ -236,7 +255,8 @@ export class NotificationsService {
        It wasn't a reflection on you — the room simply went to someone who applied around the same time.</p>
        <p>There are other rooms on the board, and applying is always free.</p>
        <p><a href="${this.frontend}">Browse rooms on RentBoard</a></p>
-       <p>— The RentBoard team</p>`,
+       <p>— The RentBoard team</p>`,,
+      { template: 'room_unavailable' },
     );
   }
 
@@ -254,7 +274,9 @@ export class NotificationsService {
         <p>📶 Set up broadband · 🛡️ Contents insurance · 🚛 Book a removal van</p>
         <p class="muted">Compare partner offers from your dashboard.</p>
       </div>
-    `));
+    `),
+      { template: 'accepted' },
+    );
   }
 
   /** 5. Tenant — kind rejection with a link back to similar rooms. */
@@ -268,7 +290,9 @@ export class NotificationsService {
       <p>Unfortunately the landlord has chosen another applicant for <strong>${roomTitle}</strong>. This is common and isn't a reflection on your application.</p>
       ${reason ? `<p class="quote">"${reason}"</p>` : ''}
       <a href="${d.searchUrl}" class="btn">Browse similar rooms →</a>
-    `));
+    `),
+      { template: 'rejection' },
+    );
   }
 
   /** 6. Both directions — new in-platform message. */
@@ -281,7 +305,9 @@ export class NotificationsService {
       <p>Hi ${recipientName},</p>
       <div class="quote">"${messagePreview}"</div>
       <a href="${d.messagesUrl}" class="btn">Reply →</a>
-    `));
+    `),
+      { template: 'new_message' },
+    );
   }
 
   private wrap(content: string): string {
@@ -309,17 +335,91 @@ export class NotificationsService {
       </div></div></body></html>`;
   }
 
-  private async send(to: string, subject: string, html: string) {
-    if (!this.resend) {
-      this.logger.log(`[email skipped — no API key] would send to ${to}: ${subject}`);
+  /**
+   * The single path every email goes through.
+   *
+   * Order matters: suppression is checked before consent, and consent before
+   * sending, because a suppressed address must not be mailed even if the
+   * person is opted in — a hard bounce means the address does not work, and
+   * continuing to send is what gets a domain blacklisted.
+   *
+   * Never throws. An email failure must not fail the business operation that
+   * triggered it: a landlord's room still gets let if the notification bounces.
+   */
+  private async send(
+    to: string,
+    subject: string,
+    html: string,
+    opts: { template: string; category?: EmailCategory } = { template: 'unknown' },
+  ) {
+    const category = opts.category ?? 'transactional';
+    const recipient = to.trim().toLowerCase();
+
+    const log = await this.prisma.emailLog
+      .create({
+        data: { toEmail: recipient, subject, template: opts.template, category, status: 'queued' },
+      })
+      .catch(() => null);
+
+    const finish = (data: Record<string, unknown>) =>
+      log ? this.prisma.emailLog.update({ where: { id: log.id }, data }).catch(() => {}) : Promise.resolve();
+
+    // 1. Suppressed addresses are never contacted again, for any reason.
+    const suppressed = await this.prisma.emailSuppression
+      .findUnique({ where: { email: recipient } })
+      .catch(() => null);
+    if (suppressed) {
+      this.logger.warn(`Suppressed (${suppressed.reason}): ${recipient} — ${subject}`);
+      await finish({ status: 'suppressed', error: `suppressed: ${suppressed.reason}` });
       return;
     }
-    try {
-      await this.resend.emails.send({ from: this.from, to, subject, html });
-      this.logger.log(`Email sent to ${to}: ${subject}`);
-    } catch (err) {
-      this.logger.error(`Failed to send email to ${to}`, err as Error);
-      // Never throw — email failure must not fail the calling business operation.
+
+    // 2. Marketing needs consent. Transactional mail is part of the service.
+    if (category === 'marketing') {
+      const user = await this.prisma.user
+        .findUnique({ where: { email: recipient }, select: { id: true, marketingEmails: true } })
+        .catch(() => null);
+      if (user && !user.marketingEmails) {
+        await finish({ status: 'suppressed', userId: user.id, error: 'marketing opted out' });
+        return;
+      }
+      if (user) await finish({ userId: user.id });
     }
+
+    if (!this.resend) {
+      this.logger.log(`[email skipped — no API key] ${recipient}: ${subject}`);
+      await finish({ status: 'failed', error: 'RESEND_API_KEY not configured' });
+      return;
+    }
+
+    try {
+      const result = await this.resend.emails.send({
+        from: this.from,
+        to: recipient,
+        subject,
+        html: category === 'marketing' ? this.withUnsubscribeFooter(html, recipient) : html,
+      });
+      await finish({ status: 'sent', sentAt: new Date(), providerId: result?.data?.id ?? null });
+      this.logger.log(`Sent ${opts.template} to ${recipient}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Failed to send ${opts.template} to ${recipient}: ${message}`);
+      await finish({ status: 'failed', error: message.slice(0, 500) });
+    }
+  }
+
+  /**
+   * POPIA s.69 requires every marketing message to identify the sender and
+   * offer a way out. Appended centrally so a new template cannot forget it.
+   */
+  private withUnsubscribeFooter(html: string, recipient: string): string {
+    const link = `${this.frontend}/account/settings`;
+    return `${html}
+      <hr style="border:none;border-top:1px solid #E0D5C4;margin:1.5rem 0"/>
+      <p style="font-size:.75rem;color:#7A6E60;line-height:1.6">
+        Sent to ${recipient} because you asked RentBoard to alert you about rooms.
+        <a href="${link}">Manage or stop these emails</a>.<br/>
+        RentBoard, South Africa.
+      </p>`;
   }
 }

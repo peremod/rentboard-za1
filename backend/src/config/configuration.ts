@@ -46,6 +46,9 @@ export default () => ({
     apiKey: process.env.RESEND_API_KEY,
     from: process.env.RESEND_FROM ?? 'noreply@rentboard.co.za',
     fromName: process.env.RESEND_FROM_NAME ?? 'RentBoard',
+    // Svix signing secret from the Resend dashboard. Without it the webhook
+    // accepts unsigned calls, which would let anyone suppress any address.
+    webhookSecret: process.env.RESEND_WEBHOOK_SECRET?.trim(),
   },
 
   whatsapp: {
