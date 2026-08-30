@@ -127,7 +127,7 @@ export class NotificationsService {
        <p style="font-size:.8rem;color:#7A6E60">
          You are receiving this because you saved a search on RentBoard.
          <a href="${this.frontend}/tenant/dashboard">Manage or turn off your alerts</a>.
-       </p>`,,
+       </p>`,
       { template: 'new_match', category: 'marketing' },
     );
   }
@@ -146,7 +146,7 @@ export class NotificationsService {
        <p><strong>Reason:</strong> ${d.reason.replace(/_/g, ' ')}<br/>
           <strong>Report:</strong> ${d.reportId}<br/>
           ${d.roomId ? `<strong>Listing:</strong> <a href="${this.frontend}/rooms/${d.roomId}">${d.roomId}</a>` : ''}</p>
-       <p><a href="${this.frontend}/admin/reports">Open the report queue</a></p>`,,
+       <p><a href="${this.frontend}/admin/reports">Open the report queue</a></p>`,
       { template: 'urgent_report_alert' },
     );
   }
@@ -159,7 +159,7 @@ export class NotificationsService {
       `<p>Hi ${d.fullName},</p>
        <p>Use the link below to set a new password. It works once and expires in ${d.ttlMinutes} minutes.</p>
        <p><a href="${link}">Set a new password</a></p>
-       <p>If you did not ask for this, you can ignore this email — your password has not changed.</p>`,,
+       <p>If you did not ask for this, you can ignore this email — your password has not changed.</p>`,
       { template: 'password_reset' },
     );
   }
@@ -172,7 +172,7 @@ export class NotificationsService {
       `<p>Hi ${d.fullName},</p>
        <p>Someone asked to reset the password for this address, but your account signs in with Google,
        so there is no password to reset.</p>
-       <p><a href="${this.frontend}/auth/login">Continue with Google</a></p>`,,
+       <p><a href="${this.frontend}/auth/login">Continue with Google</a></p>`,
       { template: 'google_only_account' },
     );
   }
@@ -185,7 +185,7 @@ export class NotificationsService {
       `<p>Hi ${d.fullName},</p>
        <p>Your password was changed just now.</p>
        <p><strong>If this was not you</strong>, reset your password immediately and contact
-       support&#64;rentboard.co.za.</p>`,,
+       support&#64;rentboard.co.za.</p>`,
       { template: 'password_changed' },
     );
   }
@@ -197,7 +197,7 @@ export class NotificationsService {
       'Confirm your new RentBoard email address',
       `<p>Hi ${d.fullName},</p>
        <p>Confirm this address to finish moving your RentBoard account to it. The link expires in an hour.</p>
-       <p><a href="${link}">Confirm this address</a></p>`,,
+       <p><a href="${link}">Confirm this address</a></p>`,
       { template: 'change_confirmation' },
     );
   }
@@ -211,7 +211,7 @@ export class NotificationsService {
        <p>A request was made to move this account to <strong>${d.newEmail}</strong>. It only takes effect
        once that address is confirmed.</p>
        <p><strong>If this was not you</strong>, change your password now and contact
-       support&#64;rentboard.co.za — someone may have access to your account.</p>`,,
+       support&#64;rentboard.co.za — someone may have access to your account.</p>`,
       { template: 'change_alert' },
     );
   }
@@ -241,7 +241,7 @@ export class NotificationsService {
        <p>Applying is free, and rooms are often taken within days.</p>
        <p style="font-size:.8rem;color:#7A6E60">
          <a href="${this.frontend}/tenant/dashboard">Manage or turn off these alerts</a>.
-       </p>`,,
+       </p>`,
       { template: 'daily_digest', category: 'marketing' },
     );
   }
@@ -255,7 +255,7 @@ export class NotificationsService {
        It wasn't a reflection on you — the room simply went to someone who applied around the same time.</p>
        <p>There are other rooms on the board, and applying is always free.</p>
        <p><a href="${this.frontend}">Browse rooms on RentBoard</a></p>
-       <p>— The RentBoard team</p>`,,
+       <p>— The RentBoard team</p>`,
       { template: 'room_unavailable' },
     );
   }
