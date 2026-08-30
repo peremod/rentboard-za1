@@ -943,11 +943,14 @@ else
   grey "        $(echo "$BODY" | jq -c '.data[0].landlord // "no landlord"' 2>/dev/null | head -c 200)"
 fi
 
-VERIFIED=$(echo "$BODY" | jq -r '.data[0].landlord.landlordProfile.idVerified // "missing"')
-if [[ "$VERIFIED" == "false" || "$VERIFIED" == "true" ]]; then
+# jq's // operator treats false as empty, so `.idVerified // "missing"` reports
+# an unverified landlord as missing. Test for the key instead of its value.
+if echo "$BODY" | jq -e '.data[0].landlord.landlordProfile | has("idVerified")' >/dev/null 2>&1; then
+  VERIFIED=$(echo "$BODY" | jq -r '.data[0].landlord.landlordProfile.idVerified')
   green "  PASS  idVerified present on the public payload ($VERIFIED)"; PASS=$((PASS+1))
 else
-  red "  FAIL  idVerified is $VERIFIED"; FAIL=$((FAIL+1))
+  red "  FAIL  idVerified absent — the verified badge cannot render"; FAIL=$((FAIL+1))
+  grey "        $(echo "$BODY" | jq -c '.data[0].landlord.landlordProfile' 2>/dev/null | head -c 200)"
 fi
 
 
