@@ -41,7 +41,22 @@ export class AdsService {
     this.http.post(`${this.api}/ads/impressions`, { campaignIds }).subscribe({ error: () => {} });
   }
 
+  /** Public enquiry form. Rate limited server-side to 3 per hour. */
+  submitEnquiry(enquiry: AdEnquiry) {
+    return this.http.post<{ id: string; message: string }>(`${this.api}/ads/enquiries`, enquiry);
+  }
+
   clickUrl(ad: Ad): string {
     return `${this.api}/ads/${ad.id}/click`;
   }
+}
+
+export interface AdEnquiry {
+  companyName: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone?: string;
+  industry?: string;
+  message: string;
+  province?: string;
 }

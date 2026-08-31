@@ -111,11 +111,33 @@ SEED_DEMO_ADS=true ADMIN_EMAIL=you@example.co.za ADMIN_PASSWORD='...' \
 Every seeded record is prefixed `[DEMO]` so it is obvious in the admin list.
 The flag is opt-in because nobody wants fake adverts on a production board.
 
-#### Still missing: the front door
+#### The front door — built in v1.19.0
 
-There is no public "Advertise with us" page, so a business landing on the site
-has no way to reach you and the inventory cannot sell itself. The `AdEnquiry`
-model exists for this; the page and endpoint do not.
+`/advertise`, linked from the footer, with an enquiry form that alerts an admin
+by email and lands in a queue at `/admin/enquiries`.
+
+**Rates are stated on the page, not hidden behind "contact us".** A regional
+advertiser deciding whether to bother emailing wants to know whether this is a
+R2,000 or a R20,000 conversation, and most will not ask. Opening figures:
+
+| Placement | Monthly |
+|---|---|
+| Sidebar | R2,500 |
+| In-grid | R4,000 |
+| Room detail | R3,000 |
+
+Adjust once you can report real impressions — these are a starting point, not
+a valuation.
+
+The page states plainly what an advertiser does and does not get: contextual
+targeting, aggregate performance for their own campaign, no user data, no
+third-party trackers, every ad labelled. That is a selling point as much as a
+constraint — it is the reason the audience trusts the board enough to be worth
+advertising on.
+
+An enquiry never auto-creates a campaign: placement is sold after a
+conversation and an invoice, and an unreviewed creative going live on a rental
+platform is precisely the risk the review step exists for.
 
 #### Original reasoning
 

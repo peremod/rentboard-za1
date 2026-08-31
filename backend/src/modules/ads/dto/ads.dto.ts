@@ -1,5 +1,5 @@
 import {
-  IsString, IsOptional, IsUUID, IsEnum, IsInt, IsUrl, IsDateString, Min, MaxLength, MinLength, IsIn,
+  IsString, IsOptional, IsUUID, IsEnum, IsInt, IsUrl, IsDateString, IsEmail, Min, MaxLength, MinLength, IsIn,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SA_PROVINCES } from '../../rooms/dto/room-filters.dto';
@@ -68,4 +68,43 @@ export class ReviewCampaignDto {
   @ApiPropertyOptional({ description: 'Required when rejecting.' })
   @IsOptional() @IsString() @MaxLength(500)
   rejectionReason?: string;
+}
+
+/**
+ * Inbound enquiry from a business wanting to buy placement. Public, so it is
+ * validated tightly and rate limited at the controller — an open contact form
+ * is a spam magnet.
+ */
+export class CreateAdEnquiryDto {
+  @ApiProperty() @IsString() @MinLength(2) @MaxLength(120) companyName!: string;
+  @ApiProperty() @IsString() @MinLength(2) @MaxLength(120) contactName!: string;
+
+  @ApiProperty()
+  @IsEmail({}, { message: 'Please enter a valid email address' })
+  @MaxLength(255)
+  contactEmail!: string;
+
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(20) contactPhone?: string;
+
+  @ApiPropertyOptional({ example: 'Fibre / ISP' })
+  @IsOptional() @IsString() @MaxLength(80)
+  industry?: string;
+
+  @ApiProperty({ minLength: 20, maxLength: 2000 })
+  @IsString()
+  @MinLength(20, { message: 'Tell us a little about what you want to advertise' })
+  @MaxLength(2000)
+  message!: string;
+
+  @ApiPropertyOptional({ enum: SA_PROVINCES })
+  @IsOptional() @IsIn(SA_PROVINCES)
+  province?: string;
+}
+
+export class UpdateEnquiryDto {
+  @ApiProperty({ enum: ['new', 'contacted', 'won', 'lost'] })
+  @IsEnum(['new', 'contacted', 'won', 'lost'])
+  status!: 'new' | 'contacted' | 'won' | 'lost';
+
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(2000) adminNotes?: string;
 }

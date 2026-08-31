@@ -42,6 +42,14 @@ import { RouterLink } from '@angular/router';
         </div>
 
         <div class="footer-col">
+          <h4>Business</h4>
+          <ul>
+            <li><a routerLink="/advertise">Advertise with us</a></li>
+            <li><a routerLink="/pricing">Pricing</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
           <h4>Legal</h4>
           <ul>
             <li><a routerLink="/legal/privacy">Privacy Policy (POPIA)</a></li>

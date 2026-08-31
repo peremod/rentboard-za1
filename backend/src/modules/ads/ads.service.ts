@@ -1,12 +1,19 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateCampaignDto, ReviewCampaignDto, CreateAdvertiserDto } from './dto/ads.dto';
+import {
+  CreateCampaignDto, ReviewCampaignDto, CreateAdvertiserDto,
+  CreateAdEnquiryDto, UpdateEnquiryDto,
+} from './dto/ads.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AdsService {
   private readonly logger = new Logger(AdsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+  ) {}
 
   /**
    * Ads for the page being viewed.
@@ -96,6 +103,50 @@ export class AdsService {
       .catch(() => {});
 
     return campaign.targetUrl;
+  }
+
+  /**
+   * Record an enquiry and alert an admin.
+   *
+   * Deliberately does not auto-create an advertiser or campaign: placement is
+   * sold after a conversation and an invoice, and an unreviewed creative going
+   * live on a rental platform is exactly the risk the review step exists for.
+   */
+  async createEnquiry(dto: CreateAdEnquiryDto) {
+    const enquiry = await this.prisma.adEnquiry.create({ data: dto });
+
+    this.logger.log(`Advertising enquiry from ${dto.companyName} (${dto.contactEmail})`);
+
+    // Best-effort: a failed alert must not lose the enquiry, which is already
+    // saved by this point.
+    this.notifications
+      .sendAdEnquiryAlert({
+        companyName: dto.companyName,
+        contactName: dto.contactName,
+        contactEmail: dto.contactEmail,
+        industry: dto.industry,
+        province: dto.province,
+        message: dto.message,
+      })
+      .catch(() => {});
+
+    return {
+      id: enquiry.id,
+      message: "Thanks — we've got it. We usually reply within two business days.",
+    };
+  }
+
+  listEnquiries(status?: string) {
+    return this.prisma.adEnquiry.findMany({
+      where: status ? { status: status as any } : {},
+      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+    });
+  }
+
+  async updateEnquiry(id: string, dto: UpdateEnquiryDto) {
+    const enquiry = await this.prisma.adEnquiry.findUnique({ where: { id } });
+    if (!enquiry) throw new NotFoundException('Enquiry not found');
+    return this.prisma.adEnquiry.update({ where: { id }, data: dto });
   }
 
   // ── Admin ────────────────────────────────────────────────────────────────

@@ -151,6 +151,27 @@ export class NotificationsService {
     );
   }
 
+  /** Tells an admin an advertiser is asking to buy placement. */
+  async sendAdEnquiryAlert(d: {
+    companyName: string; contactName: string; contactEmail: string;
+    industry?: string; province?: string; message: string;
+  }) {
+    const to = this.config.get<string>('adminAlertEmail') ?? this.config.get<string>('resend.from')!;
+    await this.send(
+      to,
+      `Advertising enquiry — ${d.companyName}`,
+      `<p><strong>${d.companyName}</strong> wants to advertise on RentBoard.</p>
+       <p>
+         Contact: ${d.contactName} &lt;${d.contactEmail}&gt;<br/>
+         ${d.industry ? `Industry: ${d.industry}<br/>` : ''}
+         ${d.province ? `Interested in: ${d.province}<br/>` : ''}
+       </p>
+       <p><em>${d.message}</em></p>
+       <p><a href="${this.frontend}/admin/enquiries">Open the enquiry queue</a></p>`,
+      { template: 'ad_enquiry_alert' },
+    );
+  }
+
   async sendPasswordResetEmail(to: string, d: { fullName: string; token: string; ttlMinutes: number }) {
     const link = `${this.frontend}/auth/reset-password?token=${encodeURIComponent(d.token)}`;
     await this.send(

@@ -714,7 +714,7 @@ head_ "19. Public pages"
 # Served by the frontend, not the API — checked here so a broken prerender is
 # caught by the same run rather than discovered in the browser.
 FE="${FRONTEND_URL:-http://localhost:4200}"
-for path in "/how-it-works" "/pricing"; do
+for path in "/how-it-works" "/pricing" "/advertise"; do
   CODE=$(curl -s -o /dev/null -w '%{http_code}' "$FE$path" 2>/dev/null || echo "000")
   if [[ "$CODE" == "200" ]]; then
     green "  PASS  $path renders  (200)"; PASS=$((PASS+1))
@@ -1193,6 +1193,38 @@ if [[ "$DEMO_COUNT" -gt 0 ]]; then
   fi
 else
   grey "  SKIP  no active campaigns — seed with SEED_DEMO_ADS=true npx ts-node prisma/seed.ts"; SKIP=$((SKIP+1))
+fi
+
+
+# -- 27. Advertising enquiries ---------------------------------------------
+head_ "27. Advertising enquiries"
+req POST /api/ads/enquiries \
+  "{\"companyName\":\"Smoke Fibre\",\"contactName\":\"Test Buyer\",\"contactEmail\":\"ads+${STAMP}@rentboard.test\",\"industry\":\"Fibre\",\"province\":\"Gauteng\",\"message\":\"We would like the Gauteng sidebar placement from next month.\"}"
+check "anyone can send an advertising enquiry" 201 "$STATUS" "$BODY"
+
+req POST /api/ads/enquiries \
+  '{"companyName":"X","contactName":"Y","contactEmail":"not-an-email","message":"too short"}'
+check "rejects a malformed enquiry" 400 "$STATUS" "$BODY"
+
+req POST /api/ads/enquiries \
+  "{\"companyName\":\"Valid Co\",\"contactName\":\"Valid Name\",\"contactEmail\":\"ok+${STAMP}@rentboard.test\",\"message\":\"short\"}"
+check "rejects a message that is too short" 400 "$STATUS" "$BODY"
+
+req GET /api/ads/enquiries "" "$LTOKEN"
+check "landlord CANNOT read the enquiry queue" 403 "$STATUS" "$BODY"
+
+req GET /api/ads/enquiries
+check "enquiry queue requires auth" 401 "$STATUS"
+
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  req GET /api/ads/enquiries "" "$ADMIN_TOKEN"
+  check "admin reads the enquiry queue" 200 "$STATUS" "$BODY"
+  ENQ_ID=$(echo "$BODY" | jq -r '.[0].id // empty')
+
+  if [[ -n "$ENQ_ID" ]]; then
+    req PATCH "/api/ads/enquiries/$ENQ_ID" '{"status":"contacted","adminNotes":"Emailed a rate card."}' "$ADMIN_TOKEN"
+    check "admin can progress an enquiry" 200 "$STATUS" "$BODY"
+  fi
 fi
 
 

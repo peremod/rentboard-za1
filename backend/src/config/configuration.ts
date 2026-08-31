@@ -54,6 +54,10 @@ export default () => ({
     },
   },
 
+  /// Where operational alerts go — advertising enquiries, urgent reports.
+  /// Falls back to the from address if unset.
+  adminAlertEmail: process.env.ADMIN_ALERT_EMAIL?.trim(),
+
   resend: {
     apiKey: process.env.RESEND_API_KEY,
     from: process.env.RESEND_FROM ?? 'noreply@rentboard.co.za',

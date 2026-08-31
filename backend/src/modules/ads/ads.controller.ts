@@ -7,7 +7,11 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AdsService } from './ads.service';
-import { CreateCampaignDto, ReviewCampaignDto, CreateAdvertiserDto } from './dto/ads.dto';
+import {
+  CreateCampaignDto, ReviewCampaignDto, CreateAdvertiserDto,
+  CreateAdEnquiryDto, UpdateEnquiryDto,
+} from './dto/ads.dto';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('ads')
 @Controller('ads')
@@ -53,6 +57,32 @@ export class AdsController {
     // noopener/noreferrer equivalent: do not leak our URL to the advertiser.
     res.setHeader('Referrer-Policy', 'no-referrer');
     return res.redirect(target);
+  }
+
+  /**
+   * Public enquiry form. Rate limited hard — an open contact form that sends
+   * mail is the obvious target for spam.
+   */
+  @Post('enquiries')
+  @Throttle({ default: { limit: 3, ttl: 60 * 60 * 1000 } })
+  @ApiOperation({ summary: 'Enquire about advertising on the board' })
+  createEnquiry(@Body() dto: CreateAdEnquiryDto) {
+    return this.adsService.createEnquiry(dto);
+  }
+
+  @Get('enquiries')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Advertising enquiry queue' })
+  listEnquiries(@Query('status') status?: string) {
+    return this.adsService.listEnquiries(status);
+  }
+
+  @Patch('enquiries/:id')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  updateEnquiry(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateEnquiryDto) {
+    return this.adsService.updateEnquiry(id, dto);
   }
 
   // ── Admin ────────────────────────────────────────────────────────────────
