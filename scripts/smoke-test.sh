@@ -139,6 +139,8 @@ fi
 # ── 3. Rooms ───────────────────────────────────────────────────────────────
 head_ "3. Rooms — landlord lifecycle"
 AVAIL=$(date -d '+30 days' +%Y-%m-%d 2>/dev/null || date -v+30d +%Y-%m-%d)
+# Yesterday — campaigns and anything else that must already be live.
+STARTED=$(date -d '-1 day' +%Y-%m-%d 2>/dev/null || date -v-1d +%Y-%m-%d)
 ROOM_JSON=$(cat <<JSON
 {"roomType":"en_suite","title":"Bright en-suite room in Sandton house","description":"A large, sunny en-suite room in a quiet professional shared house. Walking distance to Gautrain, fibre installed, secure parking available.","rentCents":550000,"depositCents":550000,"billsIncluded":true,"province":"Gauteng","city":"Sandton","locationDisplay":"Sandton, Gauteng","availableFrom":"$AVAIL","housematesCount":2,"couplesAllowed":false,"dssAccepted":true,"petsAllowed":false}
 JSON
@@ -622,9 +624,16 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req GET /api/verification/pending "" "$ADMIN_TOKEN"
   check "admin reads the verification queue" 200 "$STATUS" "$BODY"
 
+  # Must be a real user: the service looks the account up before validating
+  # the body, so a fake id returns 404 and never reaches the reason check.
+  if [[ -n "$TENANT_ID" ]]; then
+    req PATCH "/api/admin/users/$TENANT_ID/active" '{"isActive":false}' "$ADMIN_TOKEN"
+    check "suspension requires a reason" 400 "$STATUS" "$BODY"
+  fi
+
   req PATCH "/api/admin/users/00000000-0000-0000-0000-000000000000/active" \
-    '{"isActive":false}' "$ADMIN_TOKEN"
-  check "suspension requires a reason" 400 "$STATUS" "$BODY"
+    '{"isActive":false,"reason":"probe"}' "$ADMIN_TOKEN"
+  check "suspending an unknown user returns 404" 404 "$STATUS" "$BODY"
 else
   grey "  SKIP  authorised admin paths — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
 fi
@@ -1102,7 +1111,7 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
 
   if [[ -n "$ADV_ID" ]]; then
     req POST /api/ads/campaigns \
-      "{\"advertiserId\":\"$ADV_ID\",\"name\":\"Gauteng fibre\",\"placement\":\"board_sidebar\",\"headline\":\"Fibre at your new place\",\"targetUrl\":\"https://example.co.za\",\"province\":\"Gauteng\",\"startsAt\":\"$AVAIL\",\"endsAt\":\"2099-01-01\",\"monthlyRateCents\":250000}" "$ADMIN_TOKEN"
+      "{\"advertiserId\":\"$ADV_ID\",\"name\":\"Gauteng fibre\",\"placement\":\"board_sidebar\",\"headline\":\"Fibre at your new place\",\"targetUrl\":\"https://example.co.za\",\"province\":\"Gauteng\",\"startsAt\":\"$STARTED\",\"endsAt\":\"2099-01-01\",\"monthlyRateCents\":250000}" "$ADMIN_TOKEN"
     check "admin creates a campaign" 201 "$STATUS" "$BODY"
     CAMP_ID=$(echo "$BODY" | jq -r '.id // empty')
     CAMP_STATUS=$(echo "$BODY" | jq -r '.status')
@@ -1114,7 +1123,7 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
     fi
 
     req POST /api/ads/campaigns \
-      "{\"advertiserId\":\"$ADV_ID\",\"name\":\"Insecure\",\"placement\":\"board_sidebar\",\"headline\":\"Plain http link\",\"targetUrl\":\"http://example.co.za\",\"startsAt\":\"$AVAIL\",\"endsAt\":\"2099-01-01\",\"monthlyRateCents\":100}" "$ADMIN_TOKEN"
+      "{\"advertiserId\":\"$ADV_ID\",\"name\":\"Insecure\",\"placement\":\"board_sidebar\",\"headline\":\"Plain http link\",\"targetUrl\":\"http://example.co.za\",\"startsAt\":\"$STARTED\",\"endsAt\":\"2099-01-01\",\"monthlyRateCents\":100}" "$ADMIN_TOKEN"
     check "rejects a non-https destination" 400 "$STATUS" "$BODY"
 
     if [[ -n "$CAMP_ID" ]]; then
