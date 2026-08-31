@@ -73,9 +73,88 @@ Optional: ADMIN_NAME="Your Name"
     console.log(`Admin created: ${user.email}`);
   }
 
+  // Optional demo advertising, so the ad slots are visible without having to
+  // sell a placement first. Never runs unless asked for — nobody wants fake
+  // adverts appearing on a production board.
+  if (process.env.SEED_DEMO_ADS === 'true') {
+    await seedDemoAds();
+  }
+
   const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
   console.log(`Total admin accounts: ${adminCount}`);
   console.log('Sign in normally, then open /admin.');
+}
+
+/**
+ * Three campaigns covering the three placements, already approved so they
+ * render immediately. Clearly labelled as demo data so they are obvious in the
+ * admin list and easy to remove.
+ */
+async function seedDemoAds() {
+  const advertiser = await prisma.advertiser.upsert({
+    where: { id: '00000000-0000-0000-0000-0000000000ad' },
+    update: {},
+    create: {
+      id: '00000000-0000-0000-0000-0000000000ad',
+      companyName: '[DEMO] Sample Advertiser',
+      contactName: 'Demo Contact',
+      contactEmail: 'demo@example.test',
+      notes: 'Seeded demo data. Safe to delete.',
+    },
+  });
+
+  const now = new Date();
+  const nextYear = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+
+  const campaigns = [
+    {
+      id: '00000000-0000-0000-0000-00000000ad01',
+      name: '[DEMO] Fibre — sidebar',
+      placement: 'board_sidebar' as const,
+      headline: 'Fibre at your new place',
+      body: 'Check coverage before you sign the lease. Installation in 3–5 days.',
+      ctaLabel: 'Check coverage',
+      province: null,
+    },
+    {
+      id: '00000000-0000-0000-0000-00000000ad02',
+      name: '[DEMO] Movers — inline',
+      placement: 'board_inline' as const,
+      headline: 'Moving a room, not a house?',
+      body: 'Small-load moves from R650. Same-day quotes.',
+      ctaLabel: 'Get a quote',
+      province: 'Gauteng',
+    },
+    {
+      id: '00000000-0000-0000-0000-00000000ad03',
+      name: '[DEMO] Contents cover — room detail',
+      placement: 'room_detail' as const,
+      headline: 'Cover your things from R89/month',
+      body: 'Contents insurance for renters. No lease required.',
+      ctaLabel: 'See cover',
+      province: null,
+    },
+  ];
+
+  for (const c of campaigns) {
+    await prisma.adCampaign.upsert({
+      where: { id: c.id },
+      update: {},
+      create: {
+        ...c,
+        advertiserId: advertiser.id,
+        targetUrl: 'https://example.co.za',
+        startsAt: now,
+        endsAt: nextYear,
+        monthlyRateCents: 250000,
+        // Pre-approved: the point is to see the slot render.
+        status: 'active',
+        approvedAt: now,
+      },
+    });
+  }
+
+  console.log(`Seeded ${campaigns.length} demo ad campaigns (all prefixed [DEMO]).`);
 }
 
 main()

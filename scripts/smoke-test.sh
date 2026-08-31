@@ -1146,6 +1146,55 @@ else
   grey "  SKIP  admin ad management — set ADMIN_TOKEN to include it"; SKIP=$((SKIP+1))
 fi
 
+# Demo campaigns, if seeded with SEED_DEMO_ADS=true. These exercise the serving
+# path end to end without needing an admin token or a real advertiser.
+req GET "/api/ads?placement=board_sidebar"
+DEMO_COUNT=$(echo "$BODY" | jq -r 'length')
+if [[ "$DEMO_COUNT" -gt 0 ]]; then
+  green "  PASS  an ad is being served for board_sidebar"; PASS=$((PASS+1))
+
+  DEMO_ID=$(echo "$BODY" | jq -r '.[0].id')
+  for field in headline ctaLabel advertiser clickUrl; do
+    if echo "$BODY" | jq -e --arg f "$field" '.[0] | has($f)' >/dev/null 2>&1; then
+      green "  PASS  served ad has $field"; PASS=$((PASS+1))
+    else
+      red "  FAIL  served ad is missing $field"; FAIL=$((FAIL+1))
+    fi
+  done
+
+  # The destination must not be exposed before the click — that is the whole
+  # reason clicks route through us rather than linking out directly.
+  if echo "$BODY" | jq -e '.[0] | has("targetUrl")' >/dev/null 2>&1; then
+    red "  FAIL  targetUrl exposed in the ad payload"; FAIL=$((FAIL+1))
+  else
+    green "  PASS  destination withheld until the click"; PASS=$((PASS+1))
+  fi
+
+  # Counting a click should redirect rather than render anything.
+  CLICK_CODE=$(curl -s -o /dev/null -w '%{http_code}' "$API/api/ads/$DEMO_ID/click" 2>/dev/null)
+  if [[ "$CLICK_CODE" == "302" || "$CLICK_CODE" == "301" ]]; then
+    green "  PASS  click endpoint redirects  ($CLICK_CODE)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  click endpoint returned $CLICK_CODE, expected a redirect"; FAIL=$((FAIL+1))
+  fi
+
+  req POST /api/ads/impressions "{\"campaignIds\":[\"$DEMO_ID\"]}"
+  if [[ "$STATUS" == "204" ]]; then
+    green "  PASS  impression recorded anonymously"; PASS=$((PASS+1))
+  else
+    red "  FAIL  impression recording returned $STATUS"; FAIL=$((FAIL+1))
+  fi
+
+  req GET "/api/ads?placement=room_detail"
+  if [[ "$(echo "$BODY" | jq -r 'length')" -gt 0 ]]; then
+    green "  PASS  room_detail placement also serves"; PASS=$((PASS+1))
+  else
+    grey "  SKIP  no room_detail campaign seeded"; SKIP=$((SKIP+1))
+  fi
+else
+  grey "  SKIP  no active campaigns — seed with SEED_DEMO_ADS=true npx ts-node prisma/seed.ts"; SKIP=$((SKIP+1))
+fi
+
 
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'

@@ -681,6 +681,41 @@ model AdCampaign {
   @@map("ad_campaigns")
 }
 
+/// An inbound enquiry from a business wanting to buy placement.
+///
+/// Campaigns are created by an admin after a conversation and an invoice, so
+/// this is the front door: without it, an advertiser who lands on the site has
+/// no way to reach us and the inventory never sells.
+model AdEnquiry {
+  id           String    @id @default(uuid())
+  companyName  String
+  contactName  String
+  contactEmail String
+  contactPhone String?
+  /// What they sell, roughly — helps judge fit before replying.
+  industry     String?
+  /// Free text: budget, placements of interest, timing.
+  message      String
+  /// Contextual interest, so the reply can quote the right rate.
+  province     String?
+
+  status       EnquiryStatus @default(new)
+  adminNotes   String?
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@map("ad_enquiries")
+}
+
+enum EnquiryStatus {
+  new
+  contacted
+  won
+  lost
+}
+
 enum AdPlacement {
   board_sidebar   // under the filter panel
   board_inline    // between room cards in the grid

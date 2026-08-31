@@ -97,6 +97,26 @@ leaves the platform, sold as flat monthly placement.
 What an advertiser can see: their own impressions, clicks and click-through
 rate. Nothing about who saw it.
 
+#### Seeing it work
+
+Campaigns are created by an admin, so the slots are empty on a fresh database.
+To render demo campaigns across all three placements:
+
+```bash
+cd backend
+SEED_DEMO_ADS=true ADMIN_EMAIL=you@example.co.za ADMIN_PASSWORD='...' \
+  npx ts-node prisma/seed.ts
+```
+
+Every seeded record is prefixed `[DEMO]` so it is obvious in the admin list.
+The flag is opt-in because nobody wants fake adverts on a production board.
+
+#### Still missing: the front door
+
+There is no public "Advertise with us" page, so a business landing on the site
+has no way to reach you and the inventory cannot sell itself. The `AdEnquiry`
+model exists for this; the page and endpoint do not.
+
 #### Original reasoning
 
 Selling placement is not a data question at all. Nothing about a user is
