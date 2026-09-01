@@ -29,6 +29,33 @@ export interface PendingVerification extends VerificationRequest {
   user: { id: string; fullName: string; email: string; createdAt: string };
 }
 
+/**
+ * Everything about one account. Note the absence of message content — counts
+ * and counterparties are enough to resolve a dispute, and reading private
+ * conversations is a power the platform deliberately does not take.
+ */
+export interface AdminUserDetail {
+  user: AdminUser & {
+    phone?: string | null;
+    marketingEmails?: boolean;
+    authProvider?: string;
+    tenantProfile?: { employmentStatus?: string | null; incomeVerified: boolean; idVerified: boolean } | null;
+  };
+  activity: { messagesSent: number; savedSearches: number; reportsFiled: number; reportsAgainst: number };
+  rooms: { id: string; title: string; status: string; rentCents: number; locationDisplay: string;
+           publishedAt?: string | null; viewCount: number; applicationCount: number; relistCount: number }[];
+  applications: { id: string; status: string; createdAt: string; archivedAt?: string | null;
+                  room?: { id: string; title: string; locationDisplay: string } | null }[];
+  tenancies: { id: string; status: string; startDate?: string | null; endDate?: string | null;
+               rentCents: number; room?: { title: string } | null }[];
+  reviewsReceived: { id: string; type: string; rating: number; comment: string;
+                     isHidden: boolean; publishedAt?: string | null }[];
+  payments: { id: string; purpose: string; amountCents: number; status: string;
+              paidAt?: string | null; createdAt: string }[];
+  verifications: { id: string; type: string; status: string; reviewNote?: string | null;
+                   createdAt: string; reviewedAt?: string | null }[];
+}
+
 export interface AdminKpis {
   periodDays: number;
   growth: {
@@ -80,6 +107,10 @@ export interface AdEnquiry {
 export class AdminService {
   private http = inject(HttpClient);
   private api = environment.apiUrl;
+
+  getUserDetail(id: string) {
+    return this.http.get<AdminUserDetail>(`${this.api}/admin/users/${id}`);
+  }
 
   getKpis(days = 30) {
     return this.http.get<AdminKpis>(`${this.api}/admin/kpis?days=${days}`);

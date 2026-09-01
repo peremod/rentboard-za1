@@ -1242,6 +1242,12 @@ head_ "28. Admin portal"
 req GET /api/admin/kpis "" "$TTOKEN"
 check "tenant CANNOT read KPIs" 403 "$STATUS" "$BODY"
 
+req GET "/api/admin/users/$TENANT_ID" "" "$TTOKEN"
+check "tenant CANNOT read account details" 403 "$STATUS" "$BODY"
+
+req GET "/api/admin/users/$TENANT_ID" "" "$LTOKEN"
+check "landlord CANNOT read account details" 403 "$STATUS" "$BODY"
+
 if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req GET /api/admin/kpis "" "$ADMIN_TOKEN"
   check "admin reads KPIs" 200 "$STATUS" "$BODY"
@@ -1262,6 +1268,37 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   else
     red "  FAIL  health metrics are not numeric (liquidity=$LIQ response=$RESP)"; FAIL=$((FAIL+1))
   fi
+
+  # Per-account detail, the support view.
+  if [[ -n "$TENANT_ID" ]]; then
+    req GET "/api/admin/users/$TENANT_ID" "" "$ADMIN_TOKEN"
+    check "admin opens an account detail" 200 "$STATUS" "$BODY"
+
+    for section in user activity rooms applications tenancies payments verifications; do
+      if echo "$BODY" | jq -e --arg s "$section" 'has($s)' >/dev/null 2>&1; then
+        green "  PASS  detail includes $section"; PASS=$((PASS+1))
+      else
+        red "  FAIL  detail missing $section"; FAIL=$((FAIL+1))
+      fi
+    done
+
+    # Message CONTENT must never appear here — only counts. This is the whole
+    # reason the endpoint returns messagesSent rather than the messages.
+    if echo "$BODY" | jq -e '.. | objects | select(has("body"))' >/dev/null 2>&1; then
+      red "  FAIL  account detail exposes message content"; FAIL=$((FAIL+1))
+    else
+      green "  PASS  no message content in the account detail"; PASS=$((PASS+1))
+    fi
+
+    if echo "$BODY" | jq -e '.user | has("passwordHash")' >/dev/null 2>&1; then
+      red "  FAIL  account detail exposes the password hash"; FAIL=$((FAIL+1))
+    else
+      green "  PASS  no password hash in the account detail"; PASS=$((PASS+1))
+    fi
+  fi
+
+  req GET "/api/admin/users/00000000-0000-0000-0000-000000000000" "" "$ADMIN_TOKEN"
+  check "unknown account returns 404" 404 "$STATUS" "$BODY"
 
   req GET "/api/admin/kpis?days=7" "" "$ADMIN_TOKEN"
   PERIOD=$(echo "$BODY" | jq -r '.periodDays')

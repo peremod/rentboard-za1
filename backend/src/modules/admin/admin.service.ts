@@ -71,6 +71,119 @@ export class AdminService {
   }
 
   /**
+   * Everything about one account, in one call.
+   *
+   * Built for the support case: someone emails, and you need their history
+   * without running six queries. Deliberately excludes message CONTENT — the
+   * counts and who they spoke to are enough to resolve a dispute, and reading
+   * private conversations is a power we do not need (POPIA s.10).
+   */
+  async getUserDetail(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true, email: true, fullName: true, phone: true, role: true,
+        isActive: true, isVerified: true, marketingEmails: true,
+        authProvider: true, createdAt: true, lastLoginAt: true,
+        landlordProfile: { select: { idVerified: true, rating: true, ratingCount: true, planTier: true } },
+        tenantProfile: { select: { employmentStatus: true, incomeVerified: true, idVerified: true } },
+      },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const isLandlord = user.role === 'LANDLORD';
+
+    const [
+      rooms, applications, tenancies, reviewsReceived,
+      reportsAgainst, reportsFiled, payments, verifications,
+      messageCount, savedSearches,
+    ] = await Promise.all([
+      isLandlord
+        ? this.prisma.room.findMany({
+            where: { landlordId: userId },
+            select: {
+              id: true, title: true, status: true, rentCents: true, locationDisplay: true,
+              publishedAt: true, viewCount: true, applicationCount: true, relistCount: true,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+          })
+        : Promise.resolve([]),
+
+      !isLandlord
+        ? this.prisma.application.findMany({
+            where: { tenantId: userId },
+            select: {
+              id: true, status: true, createdAt: true, archivedAt: true,
+              room: { select: { id: true, title: true, locationDisplay: true } },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 50,
+          })
+        : Promise.resolve([]),
+
+      this.prisma.tenancy.findMany({
+        where: isLandlord ? { landlordId: userId } : { tenantId: userId },
+        select: {
+          id: true, status: true, startDate: true, endDate: true, rentCents: true,
+          room: { select: { title: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+
+      this.prisma.review.findMany({
+        where: { subjectId: userId, publishedAt: { not: null } },
+        select: { id: true, type: true, rating: true, comment: true, isHidden: true, publishedAt: true },
+        orderBy: { publishedAt: 'desc' },
+        take: 20,
+      }),
+
+      // The signal that matters most for moderation: has anyone reported them?
+      this.prisma.report.count({ where: { reportedUserId: userId } }),
+      this.prisma.report.count({ where: { reporterId: userId } }),
+
+      this.prisma.payment.findMany({
+        where: { userId },
+        select: { id: true, purpose: true, amountCents: true, status: true, paidAt: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+
+      this.prisma.verificationRequest.findMany({
+        where: { userId },
+        select: { id: true, type: true, status: true, reviewNote: true, createdAt: true, reviewedAt: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+
+      // Count only — the conversation itself is not ours to read.
+      this.prisma.message.count({ where: { senderId: userId } }),
+
+      this.prisma.savedSearch.count({ where: { tenantId: userId } }),
+    ]);
+
+    const roomsReported = isLandlord
+      ? await this.prisma.report.count({ where: { room: { landlordId: userId } } })
+      : 0;
+
+    return {
+      user,
+      activity: {
+        messagesSent: messageCount,
+        savedSearches,
+        reportsFiled,
+        reportsAgainst: reportsAgainst + roomsReported,
+      },
+      rooms,
+      applications,
+      tenancies,
+      reviewsReceived,
+      payments,
+      verifications,
+    };
+  }
+
+  /**
    * Suspend or restore an account.
    *
    * Suspension is reversible and does not delete anything: a suspended

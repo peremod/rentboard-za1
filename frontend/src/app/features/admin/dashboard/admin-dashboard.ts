@@ -149,7 +149,7 @@ import { ADMIN_NAV } from '../admin-nav';
               </div>
               <div class="app-info">
                 <div class="app-room">
-                  {{ u.fullName }}
+                  <a [routerLink]="['/admin/users', u.id]">{{ u.fullName }}</a>
                   @if (u.landlordProfile?.idVerified) { <span class="badge badge-new">Verified</span> }
                   @if (!u.isActive) { <span class="badge badge-reserved">Suspended</span> }
                 </div>
@@ -170,6 +170,7 @@ import { ADMIN_NAV } from '../admin-nav';
               </div>
 
               <div class="portal-row-actions">
+                <a class="btn btn-sm btn-ghost-light" [routerLink]="['/admin/users', u.id]">Open</a>
                 @if (u.role === 'ADMIN') {
                   <span class="muted">Admin</span>
                 } @else if (!u.isActive) {

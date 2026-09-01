@@ -42,6 +42,12 @@ export class AdminController {
     return this.adminService.findUsers(q, role, limit ? +limit : 50);
   }
 
+  @Get('users/:id')
+  @ApiOperation({ summary: 'Everything about one account, for support and moderation' })
+  userDetail(@Param('id', ParseUUIDPipe) id: string) {
+    return this.adminService.getUserDetail(id);
+  }
+
   @Patch('users/:id/active')
   @ApiOperation({ summary: 'Suspend or restore an account' })
   setActive(

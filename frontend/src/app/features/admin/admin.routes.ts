@@ -26,5 +26,11 @@ export const ADMIN_ROUTES: Routes = [
     loadComponent: () => import('./advertising/admin-advertising').then((m) => m.AdminAdvertising),
     title: 'Advertising — RentBoard admin',
   },
+  {
+    // withComponentInputBinding is enabled, so :id binds to the id input.
+    path: 'users/:id',
+    loadComponent: () => import('./user-detail/admin-user-detail').then((m) => m.AdminUserDetailPage),
+    title: 'Account — RentBoard admin',
+  },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];
