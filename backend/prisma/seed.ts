@@ -136,6 +136,35 @@ async function seedDemoAds() {
       ctaLabel: 'See cover',
       province: null,
     },
+    // Several per placement, so rotation is visible and the board does not
+    // show the same advertiser on every page.
+    {
+      id: '00000000-0000-0000-0000-00000000ad04',
+      name: '[DEMO] Boxes — sidebar',
+      placement: 'board_sidebar' as const,
+      headline: 'Boxes delivered, R240 a bundle',
+      body: 'Twenty boxes, tape and bubble wrap. Next-day in metro areas.',
+      ctaLabel: 'Order boxes',
+      province: null,
+    },
+    {
+      id: '00000000-0000-0000-0000-00000000ad05',
+      name: '[DEMO] Furniture rental — in-grid',
+      placement: 'board_inline' as const,
+      headline: 'Furnish a room from R450/month',
+      body: 'Bed, desk and wardrobe on rental. No credit check.',
+      ctaLabel: 'See packages',
+      province: null,
+    },
+    {
+      id: '00000000-0000-0000-0000-00000000ad06',
+      name: '[DEMO] Prepaid electricity — sidebar',
+      placement: 'board_sidebar' as const,
+      headline: 'Prepaid electricity, no deposit',
+      body: 'Top up from your phone. Works with most municipal meters.',
+      ctaLabel: 'How it works',
+      province: null,
+    },
   ];
 
   for (const c of campaigns) {

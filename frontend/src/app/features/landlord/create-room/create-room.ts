@@ -96,6 +96,7 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
 
           <div class="wizard__actions">
             <button type="button" class="btn btn-outline" (click)="step.set(3)">← Back</button>
+            <button type="button" class="btn btn-ghost-light" (click)="cancel()">Cancel</button>
 
             @if (isPublished()) {
               <!-- Live listing: saving keeps it on the board rather than
@@ -160,6 +161,19 @@ export class CreateRoom implements OnInit {
    * gallery go in separate calls because photos have their own endpoint, which
    * enforces that a published room keeps at least one image.
    */
+  /**
+   * Leave the wizard. Confirms only when there is something to lose — a draft
+   * is already saved server-side, so the warning is about unsaved edits to a
+   * live listing, not about the draft disappearing.
+   */
+  cancel() {
+    const message = this.isPublished()
+      ? 'Discard your unsaved changes to this listing?'
+      : 'Leave this listing? Your draft is saved and you can finish it from your dashboard.';
+    if (!confirm(message)) return;
+    this.router.navigate(['/landlord/dashboard']);
+  }
+
   saveChanges() {
     const id = this.roomId();
     if (!id) return;
@@ -180,7 +194,10 @@ export class CreateRoom implements OnInit {
       billsIncluded: !!pricing.billsIncluded,
       province: pricing.province!,
       city: pricing.city!,
-    }).subscribe({
+      locationDisplay: pricing.locationDisplay!,
+      availableFrom: pricing.availableFrom!,
+      ...this.preferencesForm.getRawValue(),
+    } as any).subscribe({
       next: () => {
         this.roomsService.updatePhotos(id, this.photos().map((p) => p.path)).subscribe({
           next: () => {
@@ -221,6 +238,19 @@ export class CreateRoom implements OnInit {
           billsIncluded: room.billsIncluded,
           province: room.province,
           city: room.city,
+          locationDisplay: room.locationDisplay,
+          // The input is type=date, which only accepts yyyy-MM-dd.
+          availableFrom: room.availableFrom ? room.availableFrom.split('T')[0] : '',
+        });
+
+        // Preferences were not restored at all, so editing a listing silently
+        // reset couples/pets/SASSA to false and housemates to 0 on save.
+        this.preferencesForm.patchValue({
+          housematesCount: room.housematesCount ?? 0,
+          couplesAllowed: room.couplesAllowed,
+          dssAccepted: room.dssAccepted,
+          guarantorAccepted: room.guarantorAccepted,
+          petsAllowed: room.petsAllowed,
         });
         // Cover first, then the rest of the gallery.
         const gallery = [

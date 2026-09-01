@@ -96,6 +96,38 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
         }
       </section>
 
+      <!-- A room you applied for that is back on the board is an opportunity,
+           not history. Buried under "Closed applications" nobody sees it. -->
+      @if (availableAgain().length > 0) {
+        <section class="dash-section">
+          <div class="dash-section-title">
+            Available again
+            <span class="dash-count">({{ availableAgain().length }})</span>
+          </div>
+          @for (app of availableAgain(); track app.id) {
+            <div class="app-card">
+              <div class="app-thumb portal-thumb" aria-hidden="true">🔁</div>
+              <div class="app-info">
+                <div class="app-room">{{ app.room?.title }}</div>
+                @if (app.room) {
+                  <div class="app-location">{{ app.room.locationDisplay }}</div>
+                  <div class="app-rent">{{ app.room.rentCents | zarCents:'monthly' }}</div>
+                }
+                <div class="app-location">
+                  This room is back on the board. Your earlier application was closed
+                  when it was relisted — you can apply again.
+                </div>
+              </div>
+              <div class="portal-row-actions">
+                @if (app.room) {
+                  <a class="btn btn-sm btn-primary" [routerLink]="['/rooms', app.room.id]">Apply again</a>
+                }
+              </div>
+            </div>
+          }
+        </section>
+      }
+
       @if (closedApplications().length > 0) {
         <section class="dash-section">
           <div class="dash-section-title">
@@ -355,7 +387,21 @@ export class TenantDashboard implements OnInit {
    * they can re-apply when the room is back on the board.
    */
   closedApplications() {
-    return this.applications().filter((a) => a.isArchived);
+    // Excludes the ones shown under "Available again" — the same row appearing
+    // twice reads like a bug.
+    const availableIds = new Set(this.availableAgain().map((a) => a.id));
+    return this.applications().filter((a) => a.isArchived && !availableIds.has(a.id));
+  }
+
+  /**
+   * Closed because the room was relisted, and the room is live again. The
+   * tenant lost nothing except their place in the queue, so this belongs in
+   * front of them rather than in a closed pile.
+   */
+  availableAgain() {
+    return this.applications().filter(
+      (a) => a.isArchived && a.status !== 'accepted' && a.room?.status === 'active',
+    );
   }
 
   shortlistedCount() {

@@ -394,3 +394,17 @@
 
 // A KPI below its healthy threshold should be visible at a glance, not read.
 .stat-warn { color: var(--terra) !important; }
+
+// Results header on mobile: Filters and Sort belong on one row. Stacking them
+// pushes the first room card below the fold on a small screen.
+@media (max-width: 860px) {
+  .results-header {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .5rem;
+  }
+  .results-count { order: -1; flex: 1 1 100%; margin-bottom: .25rem; }
+  .filter-toggle-btn { flex: 0 0 auto; }
+  .sort-select { flex: 1 1 auto; min-width: 0; width: auto; }
+}
