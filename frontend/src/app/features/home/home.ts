@@ -246,10 +246,11 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
             @for (room of rooms(); track room.id; let i = $index) {
               <app-room-card [room]="room" [isFirstCard]="i === 0"/>
 
-              <!-- After the sixth card: far enough in that the visitor is
-                   browsing rather than glancing, and it occupies one grid cell
-                   so the layout does not jump. -->
-              @if (i === 5) {
+              <!-- After the sixth card when there are enough rooms, otherwise
+                   after the last one. A fixed index meant the slot never
+                   appeared on a board with fewer than six listings, which is
+                   every new board. -->
+              @if (i === inlineAdIndex()) {
                 <app-ad-slot placement="board_inline"
                              [province]="province || undefined"
                              [roomType]="roomType || undefined"/>
@@ -394,6 +395,16 @@ export class Home implements OnInit, OnDestroy {
     else if (this.province) bits.push(`in ${this.province}`);
     if (this.maxRentCents) bits.push(`under R${(+this.maxRentCents / 100).toLocaleString('en-ZA')}`);
     return bits.join(' ').slice(0, 80);
+  }
+
+  /**
+   * Where the in-grid ad goes. Far enough in that the visitor is browsing
+   * rather than glancing, but never past the end of a short list.
+   */
+  inlineAdIndex(): number {
+    const count = this.rooms().length;
+    if (count === 0) return -1;   // nothing to sit between
+    return Math.min(5, count - 1);
   }
 
   /** Count of non-default filters — shown on the mobile Filters button. */

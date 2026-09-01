@@ -123,7 +123,9 @@ async function seedDemoAds() {
       headline: 'Moving a room, not a house?',
       body: 'Small-load moves from R650. Same-day quotes.',
       ctaLabel: 'Get a quote',
-      province: 'Gauteng',
+      // Nationwide: a province-targeted demo only appears once you filter to
+      // that province, which makes the placement look broken on a fresh board.
+      province: null,
     },
     {
       id: '00000000-0000-0000-0000-00000000ad03',

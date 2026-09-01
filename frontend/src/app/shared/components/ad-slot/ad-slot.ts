@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, Injector, afterNextRender, inject, input, signal } from '@angular/core';
 import { AdsService, Ad, AdPlacement } from '../../../core/services/ads.service';
 
 /**
@@ -53,7 +53,7 @@ import { AdsService, Ad, AdPlacement } from '../../../core/services/ads.service'
     .ad-slot--board_inline { margin-bottom: 0; height: 100%; }
   `],
 })
-export class AdSlot implements OnInit {
+export class AdSlot {
   private ads = inject(AdsService);
 
   readonly placement = input.required<AdPlacement>();
@@ -62,8 +62,17 @@ export class AdSlot implements OnInit {
   readonly roomType = input<string | undefined>(undefined);
 
   ad = signal<Ad | null>(null);
+  private injector = inject(Injector);
 
-  ngOnInit() {
+  constructor() {
+    // Deliberately NOT ngOnInit. The board is prerendered, so ngOnInit runs at
+    // build time against an empty database and that empty result gets baked
+    // into the HTML — hydration does not re-run it, so no ad ever appeared.
+    // afterNextRender only runs in the browser, against the live API.
+    afterNextRender(() => this.load(), { injector: this.injector });
+  }
+
+  private load() {
     this.ads
       .getAds(this.placement(), {
         province: this.province(),
