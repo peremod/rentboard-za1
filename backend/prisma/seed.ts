@@ -139,20 +139,25 @@ async function seedDemoAds() {
   ];
 
   for (const c of campaigns) {
+    const data = {
+      ...c,
+      advertiserId: advertiser.id,
+      targetUrl: 'https://example.co.za',
+      startsAt: now,
+      endsAt: nextYear,
+      monthlyRateCents: 250000,
+      // Pre-approved: the point is to see the slot render.
+      status: 'active' as const,
+      approvedAt: now,
+    };
+
+    // update: data, NOT update: {} — an empty update means re-running the seed
+    // cannot fix a demo campaign whose targeting is wrong, which is exactly
+    // what happened with the Gauteng-only in-grid ad.
     await prisma.adCampaign.upsert({
       where: { id: c.id },
-      update: {},
-      create: {
-        ...c,
-        advertiserId: advertiser.id,
-        targetUrl: 'https://example.co.za',
-        startsAt: now,
-        endsAt: nextYear,
-        monthlyRateCents: 250000,
-        // Pre-approved: the point is to see the slot render.
-        status: 'active',
-        approvedAt: now,
-      },
+      update: data,
+      create: data,
     });
   }
 
