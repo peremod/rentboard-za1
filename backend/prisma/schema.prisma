@@ -82,6 +82,9 @@ model User {
   reportsAgainst  Report[]  @relation("ReportsAgainst")
   emailLogs       EmailLog[]
   payments        Payment[]
+  referralCodes   ReferralCode[] @relation("ReferralCodesOwned")
+  referralsMade   Referral[]     @relation("ReferralsMade")
+  referralReceived Referral?     @relation("ReferralReceived")
   savedRooms      SavedRoom[]
   savedSearches   SavedSearch[]
   verifications   VerificationRequest[]
@@ -729,6 +732,97 @@ enum AdStatus {
   paused
   rejected
   ended
+}
+
+/// A shareable code that credits whoever brought a new user in.
+///
+/// Two kinds, and the distinction matters:
+///   user   — generated for a landlord or tenant to share. Unlimited uses.
+///   launch — seeded per city for the launch push, handed out by us to early
+///            landlords. Capped uses, so a code cannot leak and be farmed.
+model ReferralCode {
+  id        String           @id @default(uuid())
+  code      String           @unique
+
+  type      ReferralCodeType @default(user)
+  /// Null for launch codes — nobody personally earns those.
+  ownerId   String?
+  owner     User?            @relation("ReferralCodesOwned", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  /// Launch codes are scoped to where we are pushing, so redemptions can be
+  /// attributed to a city rather than a person.
+  city      String?
+  province  String?
+
+  /// Null means unlimited, which is right for a user's own code.
+  maxUses   Int?
+  useCount  Int              @default(0)
+  isActive  Boolean          @default(true)
+  expiresAt DateTime?
+
+  referrals Referral[]
+
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([type, isActive])
+  @@index([city])
+  @@map("referral_codes")
+}
+
+enum ReferralCodeType {
+  user
+  launch
+}
+
+/// One person arriving via a code.
+///
+/// Deliberately not counted at signup. A referral qualifies when the new user
+/// does the thing that makes them worth referring — a landlord publishes a
+/// room, a tenant submits an application. Rewarding signups alone is how a
+/// referral scheme fills up with abandoned accounts.
+model Referral {
+  id          String         @id @default(uuid())
+
+  codeId      String
+  code        ReferralCode   @relation(fields: [codeId], references: [id], onDelete: Cascade)
+
+  /// Null when the referral came from a launch code.
+  referrerId  String?
+  referrer    User?          @relation("ReferralsMade", fields: [referrerId], references: [id], onDelete: SetNull)
+
+  refereeId   String         @unique
+  referee     User           @relation("ReferralReceived", fields: [refereeId], references: [id], onDelete: Cascade)
+
+  status      ReferralStatus @default(pending)
+  /// What the referee did to qualify, e.g. 'published_room', 'applied'.
+  qualifyingAction String?
+  qualifiedAt DateTime?
+
+  /// What the referrer earned. Kept explicit rather than implied, because the
+  /// reward has to be honoured and audited.
+  reward      ReferralReward @default(none)
+  rewardedAt  DateTime?
+  /// Set when a free-verification reward is spent, so it cannot be reused.
+  rewardUsedAt DateTime?
+
+  createdAt   DateTime       @default(now())
+
+  @@index([referrerId, status])
+  @@index([status])
+  @@map("referrals")
+}
+
+enum ReferralStatus {
+  pending    // signed up, has not done the qualifying action yet
+  qualified  // did it — the referrer has earned the reward
+  rewarded   // reward granted
+  void       // self-referral, duplicate, or abuse
+}
+
+enum ReferralReward {
+  none              // tenants: no monetary reward, and the UI says so
+  free_verification // landlords: covers the R149 identity check
 }
 
 enum AuthTokenType {

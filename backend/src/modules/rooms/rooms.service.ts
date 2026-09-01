@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException, BadRequestException 
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AlertsService } from '../alerts/alerts.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { RoomFiltersDto } from './dto/room-filters.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
@@ -28,6 +29,7 @@ export class RoomsService {
     private prisma: PrismaService,
     private notifications: NotificationsService,
     private alerts: AlertsService,
+    private referrals: ReferralsService,
   ) {}
 
   /** Public notice-board search — only ever returns status = 'active' rooms. */
@@ -159,6 +161,10 @@ export class RoomsService {
 
     // Fire-and-forget: alerting tenants must never block or fail a publish.
     this.alerts.notifyMatchingTenants(id).catch(() => {});
+
+    // Publishing is what makes a referred landlord worth referring — a signup
+    // alone proves nothing.
+    this.referrals.qualify(room.landlordId, 'published_room').catch(() => {});
 
     return published;
   }

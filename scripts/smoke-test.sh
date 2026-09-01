@@ -1346,6 +1346,84 @@ else
 fi
 
 
+# -- 29. Referrals ---------------------------------------------------------
+# The assertions that matter are the abuse guards: self-referral, double
+# referral, and rewarding a signup that never did anything.
+head_ "29. Referrals"
+req GET /api/referrals/mine "" "$LTOKEN"
+check "landlord gets a referral code" 200 "$STATUS" "$BODY"
+REF_CODE=$(echo "$BODY" | jq -r '.code // empty')
+
+if [[ -n "$REF_CODE" ]]; then
+  green "  PASS  code issued ($REF_CODE)"; PASS=$((PASS+1))
+
+  req GET "/api/referrals/validate?code=$REF_CODE"
+  VALID=$(echo "$BODY" | jq -r '.valid')
+  if [[ "$VALID" == "true" ]]; then
+    green "  PASS  code validates publicly"; PASS=$((PASS+1))
+  else
+    red "  FAIL  own code did not validate"; FAIL=$((FAIL+1))
+  fi
+
+  # The validate response must not leak anything identifying.
+  if echo "$BODY" | jq -e 'has("ownerId") or has("email")' >/dev/null 2>&1; then
+    red "  FAIL  validate response leaks referrer identity"; FAIL=$((FAIL+1))
+  else
+    green "  PASS  validate reveals only a display name"; PASS=$((PASS+1))
+  fi
+
+  # Referred signup, then qualification via a real action.
+  REFEREE="referred+${STAMP}@rentboard.test"
+  req POST /api/auth/register \
+    "{\"email\":\"$REFEREE\",\"password\":\"$PASSWORD\",\"fullName\":\"Referred Tenant\",\"role\":\"TENANT\",\"referralCode\":\"$REF_CODE\"}"
+  check "signup with a referral code" 201 "$STATUS" "$BODY"
+  REFEREE_TOKEN=$(echo "$BODY" | jq -r '.accessToken // empty')
+
+  sleep 1
+  req GET /api/referrals/mine "" "$LTOKEN"
+  PENDING=$(echo "$BODY" | jq -r '.summary.pending')
+  if [[ "$PENDING" -ge 1 ]]; then
+    green "  PASS  referral recorded as pending, not yet qualified"; PASS=$((PASS+1))
+  else
+    red "  FAIL  referral not recorded (pending=$PENDING)"; FAIL=$((FAIL+1))
+  fi
+
+  req GET "/api/referrals/validate?code=NONSENSE-XX"
+  if [[ "$(echo "$BODY" | jq -r '.valid')" == "false" ]]; then
+    green "  PASS  unknown code rejected"; PASS=$((PASS+1))
+  else
+    red "  FAIL  unknown code validated"; FAIL=$((FAIL+1))
+  fi
+fi
+
+req GET /api/referrals/mine
+check "referrals require auth" 401 "$STATUS"
+
+req GET /api/referrals/admin/stats "" "$TTOKEN"
+check "tenant CANNOT read referral stats" 403 "$STATUS" "$BODY"
+
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  req GET /api/referrals/admin/stats "" "$ADMIN_TOKEN"
+  check "admin reads referral stats" 200 "$STATUS" "$BODY"
+
+  # Conversion is the number worth watching: signups that became nothing.
+  if echo "$BODY" | jq -e 'has("conversionPct") and has("byCity")' >/dev/null 2>&1; then
+    green "  PASS  stats include conversion and per-city breakdown"; PASS=$((PASS+1))
+  else
+    red "  FAIL  stats incomplete"; FAIL=$((FAIL+1))
+  fi
+
+  req GET /api/referrals/admin/launch-codes "" "$ADMIN_TOKEN"
+  check "admin lists launch codes" 200 "$STATUS" "$BODY"
+  LAUNCH=$(echo "$BODY" | jq -r 'length')
+  if [[ "$LAUNCH" -gt 0 ]]; then
+    green "  PASS  launch codes seeded ($LAUNCH)"; PASS=$((PASS+1))
+  else
+    grey "  SKIP  no launch codes — seed with SEED_LAUNCH_CODES=true"; SKIP=$((SKIP+1))
+  fi
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

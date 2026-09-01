@@ -80,9 +80,78 @@ Optional: ADMIN_NAME="Your Name"
     await seedDemoAds();
   }
 
+  // Launch invite codes, per city. Opt-in like the demo ads.
+  if (process.env.SEED_LAUNCH_CODES === 'true') {
+    await seedLaunchCodes();
+  }
+
   const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
   console.log(`Total admin accounts: ${adminCount}`);
   console.log('Sign in normally, then open /admin.');
+}
+
+/**
+ * Launch invite codes: a fixed batch per city, handed out to early landlords.
+ *
+ * Capped at one use each on purpose. A shared unlimited code gets posted in a
+ * Facebook group and farmed; fifty single-use codes can be given to fifty
+ * specific people and their redemption tells you which city is actually
+ * converting.
+ *
+ * Cities are the ones worth pushing first — where shared-room demand is
+ * concentrated. Extend the list as you open new areas.
+ */
+async function seedLaunchCodes() {
+  const cities: { city: string; province: string }[] = [
+    { city: 'Johannesburg', province: 'Gauteng' },
+    { city: 'Pretoria', province: 'Gauteng' },
+    { city: 'Cape Town', province: 'Western Cape' },
+    { city: 'Durban', province: 'KwaZulu-Natal' },
+    { city: 'Port Elizabeth', province: 'Eastern Cape' },
+    { city: 'Bloemfontein', province: 'Free State' },
+  ];
+
+  const PER_CITY = 50;
+  // No vowels and no 0/1/O/I: these get read out over the phone, and an
+  // ambiguous character is a support call.
+  const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+  let created = 0;
+
+  for (const { city, province } of cities) {
+    const prefix = city.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase();
+
+    const existing = await prisma.referralCode.count({ where: { type: 'launch', city } });
+    if (existing >= PER_CITY) continue;   // idempotent: do not stack batches
+
+    for (let i = existing; i < PER_CITY; i++) {
+      const suffix = Array.from(
+        { length: 5 },
+        () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)],
+      ).join('');
+
+      try {
+        await prisma.referralCode.create({
+          data: {
+            code: `${prefix}-${suffix}`,
+            type: 'launch',
+            city,
+            province,
+            maxUses: 1,
+            // Expire after the launch window so unredeemed codes do not
+            // linger and skew later numbers.
+            expiresAt: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000),
+          },
+        });
+        created++;
+      } catch {
+        i--;   // collision, try another suffix
+      }
+    }
+  }
+
+  console.log(`Seeded ${created} launch invite codes across ${cities.length} cities.`);
+  console.log('List them with: GET /api/referrals/admin/launch-codes?city=Johannesburg');
 }
 
 /**

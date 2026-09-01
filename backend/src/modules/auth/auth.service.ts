@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
@@ -54,6 +55,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private config: ConfigService,
+    private referrals: ReferralsService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponse> {
@@ -75,6 +77,10 @@ export class AuthService {
           : { tenantProfile: { create: {} } }),
       },
     });
+
+    // Attach the referral if a code was supplied. Never allowed to fail a
+    // registration — a bad code must not stop someone joining.
+    this.referrals.recordSignup(user.id, dto.referralCode).catch(() => {});
 
     this.logger.log(`New user registered: ${user.email} (${user.role})`);
     return this.buildAuthResponse(user);

@@ -1,5 +1,5 @@
-import { IsEmail, IsString, MinLength, MaxLength, IsEnum, Matches } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsEmail, IsString, MinLength, MaxLength, IsEnum, Matches, IsOptional } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
  * RegisterDto — validated by the global ValidationPipe (whitelist + forbidNonWhitelisted).
@@ -29,4 +29,8 @@ export class RegisterDto {
   @ApiProperty({ enum: ['TENANT', 'LANDLORD'] })
   @IsEnum(['TENANT', 'LANDLORD'], { message: 'Role must be either TENANT or LANDLORD' })
   role!: 'TENANT' | 'LANDLORD';
+
+  @ApiPropertyOptional({ description: 'Optional referral or launch invite code.' })
+  @IsOptional() @IsString() @MaxLength(32)
+  referralCode?: string;
 }

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TenanciesService } from '../tenancies/tenancies.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
@@ -23,6 +24,7 @@ export class ApplicationsService {
     private whatsapp: WhatsappService,
     private config: ConfigService,
     private tenancies: TenanciesService,
+    private referrals: ReferralsService,
   ) {}
 
   async create(dto: CreateApplicationDto, tenantId: string) {
@@ -80,6 +82,9 @@ export class ApplicationsService {
         `📬 New RentBoard application: ${tenant.fullName} applied for "${room.title}". Reply on the app to respond.`,
       );
     }
+
+        // Applying is what makes a referred tenant real.
+    this.referrals.qualify(tenantId, 'applied').catch(() => {});
 
     return application;
   }
