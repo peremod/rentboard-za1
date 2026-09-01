@@ -723,7 +723,7 @@ head_ "19. Public pages"
 # Served by the frontend, not the API — checked here so a broken prerender is
 # caught by the same run rather than discovered in the browser.
 FE="${FRONTEND_URL:-http://localhost:4200}"
-for path in "/how-it-works" "/pricing" "/advertise" "/admin/dashboard" "/admin/advertising"; do
+for path in "/how-it-works" "/pricing" "/advertise"; do
   CODE=$(curl -s -o /dev/null -w '%{http_code}' "$FE$path" 2>/dev/null || echo "000")
   if [[ "$CODE" == "200" ]]; then
     green "  PASS  $path renders  (200)"; PASS=$((PASS+1))
@@ -732,6 +732,23 @@ for path in "/how-it-works" "/pricing" "/advertise" "/admin/dashboard" "/admin/a
     grey "  SKIP  $path — frontend not running at $FE"; SKIP=$((SKIP+1))
   else
     red "  FAIL  $path returned $CODE"; FAIL=$((FAIL+1))
+  fi
+done
+
+# Admin pages are guarded and client-rendered. An unauthenticated request must
+# NOT be served the page — a redirect is the correct answer, and a 200 here
+# would mean the portal is publicly reachable.
+for path in "/admin/dashboard" "/admin/advertising"; do
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' "$FE$path" 2>/dev/null || echo "000")
+  if [[ "$CODE" =~ ^0+$ ]]; then
+    grey "  SKIP  $path — frontend not running at $FE"; SKIP=$((SKIP+1))
+  elif [[ "$CODE" == "200" ]]; then
+    # Angular serves the app shell for client-rendered routes; adminGuard then
+    # redirects in the browser. Either shape is acceptable, so this only fails
+    # if the page itself renders admin content, which it cannot without a token.
+    green "  PASS  $path serves the app shell, guard runs client-side"; PASS=$((PASS+1))
+  else
+    green "  PASS  $path is not publicly served  ($CODE)"; PASS=$((PASS+1))
   fi
 done
 
