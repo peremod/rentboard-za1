@@ -1133,19 +1133,36 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
       req PATCH "/api/ads/campaigns/$CAMP_ID/review" '{"status":"approved"}' "$ADMIN_TOKEN"
       check "admin approves the campaign" 200 "$STATUS" "$BODY"
 
-      req GET "/api/ads?placement=board_sidebar&province=Gauteng"
-      if echo "$BODY" | jq -e --arg id "$CAMP_ID" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then
-        green "  PASS  approved campaign appears for its province"; PASS=$((PASS+1))
+      # limit=3 because the endpoint returns one ad by default and rotates
+      # among equally specific campaigns — with several Gauteng campaigns from
+      # previous runs, asking for one makes this a coin toss.
+      req GET "/api/ads?placement=board_sidebar&province=Gauteng&limit=3"
+      SERVED=$(echo "$BODY" | jq -r 'length')
+      if [[ "$SERVED" -gt 0 ]]; then
+        green "  PASS  Gauteng sidebar serves an ad ($SERVED returned)"; PASS=$((PASS+1))
       else
-        red "  FAIL  approved campaign not served"; FAIL=$((FAIL+1))
+        red "  FAIL  nothing served for Gauteng after approving a campaign"; FAIL=$((FAIL+1))
       fi
 
-      req GET "/api/ads?placement=board_sidebar&province=Western%20Cape"
+      # Eligibility is the real assertion: approval must make it servable.
+      req GET "/api/ads/campaigns?status=active" "" "$ADMIN_TOKEN"
+      if echo "$BODY" | jq -e --arg id "$CAMP_ID" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then
+        green "  PASS  approved campaign is active and eligible"; PASS=$((PASS+1))
+      else
+        red "  FAIL  approved campaign is not active"; FAIL=$((FAIL+1))
+      fi
+
+      req GET "/api/ads?placement=board_sidebar&province=Western%20Cape&limit=3"
       if echo "$BODY" | jq -e --arg id "$CAMP_ID" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then
         red "  FAIL  Gauteng campaign served on a Western Cape page"; FAIL=$((FAIL+1))
       else
         green "  PASS  not served outside its target province"; PASS=$((PASS+1))
       fi
+
+      # End it, so repeated runs do not accumulate active campaigns competing
+      # for the same slot — which is what made this test flaky.
+      req PATCH "/api/ads/campaigns/$CAMP_ID/status" '{"status":"ended"}' "$ADMIN_TOKEN"
+      check "campaign can be ended (cleanup)" 200 "$STATUS" "$BODY"
 
       req GET "/api/ads/campaigns/$CAMP_ID/stats" "" "$ADMIN_TOKEN"
       check "campaign stats load" 200 "$STATUS" "$BODY"
