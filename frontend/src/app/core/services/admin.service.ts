@@ -19,6 +19,7 @@ export interface AdminUser {
   isVerified: boolean;
   createdAt: string;
   lastLoginAt?: string | null;
+  /** Search returns a narrow profile; the detail endpoint returns more. */
   landlordProfile?: { idVerified: boolean; rating?: number | null } | null;
   _count?: { rooms: number };
 }
@@ -35,10 +36,18 @@ export interface PendingVerification extends VerificationRequest {
  * conversations is a power the platform deliberately does not take.
  */
 export interface AdminUserDetail {
-  user: AdminUser & {
+  user: Omit<AdminUser, 'landlordProfile'> & {
     phone?: string | null;
     marketingEmails?: boolean;
     authProvider?: string;
+    /// Wider than the search payload: the detail endpoint also selects
+    /// ratingCount and planTier.
+    landlordProfile?: {
+      idVerified: boolean;
+      rating?: number | null;
+      ratingCount: number;
+      planTier?: string;
+    } | null;
     tenantProfile?: { employmentStatus?: string | null; incomeVerified: boolean; idVerified: boolean } | null;
   };
   activity: { messagesSent: number; savedSearches: number; reportsFiled: number; reportsAgainst: number };
