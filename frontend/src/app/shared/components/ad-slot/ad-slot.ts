@@ -38,6 +38,11 @@ import { AdsService, Ad, AdPlacement } from '../../../core/services/ads.service'
     }
   `,
   styles: [`
+    /* A custom element is display:inline by default, which makes an empty or
+       inline host behave unpredictably as a grid child. */
+    :host { display: block; }
+    :host(:empty) { display: none; }
+
     .ad-slot { border: 1px solid var(--border); border-radius: var(--r12);
                background: var(--card); overflow: hidden; margin-bottom: 1.25rem; }
     .ad-slot__label { display: block; font-size: .62rem; font-weight: 700;
