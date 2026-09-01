@@ -106,7 +106,7 @@ export class AdminService {
       // 'Not pending' means the landlord actually opened it.
       this.prisma.application.count({ where: { createdAt: { gte: since }, status: { not: 'pending' } } }),
       this.prisma.application.count({ where: { createdAt: { gte: since } } }),
-      this.prisma.report.count({ where: { status: { in: ['open', 'reviewing'] } } }),
+      this.prisma.report.count({ where: { status: { in: ['open', 'investigating'] } } }),
       this.prisma.verificationRequest.count({ where: { status: 'pending' } }),
       this.prisma.adEnquiry.count({ where: { status: 'new' } }),
       this.prisma.landlordProfile.count({ where: { idVerified: false } }),
