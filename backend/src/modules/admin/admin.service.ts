@@ -70,6 +70,87 @@ export class AdminService {
     });
   }
 
+
+  /**
+   * KPIs rather than counts.
+   *
+   * Totals tell you how much data exists; these tell you whether the platform
+   * is doing its job. On a two-sided marketplace the two that matter are
+   * liquidity (do listings get applications?) and responsiveness (do landlords
+   * reply?) — a board where tenants apply into silence dies quietly, and a raw
+   * user count will not show it happening.
+   */
+  async getKpis(days = 30) {
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const prevSince = new Date(Date.now() - days * 2 * 24 * 60 * 60 * 1000);
+
+    const [
+      newUsers, prevNewUsers,
+      newRooms, prevNewRooms,
+      newApplications, prevNewApplications,
+      roomsLet, activeRooms,
+      roomsWithApplications,
+      respondedApplications, decidedApplications,
+      openReports, pendingVerifications, newEnquiries,
+      unverifiedLandlords, verifiedLandlords,
+    ] = await Promise.all([
+      this.prisma.user.count({ where: { createdAt: { gte: since } } }),
+      this.prisma.user.count({ where: { createdAt: { gte: prevSince, lt: since } } }),
+      this.prisma.room.count({ where: { publishedAt: { gte: since } } }),
+      this.prisma.room.count({ where: { publishedAt: { gte: prevSince, lt: since } } }),
+      this.prisma.application.count({ where: { createdAt: { gte: since } } }),
+      this.prisma.application.count({ where: { createdAt: { gte: prevSince, lt: since } } }),
+      this.prisma.room.count({ where: { letAt: { gte: since } } }),
+      this.prisma.room.count({ where: { status: 'active' } }),
+      this.prisma.room.count({ where: { status: 'active', applicationCount: { gt: 0 } } }),
+      // 'Not pending' means the landlord actually opened it.
+      this.prisma.application.count({ where: { createdAt: { gte: since }, status: { not: 'pending' } } }),
+      this.prisma.application.count({ where: { createdAt: { gte: since } } }),
+      this.prisma.report.count({ where: { status: { in: ['open', 'reviewing'] } } }),
+      this.prisma.verificationRequest.count({ where: { status: 'pending' } }),
+      this.prisma.adEnquiry.count({ where: { status: 'new' } }),
+      this.prisma.landlordProfile.count({ where: { idVerified: false } }),
+      this.prisma.landlordProfile.count({ where: { idVerified: true } }),
+    ]);
+
+    const pct = (now: number, prev: number) =>
+      prev === 0 ? (now > 0 ? 100 : 0) : Math.round(((now - prev) / prev) * 100);
+
+    return {
+      periodDays: days,
+
+      growth: {
+        newUsers, newUsersChange: pct(newUsers, prevNewUsers),
+        newRooms, newRoomsChange: pct(newRooms, prevNewRooms),
+        newApplications, newApplicationsChange: pct(newApplications, prevNewApplications),
+      },
+
+      health: {
+        // The most important number here: listings nobody applies to mean
+        // tenants are not finding them, or the board looks empty.
+        listingsWithApplicationsPct:
+          activeRooms > 0 ? Math.round((roomsWithApplications / activeRooms) * 100) : 0,
+        // Silence is what makes tenants leave.
+        landlordResponsePct:
+          decidedApplications > 0 ? Math.round((respondedApplications / decidedApplications) * 100) : 0,
+        roomsLet,
+        applicationsPerActiveRoom: activeRooms > 0 ? +(newApplications / activeRooms).toFixed(1) : 0,
+      },
+
+      trust: {
+        verifiedLandlords,
+        unverifiedLandlords,
+        verifiedPct:
+          verifiedLandlords + unverifiedLandlords > 0
+            ? Math.round((verifiedLandlords / (verifiedLandlords + unverifiedLandlords)) * 100)
+            : 0,
+      },
+
+      // Work sitting in a queue waiting for a human.
+      queues: { openReports, pendingVerifications, newEnquiries },
+    };
+  }
+
   /**
    * Everything about one account, in one call.
    *
