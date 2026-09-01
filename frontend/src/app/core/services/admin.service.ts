@@ -29,10 +29,85 @@ export interface PendingVerification extends VerificationRequest {
   user: { id: string; fullName: string; email: string; createdAt: string };
 }
 
+export interface AdminKpis {
+  periodDays: number;
+  growth: {
+    newUsers: number; newUsersChange: number;
+    newRooms: number; newRoomsChange: number;
+    newApplications: number; newApplicationsChange: number;
+  };
+  health: {
+    listingsWithApplicationsPct: number;
+    landlordResponsePct: number;
+    roomsLet: number;
+    applicationsPerActiveRoom: number;
+  };
+  trust: { verifiedLandlords: number; unverifiedLandlords: number; verifiedPct: number };
+  queues: { openReports: number; pendingVerifications: number; newEnquiries: number };
+}
+
+export interface AdCampaign {
+  id: string;
+  name: string;
+  placement: string;
+  headline: string;
+  status: string;
+  province?: string | null;
+  city?: string | null;
+  impressions: number;
+  clicks: number;
+  monthlyRateCents: number;
+  startsAt: string;
+  endsAt: string;
+  advertiser?: { companyName: string };
+}
+
+export interface AdEnquiry {
+  id: string;
+  companyName: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone?: string | null;
+  industry?: string | null;
+  province?: string | null;
+  message: string;
+  status: 'new' | 'contacted' | 'won' | 'lost';
+  adminNotes?: string | null;
+  createdAt: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AdminService {
   private http = inject(HttpClient);
   private api = environment.apiUrl;
+
+  getKpis(days = 30) {
+    return this.http.get<AdminKpis>(`${this.api}/admin/kpis?days=${days}`);
+  }
+
+  // ── Advertising ──────────────────────────────────────────────────────────
+
+  listCampaigns(status?: string) {
+    const q = status ? `?status=${status}` : '';
+    return this.http.get<AdCampaign[]>(`${this.api}/ads/campaigns${q}`);
+  }
+
+  reviewCampaign(id: string, status: 'approved' | 'rejected', rejectionReason?: string) {
+    return this.http.patch<AdCampaign>(`${this.api}/ads/campaigns/${id}/review`, { status, rejectionReason });
+  }
+
+  setCampaignStatus(id: string, status: 'active' | 'paused' | 'ended') {
+    return this.http.patch<AdCampaign>(`${this.api}/ads/campaigns/${id}/status`, { status });
+  }
+
+  listEnquiries(status?: string) {
+    const q = status ? `?status=${status}` : '';
+    return this.http.get<AdEnquiry[]>(`${this.api}/ads/enquiries${q}`);
+  }
+
+  updateEnquiry(id: string, status: string, adminNotes?: string) {
+    return this.http.patch<AdEnquiry>(`${this.api}/ads/enquiries/${id}`, { status, adminNotes });
+  }
 
   getStats() {
     return this.http.get<AdminStats>(`${this.api}/admin/stats`);

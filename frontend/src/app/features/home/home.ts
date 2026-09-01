@@ -169,14 +169,14 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
              signed-in tenants: a landlord does not want alerts about rooms,
              and a signed-out visitor has nowhere to send them. -->
         @if (auth.isTenant()) {
-          <div class="filter-group">
+          <div class="filter-alert-cta">
             @if (searchSaved()) {
               <p class="field-hint">
                 ✅ Alert saved. Manage it in
                 <a routerLink="/tenant/dashboard">your dashboard</a>.
               </p>
             } @else {
-              <button type="button" class="btn btn-outline" style="width:100%"
+              <button type="button" class="btn btn-outline"
                       [disabled]="savingSearch()" (click)="saveCurrentSearch()">
                 {{ savingSearch() ? 'Saving…' : '🔔 Alert me about rooms like this' }}
               </button>
@@ -245,6 +245,15 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
           <div class="room-grid">
             @for (room of rooms(); track room.id; let i = $index) {
               <app-room-card [room]="room" [isFirstCard]="i === 0"/>
+
+              <!-- After the sixth card: far enough in that the visitor is
+                   browsing rather than glancing, and it occupies one grid cell
+                   so the layout does not jump. -->
+              @if (i === 5) {
+                <app-ad-slot placement="board_inline"
+                             [province]="province || undefined"
+                             [roomType]="roomType || undefined"/>
+              }
             }
           </div>
         }

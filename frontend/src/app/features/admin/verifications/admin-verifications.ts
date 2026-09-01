@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminService, PendingVerification } from '../../../core/services/admin.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
+import { ADMIN_NAV } from '../admin-nav';
 
 /**
  * Verification review queue.
@@ -106,11 +107,7 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
 export class AdminVerifications implements OnInit {
   private adminService = inject(AdminService);
 
-  readonly navItems: PortalNavItem[] = [
-    { label: 'Overview', icon: '📊', route: '/admin/dashboard', exact: true },
-    { label: 'Verifications', icon: '📄', route: '/admin/verifications' },
-    { label: 'Reports', icon: '🚩', route: '/admin/reports' },
-  ];
+  readonly navItems: PortalNavItem[] = ADMIN_NAV;
 
   requests = signal<PendingVerification[]>([]);
   loading = signal(true);

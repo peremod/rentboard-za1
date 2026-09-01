@@ -21,5 +21,10 @@ export const ADMIN_ROUTES: Routes = [
     loadComponent: () => import('./reports/admin-reports').then((m) => m.AdminReports),
     title: 'Reports — RentBoard',
   },
+  {
+    path: 'advertising',
+    loadComponent: () => import('./advertising/admin-advertising').then((m) => m.AdminAdvertising),
+    title: 'Advertising — RentBoard admin',
+  },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];

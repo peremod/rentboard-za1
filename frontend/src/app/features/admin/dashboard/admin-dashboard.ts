@@ -2,8 +2,9 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { RouterLink } from '@angular/router';
 import { DatePipe, LowerCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { AdminService, AdminStats, AdminUser } from '../../../core/services/admin.service';
+import { AdminService, AdminStats, AdminUser, AdminKpis } from '../../../core/services/admin.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
+import { ADMIN_NAV } from '../admin-nav';
 
 /**
  * Admin overview: platform counts, and account support.
@@ -39,6 +40,84 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
           <div class="stat-box"><div class="val">{{ s.users.tenants }}</div><div class="lbl">Tenants</div></div>
           <div class="stat-box"><div class="val">{{ s.applications.total }}</div><div class="lbl">Applications</div></div>
         </div>
+
+        @if (kpis(); as k) {
+          <section class="dash-section">
+            <div class="dash-section-title">
+              Marketplace health
+              <span class="dash-count">(last {{ k.periodDays }} days)</span>
+            </div>
+
+            <div class="insight-banner">
+              💡
+              <span>
+                Totals tell you how much data exists. These tell you whether the
+                board is working: listings nobody applies to, and applications
+                landlords never open, are how a marketplace dies quietly.
+              </span>
+            </div>
+
+            <div class="stat-row">
+              <div class="stat-box">
+                <div class="val" [class.stat-warn]="k.health.listingsWithApplicationsPct < 40">
+                  {{ k.health.listingsWithApplicationsPct }}%
+                </div>
+                <div class="lbl">Listings with applicants</div>
+              </div>
+              <div class="stat-box">
+                <div class="val" [class.stat-warn]="k.health.landlordResponsePct < 60">
+                  {{ k.health.landlordResponsePct }}%
+                </div>
+                <div class="lbl">Applications opened by landlords</div>
+              </div>
+              <div class="stat-box">
+                <div class="val">{{ k.health.applicationsPerActiveRoom }}</div>
+                <div class="lbl">Applications per active room</div>
+              </div>
+              <div class="stat-box">
+                <div class="val">{{ k.health.roomsLet }}</div>
+                <div class="lbl">Rooms let</div>
+              </div>
+            </div>
+
+            <div class="stat-row">
+              <div class="stat-box">
+                <div class="val">{{ k.growth.newUsers }}</div>
+                <div class="lbl">New users {{ change(k.growth.newUsersChange) }}</div>
+              </div>
+              <div class="stat-box">
+                <div class="val">{{ k.growth.newRooms }}</div>
+                <div class="lbl">New listings {{ change(k.growth.newRoomsChange) }}</div>
+              </div>
+              <div class="stat-box">
+                <div class="val">{{ k.growth.newApplications }}</div>
+                <div class="lbl">New applications {{ change(k.growth.newApplicationsChange) }}</div>
+              </div>
+              <div class="stat-box">
+                <div class="val">{{ k.trust.verifiedPct }}%</div>
+                <div class="lbl">Landlords verified</div>
+              </div>
+            </div>
+
+            @if (k.queues.openReports > 0 || k.queues.pendingVerifications > 0 || k.queues.newEnquiries > 0) {
+              <div class="insight-banner">
+                📥
+                <span>
+                  Waiting on you:
+                  @if (k.queues.openReports > 0) {
+                    <a routerLink="/admin/reports">{{ k.queues.openReports }} open report{{ k.queues.openReports === 1 ? '' : 's' }}</a>
+                  }
+                  @if (k.queues.pendingVerifications > 0) {
+                    · <a routerLink="/admin/verifications">{{ k.queues.pendingVerifications }} verification{{ k.queues.pendingVerifications === 1 ? '' : 's' }}</a>
+                  }
+                  @if (k.queues.newEnquiries > 0) {
+                    · <a routerLink="/admin/advertising">{{ k.queues.newEnquiries }} ad enquir{{ k.queues.newEnquiries === 1 ? 'y' : 'ies' }}</a>
+                  }
+                </span>
+              </div>
+            }
+          </section>
+        }
 
         <div class="stat-row">
           <div class="stat-box"><div class="val">{{ s.rooms.let }}</div><div class="lbl">Let</div></div>
@@ -122,13 +201,10 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
 export class AdminDashboard implements OnInit {
   private adminService = inject(AdminService);
 
-  readonly navItems: PortalNavItem[] = [
-    { label: 'Overview', icon: '📊', route: '/admin/dashboard', exact: true },
-    { label: 'Verifications', icon: '📄', route: '/admin/verifications' },
-    { label: 'Reports', icon: '🚩', route: '/admin/reports' },
-  ];
+  readonly navItems: PortalNavItem[] = ADMIN_NAV;
 
   stats = signal<AdminStats | null>(null);
+  kpis = signal<AdminKpis | null>(null);
   loading = signal(true);
   users = signal<AdminUser[]>([]);
   searching = signal(false);
@@ -138,7 +214,18 @@ export class AdminDashboard implements OnInit {
   query = '';
   suspendReason = '';
 
+  /** Arrow with sign, or nothing when there is no prior period to compare. */
+  change(pct: number): string {
+    if (pct === 0) return '';
+    return pct > 0 ? `↑ ${pct}%` : `↓ ${Math.abs(pct)}%`;
+  }
+
   ngOnInit() {
+    this.adminService.getKpis().subscribe({
+      next: (k) => this.kpis.set(k),
+      error: () => {},   // the overview must still render without them
+    });
+
     this.adminService.getStats().subscribe({
       next: (s) => { this.stats.set(s); this.loading.set(false); },
       error: () => this.loading.set(false),

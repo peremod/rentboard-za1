@@ -85,6 +85,37 @@ export class ApplicationsService {
   }
 
   /**
+   * Why an application closed, in the tenant's terms.
+   *
+   * Previously this said "the landlord relisted this room" for every closure,
+   * including the common case where the room was simply let to someone else.
+   * Being told the wrong reason is worse than being told none: a tenant who
+   * lost out to another applicant reads "relisted" as the landlord messing
+   * them about.
+   */
+  private closureReason(a: { status: string; cycle: number; archivedAt: Date | null; room?: { status: string; relistCount: number } | null }): string | null {
+    if (!a.archivedAt) return null;
+
+    const room = a.room;
+
+    if (a.status === 'accepted') {
+      return 'This tenancy ended and the room has been relisted.';
+    }
+    if (room?.status === 'deleted') {
+      return 'The landlord removed this listing.';
+    }
+    // Let while this application was open — the usual case, and the one that
+    // was being mislabelled.
+    if (room?.status === 'let' && room.relistCount === a.cycle) {
+      return 'This room was let to another applicant.';
+    }
+    if (room && room.relistCount > a.cycle) {
+      return 'The landlord relisted this room, so this application was closed. You can apply again.';
+    }
+    return 'This application was closed because the room is no longer available.';
+  }
+
+  /**
    * Returns active applications first, then closed ones. `isArchived` tells the
    * tenant an application ended because the room was relisted or let to someone
    * else, rather than leaving a stale 'pending' or 'accepted' on screen.
@@ -100,12 +131,7 @@ export class ApplicationsService {
       ...a,
       isArchived: a.archivedAt !== null,
       // Only meaningful when archived; drives the label on the tenant card.
-      archivedReason:
-        a.archivedAt === null
-          ? null
-          : a.status === 'accepted'
-            ? 'This tenancy ended and the room has been relisted.'
-            : 'The landlord relisted this room, so this application was closed.',
+      archivedReason: this.closureReason(a),
     }));
   }
 

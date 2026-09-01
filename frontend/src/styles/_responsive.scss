@@ -329,3 +329,68 @@
 // Verified landlord badge. The spec predates verification existing, so it has
 // no rule for this; sage keeps it distinct from Featured (gold) and New.
 .badge-verified { background: var(--sage); color: #fff; }
+
+// ═══════════════════════════════════════════════════════════════════════
+// FILTER PANEL & AD POLISH
+// ═══════════════════════════════════════════════════════════════════════
+
+// The panel is sticky, so with filters plus an alert button plus an ad it can
+// exceed the viewport and the ad becomes unreachable. Scroll it internally.
+@media (min-width: 901px) {
+  .filter-panel {
+    max-height: calc(100vh - 5rem);
+    overflow-y: auto;
+    // Thin, unobtrusive scrollbar — a chunky default here looks broken.
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+
+    &::-webkit-scrollbar { width: 6px; }
+    &::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--r-full); }
+    &::-webkit-scrollbar-track { background: transparent; }
+  }
+}
+
+// "Alert me about rooms like this" sat flush against the sort control above
+// and the ad below, reading as part of neither.
+.filter-alert-cta {
+  margin: 1.25rem 0;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+
+  .btn {
+    width: 100%;
+    white-space: normal;      // the label wraps rather than overflowing
+    line-height: 1.4;
+    padding: .65rem .75rem;
+  }
+}
+
+// The sheet's sticky Clear / Show results bar overlapped whatever was last in
+// the panel — which is the ad. Reserve room for it.
+@media (max-width: 900px) {
+  .filter-panel { padding-bottom: 5.5rem; }
+  .filter-drawer-actions { z-index: 2; }
+
+  // In the sheet the ad is a full-width block, not a sidebar card.
+  .filter-panel .ad-slot { margin-bottom: 1rem; }
+}
+
+// Ads in the grid occupy a cell, so they must match a card's shape rather than
+// stretching to whatever height is left.
+.ad-slot--board_inline {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 220px;
+}
+
+@media (max-width: 600px) {
+  .ad-slot { margin-bottom: 1rem; }
+  .ad-slot__image { max-height: 140px; }
+  .ad-slot--board_inline { min-height: 0; }
+  // Full-bleed inside the sheet, where side padding wastes scarce width.
+  .filter-panel .ad-slot { margin-left: -.25rem; margin-right: -.25rem; }
+}
+
+// A KPI below its healthy threshold should be visible at a glance, not read.
+.stat-warn { color: var(--terra) !important; }

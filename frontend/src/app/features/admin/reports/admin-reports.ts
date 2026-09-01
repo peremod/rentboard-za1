@@ -4,6 +4,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ReportsService } from '../../../core/services/reports.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
+import { ADMIN_NAV } from '../admin-nav';
 
 /** Reasons that mean someone may be about to lose money. Surfaced first. */
 const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_real_listing'];
@@ -123,11 +124,7 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
 export class AdminReports implements OnInit {
   private reportsService = inject(ReportsService);
 
-  readonly navItems: PortalNavItem[] = [
-    { label: 'Overview', icon: '📊', route: '/admin/dashboard', exact: true },
-    { label: 'Verifications', icon: '📄', route: '/admin/verifications' },
-    { label: 'Reports', icon: '🚩', route: '/admin/reports' },
-  ];
+  readonly navItems: PortalNavItem[] = ADMIN_NAV;
 
   reports = signal<any[]>([]);
   context = signal<Record<string, { priorReportsOnRoom: number; priorReportsOnUser: number }>>({});

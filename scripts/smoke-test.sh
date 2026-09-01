@@ -723,7 +723,7 @@ head_ "19. Public pages"
 # Served by the frontend, not the API — checked here so a broken prerender is
 # caught by the same run rather than discovered in the browser.
 FE="${FRONTEND_URL:-http://localhost:4200}"
-for path in "/how-it-works" "/pricing" "/advertise"; do
+for path in "/how-it-works" "/pricing" "/advertise" "/admin/dashboard" "/admin/advertising"; do
   CODE=$(curl -s -o /dev/null -w '%{http_code}' "$FE$path" 2>/dev/null || echo "000")
   if [[ "$CODE" == "200" ]]; then
     green "  PASS  $path renders  (200)"; PASS=$((PASS+1))
@@ -1234,6 +1234,44 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
     req PATCH "/api/ads/enquiries/$ENQ_ID" '{"status":"contacted","adminNotes":"Emailed a rate card."}' "$ADMIN_TOKEN"
     check "admin can progress an enquiry" 200 "$STATUS" "$BODY"
   fi
+fi
+
+
+# -- 28. Admin portal ------------------------------------------------------
+head_ "28. Admin portal"
+req GET /api/admin/kpis "" "$TTOKEN"
+check "tenant CANNOT read KPIs" 403 "$STATUS" "$BODY"
+
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  req GET /api/admin/kpis "" "$ADMIN_TOKEN"
+  check "admin reads KPIs" 200 "$STATUS" "$BODY"
+
+  for section in growth health trust queues; do
+    if echo "$BODY" | jq -e --arg s "$section" 'has($s)' >/dev/null 2>&1; then
+      green "  PASS  KPIs include $section"; PASS=$((PASS+1))
+    else
+      red "  FAIL  KPIs missing $section"; FAIL=$((FAIL+1))
+    fi
+  done
+
+  # The two numbers that actually describe a two-sided marketplace.
+  LIQ=$(echo "$BODY" | jq -r '.health.listingsWithApplicationsPct')
+  RESP=$(echo "$BODY" | jq -r '.health.landlordResponsePct')
+  if [[ "$LIQ" =~ ^[0-9]+$ && "$RESP" =~ ^[0-9]+$ ]]; then
+    green "  PASS  liquidity ${LIQ}% and landlord response ${RESP}% computed"; PASS=$((PASS+1))
+  else
+    red "  FAIL  health metrics are not numeric (liquidity=$LIQ response=$RESP)"; FAIL=$((FAIL+1))
+  fi
+
+  req GET "/api/admin/kpis?days=7" "" "$ADMIN_TOKEN"
+  PERIOD=$(echo "$BODY" | jq -r '.periodDays')
+  if [[ "$PERIOD" == "7" ]]; then
+    green "  PASS  period is configurable"; PASS=$((PASS+1))
+  else
+    red "  FAIL  requested 7 days, got $PERIOD"; FAIL=$((FAIL+1))
+  fi
+else
+  grey "  SKIP  admin KPIs — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
 fi
 
 

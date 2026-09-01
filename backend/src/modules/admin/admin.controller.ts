@@ -26,6 +26,12 @@ export class AdminController {
     return this.adminService.getStats();
   }
 
+  @Get('kpis')
+  @ApiOperation({ summary: 'Platform health, not just totals. Defaults to 30 days.' })
+  kpis(@Query('days') days?: string) {
+    return this.adminService.getKpis(days ? Math.min(+days, 365) : 30);
+  }
+
   @Get('users')
   @ApiOperation({ summary: 'Search users by email or name' })
   users(
