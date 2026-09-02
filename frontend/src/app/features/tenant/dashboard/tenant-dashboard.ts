@@ -337,6 +337,12 @@ export class TenantDashboard implements OnInit {
    * Saved room ids are device-local, so each is fetched individually. Rooms
    * that 404 (let or removed) are dropped rather than failing the section.
    */
+  /** Clears a saved room the tenant no longer wants to see. */
+  unsave(room: Room) {
+    this.savedRooms.unsave(room.id);
+    this.savedRoomList.update((list) => list.filter((r) => r.id !== room.id));
+  }
+
   private loadSavedRooms() {
     const ids = this.savedRooms.ids();
     if (ids.length === 0) {
@@ -345,7 +351,16 @@ export class TenantDashboard implements OnInit {
     }
     this.loadingSaved.set(true);
     forkJoin(
-      ids.map((id) => this.roomsService.getRoom(id).pipe(catchError(() => of(null)))),
+      ids.map((id) =>
+        this.roomsService.getRoom(id).pipe(
+          catchError(() => {
+            // 404 means the listing is gone for good. Drop the saved id too,
+            // or it is re-fetched on every dashboard visit forever.
+            this.savedRooms.unsave(id);
+            return of(null);
+          }),
+        ),
+      ),
     ).subscribe({
       next: (rooms) => {
         this.savedRoomList.set(rooms.filter((r): r is Room => r !== null));
@@ -393,6 +408,27 @@ export class TenantDashboard implements OnInit {
       },
       error: () => this.withdrawing.set(null),
     });
+  }
+
+  /**
+   * A saved room that is no longer takeable.
+   *
+   * Let, paused or reserved rooms still resolve — the tenant saved them and
+   * may want to know what happened — but showing them identically to an
+   * available room is misleading, so they are marked and can be cleared.
+   */
+  isUnavailable(room: Room): boolean {
+    return room.status !== 'active';
+  }
+
+  unavailableLabel(room: Room): string {
+    return {
+      let: 'Now let',
+      reserved: 'Reserved for someone else',
+      paused: 'Temporarily off the board',
+      deleted: 'No longer listed',
+      draft: 'No longer listed',
+    }[room.status] ?? 'No longer available';
   }
 
   /** Live: not archived, and not ended by the tenant's own withdrawal. */

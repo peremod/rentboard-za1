@@ -52,6 +52,18 @@ export class SavedRoomsService {
     return !saved;
   }
 
+  /**
+   * Removes a room regardless of current state.
+   *
+   * toggle() would re-save a room that had already been dropped, which is
+   * exactly what happens when the dashboard prunes a listing that 404s.
+   */
+  unsave(roomId: string) {
+    if (!this.isSaved(roomId)) return;
+    this._ids.update((ids) => ids.filter((id) => id !== roomId));
+    this.persist();
+  }
+
   clear() {
     this._ids.set([]);
     this.persist();

@@ -103,7 +103,22 @@ export class RoomsService {
     const room = await this.prisma.room.findUnique({ where: { id } });
     if (!room) throw new NotFoundException(`Room ${id} not found`);
 
-    if (!viewerId || viewerId !== room.landlordId) {
+    const isOwner = viewerId === room.landlordId;
+
+    // A removed listing must not be retrievable by id. It was still returning
+    // 200 to anyone holding the id, so a tenant's saved room kept rendering
+    // normally after the landlord took it down. Owners keep access, because
+    // they can relist it.
+    if (room.status === 'deleted' && !isOwner) {
+      throw new NotFoundException(`Room ${id} not found`);
+    }
+
+    // A draft has never been public.
+    if (room.status === 'draft' && !isOwner) {
+      throw new NotFoundException(`Room ${id} not found`);
+    }
+
+    if (!isOwner) {
       this.prisma.room.update({ where: { id }, data: { viewCount: { increment: 1 } } }).catch(() => {});
     }
     return room;

@@ -1610,6 +1610,40 @@ if [[ -n "$APP2_ID" || -n "$APP_ID" ]]; then
 fi
 
 
+# -- 34. Removed listings are not retrievable ------------------------------
+# A saved room kept rendering on the tenant dashboard after the landlord took
+# it down, because GET /rooms/:id returned it to anyone holding the id.
+head_ "34. Removed listing visibility"
+req POST /api/rooms "$ROOM_JSON" "$LTOKEN"
+GONE_ROOM=$(echo "$BODY" | jq -r '.id // empty')
+
+if [[ -n "$GONE_ROOM" ]]; then
+  req GET "/api/rooms/$GONE_ROOM"
+  check "a draft is not publicly retrievable" 404 "$STATUS" "$BODY"
+
+  req GET "/api/rooms/$GONE_ROOM" "" "$LTOKEN"
+  check "the owner can still read their own draft" 200 "$STATUS" "$BODY"
+
+  req PATCH "/api/rooms/$GONE_ROOM" '{"heroImagePath":"/smoke-test-placeholder.jpg"}' "$LTOKEN"
+  req POST "/api/rooms/$GONE_ROOM/publish" "" "$LTOKEN"
+
+  req GET "/api/rooms/$GONE_ROOM"
+  check "a published room IS publicly retrievable" 200 "$STATUS" "$BODY"
+
+  req POST "/api/rooms/$GONE_ROOM/remove" "" "$LTOKEN"
+  check "landlord removes the listing" 200 "$STATUS" "$BODY"
+
+  req GET "/api/rooms/$GONE_ROOM"
+  check "a removed listing is no longer retrievable" 404 "$STATUS" "$BODY"
+
+  req GET "/api/rooms/$GONE_ROOM" "" "$TTOKEN"
+  check "not retrievable by a signed-in tenant either" 404 "$STATUS" "$BODY"
+
+  req GET "/api/rooms/$GONE_ROOM" "" "$LTOKEN"
+  check "the owner can still see it, to relist" 200 "$STATUS" "$BODY"
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"
