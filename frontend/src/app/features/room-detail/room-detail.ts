@@ -11,6 +11,7 @@ import { ReportDialog } from '../../shared/components/report-dialog/report-dialo
 import { ReviewList } from '../../shared/components/review-list/review-list';
 import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
 import { ReviewsService } from '../../core/services/reviews.service';
+import { NavigationHistoryService } from '../../core/services/navigation-history.service';
 import { Review } from '../../core/models/review.model';
 import { AMENITY_LABELS } from '../../core/models/room.model';
 
@@ -27,7 +28,9 @@ import { AMENITY_LABELS } from '../../core/models/room.model';
   template: `
     <div class="room-detail">
       @if (room(); as r) {
-        <p><a routerLink="/">← Back to all rooms</a></p>
+        <!-- Points back where they came from: a room opened from a dashboard
+             returns to that dashboard, not to the public board. -->
+        <p><a [routerLink]="back().url">{{ back().label }}</a></p>
 
         <!-- Main image plus up to four thumbnails beside it. A row of
              equal thumbnails under a hero gave no sense of which photo
@@ -216,6 +219,10 @@ export class RoomDetail implements OnInit {
 
   private roomsService = inject(RoomsService);
   private reviewsService = inject(ReviewsService);
+  private history = inject(NavigationHistoryService);
+
+  /** Resolved once in ngOnInit — see the service for why timing matters. */
+  back = signal<{ url: string; label: string }>({ url: '/', label: '← Back to all rooms' });
   private applicationsService = inject(ApplicationsService);
   auth = inject(AuthService);
 
@@ -257,6 +264,8 @@ export class RoomDetail implements OnInit {
   loadingReviews = signal(true);
 
   ngOnInit() {
+    this.back.set(this.history.backTarget());
+
     // The room id arrives as a routed input signal, not via ActivatedRoute.
     this.reviewsService.getRoomReviews(this.id()).subscribe({
       next: (list: Review[]) => {
