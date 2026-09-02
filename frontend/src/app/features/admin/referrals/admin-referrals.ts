@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { AdminService, ReferralStats, LaunchCode } from '../../../core/services/admin.service';
 import { PortalShell } from '../../../shared/components/portal-shell/portal-shell';
 import { ADMIN_NAV } from '../admin-nav';
@@ -13,7 +12,7 @@ import { ADMIN_NAV } from '../admin-nav';
 @Component({
   selector: 'app-admin-referrals',
   standalone: true,
-  imports: [DatePipe, PortalShell],
+  imports: [PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)">

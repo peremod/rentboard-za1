@@ -19,14 +19,13 @@ export const ADMIN_ROUTES: Routes = [
   {
     path: 'reports',
     loadComponent: () => import('./reports/admin-reports').then((m) => m.AdminReports),
-    title: 'Reports — RentBoard',
+    title: 'Reports — RentBoard admin',
   },
   {
     path: 'advertising',
     loadComponent: () => import('./advertising/admin-advertising').then((m) => m.AdminAdvertising),
     title: 'Advertising — RentBoard admin',
   },
-  {
   {
     path: 'referrals',
     loadComponent: () => import('./referrals/admin-referrals').then((m) => m.AdminReferrals),
@@ -37,6 +36,7 @@ export const ADMIN_ROUTES: Routes = [
     loadComponent: () => import('./analytics/admin-analytics').then((m) => m.AdminAnalytics),
     title: 'Usage — RentBoard admin',
   },
+  {
     // withComponentInputBinding is enabled, so :id binds to the id input.
     path: 'users/:id',
     loadComponent: () => import('./user-detail/admin-user-detail').then((m) => m.AdminUserDetailPage),
