@@ -766,6 +766,35 @@ model Place {
   @@map("places")
 }
 
+/// Aggregate UX counters. NOT per-user analytics.
+///
+/// One row per event per day, incremented. There is deliberately no user id,
+/// no session id, no IP and no timestamp beyond the date — which means this
+/// cannot be used to reconstruct one person's journey, by us or by anyone who
+/// obtained the database.
+///
+/// That is a real limitation: it answers "how many people abandoned the wizard
+/// at step 3" but never "did THIS person abandon it". For product decisions the
+/// first question is the one that matters, and the second is the one that turns
+/// a room board into a surveillance platform.
+model UxCounter {
+  id       String   @id @default(uuid())
+
+  /// Dotted event name, e.g. 'wizard.step2_reached'.
+  event    String
+  /// Optional low-cardinality dimension: 'mobile', 'desktop', a province.
+  /// Never anything that could identify a person.
+  segment  String?
+  /// Date only. An exact timestamp plus a rare event is identifying.
+  day      DateTime @db.Date
+
+  count    Int      @default(0)
+
+  @@unique([event, segment, day])
+  @@index([event, day])
+  @@map("ux_counters")
+}
+
 enum PlaceType {
   province
   city

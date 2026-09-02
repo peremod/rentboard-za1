@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { SA_PROVINCES, AMENITIES } from '../../../core/models/room.model';
+import { AnalyticsService } from '../../../core/services/analytics.service';
 import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upload/photo-upload';
 
 /**
@@ -43,7 +44,7 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
           <div class="form-row"><label>Title</label><input type="text" formControlName="title" placeholder="e.g. Bright en-suite near Gautrain"/></div>
           <div class="form-row"><label>Description</label><textarea formControlName="description" rows="4" placeholder="Describe the room, the house, and who you're looking for (min. 50 characters)"></textarea></div>
           <p class="muted">{{ basicsForm.get('description')?.value?.length ?? 0 }}/50 characters minimum</p>
-          <button type="button" [disabled]="basicsForm.invalid" (click)="step.set(2)">Next →</button>
+          <button type="button" [disabled]="basicsForm.invalid" (click)="goToStep(2)">Next →</button>
         </form>
       }
 
@@ -64,7 +65,7 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
           <div class="form-row"><label>Available from</label><input type="date" formControlName="availableFrom"/></div>
           <div class="wizard__actions">
             <button type="button" (click)="step.set(1)">← Back</button>
-            <button type="button" [disabled]="pricingForm.invalid" (click)="step.set(3)">Next →</button>
+            <button type="button" [disabled]="pricingForm.invalid" (click)="goToStep(3)">Next →</button>
           </div>
         </form>
       }
@@ -158,6 +159,7 @@ export class CreateRoom implements OnInit {
   private roomsService = inject(RoomsService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
+  private analytics = inject(AnalyticsService);
 
   provinces = SA_PROVINCES;
   step = signal(1);
@@ -201,7 +203,31 @@ export class CreateRoom implements OnInit {
     );
   }
 
+  /**
+   * Wizard progress, aggregate only.
+   *
+   * Landlord drop-off is the single most valuable thing to measure here: a
+   * landlord who abandons the wizard is a room the board never gets, and they
+   * almost never come back to say why.
+   */
+  /** Forward navigation only — a Back click is not funnel progress. */
+  goToStep(step: number) {
+    this.step.set(step);
+    this.trackStep(step);
+  }
+
+  private trackStep(step: number) {
+    const events: Record<number, string> = {
+      1: 'wizard.started',
+      2: 'wizard.step2_reached',
+      3: 'wizard.step3_reached',
+      4: 'wizard.step4_reached',
+    };
+    if (events[step]) this.analytics.track(events[step]);
+  }
+
   cancel() {
+    this.analytics.track('wizard.abandoned');
     const message = this.isPublished()
       ? 'Discard your unsaved changes to this listing?'
       : 'Leave this listing? Your draft is saved and you can finish it from your dashboard.';
@@ -254,6 +280,8 @@ export class CreateRoom implements OnInit {
   }
 
   ngOnInit() {
+    this.analytics.track('wizard.started');
+
     const id = this.route.snapshot.paramMap.get('roomId');
     if (!id) return;   // creating a new listing
 

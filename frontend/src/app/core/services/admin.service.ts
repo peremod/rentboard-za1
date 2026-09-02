@@ -65,6 +65,33 @@ export interface AdminUserDetail {
                    createdAt: string; reviewedAt?: string | null }[];
 }
 
+export interface FunnelStep {
+  step: string;
+  count: number;
+  /** Percentage of everyone who started. */
+  ofStart: number;
+  /** Percentage lost since the previous step — where to look first. */
+  dropFromPrevious: number;
+}
+
+export interface Funnels {
+  periodDays: number;
+  listingFunnel: FunnelStep[];
+  applyFunnel: FunnelStep[];
+  featureUse: {
+    alertsSaved: number; roomsSaved: number; suggestionsUsed: number;
+    referralsShared: number; filtersUsed: number; adClicks: number;
+  };
+}
+
+/** Derived from business data the platform already had — no tracking. */
+export interface ContentSignals {
+  activeRoomsWithoutPhoto: number;
+  viewedButNeverApplied: number;
+  draftsAbandonedOverAWeek: number;
+  averageViewsPerActiveRoom: number;
+}
+
 export interface ReferralStats {
   total: number;
   pending: number;
@@ -138,6 +165,14 @@ export interface AdEnquiry {
 export class AdminService {
   private http = inject(HttpClient);
   private api = environment.apiUrl;
+
+  getFunnels(days = 30) {
+    return this.http.get<Funnels>(`${this.api}/analytics/funnels?days=${days}`);
+  }
+
+  getContentSignals() {
+    return this.http.get<ContentSignals>(`${this.api}/analytics/content-signals`);
+  }
 
   getReferralStats() {
     return this.http.get<ReferralStats>(`${this.api}/referrals/admin/stats`);

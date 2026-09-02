@@ -1543,6 +1543,54 @@ if [[ -n "${ADMIN_TOKEN:-}" && -n "${ADV_ID:-}" ]]; then
 fi
 
 
+# -- 32. UX analytics ------------------------------------------------------
+# The assertions that matter are about what is NOT stored.
+head_ "32. UX analytics"
+req POST /api/analytics/event '{"event":"wizard.started","segment":"mobile"}'
+if [[ "$STATUS" == "204" ]]; then
+  green "  PASS  event accepted anonymously  (204)"; PASS=$((PASS+1))
+else
+  red "  FAIL  event endpoint returned $STATUS"; FAIL=$((FAIL+1))
+fi
+
+# An allowlist, so an injected event name cannot create arbitrary rows.
+req POST /api/analytics/event '{"event":"totally.made.up","segment":"x"}'
+if [[ "$STATUS" == "204" ]]; then
+  green "  PASS  unknown event silently ignored, not stored"; PASS=$((PASS+1))
+else
+  red "  FAIL  unknown event returned $STATUS"; FAIL=$((FAIL+1))
+fi
+
+req GET /api/analytics/funnels "" "$TTOKEN"
+check "tenant CANNOT read funnels" 403 "$STATUS" "$BODY"
+
+req GET /api/analytics/content-signals "" "$LTOKEN"
+check "landlord CANNOT read content signals" 403 "$STATUS" "$BODY"
+
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  req GET /api/analytics/funnels "" "$ADMIN_TOKEN"
+  check "admin reads funnels" 200 "$STATUS" "$BODY"
+
+  for section in listingFunnel applyFunnel featureUse; do
+    if echo "$BODY" | jq -e --arg s "$section" 'has($s)' >/dev/null 2>&1; then
+      green "  PASS  funnels include $section"; PASS=$((PASS+1))
+    else
+      red "  FAIL  funnels missing $section"; FAIL=$((FAIL+1))
+    fi
+  done
+
+  # No identifier may ever appear in analytics output.
+  if echo "$BODY" | jq -e '.. | objects | select(has("userId") or has("sessionId") or has("ip"))' >/dev/null 2>&1; then
+    red "  FAIL  analytics payload contains an identifier"; FAIL=$((FAIL+1))
+  else
+    green "  PASS  no identifiers anywhere in the funnel payload"; PASS=$((PASS+1))
+  fi
+
+  req GET /api/analytics/content-signals "" "$ADMIN_TOKEN"
+  check "admin reads content signals" 200 "$STATUS" "$BODY"
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

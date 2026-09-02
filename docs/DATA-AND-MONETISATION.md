@@ -376,3 +376,54 @@ reusable — only the provider SDK and signature verification change.
    completing, and build the consent UI before approaching any partner — a
    partner will ask how you obtained the lead, and "they ticked a box on this
    screen" is the answer that closes the deal.
+
+---
+
+## 7. Measuring UX without becoming a tracking company
+
+Built in v1.30.0. The constraint is self-imposed and worth keeping: the
+`/advertise` page says there are no third-party trackers and no profiling, and
+that claim is a selling point. This is how to learn about usage anyway.
+
+### What was built
+
+**Aggregate counters.** One row per event per day, incremented. No user id, no
+session id, no IP, no timestamp beyond the date. It answers "how many people
+left at step 3" and can never answer "did this person leave" — including for
+anyone who obtains the database.
+
+**Signals from data already held.** Rooms with no photo, rooms with 20+ views
+and no applications, drafts stalled over a week. These needed no tracking at
+all and are often more actionable than a funnel: a room viewed forty times with
+no applications has a listing problem you can name and fix.
+
+**Instrumented:** the listing wizard step by step (landlord drop-off is the most
+valuable thing here — an abandoned wizard is a room the board never gets),
+the apply funnel, and feature use.
+
+### What was deliberately not built
+
+| Not built | Why |
+|---|---|
+| Google Analytics / Meta Pixel | Third-party trackers. Contradicts the advertising promise directly, and sends South African personal data offshore under s.72 |
+| Session replay (Hotjar, FullStory) | Records what an individual does on screen, including what they type. The most invasive option available, and impossible to square with the no-profiling claim |
+| Per-user event streams | Reconstructs an individual's journey. Once it exists it can be subpoenaed, breached, or quietly repurposed |
+| Cross-session identity | Would need a persistent identifier, which is the thing being avoided |
+
+### The honest limitation
+
+Aggregate counters tell you **where** people leave, never **why**. Nothing here
+replaces watching someone use the site.
+
+For a board this size that gap is best closed by talking to people, and it is
+cheap: five landlords walked through listing a room will teach you more than a
+month of funnels, and the funnels tell you which five minutes to watch. The
+counters are for noticing a problem; a conversation is for understanding it.
+
+### If you ever want more
+
+Self-hosted Plausible or Umami is the next step that stays defensible —
+cookieless, aggregate, on your own infrastructure, no data leaving the country.
+It would add page-level traffic data the counters do not cover. Anything beyond
+that starts trading the trust position for insight, and on a platform where
+people are deciding who to trust with a deposit, that is a bad trade.
