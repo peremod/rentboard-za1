@@ -4,6 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { SA_PROVINCES, AMENITIES } from '../../../core/models/room.model';
 import { AnalyticsService } from '../../../core/services/analytics.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upload/photo-upload';
 
 /**
@@ -254,6 +255,7 @@ export class CreateRoom implements OnInit {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private analytics = inject(AnalyticsService);
+  private dialogs = inject(DialogService);
 
   provinces = SA_PROVINCES;
   step = signal(1);
@@ -327,12 +329,24 @@ export class CreateRoom implements OnInit {
     this.router.navigate(['/landlord/dashboard']);
   }
 
-  cancel() {
+  async cancel() {
     this.analytics.track('wizard.abandoned');
-    const message = this.isPublished()
-      ? 'Discard your unsaved changes to this listing?'
-      : 'Leave this listing? Your draft is saved and you can finish it from your dashboard.';
-    if (!confirm(message)) return;
+
+    const confirmed = this.isPublished()
+      ? await this.dialogs.confirm(
+          'Discard your changes?',
+          'This listing stays live with its current details. Anything you have changed here will be lost.',
+          'Discard changes',
+          'Keep editing',
+        )
+      : await this.dialogs.confirm(
+          'Leave this listing?',
+          'Your draft is saved. You can finish it from your dashboard whenever you are ready.',
+          'Leave',
+          'Keep going',
+        );
+
+    if (!confirmed) return;
     this.router.navigate(['/landlord/dashboard']);
   }
 

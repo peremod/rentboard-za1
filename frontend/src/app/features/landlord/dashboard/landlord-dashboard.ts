@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { RoomsService } from '../../../core/services/rooms.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { StripeService } from '../../../core/services/stripe.service';
 import { Room } from '../../../core/models/room.model';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
@@ -195,6 +196,7 @@ export class LandlordDashboard implements OnInit {
   auth = inject(AuthService);
   private roomsService = inject(RoomsService);
   private router = inject(Router);
+  private dialogs = inject(DialogService);
   private stripe = inject(StripeService);
 
   billingEnabled = BILLING_ENABLED;
@@ -292,8 +294,18 @@ export class LandlordDashboard implements OnInit {
    * moves to the relist section. Confirmed because outstanding applicants are
    * notified, which cannot be undone after the 30-minute window.
    */
-  markLet(room: Room) {
-    if (!confirm(`Mark "${room.title}" as let? Applicants will be told the room has gone.`)) return;
+  async markLet(room: Room) {
+    const applicants = room.applicationCount ?? 0;
+    const confirmed = await this.dialogs.confirm(
+      'Mark this room as let?',
+      applicants > 0
+        ? `"${room.title}" comes off the board and ${applicants} applicant${applicants === 1 ? ' is' : 's are'} told it has gone. You have 30 minutes to undo this.`
+        : `"${room.title}" comes off the board. You have 30 minutes to undo this.`,
+      'Mark as let',
+      'Not yet',
+    );
+    if (!confirmed) return;
+
     this.marking.set(room.id);
     this.roomsService.markLet(room.id).subscribe({
       next: () => {
@@ -329,12 +341,18 @@ export class LandlordDashboard implements OnInit {
    * Removes a published listing entirely. Confirmed hard, because open
    * applicants are closed and emailed and that cannot be taken back.
    */
-  removeListing(room: Room) {
+  async removeListing(room: Room) {
     const applicants = room.applicationCount ?? 0;
     const warning = applicants > 0
-      ? `Remove "${room.title}"? ${applicants} applicant${applicants === 1 ? '' : 's'} will be told the room is gone. This cannot be undone.`
-      : `Remove "${room.title}"? This cannot be undone.`;
-    if (!confirm(warning)) return;
+      ? `${applicants} applicant${applicants === 1 ? ' is' : 's are'} told the room is gone. This cannot be undone.`
+      : 'This cannot be undone.';
+    const confirmed = await this.dialogs.confirm(
+      'Remove this listing?',
+      warning,
+      'Remove',
+      'Keep it',
+    );
+    if (!confirmed) return;
 
     this.removing.set(room.id);
     this.roomsService.removelisting(room.id).subscribe({
@@ -356,8 +374,15 @@ export class LandlordDashboard implements OnInit {
    * Drafts are never seen by tenants and carry no applications, so discarding
    * is a hard delete. Confirmed first because it cannot be undone.
    */
-  discard(room: Room) {
-    if (!confirm(`Discard "${room.title || 'this draft'}"? This cannot be undone.`)) return;
+  async discard(room: Room) {
+    const confirmed = await this.dialogs.confirm(
+      'Discard this draft?',
+      `"${room.title || 'This draft'}" will be deleted. It has never been visible to tenants, and this cannot be undone.`,
+      'Discard',
+      'Keep it',
+    );
+    if (!confirmed) return;
+
     this.discarding.set(room.id);
     this.discardError.set(null);
     this.roomsService.discardDraft(room.id).subscribe({

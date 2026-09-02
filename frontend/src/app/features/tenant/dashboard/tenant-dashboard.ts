@@ -12,6 +12,7 @@ import { ReviewPrompt } from '../../../shared/components/review-prompt/review-pr
 import { ReferralPanel } from '../../../shared/components/referral-panel/referral-panel';
 import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
 import { AlertsService } from '../../../core/services/alerts.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { SavedSearch } from '../../../core/models/alerts.model';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { Room } from '../../../core/models/room.model';
@@ -255,6 +256,7 @@ export class TenantDashboard implements OnInit {
   loadingSaved = signal(false);
   withdrawing = signal<string | null>(null);
   alerts = inject(AlertsService);
+  private dialogs = inject(DialogService);
 
   /** Plain-language summary of a saved search's filters. */
   describe(search: SavedSearch): string {
@@ -297,8 +299,15 @@ export class TenantDashboard implements OnInit {
     });
   }
 
-  deleteSearch(search: SavedSearch) {
-    if (!confirm(`Delete the alert "${search.name}"?`)) return;
+  async deleteSearch(search: SavedSearch) {
+    const confirmed = await this.dialogs.confirm(
+      'Delete this alert?',
+      `You will stop receiving emails about "${search.name}". You can create it again at any time.`,
+      'Delete',
+      'Keep it',
+    );
+    if (!confirmed) return;
+
     this.busySearch.set(search.id);
     this.alerts.remove(search.id).subscribe({
       next: () => this.busySearch.set(null),
@@ -398,8 +407,15 @@ export class TenantDashboard implements OnInit {
     return !app.isArchived && ['pending', 'viewed', 'shortlisted'].includes(app.status);
   }
 
-  withdraw(app: Application) {
-    if (!confirm('Withdraw this application? The landlord will see you are no longer interested.')) return;
+  async withdraw(app: Application) {
+    const confirmed = await this.dialogs.confirm(
+      'Withdraw this application?',
+      'The landlord will see you are no longer interested. You can apply again while the room is still available.',
+      'Withdraw',
+      'Keep applying',
+    );
+    if (!confirmed) return;
+
     this.withdrawing.set(app.id);
     this.applicationsService.withdraw(app.id).subscribe({
       next: (updated) => {
