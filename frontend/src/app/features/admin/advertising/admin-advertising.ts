@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { AdminService, AdCampaign, AdEnquiry } from '../../../core/services/admin.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { ADMIN_NAV } from '../admin-nav';
+import { SA_PROVINCES } from '../../../core/models/room.model';
 
 /**
  * Advertising: the enquiry pipeline and campaign management in one place,
@@ -13,7 +14,7 @@ import { ADMIN_NAV } from '../admin-nav';
 @Component({
   selector: 'app-admin-advertising',
   standalone: true,
-  imports: [DatePipe, FormsModule, PortalShell, ZarCentsPipe],
+  imports: [DatePipe, FormsModule, ReactiveFormsModule, PortalShell, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)">
@@ -65,6 +66,120 @@ import { ADMIN_NAV } from '../admin-nav';
 
       <section class="dash-section">
         <div class="dash-section-title">
+          New campaign
+          <button type="button" class="btn btn-sm btn-outline" style="margin-left:auto"
+                  (click)="showForm.set(!showForm())">
+            {{ showForm() ? 'Close' : '+ Create' }}
+          </button>
+        </div>
+
+        @if (showForm()) {
+          <form [formGroup]="campaignForm" (ngSubmit)="createCampaign()" class="campaign-form">
+            <div class="form-row">
+              <label for="advertiserId">Advertiser</label>
+              <select id="advertiserId" formControlName="advertiserId">
+                <option value="">Select…</option>
+                @for (a of advertisers(); track a.id) {
+                  <option [value]="a.id">{{ a.companyName }}</option>
+                }
+              </select>
+              @if (advertisers().length === 0) {
+                <p class="field-hint">
+                  No advertisers yet. Convert an enquiry above first — an advertiser
+                  should exist because you spoke to them, not because a form needed one.
+                </p>
+              }
+            </div>
+
+            <div class="form-row">
+              <label for="cname">Internal name</label>
+              <input id="cname" type="text" formControlName="name"
+                     placeholder="e.g. Vodacom fibre — Gauteng Q4"/>
+            </div>
+
+            <div class="form-row">
+              <label for="placement">Placement</label>
+              <select id="placement" formControlName="placement">
+                <option value="board_sidebar">Sidebar — R2,500/mo</option>
+                <option value="board_inline">In-grid — R4,000/mo</option>
+                <option value="room_detail">Room detail — R3,000/mo</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label for="headline">Headline <span class="muted">(max 80)</span></label>
+              <input id="headline" type="text" formControlName="headline" maxlength="80"/>
+            </div>
+
+            <div class="form-row">
+              <label for="cbody">Body <span class="muted">(optional, max 200)</span></label>
+              <textarea id="cbody" formControlName="body" rows="2" maxlength="200"></textarea>
+            </div>
+
+            <div class="form-row">
+              <label for="targetUrl">Destination (https only)</label>
+              <input id="targetUrl" type="url" formControlName="targetUrl"
+                     placeholder="https://example.co.za/offer"/>
+            </div>
+
+            <div class="form-row">
+              <label for="cprovince">Province <span class="muted">(blank = nationwide)</span></label>
+              <select id="cprovince" formControlName="province">
+                <option value="">Nationwide</option>
+                @for (p of provinces; track p) { <option [value]="p">{{ p }}</option> }
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label for="ccity">City <span class="muted">(optional)</span></label>
+              <input id="ccity" type="text" formControlName="city" placeholder="e.g. Johannesburg"/>
+            </div>
+
+            <div class="form-row">
+              <label for="csuburb">Suburb slug <span class="muted">(optional, narrowest)</span></label>
+              <input id="csuburb" type="text" formControlName="suburbSlug"
+                     placeholder="e.g. johannesburg-sandton"/>
+              <p class="field-hint">
+                From /api/places/suggest. A suburb campaign is served only in that
+                suburb, never across the whole city.
+              </p>
+            </div>
+
+            <div class="form-row">
+              <label for="rate">Monthly rate (Rand)</label>
+              <input id="rate" type="number" formControlName="monthlyRand" min="0"/>
+            </div>
+
+            <div class="form-row">
+              <label for="starts">Starts</label>
+              <input id="starts" type="date" formControlName="startsAt"/>
+            </div>
+
+            <div class="form-row">
+              <label for="ends">Ends</label>
+              <input id="ends" type="date" formControlName="endsAt"/>
+            </div>
+
+            <div class="insight-banner">
+              ⚠️
+              <span>
+                Creating a campaign does not publish it. It enters review, where the
+                creative and destination are checked before anything is served.
+              </span>
+            </div>
+
+            @if (formError()) { <p class="field-error" role="alert">{{ formError() }}</p> }
+
+            <button type="submit" class="btn btn-primary"
+                    [disabled]="campaignForm.invalid || saving()">
+              {{ saving() ? 'Creating…' : 'Create for review' }}
+            </button>
+          </form>
+        }
+      </section>
+
+      <section class="dash-section">
+        <div class="dash-section-title">
           Campaigns
           @if (pendingReviewCount() > 0) {
             <span class="dash-count">({{ pendingReviewCount() }} awaiting review)</span>
@@ -74,10 +189,7 @@ import { ADMIN_NAV } from '../admin-nav';
         @if (loadingCampaigns()) {
           <p class="muted">Loading…</p>
         } @else if (campaigns().length === 0) {
-          <p class="muted">
-            No campaigns. Create one via the API once an enquiry converts —
-            <code>POST /api/ads/campaigns</code>.
-          </p>
+          <p class="muted">No campaigns yet. Create one above once an enquiry converts.</p>
         } @else {
           @for (c of campaigns(); track c.id) {
             <div class="app-card">
@@ -143,6 +255,7 @@ import { ADMIN_NAV } from '../admin-nav';
 })
 export class AdminAdvertising implements OnInit {
   private admin = inject(AdminService);
+  private fb = inject(FormBuilder);
 
   readonly navItems: PortalNavItem[] = ADMIN_NAV;
 
@@ -153,8 +266,35 @@ export class AdminAdvertising implements OnInit {
   busy = signal<string | null>(null);
   rejectingId = signal<string | null>(null);
   rejectReason = '';
+  showForm = signal(false);
+  saving = signal(false);
+  formError = signal<string | null>(null);
+  advertisers = signal<{ id: string; companyName: string }[]>([]);
+  readonly provinces = SA_PROVINCES;
+
+  campaignForm = this.fb.group({
+    advertiserId: ['', Validators.required],
+    name: ['', [Validators.required, Validators.minLength(2)]],
+    placement: ['board_sidebar', Validators.required],
+    headline: ['', [Validators.required, Validators.minLength(5), Validators.maxLength(80)]],
+    body: ['', Validators.maxLength(200)],
+    // https only, matching the API — an ad linking over plain http is a trust
+    // problem on a platform warning people about scams.
+    targetUrl: ['', [Validators.required, Validators.pattern(/^https:\/\/.+/)]],
+    province: [''],
+    city: [''],
+    suburbSlug: [''],
+    monthlyRand: [2500, [Validators.required, Validators.min(0)]],
+    startsAt: ['', Validators.required],
+    endsAt: ['', Validators.required],
+  });
 
   ngOnInit() {
+    this.admin.listAdvertisers().subscribe({
+      next: (list) => this.advertisers.set(list),
+      error: () => {},
+    });
+
     this.admin.listEnquiries().subscribe({
       next: (list) => { this.enquiries.set(list); this.loadingEnquiries.set(false); },
       error: () => this.loadingEnquiries.set(false),
@@ -162,6 +302,40 @@ export class AdminAdvertising implements OnInit {
     this.admin.listCampaigns().subscribe({
       next: (list) => { this.campaigns.set(list); this.loadingCampaigns.set(false); },
       error: () => this.loadingCampaigns.set(false),
+    });
+  }
+
+  createCampaign() {
+    if (this.campaignForm.invalid) return;
+    this.saving.set(true);
+    this.formError.set(null);
+
+    const v = this.campaignForm.getRawValue();
+    this.admin.createCampaign({
+      advertiserId: v.advertiserId!,
+      name: v.name!,
+      placement: v.placement!,
+      headline: v.headline!,
+      body: v.body || undefined,
+      targetUrl: v.targetUrl!,
+      province: v.province || undefined,
+      city: v.city || undefined,
+      suburbSlug: v.suburbSlug || undefined,
+      // Stored in cents like every other amount in the system.
+      monthlyRateCents: Math.round((v.monthlyRand ?? 0) * 100),
+      startsAt: v.startsAt!,
+      endsAt: v.endsAt!,
+    }).subscribe({
+      next: (created) => {
+        this.campaigns.update((l) => [created, ...l]);
+        this.saving.set(false);
+        this.showForm.set(false);
+        this.campaignForm.reset({ placement: 'board_sidebar', monthlyRand: 2500 });
+      },
+      error: (err) => {
+        this.saving.set(false);
+        this.formError.set(err?.error?.message ?? 'Could not create that campaign.');
+      },
     });
   }
 

@@ -163,6 +163,25 @@ export class AdminService {
     return this.http.get<AdCampaign[]>(`${this.api}/ads/campaigns${q}`);
   }
 
+  listAdvertisers() {
+    return this.http.get<{ id: string; companyName: string; _count?: { campaigns: number } }[]>(
+      `${this.api}/ads/advertisers`,
+    );
+  }
+
+  /** Created from a won enquiry, so the contact details are already known. */
+  createAdvertiser(payload: { companyName: string; contactName: string; contactEmail: string; contactPhone?: string; notes?: string }) {
+    return this.http.post<{ id: string; companyName: string }>(`${this.api}/ads/advertisers`, payload);
+  }
+
+  createCampaign(payload: {
+    advertiserId: string; name: string; placement: string; headline: string;
+    body?: string; targetUrl: string; province?: string; city?: string;
+    suburbSlug?: string; monthlyRateCents: number; startsAt: string; endsAt: string;
+  }) {
+    return this.http.post<AdCampaign>(`${this.api}/ads/campaigns`, payload);
+  }
+
   reviewCampaign(id: string, status: 'approved' | 'rejected', rejectionReason?: string) {
     return this.http.patch<AdCampaign>(`${this.api}/ads/campaigns/${id}/review`, { status, rejectionReason });
   }

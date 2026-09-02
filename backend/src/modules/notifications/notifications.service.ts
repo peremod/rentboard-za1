@@ -152,6 +152,62 @@ export class NotificationsService {
   }
 
   /** Tells an admin an advertiser is asking to buy placement. */
+  /**
+   * Monthly performance for an advertiser.
+   *
+   * Sent unprompted. An advertiser who has to ask how their campaign is doing
+   * assumes it is doing badly, and a flat monthly rate with no reporting is
+   * the thing that makes people cancel.
+   *
+   * Carries aggregate numbers only — impressions, clicks, click-through rate.
+   * Nothing about who saw it, because we do not collect that.
+   */
+  async sendAdvertiserReport(
+    to: string,
+    d: {
+      companyName: string;
+      periodLabel: string;
+      campaigns: { name: string; placement: string; impressions: number; clicks: number; ctr: string }[];
+    },
+  ) {
+    const rows = d.campaigns
+      .map(
+        (c) => `<tr>
+            <td style="padding:.4rem .6rem;border-bottom:1px solid #E0D5C4">${c.name}</td>
+            <td style="padding:.4rem .6rem;border-bottom:1px solid #E0D5C4">${c.placement}</td>
+            <td style="padding:.4rem .6rem;border-bottom:1px solid #E0D5C4;text-align:right">${c.impressions.toLocaleString('en-ZA')}</td>
+            <td style="padding:.4rem .6rem;border-bottom:1px solid #E0D5C4;text-align:right">${c.clicks.toLocaleString('en-ZA')}</td>
+            <td style="padding:.4rem .6rem;border-bottom:1px solid #E0D5C4;text-align:right">${c.ctr}%</td>
+          </tr>`,
+      )
+      .join('');
+
+    await this.send(
+      to,
+      `Your RentBoard advertising — ${d.periodLabel}`,
+      `<p>Hi ${d.companyName},</p>
+       <p>Here's how your advertising performed in ${d.periodLabel}.</p>
+       <table style="border-collapse:collapse;width:100%;font-size:.85rem">
+         <thead>
+           <tr style="text-align:left">
+             <th style="padding:.4rem .6rem">Campaign</th>
+             <th style="padding:.4rem .6rem">Placement</th>
+             <th style="padding:.4rem .6rem;text-align:right">Impressions</th>
+             <th style="padding:.4rem .6rem;text-align:right">Clicks</th>
+             <th style="padding:.4rem .6rem;text-align:right">CTR</th>
+           </tr>
+         </thead>
+         <tbody>${rows}</tbody>
+       </table>
+       <p style="font-size:.8rem;color:#7A6E60;margin-top:1.25rem">
+         These are aggregate counts. RentBoard does not track individual visitors,
+         so we cannot tell you who saw your ad — and neither can anyone else.
+       </p>
+       <p>Reply to this email if you want to change targeting, pause, or extend.</p>`,
+      { template: 'advertiser_report' },
+    );
+  }
+
   async sendAdEnquiryAlert(d: {
     companyName: string; contactName: string; contactEmail: string;
     industry?: string; province?: string; message: string;

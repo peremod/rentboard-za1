@@ -1162,7 +1162,11 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
       fi
 
       # Eligibility is the real assertion: approval must make it servable.
-      req GET "/api/ads/campaigns?status=active" "" "$ADMIN_TOKEN"
+      # Advertisers must be listable — the campaign form populates from this.
+  req GET /api/ads/advertisers "" "$ADMIN_TOKEN"
+  check "admin lists advertisers for the campaign form" 200 "$STATUS" "$BODY"
+
+  req GET "/api/ads/campaigns?status=active" "" "$ADMIN_TOKEN"
       if echo "$BODY" | jq -e --arg id "$CAMP_ID" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then
         green "  PASS  approved campaign is active and eligible"; PASS=$((PASS+1))
       else
