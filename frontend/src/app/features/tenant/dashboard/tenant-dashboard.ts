@@ -46,6 +46,7 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
 
       <section class="dash-section">
         <div class="dash-section-title">Your applications</div>
+        <p class="muted">Live — you're waiting on the landlord.</p>
 
         @if (loading()) {
           <p class="muted">Loading…</p>
@@ -105,6 +106,11 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
             Available again
             <span class="dash-count">({{ availableAgain().length }})</span>
           </div>
+          <p class="muted">
+            Rooms you applied for that are back on the board. Your earlier
+            application closed when the landlord relisted — applying again puts
+            you back in the queue.
+          </p>
           @for (app of availableAgain(); track app.id) {
             <div class="app-card">
               <div class="app-thumb portal-thumb" aria-hidden="true">🔁</div>
@@ -135,6 +141,7 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
             Closed applications
             <span class="dash-count">({{ closedApplications().length }})</span>
           </div>
+          <p class="muted">Finished — nothing more to do on these.</p>
           @for (app of closedApplications(); track app.id) {
             <div class="app-card app-card--closed">
               <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
@@ -143,7 +150,7 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
                 @if (app.room) {
                   <div class="app-location">{{ app.room.locationDisplay }}</div>
                 }
-                <div class="app-location">{{ app.archivedReason }}</div>
+                <div class="app-location">{{ closedReason(app) }}</div>
               </div>
               <div class="portal-row-actions">
                 @if (app.room && app.room.status === 'active') {
@@ -360,8 +367,17 @@ export class TenantDashboard implements OnInit {
   }
 
   /**
-   * An accepted application cannot be withdrawn here — the landlord has already
-   * committed, so that conversation belongs in messages, not a button.
+   * The three sections, defined so they cannot overlap. Every application
+   * belongs to exactly one of them.
+   *
+   *   Your applications  — live. You are waiting on the landlord.
+   *   Available again    — closed, but the room is back and you have NOT
+   *                        re-applied. The only one with an action.
+   *   Closed             — finished. Nothing to do.
+   *
+   * Previously withdrawn applications stayed under 'Your applications' (they
+   * are not archived), and a relisted room appeared in both of the others,
+   * once per past cycle.
    */
   canWithdraw(app: Application): boolean {
     return !app.isArchived && ['pending', 'viewed', 'shortlisted'].includes(app.status);
@@ -379,9 +395,16 @@ export class TenantDashboard implements OnInit {
     });
   }
 
-  /** Live applications — the ones a tenant can still act on. */
+  /** Live: not archived, and not ended by the tenant's own withdrawal. */
   activeApplications() {
-    return this.applications().filter((a) => !a.isArchived);
+    return this.applications().filter(
+      (a) => !a.isArchived && a.status !== 'withdrawn' && a.status !== 'rejected',
+    );
+  }
+
+  /** Rooms this tenant currently has a live application on. */
+  private liveRoomIds() {
+    return new Set(this.activeApplications().map((a) => a.room?.id).filter(Boolean) as string[]);
   }
 
   /**
@@ -389,22 +412,56 @@ export class TenantDashboard implements OnInit {
    * so a tenant is not left wondering what happened to an application, and so
    * they can re-apply when the room is back on the board.
    */
+  /**
+   * Finished, with nothing left to do: withdrawn, rejected, or closed on a room
+   * that is not currently available. Never overlaps the other two sections.
+   */
   closedApplications() {
-    // Excludes the ones shown under "Available again" — the same row appearing
-    // twice reads like a bug.
-    const availableIds = new Set(this.availableAgain().map((a) => a.id));
-    return this.applications().filter((a) => a.isArchived && !availableIds.has(a.id));
+    const shownAbove = new Set(this.availableAgain().map((a) => a.id));
+    const live = this.liveRoomIds();
+
+    return this.applications().filter((a) => {
+      if (shownAbove.has(a.id)) return false;
+      const isFinished = a.isArchived || a.status === 'withdrawn' || a.status === 'rejected';
+      if (!isFinished) return false;
+      // A superseded application for a room they have re-applied to is noise.
+      const roomId = a.room?.id;
+      if (roomId && live.has(roomId) && a.isArchived) return false;
+      return true;
+    });
+  }
+
+  /** Why a closed application ended, in the tenant's terms. */
+  closedReason(app: Application): string {
+    if (app.status === 'withdrawn') return 'You withdrew this application.';
+    if (app.status === 'rejected' && !app.isArchived) {
+      return 'The landlord chose someone else.';
+    }
+    return app.archivedReason ?? 'This application is closed.';
   }
 
   /**
-   * Closed because the room was relisted, and the room is live again. The
-   * tenant lost nothing except their place in the queue, so this belongs in
-   * front of them rather than in a closed pile.
+   * The room is back on the board and they have not re-applied yet.
+   *
+   * Deduplicated by room: a room relisted three times produced three archived
+   * applications and listed the same room three times. One row per room, the
+   * most recent, and excluded entirely once they have re-applied — otherwise
+   * "apply again" stayed on screen after they already had.
    */
   availableAgain() {
-    return this.applications().filter(
-      (a) => a.isArchived && a.status !== 'accepted' && a.room?.status === 'active',
-    );
+    const live = this.liveRoomIds();
+    const seen = new Set<string>();
+
+    return this.applications()
+      .filter((a) => {
+        if (!a.isArchived || a.status === 'accepted') return false;
+        const roomId = a.room?.id;
+        if (!roomId || a.room?.status !== 'active') return false;
+        if (live.has(roomId)) return false;      // already re-applied
+        if (seen.has(roomId)) return false;      // one row per room
+        seen.add(roomId);
+        return true;
+      });
   }
 
   shortlistedCount() {

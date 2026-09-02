@@ -366,7 +366,60 @@ export class CreateRoom implements OnInit {
     this.photos.set(photos);
   }
 
+  /**
+   * Step 3 → 4.
+   *
+   * When editing, this must UPDATE the room being edited. It used to call
+   * createRoom unconditionally, so a landlord who paged forward through an
+   * edit ended up with a second listing — the original still live, and a new
+   * draft holding their changes.
+   */
   createDraftAndContinue() {
+    if (this.isEditing() && this.roomId()) {
+      this.saveAndContinue();
+      return;
+    }
+    this.createNewDraft();
+  }
+
+  /** Saves edits in place, then moves to photos. No new room is created. */
+  private saveAndContinue() {
+    const id = this.roomId();
+    if (!id) return;
+
+    this.creatingDraft.set(true);
+    this.createError.set(null);
+
+    const basics = this.basicsForm.getRawValue();
+    const pricing = this.pricingForm.getRawValue();
+    const prefs = this.preferencesForm.getRawValue();
+
+    this.roomsService.updateRoom(id, {
+      roomType: basics.roomType,
+      title: basics.title,
+      description: basics.description,
+      rentCents: Math.round((pricing.rent ?? 0) * 100),
+      depositCents: pricing.deposit ? Math.round(pricing.deposit * 100) : undefined,
+      billsIncluded: !!pricing.billsIncluded,
+      province: pricing.province,
+      city: pricing.city,
+      locationDisplay: pricing.locationDisplay,
+      availableFrom: pricing.availableFrom,
+      ...prefs,
+      amenities: this.amenities(),
+    } as any).subscribe({
+      next: () => {
+        this.creatingDraft.set(false);
+        this.goToStep(4);
+      },
+      error: (err) => {
+        this.creatingDraft.set(false);
+        this.createError.set(err?.error?.message ?? 'Could not save your changes. Please try again.');
+      },
+    });
+  }
+
+  private createNewDraft() {
     if (this.preferencesForm.invalid) return;
     this.creatingDraft.set(true);
     this.createError.set(null);

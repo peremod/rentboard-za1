@@ -93,6 +93,21 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
                           [disabled]="marking() === room.id" (click)="markLet(room)">
                     {{ marking() === room.id ? 'Saving…' : 'Mark as Let ✓' }}
                   </button>
+                  <button type="button" class="btn btn-sm btn-ghost-light"
+                          [disabled]="pausing() === room.id" (click)="pause(room)">
+                    Pause
+                  </button>
+                } @else if (room.status === 'paused') {
+                  <button type="button" class="btn btn-sm btn-sage"
+                          [disabled]="pausing() === room.id" (click)="unpause(room)">
+                    Resume
+                  </button>
+                }
+                @if (room.status !== 'draft') {
+                  <button type="button" class="btn btn-sm btn-ghost-light"
+                          [disabled]="removing() === room.id" (click)="removeListing(room)">
+                    {{ removing() === room.id ? 'Removing…' : 'Remove' }}
+                  </button>
                 }
                 @if (billingEnabled && !room.isFeatured && room.status === 'active') {
                   <button type="button" class="btn btn-sm btn-sage" (click)="boost(room.id)">⭐ Boost R99</button>
@@ -211,6 +226,8 @@ export class LandlordDashboard implements OnInit {
   /** Which room is showing the edit-or-keep prompt. */
   relistChoice = signal<string | null>(null);
   marking = signal<string | null>(null);
+  pausing = signal<string | null>(null);
+  removing = signal<string | null>(null);
   discarding = signal<string | null>(null);
   discardError = signal<string | null>(null);
 
@@ -284,6 +301,45 @@ export class LandlordDashboard implements OnInit {
         this.ngOnInit();   // reload both lists, as relist does
       },
       error: () => this.marking.set(null),
+    });
+  }
+
+  /**
+   * Off the board without closing anyone's application — for a landlord who
+   * is away, or the room is being repaired. Distinct from Mark as Let, which
+   * closes and emails every applicant.
+   */
+  pause(room: Room) {
+    this.pausing.set(room.id);
+    this.roomsService.pause(room.id).subscribe({
+      next: () => { this.pausing.set(null); this.ngOnInit(); },
+      error: () => this.pausing.set(null),
+    });
+  }
+
+  unpause(room: Room) {
+    this.pausing.set(room.id);
+    this.roomsService.relistRoom(room.id).subscribe({
+      next: () => { this.pausing.set(null); this.ngOnInit(); },
+      error: () => this.pausing.set(null),
+    });
+  }
+
+  /**
+   * Removes a published listing entirely. Confirmed hard, because open
+   * applicants are closed and emailed and that cannot be taken back.
+   */
+  removeListing(room: Room) {
+    const applicants = room.applicationCount ?? 0;
+    const warning = applicants > 0
+      ? `Remove "${room.title}"? ${applicants} applicant${applicants === 1 ? '' : 's'} will be told the room is gone. This cannot be undone.`
+      : `Remove "${room.title}"? This cannot be undone.`;
+    if (!confirm(warning)) return;
+
+    this.removing.set(room.id);
+    this.roomsService.removelisting(room.id).subscribe({
+      next: () => { this.removing.set(null); this.ngOnInit(); },
+      error: () => this.removing.set(null),
     });
   }
 

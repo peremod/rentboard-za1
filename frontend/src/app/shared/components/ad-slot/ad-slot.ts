@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, Injector, afterNextRender, inject, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, PLATFORM_ID, inject, input, signal } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { AdsService, Ad, AdPlacement } from '../../../core/services/ads.service';
 import { getImageUrl } from '../../utils/imagekit.utils';
 
@@ -62,7 +63,7 @@ import { getImageUrl } from '../../utils/imagekit.utils';
     .ad-slot--board_inline { margin-bottom: 0; height: 100%; }
   `],
 })
-export class AdSlot {
+export class AdSlot implements OnInit {
   private ads = inject(AdsService);
 
   readonly placement = input.required<AdPlacement>();
@@ -76,14 +77,23 @@ export class AdSlot {
   readonly slotIndex = input<number>(0);
 
   ad = signal<Ad | null>(null);
-  private injector = inject(Injector);
+  private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
 
-  constructor() {
-    // Deliberately NOT ngOnInit. The board is prerendered, so ngOnInit runs at
-    // build time against an empty database and that empty result gets baked
-    // into the HTML — hydration does not re-run it, so no ad ever appeared.
-    // afterNextRender only runs in the browser, against the live API.
-    afterNextRender(() => this.load(), { injector: this.injector });
+  /**
+   * Loads in ngOnInit, guarded to the browser.
+   *
+   * This was afterNextRender, which fires reliably for a slot present at first
+   * render but not for one created later — the in-grid slots appear only once
+   * rooms load, and with no further change-detection cycle their callback
+   * never ran. The result was exactly one ad on the page: the sidebar.
+   *
+   * The platform check keeps the original benefit: the board is prerendered,
+   * and running this on the server would bake an empty result into static HTML
+   * that hydration does not re-run.
+   */
+  ngOnInit() {
+    if (!this.isBrowser) return;
+    this.load();
   }
 
   private load() {
