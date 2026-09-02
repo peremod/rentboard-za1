@@ -44,7 +44,10 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
           <div class="form-row"><label>Title</label><input type="text" formControlName="title" placeholder="e.g. Bright en-suite near Gautrain"/></div>
           <div class="form-row"><label>Description</label><textarea formControlName="description" rows="4" placeholder="Describe the room, the house, and who you're looking for (min. 50 characters)"></textarea></div>
           <p class="muted">{{ basicsForm.get('description')?.value?.length ?? 0 }}/50 characters minimum</p>
-          <button type="button" [disabled]="basicsForm.invalid" (click)="goToStep(2)">Next →</button>
+          <div class="wizard__actions">
+            <button type="button" class="btn btn-ghost-light" (click)="cancel()">Cancel</button>
+            <button type="button" [disabled]="basicsForm.invalid" (click)="goToStep(2)">Next →</button>
+          </div>
         </form>
       }
 
