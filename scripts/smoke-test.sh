@@ -62,6 +62,57 @@ command -v jq >/dev/null || { red "jq is required: sudo apt install -y jq"; exit
 echo "RentBoard ZA smoke test → $API"
 
 # ── 1. Infrastructure ──────────────────────────────────────────────────────
+# ── Optional captures ───────────────────────────────────────────────────
+# Declared empty because set -u aborts on an unset variable, and each of
+# these is assigned inside a section that may be skipped. A later section
+# referencing one should get an empty string and skip, not kill the run.
+ADV_ID=""
+ALERT_ROOM=""
+AMOUNT=""
+CAMP_ID=""
+CAMP_STATUS=""
+CLICK_CODE=""
+CLOSES=""
+CODE=""
+COUNT=""
+CUR=""
+DEMO_ID=""
+DRAFT_STATUS=""
+ENQ_ID=""
+HAS_SIG=""
+IN_QUEUE=""
+LAUNCH=""
+LEFT_PENDING=""
+LET_STATUS=""
+LIQ=""
+LOWED=""
+MINE=""
+MSGS=""
+OTHER_LL=""
+OTHER_LTOKEN=""
+OWED=""
+PAY_VR=""
+PENDING=""
+PERIOD=""
+PUBKEY=""
+PUBLIC_TENANT=""
+REFEREE=""
+REFEREE_TOKEN=""
+RELISTED=""
+RESP=""
+ROOM_REVIEW=""
+SERVED=""
+SUB_CAMP=""
+TEN_APP=""
+TEN_ID=""
+TEN_STATUS=""
+VALID=""
+VERIFIED=""
+VISIBLE=""
+VR_STATUS=""
+WAITING=""
+WIZ_APP=""
+
 head_ "1. Infrastructure"
 req GET /health
 check "GET /health reachable" 200 "$STATUS" "$BODY"
@@ -1593,8 +1644,10 @@ fi
 
 # -- 33. Shortlist management ----------------------------------------------
 head_ "33. Shortlist management"
-if [[ -n "$APP2_ID" || -n "$APP_ID" ]]; then
-  SL_APP="${APP2_ID:-$APP_ID}"
+# set -u is on, so every optional variable needs a default — APP2_ID is only
+# assigned in a section that may not have run.
+SL_APP="${APP2_ID:-${APP_ID:-}}"
+if [[ -n "$SL_APP" ]]; then
   req POST "/api/applications/$SL_APP/unshortlist" "" "$LTOKEN"
   if [[ "$STATUS" == "200" || "$STATUS" == "400" ]]; then
     green "  PASS  unshortlist responds sensibly  ($STATUS)"; PASS=$((PASS+1))
