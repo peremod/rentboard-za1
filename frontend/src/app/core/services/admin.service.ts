@@ -65,6 +65,28 @@ export interface AdminUserDetail {
                    createdAt: string; reviewedAt?: string | null }[];
 }
 
+export interface ReferralStats {
+  total: number;
+  pending: number;
+  qualified: number;
+  /** Signups that went on to do something. The number worth watching. */
+  conversionPct: number;
+  launchCodes: number;
+  byCity: { city: string; codes: number; redemptions: number }[];
+  topReferrers: { referrerId: string | null; _count: { id: number } }[];
+}
+
+export interface LaunchCode {
+  id: string;
+  code: string;
+  city?: string | null;
+  province?: string | null;
+  maxUses?: number | null;
+  useCount: number;
+  isActive: boolean;
+  expiresAt?: string | null;
+}
+
 export interface AdminKpis {
   periodDays: number;
   growth: {
@@ -116,6 +138,15 @@ export interface AdEnquiry {
 export class AdminService {
   private http = inject(HttpClient);
   private api = environment.apiUrl;
+
+  getReferralStats() {
+    return this.http.get<ReferralStats>(`${this.api}/referrals/admin/stats`);
+  }
+
+  getLaunchCodes(city?: string) {
+    const q = city ? `?city=${encodeURIComponent(city)}` : '';
+    return this.http.get<LaunchCode[]>(`${this.api}/referrals/admin/launch-codes${q}`);
+  }
 
   getUserDetail(id: string) {
     return this.http.get<AdminUserDetail>(`${this.api}/admin/users/${id}`);

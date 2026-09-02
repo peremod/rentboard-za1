@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { ReferralsService } from '../../../core/services/referrals.service';
 
 @Component({
   selector: 'app-register',
@@ -48,6 +49,22 @@ import { AuthService } from '../../../core/services/auth.service';
             <p class="field-hint">At least 8 characters, with one uppercase letter and one number.</p>
           </div>
 
+          <div class="auth__field">
+            <label for="referralCode">Invite code <span class="muted">(optional)</span></label>
+            <input id="referralCode" type="text" formControlName="referralCode"
+                   autocapitalize="characters" spellcheck="false"
+                   placeholder="e.g. JHB-K4M2P" (blur)="checkCode()"/>
+            @if (checkingCode()) {
+              <p class="field-hint">Checking…</p>
+            } @else if (codeCheck()?.valid) {
+              <p class="field-hint">✓ Invited by {{ codeCheck()!.invitedBy }}</p>
+            } @else if (codeCheck() && !codeCheck()!.valid) {
+              <p class="field-hint">
+                We don't recognise that code. You can still sign up without it.
+              </p>
+            }
+          </div>
+
           @if (error()) {
             <p class="auth__error" role="alert">{{ error() }}</p>
           }
@@ -71,9 +88,11 @@ import { AuthService } from '../../../core/services/auth.service';
     </div>
   `,
 })
-export class Register {
+export class Register implements OnInit {
   private fb = inject(FormBuilder);
   private auth = inject(AuthService);
+  private route = inject(ActivatedRoute);
+  private referrals = inject(ReferralsService);
   private router = inject(Router);
 
   role = signal<'TENANT' | 'LANDLORD'>('TENANT');
@@ -84,13 +103,49 @@ export class Register {
     fullName: ['', [Validators.required, Validators.minLength(2)]],
     email: ['', [Validators.required, Validators.email]],
     password: ['', [Validators.required, Validators.minLength(8)]],
+    // Optional. An invalid code never blocks registration — it is simply not
+    // credited, which is better than turning someone away over a typo.
+    referralCode: [''],
   });
+
+  codeCheck = signal<{ valid: boolean; invitedBy?: string } | null>(null);
+  checkingCode = signal(false);
+
+  ngOnInit() {
+    // Arrives as ?ref=CODE from a shared link; pre-filled and confirmed so the
+    // person can see the invite was recognised.
+    const ref = this.route.snapshot.queryParamMap.get('ref');
+    if (ref) {
+      this.form.patchValue({ referralCode: ref.toUpperCase() });
+      this.checkCode();
+    }
+  }
+
+  /** Confirms a code as the person finishes typing it. */
+  checkCode() {
+    const code = (this.form.value.referralCode ?? '').trim();
+    if (code.length < 3) {
+      this.codeCheck.set(null);
+      return;
+    }
+    this.checkingCode.set(true);
+    this.referrals.validate(code).subscribe({
+      next: (res) => { this.codeCheck.set(res); this.checkingCode.set(false); },
+      error: () => { this.codeCheck.set(null); this.checkingCode.set(false); },
+    });
+  }
 
   onSubmit() {
     if (this.form.invalid) return;
     this.loading.set(true);
     this.error.set(null);
-    this.auth.register({ ...(this.form.getRawValue() as any), role: this.role() }).subscribe({
+    const raw = this.form.getRawValue();
+    this.auth.register({
+      ...(raw as any),
+      // Omit rather than send an empty string.
+      referralCode: raw.referralCode?.trim() || undefined,
+      role: this.role(),
+    }).subscribe({
       next: (res) => this.router.navigate([res.user.role === 'LANDLORD' ? '/landlord/dashboard' : '/tenant/dashboard']),
       error: (err) => {
         this.loading.set(false);

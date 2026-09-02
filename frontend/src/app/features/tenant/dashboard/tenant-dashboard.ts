@@ -9,6 +9,7 @@ import { MessageThread } from '../../../shared/components/message-thread/message
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
+import { ReferralPanel } from '../../../shared/components/referral-panel/referral-panel';
 import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
 import { AlertsService } from '../../../core/services/alerts.service';
 import { SavedSearch } from '../../../core/models/alerts.model';
@@ -19,7 +20,7 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, MessageThread, PortalShell, RoomCard, ReviewPrompt],
+  imports: [RouterLink, ZarCentsPipe, MessageThread, PortalShell, RoomCard, ReviewPrompt, ReferralPanel],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems()" roleLabel="Tenant" avatarColour="var(--sage)">
@@ -157,6 +158,8 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
           }
         </section>
       }
+
+      <app-referral-panel/>
 
       <section class="dash-section">
         <div class="dash-section-title">

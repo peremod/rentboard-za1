@@ -9,6 +9,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
+import { ReferralPanel } from '../../../shared/components/referral-panel/referral-panel';
 
 /**
  * Billing (Upgrade link, Boost button) is hidden behind BILLING_ENABLED —
@@ -20,7 +21,7 @@ import { ReviewPrompt } from '../../../shared/components/review-prompt/review-pr
 @Component({
   selector: 'app-landlord-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, DatePipe, PortalShell, ReviewPrompt],
+  imports: [RouterLink, ZarCentsPipe, DatePipe, PortalShell, ReviewPrompt, ReferralPanel],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems()" roleLabel="Landlord"
@@ -101,6 +102,8 @@ import { ReviewPrompt } from '../../../shared/components/review-prompt/review-pr
           }
         }
       </section>
+
+      <app-referral-panel/>
 
       <section class="dash-section">
         <div class="dash-section-title">

@@ -6,4 +6,5 @@ export const ADMIN_NAV: PortalNavItem[] = [
   { label: 'Verifications', icon: '📄', route: '/admin/verifications' },
   { label: 'Reports', icon: '🚩', route: '/admin/reports' },
   { label: 'Advertising', icon: '📢', route: '/admin/advertising' },
+  { label: 'Referrals', icon: '🎟️', route: '/admin/referrals' },
 ];
