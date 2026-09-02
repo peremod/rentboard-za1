@@ -124,8 +124,17 @@ more than one that has been profiled, and the `/advertise` page says so.
   Whoever bought the narrowest targeting gets the slot.
 - **Equally specific campaigns rotate**, chosen at random per request, so one
   advertiser cannot monopolise a placement.
-- One ad per slot per page load. Three placements exist: sidebar, in-grid
-  (after the sixth room card, or the last if there are fewer), and room detail.
+- Three placements: sidebar (one per search page), in-grid (**after every sixth
+  room card**, so a long search carries several), and room detail.
+- Repeated in-grid slots step through the eligible campaigns, so a visitor
+  scrolling a long board sees different advertisers rather than the same ad
+  four times.
+
+**If you change how often a placement repeats, change the rate card.** In-grid
+went from one slot to one-per-six in v1.28.1, roughly quadrupling impressions
+for the same money. The `/advertise` page was updated the same day. Selling a
+slot and delivering four is a happy surprise; selling four and delivering one
+is a refund and a lost customer.
 
 **There is no auction and no bidding.** Flat monthly rates, sold directly. An
 auction needs volume to work, and pretending to run one at this scale would

@@ -120,14 +120,33 @@ by email and lands in a queue at `/admin/enquiries`.
 advertiser deciding whether to bother emailing wants to know whether this is a
 R2,000 or a R20,000 conversation, and most will not ask. Opening figures:
 
-| Placement | Monthly |
-|---|---|
-| Sidebar | R2,500 |
-| In-grid | R4,000 |
-| Room detail | R3,000 |
+| Placement | Monthly | What it delivers |
+|---|---|---|
+| Sidebar | R2,500 | One slot, on screen for the whole search |
+| In-grid | R4,000 | Repeats after every 6th room card |
+| Room detail | R3,000 | Below a listing, strongest intent |
 
-Adjust once you can report real impressions — these are a starting point, not
-a valuation.
+**In-grid changed in v1.28.1** and the rate card was updated to match. It used
+to be a single slot after the sixth card; it now repeats every six rooms, so a
+24-room search shows four. That is roughly four times the impressions for the
+same money, which makes R4,000 look cheap rather than premium.
+
+Two ways to handle that, and the choice is yours:
+
+- **Leave it.** More impressions at the same price is a good first-customer
+  story, and you have no impression history to price against yet.
+- **Raise it once you have data.** After a month of real traffic you can say
+  "the in-grid slot delivered 40,000 impressions" and price from that. Raising
+  a rate on evidence is straightforward; raising it on a guess is not.
+
+The rule that matters either way: **the rate card must describe what is
+actually served.** Selling "an ad in the grid" and delivering four is a happy
+surprise; selling four and delivering one is a refund.
+
+Rates are per placement, not per impression. An advertiser buys a slot for the
+month, so a busier board means more views at the same price — worth saying on
+the page, because it makes early advertisers beneficiaries of your growth
+rather than people who bought before a price rise.
 
 The page states plainly what an advertiser does and does not get: contextual
 targeting, aggregate performance for their own campaign, no user data, no

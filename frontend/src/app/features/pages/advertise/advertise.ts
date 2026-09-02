@@ -77,15 +77,23 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
             Flat monthly rate, invoiced monthly. No contracts, cancel with a month's
             notice. All prices exclude VAT.
           </p>
+          <p class="muted">
+            Rates are per placement, not per impression. You are buying a slot for
+            the month — if the board gets busier, you get more views at the same
+            price.
+          </p>
 
           <div class="pricing-grid" style="margin-top:1.5rem">
             <div class="plan-card">
               <div class="plan-name">Sidebar</div>
               <div class="plan-price">R 2,500<span>/month</span></div>
-              <div class="plan-desc">Beside the search results, visible on every browse.</div>
+              <div class="plan-desc">
+                Beside the filters, on screen for the whole of every search.
+              </div>
               <ul class="plan-features">
+                <li>One slot per search page</li>
                 <li>Image or text</li>
-                <li>Target by province</li>
+                <li>Target by province, city or suburb</li>
                 <li>Monthly performance report</li>
               </ul>
             </div>
@@ -93,10 +101,14 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
             <div class="plan-card featured">
               <div class="plan-name">In-grid</div>
               <div class="plan-price">R 4,000<span>/month</span></div>
-              <div class="plan-desc">Between room cards, in the flow of browsing.</div>
+              <div class="plan-desc">
+                In the grid itself, after every sixth room. Someone scrolling a
+                long search passes several.
+              </div>
               <ul class="plan-features">
-                <li>Highest visibility</li>
-                <li>Target by province and room type</li>
+                <li>Repeats every 6 rooms as they scroll</li>
+                <li>Rotates with other advertisers, never the same ad twice running</li>
+                <li>Target by province, city, suburb or room type</li>
                 <li>Monthly performance report</li>
               </ul>
             </div>
@@ -104,10 +116,13 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
             <div class="plan-card">
               <div class="plan-name">Room detail</div>
               <div class="plan-price">R 3,000<span>/month</span></div>
-              <div class="plan-desc">Below a listing, where someone is deciding to apply.</div>
+              <div class="plan-desc">
+                Below a listing, at the point someone is deciding whether to apply.
+              </div>
               <ul class="plan-features">
-                <li>Reaches serious intent</li>
-                <li>Target by province</li>
+                <li>Reaches the strongest intent</li>
+                <li>Targetable to the suburb of the room being viewed</li>
+                <li>Target by province, city or suburb</li>
                 <li>Monthly performance report</li>
               </ul>
             </div>
