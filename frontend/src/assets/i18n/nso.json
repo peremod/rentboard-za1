@@ -17,7 +17,7 @@
   "filters.title": "Filters",
   "filters.bills_included": "Bills included",
   "filters.couples_welcome": "Couples welcome",
-  "filters.dss_accepted": "DSS / SASSA accepted",
+  "filters.dss_accepted": "SASSA accepted",
   "filters.guarantor_accepted": "Guarantor accepted",
   "filters.pets_allowed": "Pets allowed",
   "found_rooms": "{{count}} rooms found",

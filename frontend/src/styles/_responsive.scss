@@ -501,3 +501,33 @@
 }
 .campaign-form { max-width: 34rem; }
 .campaign-form .is-busy { opacity: .6; pointer-events: none; }
+
+// ── Checkbox rows ───────────────────────────────────────────────────────
+// The global control styles set inputs to width:100%, which stretched every
+// checkbox to the full form width and pushed its label onto the next line.
+// This keeps the box next to its text, and gives room for an explanation.
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: .65rem;
+  padding: .6rem 0;
+  cursor: pointer;
+
+  input[type='checkbox'] {
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
+    margin: .15rem 0 0;      // nudged to sit on the first line of text
+    accent-color: var(--terra);
+    flex: 0 0 auto;
+  }
+}
+
+.check-row__text { display: flex; flex-direction: column; gap: .15rem; }
+.check-row__label { font-size: .92rem; font-weight: 600; color: var(--ink); }
+.check-row__hint {
+  font-size: .8rem;
+  line-height: 1.55;
+  color: var(--slate);
+  font-weight: 400;
+}

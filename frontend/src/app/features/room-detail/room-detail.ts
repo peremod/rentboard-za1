@@ -80,7 +80,12 @@ import { AMENITY_LABELS } from '../../core/models/room.model';
 
         <div class="room-detail__flags">
           @if (r.couplesAllowed) { <span class="pill pill--green">Couples welcome</span> }
-          @if (r.dssAccepted) { <span class="pill pill--green">DSS/SASSA accepted</span> }
+          @if (r.dssAccepted) {
+            <span class="pill pill--green"
+                  title="The landlord will consider tenants whose income is a government grant">
+              SASSA grants welcome
+            </span>
+          }
           @if (r.guarantorAccepted) { <span class="pill pill--green">Guarantor accepted</span> }
           @if (r.petsAllowed) { <span class="pill pill--green">Pets allowed</span> }
         </div>

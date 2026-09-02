@@ -53,7 +53,15 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
           <h2>Pricing &amp; location</h2>
           <div class="form-row"><label>Monthly rent (ZAR)</label><input type="number" formControlName="rent" min="100" placeholder="5500"/></div>
           <div class="form-row"><label>Deposit (ZAR, optional)</label><input type="number" formControlName="deposit" min="0"/></div>
-          <label><input type="checkbox" formControlName="billsIncluded"/> Bills included</label>
+          <label class="check-row">
+            <input type="checkbox" formControlName="billsIncluded"/>
+            <span class="check-row__text">
+              <span class="check-row__label">Bills included</span>
+              <span class="check-row__hint">
+                Water, electricity and rates are covered by the rent.
+              </span>
+            </span>
+          </label>
           <label>Province
             <select formControlName="province">
               <option value="" disabled>Select a province</option>
@@ -74,9 +82,36 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
         <form [formGroup]="preferencesForm">
           <h2>Housemate preferences</h2>
           <div class="form-row"><label>Current housemates</label><input type="number" formControlName="housematesCount" min="0"/></div>
-          <label><input type="checkbox" formControlName="couplesAllowed"/> Couples welcome</label>
-          <label><input type="checkbox" formControlName="dssAccepted"/> DSS / SASSA accepted</label>
-          <label><input type="checkbox" formControlName="guarantorAccepted"/> Guarantor accepted</label>
+          <label class="check-row">
+            <input type="checkbox" formControlName="couplesAllowed"/>
+            <span class="check-row__text">
+              <span class="check-row__label">Couples welcome</span>
+              <span class="check-row__hint">Two people may share the room.</span>
+            </span>
+          </label>
+
+          <label class="check-row">
+            <input type="checkbox" formControlName="dssAccepted"/>
+            <span class="check-row__text">
+              <span class="check-row__label">SASSA grant recipients welcome</span>
+              <span class="check-row__hint">
+                You'll consider tenants whose income is a government grant —
+                old age, disability, child support or similar.
+              </span>
+            </span>
+          </label>
+
+          <label class="check-row">
+            <input type="checkbox" formControlName="guarantorAccepted"/>
+            <span class="check-row__text">
+              <span class="check-row__label">Guarantor accepted</span>
+              <span class="check-row__hint">
+                If a tenant can't show enough income on their own, you'll accept
+                someone — often a parent or employer — who agrees in writing to
+                cover the rent if they don't.
+              </span>
+            </span>
+          </label>
           <label><input type="checkbox" formControlName="petsAllowed"/> Pets allowed</label>
           @if (creatingDraft()) { <p class="muted">Saving draft…</p> }
           @if (createError()) { <p class="error">{{ createError() }}</p> }
