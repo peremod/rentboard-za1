@@ -782,9 +782,13 @@ model UxCounter {
 
   /// Dotted event name, e.g. 'wizard.step2_reached'.
   event    String
-  /// Optional low-cardinality dimension: 'mobile', 'desktop', a province.
-  /// Never anything that could identify a person.
-  segment  String?
+  /// Low-cardinality dimension: 'mobile', 'desktop', or 'all'. Never anything
+  /// that could identify a person.
+  ///
+  /// NOT nullable, deliberately. Postgres treats NULL as distinct from NULL in
+  /// a unique index, so a nullable column here would let the same event/day
+  /// insert unlimited duplicate rows and the counter would never increment.
+  segment  String   @default("all")
   /// Date only. An exact timestamp plus a rare event is identifying.
   day      DateTime @db.Date
 

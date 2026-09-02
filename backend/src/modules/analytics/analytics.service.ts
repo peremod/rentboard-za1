@@ -37,7 +37,10 @@ export class AnalyticsService {
     const day = new Date();
     day.setUTCHours(0, 0, 0, 0);
 
-    const safeSegment = segment && segment.length <= 24 ? segment : null;
+    // 'all' rather than null: a nullable column in a compound unique index
+    // never collides in Postgres, so the upsert would insert forever instead
+    // of incrementing.
+    const safeSegment = segment && segment.length <= 24 ? segment : 'all';
 
     try {
       await this.prisma.uxCounter.upsert({
