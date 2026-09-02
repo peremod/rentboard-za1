@@ -73,6 +73,7 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
           <div class="form-row"><label>Available from</label><input type="date" formControlName="availableFrom"/></div>
           <div class="wizard__actions">
             <button type="button" (click)="step.set(1)">← Back</button>
+            <button type="button" class="btn btn-ghost-light" (click)="cancel()">Cancel</button>
             <button type="button" [disabled]="pricingForm.invalid" (click)="goToStep(3)">Next →</button>
           </div>
         </form>
@@ -112,7 +113,13 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
               </span>
             </span>
           </label>
-          <label><input type="checkbox" formControlName="petsAllowed"/> Pets allowed</label>
+          <label class="check-row">
+            <input type="checkbox" formControlName="petsAllowed"/>
+            <span class="check-row__text">
+              <span class="check-row__label">Pets allowed</span>
+              <span class="check-row__hint">Cats or dogs are welcome in the house.</span>
+            </span>
+          </label>
           @if (creatingDraft()) { <p class="muted">Saving draft…</p> }
           @if (createError()) { <p class="error">{{ createError() }}</p> }
           
@@ -139,6 +146,7 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
 
           <div class="wizard__actions">
             <button type="button" (click)="step.set(2)">← Back</button>
+            <button type="button" class="btn btn-ghost-light" (click)="cancel()">Cancel</button>
             <button type="button" [disabled]="creatingDraft()" (click)="createDraftAndContinue()">Next →</button>
           </div>
         </form>

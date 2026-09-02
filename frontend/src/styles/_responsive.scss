@@ -416,18 +416,40 @@
   font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
   color: var(--slate); margin-bottom: .45rem;
 }
-.amenities__items { display: flex; flex-wrap: wrap; gap: .4rem; }
+.amenities__items { display: flex; flex-wrap: wrap; gap: .5rem; }
 
 // Chips rather than a column of checkboxes: 28 stacked rows is a form nobody
 // finishes, and these are quick yes/no choices.
 .amenity-chip {
-  display: inline-flex; align-items: center; gap: .35rem;
-  padding: .35rem .7rem; font-size: .82rem;
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: var(--r-full); cursor: pointer; user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  // Roomier than before: the label was hard against the pill edge, which made
+  // every chip read as cramped.
+  padding: .5rem .9rem;
+  font-size: .85rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  cursor: pointer;
+  user-select: none;
   transition: background .12s, border-color .12s;
 
-  input { width: auto; margin: 0; accent-color: var(--terra); }
+  // The global control rule sets inputs to display:block and width:100%, which
+  // pushed the box onto its own line above the label and centred it. Explicit
+  // dimensions keep it inline.
+  input[type='checkbox'] {
+    width: 16px;
+    min-width: 16px;
+    height: 16px;
+    margin: 0;
+    display: inline-block;
+    accent-color: var(--terra);
+    flex: 0 0 auto;
+  }
+
   &:hover { border-color: var(--terra2); }
 }
 .amenity-chip--on {
@@ -534,3 +556,10 @@
 
 .campaign-form__actions { display: flex; gap: .5rem; margin-top: 1rem; }
 .campaign-form__actions .btn { flex: 1; }
+
+
+@media (max-width: 480px) {
+  // nowrap is right on a wide screen but forces horizontal overflow on a
+  // phone, where a label like 'Backup power / inverter' is wider than the row.
+  .amenity-chip { white-space: normal; }
+}
