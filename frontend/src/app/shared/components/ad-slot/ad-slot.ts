@@ -65,6 +65,11 @@ export class AdSlot {
   readonly province = input<string | undefined>(undefined);
   readonly city = input<string | undefined>(undefined);
   readonly roomType = input<string | undefined>(undefined);
+  /**
+   * Which repeat this is down the page. Used to pick a different campaign per
+   * slot: the same ad six times reads as a broken page, not as frequency.
+   */
+  readonly slotIndex = input<number>(0);
 
   ad = signal<Ad | null>(null);
   private injector = inject(Injector);
@@ -83,12 +88,16 @@ export class AdSlot {
         province: this.province(),
         city: this.city(),
         roomType: this.roomType(),
+        limit: 3,
       })
       .subscribe({
         next: (ads) => {
-          const first = ads[0] ?? null;
-          this.ad.set(first);
-          if (first) this.ads.recordImpressions([first.id]);
+          // Ask for several and step through them by slot, wrapping when there
+          // are fewer campaigns than slots. Repetition is then spaced out
+          // rather than consecutive.
+          const chosen = ads.length > 0 ? ads[this.slotIndex() % ads.length] : null;
+          this.ad.set(chosen);
+          if (chosen) this.ads.recordImpressions([chosen.id]);
         },
         // An ad failing must never affect the page it sits on.
         error: () => this.ad.set(null),

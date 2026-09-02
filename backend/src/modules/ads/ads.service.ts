@@ -73,10 +73,28 @@ export class AdsService {
       }))
       .sort((a, b) => b.specificity - a.specificity);
 
-    const top = scored.filter((s) => s.specificity === scored[0]?.specificity);
-    const chosen = top.length > 1
-      ? [top[Math.floor(Math.random() * top.length)], ...scored.filter((s) => !top.includes(s))]
-      : scored;
+    // Shuffle within each specificity band rather than picking one and
+    // discarding the rest: asking for three equally specific campaigns should
+    // return three in a random order, not one. The old version dropped the
+    // others entirely, so repeated slots on a page all got the same ad.
+    const bands = new Map<number, typeof scored>();
+    for (const entry of scored) {
+      const band = bands.get(entry.specificity) ?? [];
+      band.push(entry);
+      bands.set(entry.specificity, band);
+    }
+
+    const chosen = [...bands.keys()]
+      .sort((a, b) => b - a)
+      .flatMap((specificity) => {
+        const band = [...bands.get(specificity)!];
+        // Fisher-Yates, so no advertiser is permanently first in its band.
+        for (let i = band.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [band[i], band[j]] = [band[j], band[i]];
+        }
+        return band;
+      });
 
     return chosen.slice(0, params.limit ?? 1).map(({ campaign }) => ({
       id: campaign.id,

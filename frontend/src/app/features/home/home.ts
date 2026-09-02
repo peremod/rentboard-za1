@@ -273,12 +273,13 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
             @for (room of rooms(); track room.id; let i = $index) {
               <app-room-card [room]="room" [isFirstCard]="i === 0"/>
 
-              <!-- After the sixth card when there are enough rooms, otherwise
-                   after the last one. A fixed index meant the slot never
-                   appeared on a board with fewer than six listings, which is
-                   every new board. -->
-              @if (i === inlineAdIndex()) {
+              <!-- Every sixth card, not just the first six. The slot index is
+                   passed so each one requests independently and the rotation
+                   gives a different advertiser rather than the same ad six
+                   times down the page. -->
+              @if (showsAdAfter(i)) {
                 <app-ad-slot placement="board_inline"
+                             [slotIndex]="adSlotNumber(i)"
                              [province]="province || undefined"
                              [city]="searchTerm.trim() || undefined"
                              [roomType]="roomType || undefined"/>
@@ -472,14 +473,29 @@ export class Home implements OnInit, OnDestroy {
     return bits.join(' ').slice(0, 80);
   }
 
+  /** One ad per six rooms — dense enough to be worth selling, sparse enough
+   *  that the board still reads as a room board. */
+  private readonly AD_EVERY = 6;
+
   /**
-   * Where the in-grid ad goes. Far enough in that the visitor is browsing
-   * rather than glancing, but never past the end of a short list.
+   * True when an ad belongs after this card.
+   *
+   * Every sixth card, plus the last card on a short board so a new board with
+   * three listings still shows one. The trailing case is skipped when the last
+   * card is already a multiple of six, or two ads would land together.
    */
-  inlineAdIndex(): number {
+  showsAdAfter(index: number): boolean {
     const count = this.rooms().length;
-    if (count === 0) return -1;   // nothing to sit between
-    return Math.min(5, count - 1);
+    if (count === 0) return false;
+
+    const isInterval = (index + 1) % this.AD_EVERY === 0;
+    const isShortBoardEnd = count < this.AD_EVERY && index === count - 1;
+    return isInterval || isShortBoardEnd;
+  }
+
+  /** Which ad slot this is, so each requests its own campaign. */
+  adSlotNumber(index: number): number {
+    return Math.floor(index / this.AD_EVERY);
   }
 
   /** Count of non-default filters — shown on the mobile Filters button. */

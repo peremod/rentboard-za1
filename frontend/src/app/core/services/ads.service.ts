@@ -24,8 +24,12 @@ export class AdsService {
    * Ads for the page context — never for the person. Province and room type
    * describe what is being looked at, not who is looking.
    */
-  getAds(placement: AdPlacement, context: { province?: string; city?: string; roomType?: string } = {}) {
+  getAds(
+    placement: AdPlacement,
+    context: { province?: string; city?: string; roomType?: string; limit?: number } = {},
+  ) {
     let params = new HttpParams().set('placement', placement);
+    if (context.limit) params = params.set('limit', String(context.limit));
     if (context.province) params = params.set('province', context.province);
     if (context.city) params = params.set('city', context.city);
     if (context.roomType) params = params.set('roomType', context.roomType);
