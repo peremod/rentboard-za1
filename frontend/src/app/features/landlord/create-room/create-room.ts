@@ -4,7 +4,6 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { SA_PROVINCES, AMENITIES } from '../../../core/models/room.model';
 import { AnalyticsService } from '../../../core/services/analytics.service';
-import { ToastService } from '../../../core/services/toast.service';
 import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upload/photo-upload';
 
 /**
@@ -141,8 +140,41 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
         </div>
       }
     </div>
+
+    @if (savedDialog()) {
+      <div class="save-dialog" role="alertdialog" aria-modal="true"
+           aria-labelledby="save-dialog-title">
+        <div class="save-dialog__panel">
+          <div class="save-dialog__icon" aria-hidden="true">✅</div>
+          <h2 id="save-dialog-title" class="save-dialog__title">Changes saved</h2>
+          <p class="save-dialog__body">Your listing is still live.</p>
+          <button type="button" class="btn btn-primary save-dialog__ok"
+                  (click)="dismissSaved()" #savedOk>
+            Back to dashboard
+          </button>
+        </div>
+      </div>
+    }
   `,
   styles: [`
+    /* Blocks the page deliberately: the landlord has finished a task and the
+       only sensible next step is leaving, so a dismissable dialog is clearer
+       than a notification that fades while they are still reading it. */
+    .save-dialog {
+      position: fixed; inset: 0; z-index: 300;
+      background: rgba(26, 20, 16, .55);
+      display: flex; align-items: center; justify-content: center; padding: 1.5rem;
+    }
+    .save-dialog__panel {
+      background: var(--card, #fff); border-radius: 12px;
+      padding: 1.75rem 1.5rem; max-width: 22rem; width: 100%; text-align: center;
+      box-shadow: 0 18px 44px rgba(0, 0, 0, .22);
+    }
+    .save-dialog__icon { font-size: 2rem; line-height: 1; margin-bottom: .5rem; }
+    .save-dialog__title { font-size: 1.15rem; font-weight: 700; margin-bottom: .35rem; }
+    .save-dialog__body { font-size: .9rem; color: var(--ink2, #5A5044); margin-bottom: 1.25rem; }
+    .save-dialog__ok { width: 100%; }
+
     .wizard { max-width: 520px; margin: 2rem auto; padding: 0 1.25rem; font-family: sans-serif; }
     .wizard__steps { display: flex; gap: .5rem; margin-bottom: 2rem; }
     .wizard__step { flex: 1; height: 4px; background: #DDD5C8; border-radius: 4px; }
@@ -163,7 +195,6 @@ export class CreateRoom implements OnInit {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private analytics = inject(AnalyticsService);
-  private toast = inject(ToastService);
 
   provinces = SA_PROVINCES;
   step = signal(1);
@@ -177,6 +208,7 @@ export class CreateRoom implements OnInit {
   saving = signal(false);
   saveError = signal<string | null>(null);
   savedMessage = signal<string | null>(null);
+  savedDialog = signal(false);
   loadingDraft = signal(false);
 
   readonly amenityGroups = AMENITIES;
@@ -230,6 +262,12 @@ export class CreateRoom implements OnInit {
     if (events[step]) this.analytics.track(events[step]);
   }
 
+  /** Acknowledging the save is what returns to the dashboard. */
+  dismissSaved() {
+    this.savedDialog.set(false);
+    this.router.navigate(['/landlord/dashboard']);
+  }
+
   cancel() {
     this.analytics.track('wizard.abandoned');
     const message = this.isPublished()
@@ -268,11 +306,10 @@ export class CreateRoom implements OnInit {
         this.roomsService.updatePhotos(id, this.photos().map((p) => p.path)).subscribe({
           next: () => {
             this.saving.set(false);
-            // Back to the dashboard rather than leaving them on a form with
-            // nothing left to do. The toast confirms it after the navigation,
-            // so the message is seen next to the updated listing.
-            this.toast.success('Changes saved — your listing is still live.');
-            this.router.navigate(['/landlord/dashboard']);
+            // A dialog rather than a toast: this is the end of a task, and a
+            // notification that fades can be missed entirely on a page the
+            // landlord is about to leave.
+            this.savedDialog.set(true);
           },
           error: (err) => {
             this.saving.set(false);
