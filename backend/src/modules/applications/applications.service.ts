@@ -193,6 +193,22 @@ export class ApplicationsService {
    * for the same room, with a considerate note — matches the behaviour
    * shown in the Sprint3 reference (RentBoard-Sprint3-Code.html).
    */
+  /**
+   * Undo a shortlist. Returns the application to 'viewed', not 'pending' —
+   * the landlord has read it, and pretending otherwise would restart the
+   * response-time clock and mislead the tenant.
+   */
+  async unshortlist(applicationId: string, landlordId: string) {
+    const application = await this.getOwnedApplication(applicationId, landlordId);
+    if (application.status !== 'shortlisted') {
+      throw new BadRequestException('This application is not shortlisted');
+    }
+    return this.prisma.application.update({
+      where: { id: applicationId },
+      data: { status: 'viewed' },
+    });
+  }
+
   async accept(applicationId: string, landlordId: string) {
     const application = await this.getOwnedApplication(applicationId, landlordId);
     this.assertNotDecided(application);

@@ -1591,6 +1591,25 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
 fi
 
 
+# -- 33. Shortlist management ----------------------------------------------
+head_ "33. Shortlist management"
+if [[ -n "$APP2_ID" || -n "$APP_ID" ]]; then
+  SL_APP="${APP2_ID:-$APP_ID}"
+  req POST "/api/applications/$SL_APP/unshortlist" "" "$LTOKEN"
+  if [[ "$STATUS" == "200" || "$STATUS" == "400" ]]; then
+    green "  PASS  unshortlist responds sensibly  ($STATUS)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  unshortlist returned $STATUS"; FAIL=$((FAIL+1))
+  fi
+
+  req POST "/api/applications/$SL_APP/unshortlist" "" "$TTOKEN"
+  check "tenant CANNOT unshortlist" 403 "$STATUS" "$BODY"
+
+  req POST "/api/applications/$SL_APP/unshortlist" ""
+  check "unshortlist requires auth" 401 "$STATUS"
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

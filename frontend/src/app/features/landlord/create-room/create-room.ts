@@ -4,6 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { SA_PROVINCES, AMENITIES } from '../../../core/models/room.model';
 import { AnalyticsService } from '../../../core/services/analytics.service';
+import { ToastService } from '../../../core/services/toast.service';
 import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upload/photo-upload';
 
 /**
@@ -112,7 +113,9 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
       @if (step() === 4 && roomId()) {
         <div>
           <h2>Add photos</h2>
-          <app-photo-upload [folder]="'rooms/' + roomId()" (photosChange)="onPhotosChange($event)"/>
+          <app-photo-upload [folder]="'rooms/' + roomId()"
+                            [initialPhotos]="photos()"
+                            (photosChange)="onPhotosChange($event)"/>
           @if (publishError()) { <p class="error">{{ publishError() }}</p> }
           @if (saveError()) { <p class="error">{{ saveError() }}</p> }
           @if (savedMessage()) { <p class="field-hint">{{ savedMessage() }}</p> }
@@ -160,6 +163,7 @@ export class CreateRoom implements OnInit {
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private analytics = inject(AnalyticsService);
+  private toast = inject(ToastService);
 
   provinces = SA_PROVINCES;
   step = signal(1);
@@ -264,7 +268,11 @@ export class CreateRoom implements OnInit {
         this.roomsService.updatePhotos(id, this.photos().map((p) => p.path)).subscribe({
           next: () => {
             this.saving.set(false);
-            this.savedMessage.set('Changes saved. Your listing is still live.');
+            // Back to the dashboard rather than leaving them on a form with
+            // nothing left to do. The toast confirms it after the navigation,
+            // so the message is seen next to the updated listing.
+            this.toast.success('Changes saved — your listing is still live.');
+            this.router.navigate(['/landlord/dashboard']);
           },
           error: (err) => {
             this.saving.set(false);

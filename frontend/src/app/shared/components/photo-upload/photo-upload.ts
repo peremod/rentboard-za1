@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, input, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { MAX_PHOTOS_PER_ROOM } from '../../../core/config/feature-flags';
 
@@ -64,10 +64,27 @@ export class PhotoUpload {
 
   /** ImageKit folder — e.g. 'rooms/{roomId}'. */
   folder = input.required<string>();
+  /**
+   * Photos the room already has. Without this an edit screen showed an empty
+   * uploader on a room with photos, which reads as "they are gone" and invites
+   * the landlord to re-upload everything.
+   */
+  initialPhotos = input<UploadedPhoto[]>([]);
   photosChange = output<UploadedPhoto[]>();
 
   maxPhotos = MAX_PHOTOS_PER_ROOM;
   photos = signal<UploadedPhoto[]>([]);
+
+  constructor() {
+    // Seed once from the input; after that the signal is the source of truth,
+    // so a re-render cannot wipe photos the landlord just added.
+    effect(() => {
+      const initial = this.initialPhotos();
+      if (initial.length > 0 && this.photos().length === 0) {
+        this.photos.set([...initial]);
+      }
+    });
+  }
   uploading = signal(false);
   error = signal<string | null>(null);
 

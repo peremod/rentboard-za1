@@ -28,7 +28,37 @@ import { TenantReferences } from '../../../core/models/review.model';
       } @else if (applications().length === 0) {
         <p class="muted">No applications yet for this room.</p>
       } @else {
-        @for (app of applications(); track app.id) {
+        <!-- Grouped, shortlist first. A flat list meant a landlord with
+             fifteen applicants had to re-find the three they liked every time
+             they came back. -->
+        @if (shortlisted().length > 0) {
+          <div class="applicant-group">
+            <h3 class="applicant-group__title">
+              ⭐ Shortlisted <span class="applicant-group__count">({{ shortlisted().length }})</span>
+            </h3>
+            <p class="applicant-group__hint">
+              Arrange viewings with these, then accept one. Accepting closes the
+              room and tells everyone else.
+            </p>
+          </div>
+        }
+
+        @for (app of ordered(); track app.id) {
+          @if (isFirstOf(app, 'other')) {
+            <div class="applicant-group">
+              <h3 class="applicant-group__title">
+                New and viewed <span class="applicant-group__count">({{ others().length }})</span>
+              </h3>
+            </div>
+          }
+          @if (isFirstOf(app, 'decided')) {
+            <div class="applicant-group">
+              <h3 class="applicant-group__title">
+                Decided <span class="applicant-group__count">({{ decided().length }})</span>
+              </h3>
+              <p class="applicant-group__hint">Accepted, rejected or withdrawn. No action needed.</p>
+            </div>
+          }
           <div class="applicant-card">
             <div class="applicant-card__header" (click)="toggleOpen(app)">
               <div>
@@ -47,6 +77,8 @@ import { TenantReferences } from '../../../core/models/review.model';
                   <div class="applicant-card__actions">
                     @if (app.status !== 'shortlisted') {
                       <button type="button" (click)="shortlist(app)">⭐ Shortlist</button>
+                    } @else {
+                      <button type="button" (click)="unshortlist(app)">Remove from shortlist</button>
                     }
                     <button type="button" class="accept" (click)="accept(app)">✓ Accept</button>
                     <button type="button" class="reject" (click)="reject(app)">✕ Reject</button>
@@ -100,6 +132,10 @@ import { TenantReferences } from '../../../core/models/review.model';
     .refs-toggle { background: none; border: 1px solid #E0D5C4; border-radius: 6px; padding: .35rem .75rem;
                    font-size: .78rem; font-weight: 600; cursor: pointer; color: #3A3228; }
     .refs-note { font-size: .72rem; color: #7A6E60; line-height: 1.6; margin-top: .6rem; }
+    .applicant-group { margin: 1.25rem 0 .5rem; }
+    .applicant-group__title { font-size: .95rem; font-weight: 700; color: #3A3228; }
+    .applicant-group__count { color: #7A6E60; font-weight: 400; }
+    .applicant-group__hint { font-size: .8rem; color: #7A6E60; line-height: 1.6; margin-top: .2rem; }
     .applicant-card__actions { display: flex; gap: .5rem; margin-bottom: .5rem; flex-wrap: wrap; }
     .applicant-card__actions button { padding: .4rem .8rem; border-radius: 6px; border: 1px solid #DDD5C8; background: #fff; cursor: pointer; font-size: .78rem; font-weight: 600; }
     .applicant-card__actions .accept { background: #3D7040; color: #fff; border: none; }
@@ -126,6 +162,31 @@ export class Applicants implements OnInit {
    * eagerly would mean requesting personal information about people whose
    * applications the landlord may never open.
    */
+  /** Shortlisted first, then undecided, then finished. */
+  shortlisted() {
+    return this.applications().filter((a) => a.status === 'shortlisted');
+  }
+
+  others() {
+    return this.applications().filter((a) => a.status === 'pending' || a.status === 'viewed');
+  }
+
+  decided() {
+    return this.applications().filter((a) =>
+      ['accepted', 'rejected', 'withdrawn'].includes(a.status),
+    );
+  }
+
+  ordered() {
+    return [...this.shortlisted(), ...this.others(), ...this.decided()];
+  }
+
+  /** Drives the group heading before the first row of each band. */
+  isFirstOf(app: { id: string }, band: 'other' | 'decided') {
+    const list = band === 'other' ? this.others() : this.decided();
+    return list.length > 0 && list[0].id === app.id;
+  }
+
   toggleRefs(app: { id: string; tenant?: { id: string } }) {
     if (this.openRefs() === app.id) {
       this.openRefs.set(null);
@@ -174,6 +235,9 @@ export class Applicants implements OnInit {
 
   shortlist(app: Application) {
     this.applicationsService.shortlist(app.id).subscribe((updated) => this.patch(app.id, updated));
+  }
+  unshortlist(app: Application) {
+    this.applicationsService.unshortlist(app.id).subscribe((updated) => this.patch(app.id, updated));
   }
 
   accept(app: Application) {

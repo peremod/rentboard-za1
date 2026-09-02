@@ -29,16 +29,47 @@ import { AMENITY_LABELS } from '../../core/models/room.model';
       @if (room(); as r) {
         <p><a routerLink="/">← Back to all rooms</a></p>
 
-        <div class="room-detail__gallery">
-          <img [ngSrc]="heroPath()" [alt]="r.title" width="800" height="533" priority/>
-          @if (galleryPaths().length > 0) {
-            <div class="room-detail__thumbs">
-              @for (path of galleryPaths(); track path) {
-                <img [ngSrc]="path" [alt]="r.title" width="150" height="100"/>
+        <!-- Main image plus up to four thumbnails beside it. A row of
+             equal thumbnails under a hero gave no sense of which photo
+             mattered; this keeps one image dominant. -->
+        <div class="gallery" [class.gallery--solo]="allPhotos().length === 1">
+          <button type="button" class="gallery__main" (click)="openLightbox(0)"
+                  [attr.aria-label]="'View photos of ' + r.title">
+            <img [ngSrc]="activePath()" [alt]="r.title" width="800" height="533" priority/>
+          </button>
+
+          @if (allPhotos().length > 1) {
+            <div class="gallery__side">
+              @for (path of sidePhotos(); track $index; let i = $index) {
+                <button type="button" class="gallery__thumb" (click)="openLightbox(i + 1)">
+                  <img [ngSrc]="path" [alt]="r.title" width="200" height="140"/>
+                  <!-- The overflow count sits on the last visible thumb rather
+                       than adding another row nobody scrolls. -->
+                  @if (i === 3 && hiddenCount() > 0) {
+                    <span class="gallery__more">+{{ hiddenCount() }}</span>
+                  }
+                </button>
               }
             </div>
           }
         </div>
+
+        @if (lightboxIndex() !== null) {
+          <div class="lightbox" role="dialog" aria-modal="true"
+               (click)="closeLightbox()" (keydown.escape)="closeLightbox()" tabindex="-1">
+            <button type="button" class="lightbox__close" (click)="closeLightbox()"
+                    aria-label="Close">✕</button>
+            <button type="button" class="lightbox__nav lightbox__nav--prev"
+                    (click)="step(-1); $event.stopPropagation()" aria-label="Previous">‹</button>
+            <img [src]="allPhotos()[lightboxIndex()!]" [alt]="r.title"
+                 (click)="$event.stopPropagation()"/>
+            <button type="button" class="lightbox__nav lightbox__nav--next"
+                    (click)="step(1); $event.stopPropagation()" aria-label="Next">›</button>
+            <div class="lightbox__count">
+              {{ lightboxIndex()! + 1 }} of {{ allPhotos().length }}
+            </div>
+          </div>
+        }
 
         <h1>{{ r.title }}</h1>
         <p class="room-detail__price">{{ r.rentCents | zarCents:'monthly' }} @if (r.billsIncluded) { <span class="pill">Bills included</span> }</p>
@@ -122,9 +153,38 @@ import { AMENITY_LABELS } from '../../core/models/room.model';
   `,
   styles: [`
     .room-detail { max-width: 640px; margin: 0 auto; padding: 1.5rem 1.25rem; font-family: sans-serif; }
-    .room-detail__gallery img:first-child { width: 100%; height: auto; border-radius: 10px; margin-bottom: .5rem; }
-    .room-detail__thumbs { display: flex; gap: .4rem; overflow-x: auto; }
-    .room-detail__thumbs img { border-radius: 6px; object-fit: cover; }
+    /* Hero plus a 2x2 of thumbnails. Collapses to hero-only on narrow
+       screens, where four small images are unreadable anyway. */
+    .gallery { display: grid; grid-template-columns: 2fr 1fr; gap: .5rem; margin-bottom: 1rem; }
+    .gallery--solo { grid-template-columns: 1fr; }
+    .gallery button { padding: 0; border: none; background: none; cursor: pointer; display: block; }
+    .gallery__main img { width: 100%; height: 100%; aspect-ratio: 3/2;
+                         object-fit: cover; border-radius: 10px; display: block; }
+    .gallery__side { display: grid; grid-template-rows: repeat(2, 1fr); gap: .5rem; }
+    .gallery__thumb { position: relative; }
+    .gallery__thumb img { width: 100%; height: 100%; aspect-ratio: 3/2;
+                          object-fit: cover; border-radius: 8px; display: block; }
+    .gallery__more { position: absolute; inset: 0; display: flex; align-items: center;
+                     justify-content: center; background: rgba(26,20,16,.62); color: #fff;
+                     font-weight: 700; border-radius: 8px; font-size: 1.05rem; }
+
+    @media (max-width: 700px) {
+      .gallery { grid-template-columns: 1fr; }
+      .gallery__side { grid-template-rows: none; grid-template-columns: repeat(4, 1fr); }
+    }
+
+    .lightbox { position: fixed; inset: 0; z-index: 200; background: rgba(10,8,6,.94);
+                display: flex; align-items: center; justify-content: center; padding: 2rem; }
+    .lightbox img { max-width: 100%; max-height: 88vh; object-fit: contain; border-radius: 6px; }
+    .lightbox__close { position: absolute; top: 1rem; right: 1.25rem; font-size: 1.6rem;
+                       background: none; border: none; color: #fff; cursor: pointer; line-height: 1; }
+    .lightbox__nav { position: absolute; top: 50%; transform: translateY(-50%);
+                     font-size: 2.5rem; background: none; border: none; color: #fff;
+                     cursor: pointer; padding: 0 1rem; line-height: 1; }
+    .lightbox__nav--prev { left: .25rem; }
+    .lightbox__nav--next { right: .25rem; }
+    .lightbox__count { position: absolute; bottom: 1.25rem; left: 50%; transform: translateX(-50%);
+                       color: rgba(255,255,255,.75); font-size: .85rem; }
     h1 { font-size: 1.4rem; margin: 1rem 0 .3rem; }
     .room-detail__price { font-size: 1.15rem; font-weight: 700; color: #C04E28; margin-bottom: .3rem; }
     .room-detail__location { color: #7A6E60; margin-bottom: .8rem; }
@@ -168,6 +228,30 @@ export class RoomDetail implements OnInit {
 
   heroPath = computed(() => this.room()?.heroImagePath || '/assets/images/room-placeholder.svg');
   galleryPaths = computed(() => this.room()?.imagePaths ?? []);
+
+  /** Cover first, then the rest — the order the landlord chose. */
+  allPhotos = computed(() => [this.heroPath(), ...this.galleryPaths()]);
+  activePath = computed(() => this.allPhotos()[0]);
+  /** At most four beside the hero; the rest are reachable in the lightbox. */
+  sidePhotos = computed(() => this.allPhotos().slice(1, 5));
+  hiddenCount = computed(() => Math.max(0, this.allPhotos().length - 5));
+
+  lightboxIndex = signal<number | null>(null);
+
+  openLightbox(index: number) {
+    this.lightboxIndex.set(index);
+  }
+
+  closeLightbox() {
+    this.lightboxIndex.set(null);
+  }
+
+  /** Wraps at both ends — running out of photos mid-browse feels broken. */
+  step(delta: number) {
+    const total = this.allPhotos().length;
+    if (total === 0) return;
+    this.lightboxIndex.update((i) => ((i ?? 0) + delta + total) % total);
+  }
 
   roomReviews = signal<Review[]>([]);
   loadingReviews = signal(true);

@@ -54,6 +54,15 @@ export class ApplicationsController {
     return this.applicationsService.shortlist(id, user.id);
   }
 
+  @Post(':id/unshortlist')
+  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove an applicant from the shortlist' })
+  unshortlist(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.applicationsService.unshortlist(id, user.id);
+  }
+
   @Post(':id/accept')
   @UseGuards(LandlordGuard)
   @HttpCode(HttpStatus.OK)

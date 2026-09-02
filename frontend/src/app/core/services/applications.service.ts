@@ -31,6 +31,10 @@ export class ApplicationsService {
     return this.http.post<Application>(`${this.api}/applications/${id}/withdraw`, {});
   }
 
+  unshortlist(id: string) {
+    return this.http.post<Application>(`${this.api}/applications/${id}/unshortlist`, {});
+  }
+
   shortlist(applicationId: string): Observable<Application> {
     return this.http.post<Application>(`${this.api}/applications/${applicationId}/shortlist`, {});
   }
