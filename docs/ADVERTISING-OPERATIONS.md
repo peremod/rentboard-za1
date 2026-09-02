@@ -83,6 +83,20 @@ reason.
 - **Non-https destinations.** Enforced by the API, listed here because it is a
   trust issue rather than a technical one.
 
+### Creative specification
+
+Give this to an advertiser before they send artwork — it saves a round trip.
+
+| | |
+|---|---|
+| Size | 600 × 400 (3:2). Anything else is centre-cropped to that shape |
+| Format | JPEG, PNG or WebP, under 2MB |
+| Safe area | Keep text away from the edges — the crop takes from the sides |
+| Text | Headline and body are rendered by us as real text, so the image does not need to carry the message |
+
+Images upload from the campaign form and are stored as a path, not a URL, so
+one upload serves every placement and the CDN handles resizing.
+
 ### Check before approving
 
 - Does the destination page match the ad's claim? Follow the link.
@@ -151,5 +165,4 @@ mean advertisers paying variable prices for inventory nobody else wants.
 - **No billing.** Invoiced outside the platform.
 - **No frequency capping.** Someone browsing thirty rooms may see the same ad
   thirty times. Worth adding once inventory is sold out enough to matter.
-- **No creative image upload in the admin form.** `imagePath` is set via the
-  API; text-only ads work fine in the meantime.
+- **No frequency capping** across a session, beyond the rotation between slots.

@@ -488,3 +488,16 @@
 }
 .search-suggest__place { font-weight: 500; }
 .search-suggest__count { font-size: .75rem; color: var(--slate); white-space: nowrap; }
+
+// ── Ad creative upload ──────────────────────────────────────────────────
+.creative-preview {
+  display: flex; align-items: flex-start; gap: .75rem; flex-wrap: wrap;
+
+  img {
+    // Same 3:2 the slot renders, so what the reviewer approves is what runs.
+    width: 220px; height: 147px; object-fit: cover;
+    border: 1px solid var(--border); border-radius: var(--r8);
+  }
+}
+.campaign-form { max-width: 34rem; }
+.campaign-form .is-busy { opacity: .6; pointer-events: none; }

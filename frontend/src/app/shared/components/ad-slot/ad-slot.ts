@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, Injector, afterNextRender, inject, input, signal } from '@angular/core';
 import { AdsService, Ad, AdPlacement } from '../../../core/services/ads.service';
+import { getImageUrl } from '../../utils/imagekit.utils';
 
 /**
  * A single ad placement.
@@ -24,8 +25,11 @@ import { AdsService, Ad, AdPlacement } from '../../../core/services/ads.service'
         <a class="ad-slot__link" [href]="clickUrl(advert)"
            target="_blank" rel="noopener noreferrer sponsored">
           @if (advert.imagePath) {
-            <img class="ad-slot__image" [src]="advert.imagePath" [alt]="advert.headline"
-                 width="300" height="160" loading="lazy"/>
+            <!-- Through the CDN helper: a stored path is not a URL, and the
+                 'ad' variant force-crops so every creative is the same shape. -->
+            <img class="ad-slot__image" [src]="imageUrl(advert.imagePath)"
+                 [alt]="advert.headline"
+                 width="600" height="400" loading="lazy" decoding="async"/>
           }
           <div class="ad-slot__body">
             <h4 class="ad-slot__headline">{{ advert.headline }}</h4>
@@ -102,6 +106,10 @@ export class AdSlot {
         // An ad failing must never affect the page it sits on.
         error: () => this.ad.set(null),
       });
+  }
+
+  imageUrl(path: string | null | undefined) {
+    return getImageUrl(path, 'ad');
   }
 
   clickUrl(ad: Ad) {

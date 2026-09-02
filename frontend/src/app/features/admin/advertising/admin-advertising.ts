@@ -6,6 +6,8 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { ADMIN_NAV } from '../admin-nav';
 import { SA_PROVINCES } from '../../../core/models/room.model';
+import { UploadsService } from '../../../core/services/uploads.service';
+import { getImageUrl } from '../../../shared/utils/imagekit.utils';
 
 /**
  * Advertising: the enquiry pipeline and campaign management in one place,
@@ -114,6 +116,32 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
             <div class="form-row">
               <label for="cbody">Body <span class="muted">(optional, max 200)</span></label>
               <textarea id="cbody" formControlName="body" rows="2" maxlength="200"></textarea>
+            </div>
+
+            <div class="form-row">
+              <label>Creative image <span class="muted">(optional)</span></label>
+
+              @if (imagePath()) {
+                <div class="creative-preview">
+                  <img [src]="previewUrl()" alt="Creative preview"/>
+                  <button type="button" class="btn btn-sm btn-ghost-light" (click)="clearImage()">
+                    Remove
+                  </button>
+                </div>
+              } @else {
+                <label class="btn btn-sm btn-outline" [class.is-busy]="uploading()">
+                  {{ uploading() ? 'Uploading…' : 'Choose image' }}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" hidden
+                         [disabled]="uploading()" (change)="onCreative($event)"/>
+                </label>
+              }
+
+              <p class="field-hint">
+                Shown at 600×400. Anything else is centre-cropped to that shape,
+                so keep the message away from the edges. Under 2MB.
+                Text-only ads work well in the sidebar.
+              </p>
+              @if (uploadError()) { <p class="field-error" role="alert">{{ uploadError() }}</p> }
             </div>
 
             <div class="form-row">
@@ -256,6 +284,7 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
 export class AdminAdvertising implements OnInit {
   private admin = inject(AdminService);
   private fb = inject(FormBuilder);
+  private uploads = inject(UploadsService);
 
   readonly navItems: PortalNavItem[] = ADMIN_NAV;
 
@@ -270,6 +299,9 @@ export class AdminAdvertising implements OnInit {
   saving = signal(false);
   formError = signal<string | null>(null);
   advertisers = signal<{ id: string; companyName: string }[]>([]);
+  imagePath = signal<string | null>(null);
+  uploading = signal(false);
+  uploadError = signal<string | null>(null);
   readonly provinces = SA_PROVINCES;
 
   campaignForm = this.fb.group({
@@ -305,6 +337,47 @@ export class AdminAdvertising implements OnInit {
     });
   }
 
+  /**
+   * Uploads the creative to a per-advertiser folder.
+   *
+   * Public, unlike verification documents — an ad image is meant to be seen.
+   * The path is stored, not the URL, so the CDN transform is applied at render
+   * time and one upload serves every placement size.
+   */
+  async onCreative(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    input.value = '';
+
+    if (file.size > 2 * 1024 * 1024) {
+      this.uploadError.set('That image is over 2MB. Please compress it first.');
+      return;
+    }
+
+    this.uploading.set(true);
+    this.uploadError.set(null);
+
+    try {
+      const advertiserId = this.campaignForm.value.advertiserId || 'unassigned';
+      const compressed = await this.uploads.compressImage(file, 1200, 0.85);
+      const uploaded = await this.uploads.uploadImage(compressed, `ads/${advertiserId}`);
+      this.imagePath.set(uploaded.path);
+      this.uploading.set(false);
+    } catch (err) {
+      this.uploading.set(false);
+      this.uploadError.set(err instanceof Error ? err.message : 'Upload failed. Please try again.');
+    }
+  }
+
+  clearImage() {
+    this.imagePath.set(null);
+  }
+
+  previewUrl() {
+    return getImageUrl(this.imagePath(), 'ad');
+  }
+
   createCampaign() {
     if (this.campaignForm.invalid) return;
     this.saving.set(true);
@@ -317,6 +390,7 @@ export class AdminAdvertising implements OnInit {
       placement: v.placement!,
       headline: v.headline!,
       body: v.body || undefined,
+      imagePath: this.imagePath() || undefined,
       targetUrl: v.targetUrl!,
       province: v.province || undefined,
       city: v.city || undefined,
@@ -331,6 +405,7 @@ export class AdminAdvertising implements OnInit {
         this.saving.set(false);
         this.showForm.set(false);
         this.campaignForm.reset({ placement: 'board_sidebar', monthlyRand: 2500 });
+        this.imagePath.set(null);
       },
       error: (err) => {
         this.saving.set(false);

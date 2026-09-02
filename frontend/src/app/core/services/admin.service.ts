@@ -176,7 +176,7 @@ export class AdminService {
 
   createCampaign(payload: {
     advertiserId: string; name: string; placement: string; headline: string;
-    body?: string; targetUrl: string; province?: string; city?: string;
+    body?: string; imagePath?: string; targetUrl: string; province?: string; city?: string;
     suburbSlug?: string; monthlyRateCents: number; startsAt: string; endsAt: string;
   }) {
     return this.http.post<AdCampaign>(`${this.api}/ads/campaigns`, payload);
