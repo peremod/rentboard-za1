@@ -3,7 +3,7 @@ import { inject } from '@angular/core';
 import { catchError, switchMap, throwError, of } from 'rxjs';
 import { Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
-import { ToastService } from '../services/toast.service';
+import { DialogService } from '../services/dialog.service';
 
 /** Requests where a 401 must never trigger a silent-refresh attempt — refreshing off a failed refresh/login is how you build an infinite loop. */
 const AUTH_ENDPOINTS_NO_RETRY = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/google'];
@@ -25,7 +25,7 @@ const AUTH_ENDPOINTS_NO_RETRY = ['/auth/login', '/auth/register', '/auth/refresh
  */
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
-  const toast = inject(ToastService);
+  const dialogs = inject(DialogService);
   const router = inject(Router);
 
   return next(req).pipe(
@@ -33,10 +33,10 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       const isAuthEndpoint = AUTH_ENDPOINTS_NO_RETRY.some((p) => req.url.includes(p));
 
       if (err.status === 401 && !isAuthEndpoint) {
-        return attemptSilentRefreshAndRetry(req, next, auth, router, toast);
+        return attemptSilentRefreshAndRetry(req, next, auth, router, dialogs);
       }
 
-      handleNonAuthError(err, toast);
+      handleNonAuthError(err, dialogs);
       return throwError(() => err);
     }),
   );
@@ -47,12 +47,12 @@ function attemptSilentRefreshAndRetry(
   next: HttpHandlerFn,
   auth: AuthService,
   router: Router,
-  toast: ToastService,
+  dialogs: DialogService,
 ) {
   return auth.restoreSession().pipe(
     switchMap((user) => {
       if (!user) {
-        toast.error('Your session has expired. Please log in again.');
+        dialogs.alert('Signed out', 'Your session has expired. Please log in again.', 'warning', 'Log in');
         auth.logout();
         router.navigate(['/auth/login'], { queryParams: { returnUrl: router.url } });
         return throwError(() => new Error('Session expired'));
@@ -63,7 +63,7 @@ function attemptSilentRefreshAndRetry(
       return next(retried);
     }),
     catchError((err) => {
-      toast.error('Your session has expired. Please log in again.');
+      dialogs.alert('Signed out', 'Your session has expired. Please log in again.', 'warning', 'Log in');
       auth.logout();
       router.navigate(['/auth/login'], { queryParams: { returnUrl: router.url } });
       return throwError(() => err);
@@ -71,21 +71,23 @@ function attemptSilentRefreshAndRetry(
   );
 }
 
-function handleNonAuthError(err: HttpErrorResponse, toast: ToastService) {
+function handleNonAuthError(err: HttpErrorResponse, dialogs: DialogService) {
   switch (err.status) {
     case 403:
-      toast.error("You don't have permission to do that.");
+      dialogs.error("You don't have permission to do that.", 'Not allowed');
       break;
     case 429:
-      toast.error('Too many requests — please slow down and try again.');
+      dialogs.error('Too many requests. Please wait a moment and try again.', 'Slow down');
       break;
     case 400:
     case 422: {
       const msg = (err.error as any)?.message;
-      if (msg && typeof msg === 'string') toast.error(msg);
+      if (msg && typeof msg === 'string') dialogs.error(msg);
       break;
     }
     default:
-      if (err.status >= 500) toast.error('Something went wrong on our end. Please try again shortly.');
+      if (err.status >= 500) {
+        dialogs.error('Something went wrong on our end. Please try again shortly.', 'Server error');
+      }
   }
 }

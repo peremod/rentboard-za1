@@ -7,6 +7,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { ADMIN_NAV } from '../admin-nav';
 import { SA_PROVINCES } from '../../../core/models/room.model';
 import { UploadsService } from '../../../core/services/uploads.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { getImageUrl } from '../../../shared/utils/imagekit.utils';
 
 /**
@@ -198,10 +199,16 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
 
             @if (formError()) { <p class="field-error" role="alert">{{ formError() }}</p> }
 
-            <button type="submit" class="btn btn-primary"
-                    [disabled]="campaignForm.invalid || saving()">
-              {{ saving() ? 'Creating…' : 'Create for review' }}
-            </button>
+            <div class="campaign-form__actions">
+              <button type="submit" class="btn btn-primary"
+                      [disabled]="campaignForm.invalid || saving()">
+                {{ saving() ? 'Creating…' : 'Create for review' }}
+              </button>
+              <button type="button" class="btn btn-outline"
+                      [disabled]="saving()" (click)="cancelCampaign()">
+                Cancel
+              </button>
+            </div>
           </form>
         }
       </section>
@@ -285,6 +292,7 @@ export class AdminAdvertising implements OnInit {
   private admin = inject(AdminService);
   private fb = inject(FormBuilder);
   private uploads = inject(UploadsService);
+  private dialogs = inject(DialogService);
 
   readonly navItems: PortalNavItem[] = ADMIN_NAV;
 
@@ -378,6 +386,29 @@ export class AdminAdvertising implements OnInit {
     return getImageUrl(this.imagePath(), 'ad');
   }
 
+  /** Closes the form and clears it, including an uploaded creative. */
+  async cancelCampaign() {
+    const dirty = this.campaignForm.dirty || this.imagePath() !== null;
+    if (dirty) {
+      const discard = await this.dialogs.confirm(
+        'Discard this campaign?',
+        'The details you have entered will be lost.',
+        'Discard',
+        'Keep editing',
+      );
+      if (!discard) return;
+    }
+    this.resetForm();
+    this.showForm.set(false);
+  }
+
+  private resetForm() {
+    this.campaignForm.reset({ placement: 'board_sidebar', monthlyRand: 2500 });
+    this.imagePath.set(null);
+    this.uploadError.set(null);
+    this.formError.set(null);
+  }
+
   createCampaign() {
     if (this.campaignForm.invalid) return;
     this.saving.set(true);
@@ -404,8 +435,7 @@ export class AdminAdvertising implements OnInit {
         this.campaigns.update((l) => [created, ...l]);
         this.saving.set(false);
         this.showForm.set(false);
-        this.campaignForm.reset({ placement: 'board_sidebar', monthlyRand: 2500 });
-        this.imagePath.set(null);
+        this.resetForm();
       },
       error: (err) => {
         this.saving.set(false);

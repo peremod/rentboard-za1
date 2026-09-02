@@ -531,3 +531,6 @@
   color: var(--slate);
   font-weight: 400;
 }
+
+.campaign-form__actions { display: flex; gap: .5rem; margin-top: 1rem; }
+.campaign-form__actions .btn { flex: 1; }
