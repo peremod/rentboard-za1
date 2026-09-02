@@ -80,6 +80,14 @@ export class RoomsService {
     return this.http.post<Room>(`${this.api}/rooms/${id}/undo-let`, {});
   }
 
+  /** Location suggestions, drawn from cities that actually have live listings. */
+  suggestLocations(query: string) {
+    return this.http.get<{ city: string; province: string; label: string; roomCount: number }[]>(
+      `${this.api}/rooms/suggest`,
+      { params: new HttpParams().set('q', query) },
+    );
+  }
+
   /** Reserved: visible with a badge, but closed to new applications. */
   reserve(id: string) {
     this.bustCache();

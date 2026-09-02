@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { RouterLink, Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { StripeService } from '../../../core/services/stripe.service';
@@ -179,6 +179,7 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
 export class LandlordDashboard implements OnInit {
   auth = inject(AuthService);
   private roomsService = inject(RoomsService);
+  private router = inject(Router);
   private stripe = inject(StripeService);
 
   billingEnabled = BILLING_ENABLED;
@@ -207,6 +208,8 @@ export class LandlordDashboard implements OnInit {
   loadingArchived = signal(true);
   relisting = signal<string | null>(null);
   relistError = signal<string | null>(null);
+  /** Which room is showing the edit-or-keep prompt. */
+  relistChoice = signal<string | null>(null);
   marking = signal<string | null>(null);
   discarding = signal<string | null>(null);
   discardError = signal<string | null>(null);
@@ -219,7 +222,34 @@ export class LandlordDashboard implements OnInit {
     this.loadArchived();
   }
 
+  /**
+   * Relisting is the natural moment to change the rent — the market has moved
+   * since it was first posted, and a landlord who has to relist first and edit
+   * afterwards usually just leaves the old price. Asking costs one tap.
+   */
+  askRelist(roomId: string) {
+    this.relistChoice.set(roomId);
+  }
+
+  /** Relist unchanged, then open the wizard so details can be adjusted. */
+  relistAndEdit(roomId: string) {
+    this.relistChoice.set(null);
+    this.relisting.set(roomId);
+    this.relistError.set(null);
+    this.roomsService.relistRoom(roomId).subscribe({
+      next: () => {
+        this.relisting.set(null);
+        this.router.navigate(['/landlord/rooms', roomId, 'edit']);
+      },
+      error: () => {
+        this.relisting.set(null);
+        this.relistError.set(roomId);
+      },
+    });
+  }
+
   relist(roomId: string) {
+    this.relistChoice.set(null);
     this.relisting.set(roomId);
     this.relistError.set(null);
     this.roomsService.relistRoom(roomId).subscribe({

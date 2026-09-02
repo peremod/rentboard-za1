@@ -95,6 +95,7 @@ import { AMENITY_LABELS } from '../../core/models/room.model';
 
         <app-ad-slot placement="room_detail"
                      [province]="room()?.province"
+                     [city]="room()?.city"
                      [roomType]="room()?.roomType"/>
 
         <aside class="detail__safety">

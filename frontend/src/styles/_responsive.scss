@@ -463,3 +463,28 @@
   .ad-slot__link { transition: none; }
   .hero-headline--swap { transform: none; }
 }
+
+// ── Search autocomplete ─────────────────────────────────────────────────
+// The wrapper must position the dropdown; without this it escapes the hero.
+.search-input-wrap { position: relative; }
+
+.search-suggest {
+  position: absolute; top: calc(100% + .35rem); left: 0; right: 0; z-index: 40;
+  margin: 0; padding: .3rem; list-style: none;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--r8); box-shadow: 0 8px 28px rgba(0,0,0,.12);
+  max-height: 17rem; overflow-y: auto;
+
+  li { margin: 0; }
+
+  button {
+    display: flex; align-items: baseline; justify-content: space-between; gap: .75rem;
+    width: 100%; padding: .55rem .7rem; text-align: left;
+    background: none; border: none; border-radius: var(--r4); cursor: pointer;
+    font-size: .88rem; color: var(--ink);
+
+    &:hover, &:focus-visible { background: var(--cream2); }
+  }
+}
+.search-suggest__place { font-weight: 500; }
+.search-suggest__count { font-size: .75rem; color: var(--slate); white-space: nowrap; }

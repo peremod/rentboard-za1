@@ -67,7 +67,29 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
           </svg>
           <input class="search-input" type="text" [placeholder]="'search.placeholder' | translate"
-                 [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()"/>
+                 [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()"
+                 (focus)="suggestOpen.set(true)" (blur)="closeSuggestions()"
+                 autocomplete="off" role="combobox"
+                 [attr.aria-expanded]="suggestOpen() && suggestions().length > 0"
+                 aria-autocomplete="list"/>
+
+          @if (suggestOpen() && suggestions().length > 0) {
+            <ul class="search-suggest" role="listbox">
+              @for (s of suggestions(); track s.label) {
+                <li>
+                  <!-- mousedown, not click: blur fires first and would close
+                       the list before a click ever lands. -->
+                  <button type="button" role="option" [attr.aria-selected]="false"
+                          (mousedown)="chooseSuggestion(s)">
+                    <span class="search-suggest__place">{{ s.label }}</span>
+                    <span class="search-suggest__count">
+                      {{ s.roomCount }} room{{ s.roomCount === 1 ? '' : 's' }}
+                    </span>
+                  </button>
+                </li>
+              }
+            </ul>
+          }
         </div>
         <select class="search-select" [(ngModel)]="province" (ngModelChange)="onFilterChange()">
           <option value="">{{ 'search.all_provinces' | translate }}</option>
@@ -195,6 +217,7 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
              browsed, never the person browsing. -->
         <app-ad-slot placement="board_sidebar"
                      [province]="province || undefined"
+                     [city]="searchTerm.trim() || undefined"
                      [roomType]="roomType || undefined"/>
 
         <!-- Drawer actions: visible only while the panel is a bottom sheet. -->
@@ -257,6 +280,7 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
               @if (i === inlineAdIndex()) {
                 <app-ad-slot placement="board_inline"
                              [province]="province || undefined"
+                             [city]="searchTerm.trim() || undefined"
                              [roomType]="roomType || undefined"/>
               }
             }
@@ -319,6 +343,9 @@ export class Home implements OnInit, OnDestroy {
 
   provinces = SA_PROVINCES;
   searchTerm = '';
+  suggestions = signal<{ city: string; province: string; label: string; roomCount: number }[]>([]);
+  suggestOpen = signal(false);
+  private suggestTimer?: ReturnType<typeof setTimeout>;
   province = '';
   roomType = '';
   billsIncluded = false;
@@ -513,7 +540,40 @@ export class Home implements OnInit, OnDestroy {
     clearTimeout(this.searchDebounce);
   }
 
+  /** Picks a suggestion: fills the city and its province, then searches. */
+  chooseSuggestion(s: { city: string; province: string }) {
+    this.searchTerm = s.city;
+    this.province = s.province;
+    this.suggestOpen.set(false);
+    this.suggestions.set([]);
+    this.onFilterChange();
+  }
+
+  /** Delayed so a click on the list still registers before it closes. */
+  closeSuggestions() {
+    setTimeout(() => this.suggestOpen.set(false), 150);
+  }
+
+  private fetchSuggestions() {
+    const term = this.searchTerm.trim();
+    if (term.length < 2) {
+      this.suggestions.set([]);
+      return;
+    }
+    this.roomsService.suggestLocations(term).subscribe({
+      next: (list) => this.suggestions.set(list),
+      error: () => this.suggestions.set([]),
+    });
+  }
+
   onSearchChange() {
+    // Two debounces on purpose: suggestions should feel immediate, while the
+    // full result fetch can wait until typing actually stops.
+    clearTimeout(this.suggestTimer);
+    this.suggestTimer = setTimeout(() => this.fetchSuggestions(), 220);
+    this.suggestOpen.set(true);
+    this.searchSaved.set(false);
+
     clearTimeout(this.searchDebounce);
     this.searchDebounce = setTimeout(() => { this.page = 1; this.fetchRooms(); }, 400);
   }

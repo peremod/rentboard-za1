@@ -390,6 +390,41 @@ export class RoomsService {
     });
   }
 
+  /**
+   * Location suggestions for the search box.
+   *
+   * Drawn from cities that actually have live listings, not a static gazetteer:
+   * suggesting "Bloemfontein" when nothing is let there sends people to an
+   * empty result and teaches them the search is useless. Counts are returned
+   * so the UI can say how many rooms are waiting.
+   */
+  async suggestLocations(query: string, limit = 8) {
+    const term = query.trim();
+    if (term.length < 2) return [];
+
+    const rows = await this.prisma.room.groupBy({
+      by: ['city', 'province'],
+      where: {
+        status: 'active',
+        OR: [
+          { city: { contains: term, mode: 'insensitive' } },
+          { province: { contains: term, mode: 'insensitive' } },
+          { locationDisplay: { contains: term, mode: 'insensitive' } },
+        ],
+      },
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
+      take: limit,
+    });
+
+    return rows.map((r) => ({
+      city: r.city,
+      province: r.province,
+      label: `${r.city}, ${r.province}`,
+      roomCount: r._count.id,
+    }));
+  }
+
   private async assertOwner(roomId: string, landlordId: string) {
     const room = await this.prisma.room.findUnique({ where: { id: roomId } });
     if (!room) throw new NotFoundException('Room not found');

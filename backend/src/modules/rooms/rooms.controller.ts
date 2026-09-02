@@ -43,6 +43,13 @@ export class RoomsController {
     return this.roomsService.findAll(query);
   }
 
+  @Get('suggest')
+  @Header('Cache-Control', 'public, max-age=60')
+  @ApiOperation({ summary: 'Location suggestions for the search box' })
+  suggest(@Query('q') q: string, @Query('limit') limit?: string) {
+    return this.roomsService.suggestLocations(q ?? '', limit ? Math.min(+limit, 10) : 8);
+  }
+
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
   @Header('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=60')

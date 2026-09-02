@@ -1424,6 +1424,52 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
 fi
 
 
+# -- 30. Search suggestions & amenities ------------------------------------
+head_ "30. Search suggestions & amenities"
+req GET "/api/rooms/suggest?q=jo"
+check "suggestions endpoint is public" 200 "$STATUS" "$BODY"
+
+if echo "$BODY" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  green "  PASS  returns an array"; PASS=$((PASS+1))
+else
+  red "  FAIL  unexpected shape"; FAIL=$((FAIL+1))
+fi
+
+# A single character would match nearly everything, so it returns nothing.
+req GET "/api/rooms/suggest?q=a"
+if [[ "$(echo "$BODY" | jq -r 'length')" == "0" ]]; then
+  green "  PASS  a one-character query returns nothing"; PASS=$((PASS+1))
+else
+  red "  FAIL  one-character query returned results"; FAIL=$((FAIL+1))
+fi
+
+# 'suggest' is declared before ':id' in the controller; if that order ever
+# changes it would be parsed as a UUID and 400.
+req GET "/api/rooms/suggest?q=pretoria"
+if [[ "$STATUS" == "200" ]]; then
+  green "  PASS  /rooms/suggest is not shadowed by /rooms/:id"; PASS=$((PASS+1))
+else
+  red "  FAIL  /rooms/suggest returned $STATUS — route order regression"; FAIL=$((FAIL+1))
+fi
+
+# Amenities round-trip.
+req POST /api/rooms "$ROOM_JSON" "$LTOKEN"
+AMEN_ROOM=$(echo "$BODY" | jq -r '.id // empty')
+if [[ -n "$AMEN_ROOM" ]]; then
+  req PATCH "/api/rooms/$AMEN_ROOM" '{"amenities":["shower_indoor","prepaid_electricity","furnished"]}' "$LTOKEN"
+  check "amenities save" 200 "$STATUS" "$BODY"
+  COUNT=$(echo "$BODY" | jq -r '.amenities | length')
+  if [[ "$COUNT" == "3" ]]; then
+    green "  PASS  all three amenities persisted"; PASS=$((PASS+1))
+  else
+    red "  FAIL  expected 3 amenities, got $COUNT"; FAIL=$((FAIL+1))
+  fi
+
+  req PATCH "/api/rooms/$AMEN_ROOM" '{"amenities":[]}' "$LTOKEN"
+  check "amenities can be cleared" 200 "$STATUS" "$BODY"
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"
