@@ -422,13 +422,17 @@ export class TenantDashboard implements OnInit {
   }
 
   unavailableLabel(room: Room): string {
-    return {
+    // Typed as a partial map: 'active' is deliberately absent, since this is
+    // only called for rooms that are not available, and listing every status
+    // would imply the method handles them all.
+    const labels: Partial<Record<Room['status'], string>> = {
       let: 'Now let',
       reserved: 'Reserved for someone else',
       paused: 'Temporarily off the board',
       deleted: 'No longer listed',
       draft: 'No longer listed',
-    }[room.status] ?? 'No longer available';
+    };
+    return labels[room.status] ?? 'No longer available';
   }
 
   /** Live: not archived, and not ended by the tenant's own withdrawal. */
