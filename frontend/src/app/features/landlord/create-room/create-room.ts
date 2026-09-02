@@ -226,8 +226,21 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
     .wizard__step { flex: 1; height: 4px; background: #DDD5C8; border-radius: 4px; }
     .wizard__step.active, .wizard__step.done { background: #C04E28; }
     h2 { font-size: 1.2rem; margin-bottom: 1rem; }
-    label { display: block; font-size: .85rem; font-weight: 600; margin-bottom: .9rem; }
-    input, select, textarea { width: 100%; padding: .55rem .7rem; border: 1.5px solid #DDD5C8; border-radius: 6px; font-size: .85rem; margin-top: .3rem; font-family: inherit; }
+    /* Scoped away from checkboxes. Angular's emulated encapsulation makes a
+       component style beat any global rule, so these two lines overrode the
+       app-wide checkbox handling and stretched every box to the full form
+       width — which is why the glyph rendered centred with its label beneath.
+       The global rules already cover controls correctly; these only need to
+       carry what is specific to this wizard. */
+    label:not(.check-row):not(.amenity-chip) {
+      display: block; font-size: .85rem; font-weight: 600; margin-bottom: .9rem;
+    }
+    input:not([type='checkbox']):not([type='radio']),
+    select,
+    textarea {
+      width: 100%; padding: .55rem .7rem; border: 1.5px solid #DDD5C8;
+      border-radius: 6px; font-size: .85rem; margin-top: .3rem; font-family: inherit;
+    }
     .muted { font-size: .78rem; color: #7A6E60; }
     .error { color: #D63B3B; font-size: .82rem; }
     .wizard__actions { display: flex; justify-content: space-between; margin-top: 1.5rem; }
