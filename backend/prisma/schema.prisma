@@ -659,9 +659,12 @@ model AdCampaign {
   ctaLabel     String       @default("Learn more")
   targetUrl    String
 
-  // Contextual targeting. Null means "any".
+  // Contextual targeting. Null means "any". Most specific wins.
   province     String?
   city         String?
+  /// Suburb slug from Place. Narrower than city, and the reason the taxonomy
+  /// exists — "sandton" must not be served across all of Johannesburg.
+  suburbSlug   String?
   roomType     RoomType?
 
   startsAt     DateTime
@@ -724,6 +727,49 @@ enum EnquiryStatus {
   contacted
   won
   lost
+}
+
+/// Suburb → city → province, so targeting and search can work at the level
+/// people actually think in.
+///
+/// Exists because string matching cannot know that Sandton is in Johannesburg.
+/// An advertiser paying for "Sandton" must not silently get the whole of
+/// Gauteng, and a tenant searching "Sandton" should still see rooms tagged
+/// "Johannesburg" nearby.
+///
+/// Seeded from a fixed list rather than an API: the set changes rarely, and a
+/// runtime dependency on a geocoder would put ad serving behind a third party.
+model Place {
+  id        String   @id @default(uuid())
+
+  /// Lowercased, no punctuation — the key everything matches on.
+  slug      String   @unique
+  name      String
+  type      PlaceType
+
+  /// Null for a province. A suburb points at its city; a city at its province.
+  parentId  String?
+  parent    Place?   @relation("PlaceHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Place[]  @relation("PlaceHierarchy")
+
+  /// Denormalised for querying without recursion — a suburb carries both.
+  city      String?
+  province  String
+
+  /// Common alternates: "PE" for Gqeberha, "Joburg" for Johannesburg.
+  aliases   String[] @default([])
+
+  createdAt DateTime @default(now())
+
+  @@index([type, province])
+  @@index([city])
+  @@map("places")
+}
+
+enum PlaceType {
+  province
+  city
+  suburb
 }
 
 enum AdPlacement {

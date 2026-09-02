@@ -213,6 +213,32 @@ The consent version above earns nearly as much and is defensible.
 
 There is no lawful basis. Do not entertain it regardless of the offer.
 
+### ⚠️ Behavioural ad targeting — considered, not built
+
+The proposal was to target ads by inferred situation: a first-time tenant, a
+tenant relocating from another city, a tenant moving within the same area.
+
+**Not built, and the reason matters.** Each of those is an inference about a
+person, drawn from their history rather than the page in front of them. That
+crosses the line this document has held throughout: contextual targeting reads
+the page, behavioural targeting reads the person. Once we build a profile of
+"this tenant is relocating from Durban", we hold personal information collected
+for one purpose and used for another (s.13), and the "no third-party trackers,
+no profiling" claim on the Advertise page stops being true.
+
+What is built instead reaches most of the same advertisers without any of that:
+
+- **Suburb, city, province and room type targeting** (v1.27.0), matched against
+  the page. A storage company wanting people moving into Sandton buys Sandton.
+- **Price band and room type** are already in the query, so an advertiser
+  selling budget furniture can target studios under R4,000 without knowing
+  anything about who is looking.
+
+If behavioural targeting is ever wanted, it needs explicit opt-in consent at
+collection, a stated purpose, and a way to withdraw — the same shape as the
+alerts consent, not a silent default. That is a product and legal decision
+before it is an engineering one.
+
 ### ⚠️ Tracking tenants who move out without re-letting through us
 
 You asked specifically. Technically you can see it: a tenancy ends and no new

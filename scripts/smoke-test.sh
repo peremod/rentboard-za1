@@ -1470,6 +1470,75 @@ if [[ -n "$AMEN_ROOM" ]]; then
 fi
 
 
+# -- 31. Places & suburb targeting -----------------------------------------
+# The point of the taxonomy: Sandton is in Johannesburg, and string comparison
+# cannot know that.
+head_ "31. Places & suburb targeting"
+req GET "/api/places/suggest?q=sand"
+check "place suggestions are public" 200 "$STATUS" "$BODY"
+
+if echo "$BODY" | jq -e 'any(.[]?; .name == "Sandton")' >/dev/null 2>&1; then
+  green "  PASS  suburb suggestion found"; PASS=$((PASS+1))
+else
+  grey "  SKIP  places not seeded — run npx ts-node prisma/seed.ts"; SKIP=$((SKIP+1))
+fi
+
+req GET "/api/places/resolve?q=sandton"
+RESOLVED_CITY=$(echo "$BODY" | jq -r '.city // empty')
+if [[ "$RESOLVED_CITY" == "Johannesburg" ]]; then
+  green "  PASS  Sandton resolves to Johannesburg"; PASS=$((PASS+1))
+elif [[ -z "$RESOLVED_CITY" ]]; then
+  grey "  SKIP  places not seeded"; SKIP=$((SKIP+1))
+else
+  red "  FAIL  Sandton resolved to '$RESOLVED_CITY'"; FAIL=$((FAIL+1))
+fi
+
+# Aliases are the reason a South African can type what they actually say.
+req GET "/api/places/resolve?q=joburg"
+ALIAS=$(echo "$BODY" | jq -r '.name // empty')
+if [[ "$ALIAS" == "Johannesburg" ]]; then
+  green "  PASS  alias 'joburg' resolves"; PASS=$((PASS+1))
+elif [[ -z "$ALIAS" ]]; then
+  grey "  SKIP  places not seeded"; SKIP=$((SKIP+1))
+else
+  red "  FAIL  'joburg' resolved to '$ALIAS'"; FAIL=$((FAIL+1))
+fi
+
+req GET "/api/places/resolve?q=notarealplace"
+if [[ "$STATUS" == "200" ]]; then
+  green "  PASS  unknown place returns null, not an error"; PASS=$((PASS+1))
+else
+  red "  FAIL  unknown place returned $STATUS"; FAIL=$((FAIL+1))
+fi
+
+# A suburb-targeted campaign must not leak to the whole city.
+if [[ -n "${ADMIN_TOKEN:-}" && -n "${ADV_ID:-}" ]]; then
+  req POST /api/ads/campaigns \
+    "{\"advertiserId\":\"$ADV_ID\",\"name\":\"Sandton only\",\"placement\":\"board_sidebar\",\"headline\":\"Sandton storage units\",\"targetUrl\":\"https://example.co.za\",\"suburbSlug\":\"johannesburg-sandton\",\"startsAt\":\"$STARTED\",\"endsAt\":\"2099-01-01\",\"monthlyRateCents\":300000}" "$ADMIN_TOKEN"
+  SUB_CAMP=$(echo "$BODY" | jq -r '.id // empty')
+
+  if [[ -n "$SUB_CAMP" ]]; then
+    req PATCH "/api/ads/campaigns/$SUB_CAMP/review" '{"status":"approved"}' "$ADMIN_TOKEN"
+
+    req GET "/api/ads?placement=board_sidebar&limit=3"
+    if echo "$BODY" | jq -e --arg id "$SUB_CAMP" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then
+      red "  FAIL  suburb campaign served with no suburb context"; FAIL=$((FAIL+1))
+    else
+      green "  PASS  suburb campaign withheld without suburb context"; PASS=$((PASS+1))
+    fi
+
+    req GET "/api/ads?placement=board_sidebar&suburbSlug=johannesburg-sandton&limit=3"
+    if echo "$BODY" | jq -e --arg id "$SUB_CAMP" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then
+      green "  PASS  suburb campaign served for its suburb"; PASS=$((PASS+1))
+    else
+      red "  FAIL  suburb campaign not served for its own suburb"; FAIL=$((FAIL+1))
+    fi
+
+    req PATCH "/api/ads/campaigns/$SUB_CAMP/status" '{"status":"ended"}' "$ADMIN_TOKEN"
+  fi
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

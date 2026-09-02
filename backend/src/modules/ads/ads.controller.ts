@@ -28,12 +28,13 @@ export class AdsController {
     @Query('placement') placement: string,
     @Query('province') province?: string,
     @Query('city') city?: string,
+    @Query('suburbSlug') suburbSlug?: string,
     @Query('roomType') roomType?: string,
     @Query('limit') limit?: string,
   ) {
     return this.adsService.getForContext({
       placement: placement || 'board_sidebar',
-      province, city, roomType,
+      province, city, suburbSlug, roomType,
       limit: limit ? Math.min(+limit, 3) : 1,
     });
   }

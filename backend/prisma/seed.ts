@@ -80,6 +80,10 @@ Optional: ADMIN_NAME="Your Name"
     await seedDemoAds();
   }
 
+  // Place taxonomy. Always seeded — search and ad targeting depend on it, and
+  // it is reference data rather than demo data.
+  await seedPlaces();
+
   // Launch invite codes, per city. Opt-in like the demo ads.
   if (process.env.SEED_LAUNCH_CODES === 'true') {
     await seedLaunchCodes();
@@ -88,6 +92,134 @@ Optional: ADMIN_NAME="Your Name"
   const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
   console.log(`Total admin accounts: ${adminCount}`);
   console.log('Sign in normally, then open /admin.');
+}
+
+/**
+ * Suburb → city → province for the metros worth launching in.
+ *
+ * Deliberately partial. A complete South African gazetteer is thousands of
+ * entries and most would never be searched; this covers the areas where
+ * shared-room demand is concentrated, and the model takes more without a
+ * migration. Anything not listed still works — it just falls back to matching
+ * on the city string as before.
+ */
+async function seedPlaces() {
+  const slug = (name: string) =>
+    name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+  const provinces = [
+    'Gauteng', 'Western Cape', 'KwaZulu-Natal', 'Eastern Cape',
+    'Free State', 'Limpopo', 'Mpumalanga', 'North West', 'Northern Cape',
+  ];
+
+  const cities: Record<string, { name: string; aliases?: string[]; suburbs: string[] }[]> = {
+    Gauteng: [
+      {
+        name: 'Johannesburg',
+        aliases: ['joburg', 'jhb', 'jozi', 'egoli'],
+        suburbs: [
+          'Sandton', 'Rosebank', 'Randburg', 'Braamfontein', 'Melville',
+          'Yeoville', 'Hillbrow', 'Soweto', 'Roodepoort', 'Midrand',
+          'Fourways', 'Auckland Park', 'Parktown', 'Bez Valley', 'Kensington',
+        ],
+      },
+      {
+        name: 'Pretoria',
+        aliases: ['tshwane', 'pta'],
+        suburbs: [
+          'Hatfield', 'Sunnyside', 'Arcadia', 'Brooklyn', 'Centurion',
+          'Menlyn', 'Soshanguve', 'Mamelodi', 'Pretoria North', 'Silverton',
+        ],
+      },
+      { name: 'Ekurhuleni', aliases: ['east rand'], suburbs: ['Benoni', 'Boksburg', 'Kempton Park', 'Germiston', 'Springs', 'Tembisa'] },
+      { name: 'Vereeniging', suburbs: ['Vanderbijlpark', 'Sebokeng'] },
+    ],
+    'Western Cape': [
+      {
+        name: 'Cape Town',
+        aliases: ['ct', 'kaapstad', 'mother city'],
+        suburbs: [
+          'Observatory', 'Woodstock', 'Rondebosch', 'Claremont', 'Mowbray',
+          'Salt River', 'Bellville', 'Parow', 'Khayelitsha', 'Gugulethu',
+          'Muizenberg', 'Sea Point', 'Athlone', 'Mitchells Plain', 'Goodwood',
+        ],
+      },
+      { name: 'Stellenbosch', suburbs: ['Die Boord', 'Idas Valley', 'Cloetesville'] },
+      { name: 'George', suburbs: ['Blanco', 'Pacaltsdorp'] },
+    ],
+    'KwaZulu-Natal': [
+      {
+        name: 'Durban',
+        aliases: ['ethekwini', 'dbn'],
+        suburbs: [
+          'Umbilo', 'Glenwood', 'Musgrave', 'Berea', 'Westville',
+          'Umlazi', 'Chatsworth', 'Pinetown', 'Morningside', 'Overport',
+        ],
+      },
+      { name: 'Pietermaritzburg', aliases: ['pmb', 'maritzburg'], suburbs: ['Scottsville', 'Hayfields', 'Northdale'] },
+    ],
+    'Eastern Cape': [
+      { name: 'Gqeberha', aliases: ['port elizabeth', 'pe'], suburbs: ['Summerstrand', 'Central', 'Newton Park', 'Motherwell'] },
+      { name: 'East London', suburbs: ['Southernwood', 'Vincent', 'Mdantsane'] },
+      { name: 'Makhanda', aliases: ['grahamstown'], suburbs: ['Rhodes Campus Area'] },
+    ],
+    'Free State': [
+      { name: 'Bloemfontein', aliases: ['bloem', 'mangaung'], suburbs: ['Universitas', 'Brandwag', 'Willows', 'Bothaville'] },
+    ],
+    Limpopo: [{ name: 'Polokwane', aliases: ['pietersburg'], suburbs: ['Bendor', 'Seshego'] }],
+    Mpumalanga: [{ name: 'Nelspruit', aliases: ['mbombela'], suburbs: ['Sonheuwel', 'West Acres'] }],
+    'North West': [{ name: 'Potchefstroom', aliases: ['potch'], suburbs: ['Baillie Park', 'Ikageng'] }],
+    'Northern Cape': [{ name: 'Kimberley', suburbs: ['Galeshewe', 'Herlear'] }],
+  };
+
+  let created = 0;
+
+  for (const province of provinces) {
+    const p = await prisma.place.upsert({
+      where: { slug: slug(province) },
+      update: {},
+      create: { slug: slug(province), name: province, type: 'province', province },
+    });
+    created++;
+
+    for (const city of cities[province] ?? []) {
+      const c = await prisma.place.upsert({
+        where: { slug: slug(city.name) },
+        update: { aliases: city.aliases ?? [] },
+        create: {
+          slug: slug(city.name),
+          name: city.name,
+          type: 'city',
+          parentId: p.id,
+          province,
+          city: city.name,
+          aliases: city.aliases ?? [],
+        },
+      });
+      created++;
+
+      for (const suburb of city.suburbs) {
+        // Suburb slugs are prefixed with the city: Central exists in more
+        // than one metro, and a bare slug would collide.
+        const suburbSlug = `${slug(city.name)}-${slug(suburb)}`;
+        await prisma.place.upsert({
+          where: { slug: suburbSlug },
+          update: {},
+          create: {
+            slug: suburbSlug,
+            name: suburb,
+            type: 'suburb',
+            parentId: c.id,
+            province,
+            city: city.name,
+          },
+        });
+        created++;
+      }
+    }
+  }
+
+  console.log(`Seeded ${created} places (provinces, cities and suburbs).`);
 }
 
 /**

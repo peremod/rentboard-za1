@@ -30,6 +30,8 @@ export class AdsService {
     placement: string;
     province?: string;
     city?: string;
+    /// Suburb slug, when the page context is that precise.
+    suburbSlug?: string;
     roomType?: string;
     limit?: number;
   }) {
@@ -44,13 +46,17 @@ export class AdsService {
         AND: [
           { OR: [{ province: null }, ...(params.province ? [{ province: params.province }] : [])] },
           { OR: [{ city: null }, ...(params.city ? [{ city: { equals: params.city, mode: 'insensitive' as const } }] : [])] },
+          // A suburb-targeted campaign must not appear outside that suburb —
+          // it is the narrowest thing an advertiser can buy and the reason the
+          // place taxonomy exists.
+          { OR: [{ suburbSlug: null }, ...(params.suburbSlug ? [{ suburbSlug: params.suburbSlug }] : [])] },
           { OR: [{ roomType: null }, ...(params.roomType ? [{ roomType: params.roomType as any }] : [])] },
         ],
       },
       select: {
         id: true, headline: true, body: true, imagePath: true,
         ctaLabel: true, targetUrl: true, placement: true,
-        province: true, city: true, roomType: true,
+        province: true, city: true, suburbSlug: true, roomType: true,
         advertiser: { select: { companyName: true } },
       },
       take: 20,
@@ -60,7 +66,10 @@ export class AdsService {
     const scored = campaigns
       .map((c) => ({
         campaign: c,
-        specificity: (c.city ? 4 : 0) + (c.province ? 2 : 0) + (c.roomType ? 1 : 0),
+        // Suburb outranks city outranks province: whoever paid for the
+        // narrowest targeting gets the slot.
+        specificity:
+          (c.suburbSlug ? 8 : 0) + (c.city ? 4 : 0) + (c.province ? 2 : 0) + (c.roomType ? 1 : 0),
       }))
       .sort((a, b) => b.specificity - a.specificity);
 

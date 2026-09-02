@@ -48,6 +48,12 @@ export class CreateCampaignDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(80) city?: string;
 
+  @ApiPropertyOptional({
+    description: 'Suburb slug from /places/suggest, e.g. johannesburg-sandton. Narrower than city.',
+  })
+  @IsOptional() @IsString() @MaxLength(120)
+  suburbSlug?: string;
+
   @ApiPropertyOptional({ enum: ['shared_house', 'en_suite', 'studio', 'private'] })
   @IsOptional() @IsEnum(['shared_house', 'en_suite', 'studio', 'private'])
   roomType?: 'shared_house' | 'en_suite' | 'studio' | 'private';
