@@ -61,11 +61,16 @@ a { color: $color-terracotta; }
   color: $color-ink;
   margin-bottom: .3rem;
 
-  // Checkbox/radio labels wrap their control and must stay inline
-  &:has(> input[type='checkbox']),
-  &:has(> input[type='radio']) {
+  // A label wrapping a checkbox or radio must stay inline. Deliberately NOT
+  // a direct-child selector: a label whose text is wrapped in a span for a
+  // hint line still contains the input, and requiring `>` meant those fell
+  // back to display:block and stacked the box above its label.
+  &:has(input[type='checkbox']),
+  &:has(input[type='radio']) {
     display: flex;
-    align-items: center;
+    // flex-start, not center: with a hint line underneath, centring pushes the
+    // box halfway down the block instead of aligning it with the first line.
+    align-items: flex-start;
     gap: $sp-2;
     font-weight: 400;
     cursor: pointer;
@@ -151,14 +156,20 @@ textarea {
 }
 
 // ── Checkboxes & radios ──────────────────────────────────────────────────
+// min-width as well as width: inside a flex container a bare width is a
+// suggestion, and a long label was squashing the box to a sliver.
 input[type='checkbox'],
 input[type='radio'] {
   width: 1.15rem;
+  min-width: 1.15rem;
   height: 1.15rem;
   flex-shrink: 0;
   accent-color: $color-terracotta;
   cursor: pointer;
   margin: 0;
+  // Explicit, because the text-input rule above sets display on everything it
+  // matches and a checkbox must never become a block.
+  display: inline-block;
 }
 
 // ── Buttons ──────────────────────────────────────────────────────────────
