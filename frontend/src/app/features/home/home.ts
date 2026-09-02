@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, ElementRef, Injector, OnDestroy, OnInit, ViewChild,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, OnDestroy, OnInit, ViewChild,
   afterNextRender, inject, signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -30,10 +30,14 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
     <section class="hero">
       <div class="hero-inner">
         <div class="hero-eyebrow">🇿🇦 {{ 'hero.eyebrow' | translate }}</div>
-        <h1>{{ 'hero.title_line1' | translate }}<br/><em>{{ 'hero.title_line2' | translate }}</em></h1>
-        <p class="hero-sub">
-          No estate agents. No fees to apply. Shared houses, en-suites, studios and private
-          rooms — posted directly by landlords across South Africa.
+        <!-- Alternates between the two audiences. A board serving both needs
+             to speak to both; one fixed message tells half the visitors this
+             site is not for them. -->
+        <h1 class="hero-headline" [class.hero-headline--swap]="swapping()">
+          {{ heroMessage().title }}<br/><em>{{ heroMessage().emphasis }}</em>
+        </h1>
+        <p class="hero-sub hero-headline" [class.hero-headline--swap]="swapping()">
+          {{ heroMessage().sub }}
         </p>
         <div class="hero-ctas">
           <a href="#board" class="btn btn-primary btn-lg" (click)="scrollToBoard($event)">Browse rooms</a>
@@ -277,6 +281,7 @@ export class Home implements OnInit, OnDestroy {
   private roomsService = inject(RoomsService);
   private alerts = inject(AlertsService);
   auth = inject(AuthService);
+  private destroyRef = inject(DestroyRef);
   private injector = inject(Injector);
 
   rooms = signal<Room[]>([]);
@@ -287,6 +292,27 @@ export class Home implements OnInit, OnDestroy {
   page = 1;
   /** Mobile filter drawer. Ignored above 860px, where the panel is a sidebar. */
   filtersOpen = signal(false);
+  /**
+   * Two audiences, alternating. Starts on whichever suits the visitor when we
+   * can tell — a signed-in landlord should not be pitched rooms to rent.
+   */
+  private readonly heroMessages = [
+    {
+      title: 'Find your next room.',
+      emphasis: 'Direct from landlords.',
+      sub: 'No estate agents. No fees to apply. Shared houses, en-suites, studios and private rooms across South Africa.',
+    },
+    {
+      title: 'Find your next tenant.',
+      emphasis: 'Free to list, always.',
+      sub: 'Post a room in minutes, shortlist applicants, and let it without paying commission to anyone.',
+    },
+  ];
+
+  heroIndex = signal(0);
+  swapping = signal(false);
+  heroMessage = () => this.heroMessages[this.heroIndex()];
+
   savingSearch = signal(false);
   searchSaved = signal(false);
   saveSearchError = signal<string | null>(null);
@@ -341,6 +367,28 @@ export class Home implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.fetchRooms();
+
+    // A landlord already knows they can list; lead with the tenant message
+    // for everyone else, and for signed-out visitors.
+    if (this.auth.isLandlord()) this.heroIndex.set(1);
+
+    // Browser only: an interval on the server would never be cleared, and the
+    // prerendered HTML should just carry the first message.
+    afterNextRender(() => this.startHeroRotation(), { injector: this.injector });
+  }
+
+  private startHeroRotation() {
+    // Long enough to read, short enough that someone scanning the page sees
+    // both. The class toggle drives a CSS fade so it is not a hard cut.
+    const timer = setInterval(() => {
+      this.swapping.set(true);
+      setTimeout(() => {
+        this.heroIndex.update((i) => (i + 1) % this.heroMessages.length);
+        this.swapping.set(false);
+      }, 260);
+    }, 7000);
+
+    this.destroyRef.onDestroy(() => clearInterval(timer));
   }
 
   /**

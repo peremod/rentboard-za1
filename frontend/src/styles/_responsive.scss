@@ -408,3 +408,58 @@
   .filter-toggle-btn { flex: 0 0 auto; }
   .sort-select { flex: 1 1 auto; min-width: 0; width: auto; }
 }
+
+// ── Amenity picker ──────────────────────────────────────────────────────
+.amenities__heading { font-size: 1rem; font-weight: 700; margin: 1.25rem 0 .3rem; }
+.amenities__group { margin-top: 1rem; }
+.amenities__group-name {
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--slate); margin-bottom: .45rem;
+}
+.amenities__items { display: flex; flex-wrap: wrap; gap: .4rem; }
+
+// Chips rather than a column of checkboxes: 28 stacked rows is a form nobody
+// finishes, and these are quick yes/no choices.
+.amenity-chip {
+  display: inline-flex; align-items: center; gap: .35rem;
+  padding: .35rem .7rem; font-size: .82rem;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--r-full); cursor: pointer; user-select: none;
+  transition: background .12s, border-color .12s;
+
+  input { width: auto; margin: 0; accent-color: var(--terra); }
+  &:hover { border-color: var(--terra2); }
+}
+.amenity-chip--on {
+  background: rgba(192, 78, 40, .08);
+  border-color: var(--terra);
+  color: var(--terra);
+  font-weight: 600;
+}
+
+// ── Amenities on room detail ────────────────────────────────────────────
+.room-amenities { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+.room-amenity {
+  font-size: .8rem; padding: .3rem .65rem;
+  background: var(--cream2); border: 1px solid var(--border);
+  border-radius: var(--r-full); color: var(--ink2);
+}
+
+// Hero message swap: a short cross-fade, not a hard cut. Respects reduced
+// motion, where an instant change is the accessible behaviour.
+.hero-headline {
+  transition: opacity .26s ease, transform .26s ease;
+}
+.hero-headline--swap {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+// Ad rotation uses the same treatment for the same reason.
+.ad-slot__link { transition: opacity .2s ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-headline,
+  .ad-slot__link { transition: none; }
+  .hero-headline--swap { transform: none; }
+}

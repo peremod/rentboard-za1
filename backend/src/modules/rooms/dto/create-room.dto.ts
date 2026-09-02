@@ -40,6 +40,13 @@ export class CreateRoomDto {
   @ApiPropertyOptional({ default: false }) @IsOptional() @IsBoolean() guarantorAccepted?: boolean;
   @ApiPropertyOptional({ default: false }) @IsOptional() @IsBoolean() petsAllowed?: boolean;
 
+  @ApiPropertyOptional({
+    description: 'Amenity keys from the shared AMENITIES list.',
+    example: ['shower_indoor', 'prepaid_electricity', 'furnished'],
+  })
+  @IsOptional() @IsArray() @IsString({ each: true }) @ArrayMaxSize(40)
+  amenities?: string[];
+
   @ApiPropertyOptional({ description: 'ImageKit path — the room cover photo' })
   @IsOptional() @IsString() @MaxLength(500)
   heroImagePath?: string;

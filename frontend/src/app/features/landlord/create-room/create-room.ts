@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { RoomsService } from '../../../core/services/rooms.service';
-import { SA_PROVINCES } from '../../../core/models/room.model';
+import { SA_PROVINCES, AMENITIES } from '../../../core/models/room.model';
 import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upload/photo-upload';
 
 /**
@@ -79,6 +79,28 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
           <label><input type="checkbox" formControlName="petsAllowed"/> Pets allowed</label>
           @if (creatingDraft()) { <p class="muted">Saving draft…</p> }
           @if (createError()) { <p class="error">{{ createError() }}</p> }
+          
+          <h3 class="amenities__heading">What does the room have?</h3>
+          <p class="field-hint">
+            Tenants filter on these, and a listing that lists nothing looks
+            like it is hiding something. Tick what applies.
+          </p>
+
+          @for (group of amenityGroups; track group.group) {
+            <div class="amenities__group">
+              <div class="amenities__group-name">{{ group.group }}</div>
+              <div class="amenities__items">
+                @for (item of group.items; track item.value) {
+                  <label class="amenity-chip" [class.amenity-chip--on]="hasAmenity(item.value)">
+                    <input type="checkbox" [checked]="hasAmenity(item.value)"
+                           (change)="toggleAmenity(item.value)"/>
+                    {{ item.label }}
+                  </label>
+                }
+              </div>
+            </div>
+          }
+
           <div class="wizard__actions">
             <button type="button" (click)="step.set(2)">← Back</button>
             <button type="button" [disabled]="creatingDraft()" (click)="createDraftAndContinue()">Next →</button>
@@ -151,6 +173,9 @@ export class CreateRoom implements OnInit {
   savedMessage = signal<string | null>(null);
   loadingDraft = signal(false);
 
+  readonly amenityGroups = AMENITIES;
+  amenities = signal<string[]>([]);
+
   creatingDraft = signal(false);
   createError = signal<string | null>(null);
   publishing = signal(false);
@@ -166,6 +191,16 @@ export class CreateRoom implements OnInit {
    * is already saved server-side, so the warning is about unsaved edits to a
    * live listing, not about the draft disappearing.
    */
+  hasAmenity(value: string) {
+    return this.amenities().includes(value);
+  }
+
+  toggleAmenity(value: string) {
+    this.amenities.update((list) =>
+      list.includes(value) ? list.filter((v) => v !== value) : [...list, value],
+    );
+  }
+
   cancel() {
     const message = this.isPublished()
       ? 'Discard your unsaved changes to this listing?'
@@ -197,6 +232,7 @@ export class CreateRoom implements OnInit {
       locationDisplay: pricing.locationDisplay!,
       availableFrom: pricing.availableFrom!,
       ...this.preferencesForm.getRawValue(),
+      amenities: this.amenities(),
     } as any).subscribe({
       next: () => {
         this.roomsService.updatePhotos(id, this.photos().map((p) => p.path)).subscribe({
@@ -245,6 +281,7 @@ export class CreateRoom implements OnInit {
 
         // Preferences were not restored at all, so editing a listing silently
         // reset couples/pets/SASSA to false and housemates to 0 on save.
+        this.amenities.set(room.amenities ?? []);
         this.preferencesForm.patchValue({
           housematesCount: room.housematesCount ?? 0,
           couplesAllowed: room.couplesAllowed,
@@ -309,6 +346,7 @@ export class CreateRoom implements OnInit {
     const basics = this.basicsForm.getRawValue();
     const pricing = this.pricingForm.getRawValue();
     const prefs = this.preferencesForm.getRawValue();
+    const amenities = this.amenities();
 
     this.roomsService.createRoom({
       roomType: basics.roomType as any,
@@ -327,6 +365,7 @@ export class CreateRoom implements OnInit {
       dssAccepted: prefs.dssAccepted ?? false,
       guarantorAccepted: prefs.guarantorAccepted ?? false,
       petsAllowed: prefs.petsAllowed ?? false,
+      amenities,
     } as any).subscribe({
       next: (room) => {
         this.roomId.set(room.id);

@@ -12,6 +12,7 @@ import { ReviewList } from '../../shared/components/review-list/review-list';
 import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
 import { ReviewsService } from '../../core/services/reviews.service';
 import { Review } from '../../core/models/review.model';
+import { AMENITY_LABELS } from '../../core/models/room.model';
 
 /**
  * Room detail — gallery, full description, and the apply flow.
@@ -69,6 +70,17 @@ import { Review } from '../../core/models/review.model';
             </button>
           }
         </div>
+
+        @if (room()?.amenities?.length) {
+          <section class="detail__section">
+            <h2>What's included</h2>
+            <div class="room-amenities">
+              @for (a of room()!.amenities!; track a) {
+                <span class="room-amenity">{{ amenityLabel(a) }}</span>
+              }
+            </div>
+          </section>
+        }
 
         <section class="detail__section">
           <h2>What previous tenants said</h2>
@@ -129,6 +141,12 @@ import { Review } from '../../core/models/review.model';
   `],
 })
 export class RoomDetail implements OnInit {
+
+  /** Falls back to the raw key so an unknown value still shows something. */
+  amenityLabel(value: string) {
+    return AMENITY_LABELS[value] ?? value;
+  }
+
   /** Report dialog visibility. Available signed out — see ReportDialog. */
   reportOpen = signal(false);
 

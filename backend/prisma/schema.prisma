@@ -161,6 +161,13 @@ model Room {
   guarantorAccepted Boolean   @default(false)
   petsAllowed      Boolean    @default(false)
 
+  /// What the room and house actually have. Stored as a string array rather
+  /// than 15 booleans: the list will grow, and a Postgres array can be
+  /// filtered with `hasEvery` without a migration each time.
+  ///
+  /// Values come from AMENITIES in the frontend so the two stay in step.
+  amenities        String[]   @default([])
+
   heroImagePath    String?
   imagePaths       String[]
 
