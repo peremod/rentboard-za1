@@ -1644,6 +1644,28 @@ req GET /api/analytics/content-signals "" "$LTOKEN"
 check "landlord CANNOT read content signals" 403 "$STATUS" "$BODY"
 
 if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  req GET /api/admin/growth "" "$ADMIN_TOKEN"
+  check "admin reads growth metrics" 200 "$STATUS" "$BODY"
+
+  for section in active signups totals; do
+    if echo "$BODY" | jq -e --arg s "$section" 'has($s)' >/dev/null 2>&1; then
+      green "  PASS  growth includes $section"; PASS=$((PASS+1))
+    else
+      red "  FAIL  growth missing $section"; FAIL=$((FAIL+1))
+    fi
+  done
+
+  # Signups split by role: a room board needs both sides, and one number hides
+  # a board filling with tenants and no rooms.
+  if echo "$BODY" | jq -e '.signups | has("tenants") and has("landlords")' >/dev/null 2>&1; then
+    green "  PASS  signups are split by role"; PASS=$((PASS+1))
+  else
+    red "  FAIL  signups are not split by role"; FAIL=$((FAIL+1))
+  fi
+
+  req GET /api/admin/growth "" "$TTOKEN"
+  check "tenant CANNOT read growth metrics" 403 "$STATUS" "$BODY"
+
   req GET /api/analytics/funnels "" "$ADMIN_TOKEN"
   check "admin reads funnels" 200 "$STATUS" "$BODY"
 

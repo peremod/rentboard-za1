@@ -32,6 +32,12 @@ export class AdminController {
     return this.adminService.getKpis(days ? Math.min(+days, 365) : 30);
   }
 
+  @Get('growth')
+  @ApiOperation({ summary: 'Active users and signups: now, daily, weekly, monthly, yearly' })
+  growth() {
+    return this.adminService.getGrowth();
+  }
+
   @Get('users')
   @ApiOperation({ summary: 'Search users by email or name' })
   users(

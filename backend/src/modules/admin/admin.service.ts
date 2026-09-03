@@ -43,6 +43,103 @@ export class AdminService {
   }
 
   /**
+   * Active users and signups over time.
+   *
+   * Active counts are distinct users seen in a window — the standard DAU/WAU/
+   * MAU shape. They rely on lastSeenAt, a single overwritten timestamp, so this
+   * can say how many people used the app and never what any of them did.
+   *
+   * One caveat surfaced in the UI: signup history is exact from day one because
+   * createdAt was always recorded, while active-user history only begins when
+   * lastSeenAt shipped, so earlier periods read as zero.
+   */
+  async getGrowth() {
+    const now = Date.now();
+    const since = (ms: number) => new Date(now - ms);
+    const MINUTE = 60 * 1000;
+    const DAY = 24 * 60 * MINUTE;
+
+    const activeIn = (ms: number) =>
+      this.prisma.user.count({ where: { lastSeenAt: { gte: since(ms) }, isActive: true } });
+
+    const signupsIn = (ms: number, role?: 'TENANT' | 'LANDLORD') =>
+      this.prisma.user.count({
+        where: { createdAt: { gte: since(ms) }, ...(role ? { role } : {}) },
+      });
+
+    const [
+      onlineNow, dau, wau, mau, yau,
+      signupsToday, signupsWeek, signupsMonth, signupsYear,
+      tenantsToday, tenantsWeek, tenantsMonth, tenantsYear,
+      landlordsToday, landlordsWeek, landlordsMonth, landlordsYear,
+      totalTenants, totalLandlords,
+    ] = await Promise.all([
+      // 'Now' is the last 5 minutes: shorter flickers, longer is not now.
+      activeIn(5 * MINUTE),
+      activeIn(DAY), activeIn(7 * DAY), activeIn(30 * DAY), activeIn(365 * DAY),
+      signupsIn(DAY), signupsIn(7 * DAY), signupsIn(30 * DAY), signupsIn(365 * DAY),
+      signupsIn(DAY, 'TENANT'), signupsIn(7 * DAY, 'TENANT'),
+      signupsIn(30 * DAY, 'TENANT'), signupsIn(365 * DAY, 'TENANT'),
+      signupsIn(DAY, 'LANDLORD'), signupsIn(7 * DAY, 'LANDLORD'),
+      signupsIn(30 * DAY, 'LANDLORD'), signupsIn(365 * DAY, 'LANDLORD'),
+      this.prisma.user.count({ where: { role: 'TENANT' } }),
+      this.prisma.user.count({ where: { role: 'LANDLORD' } }),
+    ]);
+
+    return {
+      active: {
+        onlineNow,
+        daily: dau, weekly: wau, monthly: mau, yearly: yau,
+        // Below roughly 20% suggests people sign up and do not come back.
+        stickiness: mau > 0 ? Math.round((dau / mau) * 100) : 0,
+      },
+      signups: {
+        today: signupsToday, week: signupsWeek, month: signupsMonth, year: signupsYear,
+        tenants: { today: tenantsToday, week: tenantsWeek, month: tenantsMonth, year: tenantsYear },
+        landlords: { today: landlordsToday, week: landlordsWeek, month: landlordsMonth, year: landlordsYear },
+      },
+      totals: { tenants: totalTenants, landlords: totalLandlords },
+      dailySignups: await this.dailySignupSeries(30),
+      dailyActive: await this.dailyActiveSeries(30),
+    };
+  }
+
+  /** Signups per day, for a trend line. Exact from launch. */
+  private async dailySignupSeries(days: number) {
+    const rows = await this.prisma.$queryRaw<{ day: Date; tenants: bigint; landlords: bigint }[]>`
+      SELECT date_trunc('day', "createdAt") AS day,
+             COUNT(*) FILTER (WHERE role = 'TENANT')   AS tenants,
+             COUNT(*) FILTER (WHERE role = 'LANDLORD') AS landlords
+      FROM users
+      WHERE "createdAt" >= NOW() - INTERVAL '1 day' * ${days}
+      GROUP BY 1
+      ORDER BY 1
+    `;
+    return rows.map((r) => ({
+      day: r.day.toISOString().slice(0, 10),
+      tenants: Number(r.tenants),
+      landlords: Number(r.landlords),
+    }));
+  }
+
+  /**
+   * Active users per day. Approximate by design: lastSeenAt holds only the most
+   * recent visit, so someone active on several days counts on the latest one.
+   * It shows the shape of recent activity, not a true historical DAU.
+   */
+  private async dailyActiveSeries(days: number) {
+    const rows = await this.prisma.$queryRaw<{ day: Date; users: bigint }[]>`
+      SELECT date_trunc('day', "lastSeenAt") AS day, COUNT(*) AS users
+      FROM users
+      WHERE "lastSeenAt" >= NOW() - INTERVAL '1 day' * ${days}
+      GROUP BY 1
+      ORDER BY 1
+    `;
+    return rows.map((r) => ({ day: r.day.toISOString().slice(0, 10), users: Number(r.users) }));
+  }
+
+
+  /**
    * User search for support work — "a landlord emailed about their account".
    * Returns no password hash and no message content.
    */

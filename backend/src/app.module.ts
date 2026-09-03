@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { LastSeenInterceptor } from './common/interceptors/last-seen.interceptor';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -73,5 +75,6 @@ import { MessagesModule } from './modules/messages/messages.module';
     // StripeModule, // temporarily disabled — see comment above
   ],
   controllers: [HealthController],
+  providers: [{ provide: APP_INTERCEPTOR, useClass: LastSeenInterceptor }],
 })
 export class AppModule {}

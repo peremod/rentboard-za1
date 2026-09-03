@@ -69,6 +69,15 @@ model User {
   updatedAt      DateTime @updatedAt
   lastLoginAt    DateTime?
 
+  /// Last authenticated request, rounded and written at most hourly.
+  ///
+  /// One timestamp, overwritten — not an event log. It answers "how many
+  /// people used the app this week" without recording what anyone did or
+  /// when, and it cannot reconstruct a session or a journey. lastLoginAt
+  /// alone was not enough: with a 15-minute token and silent refresh, someone
+  /// using the app daily may not log in for weeks.
+  lastSeenAt     DateTime?
+
   /// POPIA s.69: marketing needs consent and a working opt-out. Transactional
   /// mail about a room you applied for is unaffected by this.
   marketingEmails Boolean @default(true)

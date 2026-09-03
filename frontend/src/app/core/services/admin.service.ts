@@ -65,6 +65,24 @@ export interface AdminUserDetail {
                    createdAt: string; reviewedAt?: string | null }[];
 }
 
+export interface Growth {
+  active: {
+    /** Seen in the last 5 minutes. */
+    onlineNow: number;
+    daily: number; weekly: number; monthly: number; yearly: number;
+    /** DAU as a share of MAU. Low means people sign up and don't return. */
+    stickiness: number;
+  };
+  signups: {
+    today: number; week: number; month: number; year: number;
+    tenants: { today: number; week: number; month: number; year: number };
+    landlords: { today: number; week: number; month: number; year: number };
+  };
+  totals: { tenants: number; landlords: number };
+  dailySignups: { day: string; tenants: number; landlords: number }[];
+  dailyActive: { day: string; users: number }[];
+}
+
 export interface FunnelStep {
   step: string;
   count: number;
@@ -165,6 +183,10 @@ export interface AdEnquiry {
 export class AdminService {
   private http = inject(HttpClient);
   private api = environment.apiUrl;
+
+  getGrowth() {
+    return this.http.get<Growth>(`${this.api}/admin/growth`);
+  }
 
   getFunnels(days = 30) {
     return this.http.get<Funnels>(`${this.api}/analytics/funnels?days=${days}`);
