@@ -549,3 +549,20 @@
   // phone, where a label like 'Backup power / inverter' is wider than the row.
   .amenity-chip { white-space: normal; }
 }
+
+// ── Advertising rate card ───────────────────────────────────────────────
+.rate-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.rate-table th {
+  text-align: left; padding: .6rem .5rem; font-size: .72rem;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--slate);
+  border-bottom: 1px solid var(--border);
+}
+.rate-table td { padding: .75rem .5rem; border-bottom: 1px solid var(--border); color: var(--ink2); }
+.rate-table td:first-child { color: var(--ink); }
+.rate-table__note { display: block; font-size: .75rem; color: var(--slate); margin-top: .15rem; }
+
+@media (max-width: 700px) {
+  // Four price columns will not fit; scroll rather than shrink the type to
+  // something unreadable.
+  .rate-table { display: block; overflow-x: auto; white-space: nowrap; }
+}

@@ -1,6 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Body, Param, Query, Res, UseGuards, ParseUUIDPipe, HttpCode, HttpStatus,
-} from '@nestjs/common';
+  Controller, Get, Post, Patch, Body, Param, Query, Res, UseGuards, ParseUUIDPipe, HttpCode, HttpStatus, Header } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -64,6 +63,13 @@ export class AdsController {
    * Public enquiry form. Rate limited hard — an open contact form that sends
    * mail is the obvious target for spam.
    */
+  @Get('rates')
+  @Header('Cache-Control', 'public, max-age=3600')
+  @ApiOperation({ summary: 'Rate card: monthly price by placement and targeting reach' })
+  rates() {
+    return this.adsService.getRateCard();
+  }
+
   @Post('enquiries')
   @Throttle({ default: { limit: 3, ttl: 60 * 60 * 1000 } })
   @ApiOperation({ summary: 'Enquire about advertising on the board' })

@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { rateCard, suggestedRateCents, targetLevel, MINIMUM_MONTHLY_CENTS } from './ad-rates';
 import {
   CreateCampaignDto, ReviewCampaignDto, CreateAdvertiserDto,
   CreateAdEnquiryDto, UpdateEnquiryDto,
@@ -189,6 +190,11 @@ export class AdsService {
     });
   }
 
+  /** The rate card, for the Advertise page and the admin form. */
+  getRateCard() {
+    return { placements: rateCard(), minimumMonthlyCents: MINIMUM_MONTHLY_CENTS };
+  }
+
   async createCampaign(dto: CreateCampaignDto) {
     const advertiser = await this.prisma.advertiser.findUnique({ where: { id: dto.advertiserId } });
     if (!advertiser) throw new NotFoundException('Advertiser not found');
@@ -196,6 +202,16 @@ export class AdsService {
     const startsAt = new Date(dto.startsAt);
     const endsAt = new Date(dto.endsAt);
     if (endsAt <= startsAt) throw new BadRequestException('The end date must be after the start date.');
+
+    // A rate well under the card for that reach is usually a mistake rather
+    // than a discount, so it is worth surfacing before the campaign runs.
+    const suggested = suggestedRateCents(dto.placement, dto);
+    if (dto.monthlyRateCents < suggested * 0.5) {
+      this.logger.warn(
+        `Campaign priced at ${dto.monthlyRateCents} against a suggested ${suggested} ` +
+        `for ${targetLevel(dto)} ${dto.placement}`,
+      );
+    }
 
     return this.prisma.adCampaign.create({
       data: { ...dto, startsAt, endsAt, status: 'pending_review' },

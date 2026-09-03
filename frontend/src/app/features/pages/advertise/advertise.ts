@@ -78,55 +78,55 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
             notice. All prices exclude VAT.
           </p>
           <p class="muted">
-            Rates are per placement, not per impression. You are buying a slot for
-            the month — if the board gets busier, you get more views at the same
-            price.
+            Rates are per month, not per impression. You are buying a slot — if the
+            board gets busier, you get more views at the same price.
           </p>
 
-          <div class="pricing-grid" style="margin-top:1.5rem">
-            <div class="plan-card">
-              <div class="plan-name">Sidebar</div>
-              <div class="plan-price">R 2,500<span>/month</span></div>
-              <div class="plan-desc">
-                Beside the filters, on screen for the whole of every search.
-              </div>
-              <ul class="plan-features">
-                <li>One slot per search page</li>
-                <li>Image or text</li>
-                <li>Target by province, city or suburb</li>
-                <li>Monthly performance report</li>
-              </ul>
-            </div>
+          <table class="rate-table">
+            <thead>
+              <tr>
+                <th>Placement</th>
+                <th>Nationwide</th>
+                <th>One province</th>
+                <th>One city</th>
+                <th>One suburb</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <strong>Sidebar</strong>
+                  <span class="rate-table__note">Beside the filters, whole search</span>
+                </td>
+                <td>R2,500</td><td>R1,250</td><td>R700</td><td>R450</td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>In-grid</strong>
+                  <span class="rate-table__note">After every sixth room</span>
+                </td>
+                <td>R4,000</td><td>R2,000</td><td>R1,100</td><td>R600</td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Room detail</strong>
+                  <span class="rate-table__note">Below a listing</span>
+                </td>
+                <td>R3,000</td><td>R1,500</td><td>R850</td><td>R450</td>
+              </tr>
+            </tbody>
+          </table>
 
-            <div class="plan-card featured">
-              <div class="plan-name">In-grid</div>
-              <div class="plan-price">R 4,000<span>/month</span></div>
-              <div class="plan-desc">
-                In the grid itself, after every sixth room. Someone scrolling a
-                long search passes several.
-              </div>
-              <ul class="plan-features">
-                <li>Repeats every 6 rooms as they scroll</li>
-                <li>Rotates with other advertisers, never the same ad twice running</li>
-                <li>Target by province, city, suburb or room type</li>
-                <li>Monthly performance report</li>
-              </ul>
-            </div>
-
-            <div class="plan-card">
-              <div class="plan-name">Room detail</div>
-              <div class="plan-price">R 3,000<span>/month</span></div>
-              <div class="plan-desc">
-                Below a listing, at the point someone is deciding whether to apply.
-              </div>
-              <ul class="plan-features">
-                <li>Reaches the strongest intent</li>
-                <li>Targetable to the suburb of the room being viewed</li>
-                <li>Target by province, city or suburb</li>
-                <li>Monthly performance report</li>
-              </ul>
-            </div>
-          </div>
+          <p class="muted" style="margin-top:1rem">
+            <strong>Narrower targeting costs less, not more.</strong> A nationwide
+            sidebar runs on every search; a Sandton one runs only on Sandton
+            searches. You pay for the reach you get.
+          </p>
+          <p class="muted">
+            It does cost more <em>per impression</em>, and deliberately so — an
+            advert for storage in Sandton, shown to people moving into Sandton,
+            is worth more than the same advert shown to the whole country.
+          </p>
         </section>
 
         <section class="dash-section">

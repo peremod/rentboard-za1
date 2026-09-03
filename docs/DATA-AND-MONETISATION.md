@@ -120,11 +120,29 @@ by email and lands in a queue at `/admin/enquiries`.
 advertiser deciding whether to bother emailing wants to know whether this is a
 R2,000 or a R20,000 conversation, and most will not ask. Opening figures:
 
-| Placement | Monthly | What it delivers |
-|---|---|---|
-| Sidebar | R2,500 | One slot, on screen for the whole search |
-| In-grid | R4,000 | Repeats after every 6th room card |
-| Room detail | R3,000 | Below a listing, strongest intent |
+Rates scale with reach, because targeting changes what a placement delivers:
+
+| Placement | Nationwide | Province | City | Suburb |
+|---|---|---|---|---|
+| Sidebar | R2,500 | R1,250 | R700 | R450 |
+| In-grid | R4,000 | R2,000 | R1,100 | R600 |
+| Room detail | R3,000 | R1,500 | R850 | R450 |
+
+**A flat rate per placement was wrong**, and it took a direct question to spot
+it. A nationwide sidebar runs on every search; a Sandton one runs only on
+Sandton searches. Charging both R2,500 meant the national buyer got perhaps ten
+times the impressions for the same money, and the suburb buyer was badly
+overpaying.
+
+Rates scale with reach but **not linearly**. A suburb campaign reaches roughly
+3% of traffic and pays 15% of the national rate — several times the price per
+impression. That premium is the point: an advert for storage in Sandton, shown
+to people moving into Sandton, is worth more than the same advert shown
+nationally.
+
+There is a floor of R450. Reviewing a creative, invoicing and reporting cost
+the same whether a campaign is national or one suburb, so below that a
+placement costs more to administer than it earns.
 
 **In-grid changed in v1.28.1** and the rate card was updated to match. It used
 to be a single slot after the sixth card; it now repeats every six rooms, so a

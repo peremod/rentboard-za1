@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, DecimalPipe, LowerCasePipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { AdminService, AdCampaign, AdEnquiry } from '../../../core/services/admin.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
@@ -17,7 +17,7 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
 @Component({
   selector: 'app-admin-advertising',
   standalone: true,
-  imports: [DatePipe, FormsModule, ReactiveFormsModule, PortalShell, ZarCentsPipe],
+  imports: [DatePipe, DecimalPipe, LowerCasePipe, FormsModule, ReactiveFormsModule, PortalShell, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)">
@@ -177,6 +177,17 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
             <div class="form-row">
               <label for="rate">Monthly rate (Rand)</label>
               <input id="rate" type="number" formControlName="monthlyRand" min="0"/>
+              <p class="field-hint">
+                Card rate for {{ targetLevelLabel() }} {{ placementLabel(campaignForm.value.placement!) | lowercase }}:
+                <strong>R{{ (suggestedRand() | number) }}</strong>
+                @if (suggestedRand() !== campaignForm.value.monthlyRand) {
+                  · <button type="button" class="linkish" (click)="useSuggested()">use this</button>
+                }
+              </p>
+              <p class="field-hint">
+                Narrower targeting reaches fewer people, so it costs less overall —
+                but more per impression, because those impressions are worth more.
+              </p>
             </div>
 
             <div class="form-row">
@@ -407,6 +418,35 @@ export class AdminAdvertising implements OnInit {
     this.imagePath.set(null);
     this.uploadError.set(null);
     this.formError.set(null);
+  }
+
+  /**
+   * The narrowest targeting set is what the buyer is paying for. Mirrors the
+   * server-side calculation, which remains the authority.
+   */
+  targetLevelLabel(): string {
+    const v = this.campaignForm.value;
+    if (v.suburbSlug) return 'suburb';
+    if (v.city) return 'city';
+    if (v.province) return 'province';
+    return 'national';
+  }
+
+  suggestedRand(): number {
+    const base: Record<string, number> = {
+      board_sidebar: 2500, board_inline: 4000, room_detail: 3000,
+    };
+    const multiplier: Record<string, number> = {
+      national: 1, province: 0.5, city: 0.28, suburb: 0.15,
+    };
+    const raw = (base[this.campaignForm.value.placement ?? 'board_sidebar'] ?? 2500)
+      * multiplier[this.targetLevelLabel()];
+    // Nearest R50, floored at R450 — same rounding as the server.
+    return Math.max(Math.round(raw / 50) * 50, 450);
+  }
+
+  useSuggested() {
+    this.campaignForm.patchValue({ monthlyRand: this.suggestedRand() });
   }
 
   createCampaign() {
