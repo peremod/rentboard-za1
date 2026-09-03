@@ -102,6 +102,15 @@ export class RoomsController {
     return this.roomsService.markReserved(id, user.id);
   }
 
+  @Post(':id/unpause')
+  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Resume a paused listing, keeping its applications' })
+  unpause(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.roomsService.unpause(id, user.id);
+  }
+
   @Post(':id/unreserve')
   @UseGuards(JwtAuthGuard, LandlordGuard)
   @ApiBearerAuth()

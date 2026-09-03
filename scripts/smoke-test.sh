@@ -615,8 +615,33 @@ if [[ -n "$LIFE_ID" ]]; then
     green "  PASS  paused room is off the public board"; PASS=$((PASS+1))
   fi
 
-  req POST "/api/rooms/$LIFE_ID/relist" '{}' "$LTOKEN"
-  check "relist a paused room" 200 "$STATUS" "$BODY"
+  # Resume must keep applications. Relisting a paused room would archive them,
+  # which is the opposite of what pausing is for.
+  req POST /api/applications "{\"roomId\":\"$LIFE_ID\",\"coverNote\":\"Interested while paused test.\"}" "$ITOKEN"
+  PAUSE_APP=$(echo "$BODY" | jq -r '.id // empty')
+
+  req POST "/api/rooms/$LIFE_ID/unpause" "" "$LTOKEN"
+  check "resume a paused room" 200 "$STATUS" "$BODY"
+
+  if [[ -n "$PAUSE_APP" ]]; then
+    req GET "/api/applications/room/$LIFE_ID" "" "$LTOKEN"
+    if echo "$BODY" | jq -e --arg id "$PAUSE_APP" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then
+      green "  PASS  resuming kept the open application"; PASS=$((PASS+1))
+    else
+      red "  FAIL  resuming closed an open application"; FAIL=$((FAIL+1))
+    fi
+  fi
+
+  # A paused room must still be visible to its landlord, or it is unreachable.
+  req POST "/api/rooms/$LIFE_ID/pause" "" "$LTOKEN"
+  req GET /api/rooms/my-rooms "" "$LTOKEN"
+  if echo "$BODY" | jq -e --arg id "$LIFE_ID" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then
+    green "  PASS  a paused room stays on the landlord dashboard"; PASS=$((PASS+1))
+  else
+    red "  FAIL  paused room vanished from my-rooms"; FAIL=$((FAIL+1))
+  fi
+
+  req POST "/api/rooms/$LIFE_ID/unpause" "" "$LTOKEN"
 
   req POST "/api/rooms/$LIFE_ID/remove" "" "$LTOKEN"
   check "remove a published listing" 200 "$STATUS" "$BODY"

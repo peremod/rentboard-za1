@@ -200,6 +200,24 @@ export class RoomsService {
     return this.prisma.room.update({ where: { id }, data: { status: 'reserved' } });
   }
 
+  /**
+   * Resume a paused listing.
+   *
+   * Deliberately NOT relist. Relisting archives every open application and
+   * starts a new cycle, which is right when a tenancy has ended — and exactly
+   * wrong here, since the whole point of pausing is that applications survive.
+   */
+  async unpause(id: string, landlordId: string) {
+    const room = await this.assertOwner(id, landlordId);
+    if (room.status !== 'paused') {
+      throw new BadRequestException('This room is not paused');
+    }
+    return this.prisma.room.update({
+      where: { id },
+      data: { status: 'active' },
+    });
+  }
+
   /** Reserved → active, when a prospective tenant falls through. */
   async unreserve(id: string, landlordId: string) {
     const room = await this.assertOwner(id, landlordId);
@@ -349,17 +367,30 @@ export class RoomsService {
     return updated;
   }
 
+  /**
+   * Everything the landlord is still working on.
+   *
+   * 'paused' belongs here rather than in archived: the room is off the board
+   * but not finished with. It was in neither query, so pausing a listing made
+   * it vanish from the dashboard entirely and there was no way to resume it.
+   */
   getLandlordRooms(landlordId: string) {
     return this.prisma.room.findMany({
-      where: { landlordId, status: { in: ['active', 'reserved', 'draft'] } },
+      where: { landlordId, status: { in: ['active', 'reserved', 'paused', 'draft'] } },
       orderBy: { publishedAt: 'desc' },
     });
   }
 
+  /**
+   * Finished with, but relistable: let, or removed. A removed listing was
+   * previously unreachable from anywhere in the dashboard.
+   */
   getArchivedRooms(landlordId: string) {
     return this.prisma.room.findMany({
-      where: { landlordId, status: 'let' },
-      orderBy: { letAt: 'desc' },
+      where: { landlordId, status: { in: ['let', 'deleted'] } },
+      // updatedAt rather than letAt, which is null on a removed room and would
+      // sort those to the end regardless of when they were removed.
+      orderBy: { updatedAt: 'desc' },
       take: 20,
     });
   }

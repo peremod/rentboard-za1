@@ -98,11 +98,6 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
                           [disabled]="pausing() === room.id" (click)="pause(room)">
                     Pause
                   </button>
-                } @else if (room.status === 'paused') {
-                  <button type="button" class="btn btn-sm btn-sage"
-                          [disabled]="pausing() === room.id" (click)="unpause(room)">
-                    Resume
-                  </button>
                 }
                 @if (room.status !== 'draft') {
                   <button type="button" class="btn btn-sm btn-ghost-light"
@@ -120,6 +115,42 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
       </section>
 
       <app-referral-panel/>
+
+      @if (pausedRooms().length > 0) {
+        <section class="dash-section">
+          <div class="dash-section-title">
+            Paused
+            <span class="dash-count">({{ pausedRooms().length }})</span>
+          </div>
+          <p class="muted">
+            Off the board and not visible to tenants. Existing applications are
+            untouched — resume whenever you're ready.
+          </p>
+
+          @for (room of pausedRooms(); track room.id) {
+            <div class="app-card app-card--closed">
+              <div class="app-thumb portal-thumb" aria-hidden="true">⏸</div>
+              <div class="app-info">
+                <div class="app-room">{{ room.title }}</div>
+                <div class="app-location">{{ room.locationDisplay }}</div>
+                <div class="app-rent">{{ room.rentCents | zarCents:'monthly' }}</div>
+              </div>
+              <div class="portal-row-actions">
+                <button type="button" class="btn btn-sm btn-sage"
+                        [disabled]="pausing() === room.id" (click)="unpause(room)">
+                  {{ pausing() === room.id ? 'Resuming…' : 'Resume' }}
+                </button>
+                <a class="btn btn-sm btn-ghost-light"
+                   [routerLink]="['/landlord/rooms', room.id, 'edit']">Edit</a>
+                <button type="button" class="btn btn-sm btn-ghost-light"
+                        [disabled]="removing() === room.id" (click)="removeListing(room)">
+                  Remove
+                </button>
+              </div>
+            </div>
+          }
+        </section>
+      }
 
       <section class="dash-section">
         <div class="dash-section-title">
@@ -329,9 +360,10 @@ export class LandlordDashboard implements OnInit {
     });
   }
 
+  /** Resume, not relist — relisting would close every open application. */
   unpause(room: Room) {
     this.pausing.set(room.id);
-    this.roomsService.relistRoom(room.id).subscribe({
+    this.roomsService.unpause(room.id).subscribe({
       next: () => { this.pausing.set(null); this.ngOnInit(); },
       error: () => this.pausing.set(null),
     });
@@ -362,8 +394,18 @@ export class LandlordDashboard implements OnInit {
   }
 
   /** my-rooms returns active, reserved and drafts together; split for display. */
+  /** On the board, or reserved. Paused rooms get their own section. */
   activeRooms() {
-    return this.rooms().filter((r) => r.status !== 'draft');
+    return this.rooms().filter((r) => r.status === 'active' || r.status === 'reserved');
+  }
+
+  /**
+   * Off the board but not finished with. Separated so a landlord can see at a
+   * glance that a room is not being seen by anyone — mixed in with the live
+   * listings it looks the same as one that is working.
+   */
+  pausedRooms() {
+    return this.rooms().filter((r) => r.status === 'paused');
   }
 
   draftRooms() {

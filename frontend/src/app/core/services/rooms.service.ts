@@ -99,6 +99,12 @@ export class RoomsService {
     return this.http.post<Room>(`${this.api}/rooms/${id}/unreserve`, {});
   }
 
+  /** Resumes a paused room without touching its applications. */
+  unpause(id: string) {
+    this.bustCache();
+    return this.http.post<Room>(`${this.api}/rooms/${id}/unpause`, {});
+  }
+
   /** Off the board, applications left open — unlike marking it let. */
   pause(id: string) {
     this.bustCache();
