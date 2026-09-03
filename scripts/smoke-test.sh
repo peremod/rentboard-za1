@@ -1258,6 +1258,14 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req GET /api/ads/reach-analysis "" "$ADMIN_TOKEN"
   check "admin reads reach analysis" 200 "$STATUS" "$BODY"
 
+  # Reach must come from eligibility, not impressions won — otherwise selling
+  # more inventory would look like the targeting reached more people.
+  if echo "$BODY" | jq -e '.levels | any(.; has("eligibleRequests") and has("reachSharePct"))' >/dev/null 2>&1; then
+    green "  PASS  reach measured by eligible requests"; PASS=$((PASS+1))
+  else
+    red "  FAIL  reach analysis is not using eligibility"; FAIL=$((FAIL+1))
+  fi
+
   # The whole point is comparing delivered reach against what the rate assumes.
   if echo "$BODY" | jq -e '.levels | any(.; has("actualSharePct") and has("pricedSharePct") and has("gapPct"))' >/dev/null 2>&1; then
     green "  PASS  reach analysis compares actual against priced share"; PASS=$((PASS+1))
@@ -1774,6 +1782,43 @@ if [[ -n "$GONE_ROOM" ]]; then
 
   req GET "/api/rooms/$GONE_ROOM" "" "$LTOKEN"
   check "the owner can still see it, to relist" 200 "$STATUS" "$BODY"
+fi
+
+
+# -- 35. House ads ---------------------------------------------------------
+# They fill unsold inventory and give the rate card a national baseline. The
+# assertion that matters is that they never outrank a paid campaign.
+head_ "35. House ads"
+req GET "/api/ads?placement=board_sidebar&limit=3"
+HOUSE_SERVED=$(echo "$BODY" | jq -r '[.[]? | select(.advertiser == "RentBoard")] | length')
+TOTAL_SERVED=$(echo "$BODY" | jq -r 'length')
+
+if [[ "$TOTAL_SERVED" -gt 0 ]]; then
+  green "  PASS  an ad is served for the sidebar ($TOTAL_SERVED)"; PASS=$((PASS+1))
+
+  # With paid demo campaigns seeded, a house ad must not come first.
+  FIRST=$(echo "$BODY" | jq -r '.[0].advertiser')
+  PAID_AVAILABLE=$(echo "$BODY" | jq -r '[.[]? | select(.advertiser != "RentBoard")] | length')
+  if [[ "$PAID_AVAILABLE" -gt 0 && "$FIRST" == "RentBoard" ]]; then
+    red "  FAIL  a house ad outranked a paid campaign"; FAIL=$((FAIL+1))
+  else
+    green "  PASS  house ads do not displace paid campaigns"; PASS=$((PASS+1))
+  fi
+else
+  grey "  SKIP  no campaigns seeded"; SKIP=$((SKIP+1))
+fi
+
+# Requesting an ad must record eligibility, which is what the rate card is
+# checked against.
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  req GET "/api/ads?placement=board_sidebar&province=Gauteng&city=Johannesburg"
+  req GET /api/ads/reach-analysis "" "$ADMIN_TOKEN"
+  REQS=$(echo "$BODY" | jq -r '.totalRequests // 0')
+  if [[ "$REQS" -gt 0 ]]; then
+    green "  PASS  ad requests are being counted ($REQS)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  no eligibility recorded after an ad request"; FAIL=$((FAIL+1))
+  fi
 fi
 
 

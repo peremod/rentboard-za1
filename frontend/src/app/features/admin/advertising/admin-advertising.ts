@@ -28,17 +28,16 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
 
           @if (!r.hasBaseline) {
             <p class="muted">
-              Nothing to compare against yet. This needs at least one nationwide
-              campaign running alongside targeted ones — without a national
-              baseline there is no way to tell whether a suburb campaign is
-              reaching 3% of traffic or 30%.
+              No measurements yet. RentBoard's own house ads run nationwide and
+              generate this baseline automatically, so figures appear once the
+              board has traffic.
             </p>
           } @else {
             <p class="muted">
-              The rate card assumes each targeting level reaches a share of
-              national traffic. This is what they actually deliver, measured as
-              impressions per day so campaigns of different lengths compare
-              fairly.
+              Measured by how many ad requests each level could serve, not by
+              impressions won. Impressions move with how much inventory is sold;
+              eligibility is the reach itself.
+              <strong>{{ r.totalRequests }}</strong> requests measured so far.
             </p>
 
             <table class="growth-table">
@@ -46,8 +45,8 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
                 <tr>
                   <th>Targeting</th>
                   <th>Campaigns</th>
-                  <th>Impressions/day</th>
-                  <th>Actual reach</th>
+                  <th>Requests</th>
+                  <th>Reach</th>
                   <th>Priced at</th>
                   <th>Verdict</th>
                 </tr>
@@ -57,8 +56,8 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
                   <tr>
                     <td>{{ l.level }}</td>
                     <td>{{ l.campaigns }}</td>
-                    <td>{{ l.impressionsPerDay }}</td>
-                    <td>{{ l.actualSharePct }}%</td>
+                    <td>{{ l.eligibleRequests }}</td>
+                    <td>{{ l.reachSharePct }}%</td>
                     <td>{{ l.pricedSharePct }}%</td>
                     <td>
                       @if (!l.reliable) {
@@ -81,9 +80,9 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
             </table>
 
             <p class="field-hint">
-              'Too little data' means fewer than three campaigns or under a month
-              at that level — below that any ratio is one advertiser's luck
-              rather than a pattern. A gap under 8 points is noise.
+              'Too little data' means under 5,000 measured requests — below that
+              the ratios move too much to act on. A gap under 8 points is noise
+              either way.
             </p>
             <p class="field-hint">
               If a level is underpriced, raise it in

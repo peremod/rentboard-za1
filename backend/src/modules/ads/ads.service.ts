@@ -41,6 +41,11 @@ export class AdsService {
   }) {
     const now = new Date();
 
+    // Count what each targeting level was ELIGIBLE for, not what it won.
+    // Impressions measure which ad happened to be picked; eligibility measures
+    // actual reach, and is unaffected by how much inventory is sold.
+    this.recordEligibility(params).catch(() => {});
+
     const campaigns = await this.prisma.adCampaign.findMany({
       where: {
         status: 'active',
@@ -60,7 +65,7 @@ export class AdsService {
       select: {
         id: true, headline: true, body: true, imagePath: true,
         ctaLabel: true, targetUrl: true, placement: true,
-        province: true, city: true, suburbSlug: true, roomType: true,
+        province: true, city: true, suburbSlug: true, roomType: true, isHouseAd: true,
         advertiser: { select: { companyName: true } },
       },
       take: 20,
@@ -81,24 +86,34 @@ export class AdsService {
     // discarding the rest: asking for three equally specific campaigns should
     // return three in a random order, not one. The old version dropped the
     // others entirely, so repeated slots on a page all got the same ad.
-    const bands = new Map<number, typeof scored>();
-    for (const entry of scored) {
-      const band = bands.get(entry.specificity) ?? [];
-      band.push(entry);
-      bands.set(entry.specificity, band);
-    }
+    // House ads sort after every paid campaign regardless of specificity: they
+    // fill inventory nobody bought and must never displace a sold placement.
+    const rank = (entries: typeof scored) => {
+      const bands = new Map<number, typeof scored>();
+      for (const entry of entries) {
+        const band = bands.get(entry.specificity) ?? [];
+        band.push(entry);
+        bands.set(entry.specificity, band);
+      }
 
-    const chosen = [...bands.keys()]
-      .sort((a, b) => b - a)
-      .flatMap((specificity) => {
-        const band = [...bands.get(specificity)!];
-        // Fisher-Yates, so no advertiser is permanently first in its band.
-        for (let i = band.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [band[i], band[j]] = [band[j], band[i]];
-        }
-        return band;
-      });
+      return [...bands.keys()]
+        .sort((a, b) => b - a)
+        .flatMap((specificity) => {
+          const band = [...bands.get(specificity)!];
+          // Fisher-Yates, so no advertiser is permanently first in its band.
+          for (let i = band.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [band[i], band[j]] = [band[j], band[i]];
+          }
+          return band;
+        });
+    };
+
+    const chosen = [
+      ...rank(scored.filter((s) => !s.campaign.isHouseAd)),
+      ...rank(scored.filter((s) => s.campaign.isHouseAd)),
+    ];
+
 
     return chosen.slice(0, params.limit ?? 1).map(({ campaign }) => ({
       id: campaign.id,
@@ -111,6 +126,35 @@ export class AdsService {
       // the page; the destination is not exposed until the click happens.
       clickUrl: `/api/ads/${campaign.id}/click`,
     }));
+  }
+
+  /**
+   * One counter per request, plus one for each targeting level the request
+   * could have matched.
+   *
+   * This is what makes the rate card checkable. A national campaign is
+   * eligible for every request; a Gauteng one only for Gauteng requests. The
+   * ratio between those counts is the real reach multiplier, and unlike
+   * impressions it does not change with how much inventory happens to be sold.
+   */
+  private async recordEligibility(params: { province?: string; city?: string; suburbSlug?: string }) {
+    const day = new Date();
+    day.setUTCHours(0, 0, 0, 0);
+
+    const levels = ['national'];
+    if (params.province) levels.push('province');
+    if (params.city) levels.push('city');
+    if (params.suburbSlug) levels.push('suburb');
+
+    await Promise.all(
+      levels.map((level) =>
+        this.prisma.uxCounter.upsert({
+          where: { event_segment_day: { event: 'ad.eligible', segment: level, day } },
+          create: { event: 'ad.eligible', segment: level, day, count: 1 },
+          update: { count: { increment: 1 } },
+        }).catch(() => {}),
+      ),
+    );
   }
 
   /** Fire-and-forget counter. No user, no session, no timestamp per view. */
@@ -244,10 +288,23 @@ export class AdsService {
 
     const nationalPerDay = perDay('national');
 
+    // Eligibility is the honest denominator. Impressions measure which ad was
+    // picked, which changes with how much inventory is sold; eligibility
+    // measures how many requests a level could have served at all.
+    const eligibility = await this.prisma.uxCounter.groupBy({
+      by: ['segment'],
+      where: { event: 'ad.eligible' },
+      _sum: { count: true },
+    });
+    const eligibleFor = (level: string) =>
+      Number(eligibility.find((e) => e.segment === level)?._sum.count ?? 0);
+    const nationalEligible = eligibleFor('national');
+
     return {
       // Everything below is meaningless without campaigns at the national
       // level to compare against, and the UI says so rather than showing 0%.
-      hasBaseline: nationalPerDay > 0,
+      hasBaseline: nationalEligible > 0,
+      totalRequests: nationalEligible,
       levels: levels.map((level) => {
         const b = buckets.get(level);
         const impressionsPerDay = perDay(level);
@@ -269,13 +326,27 @@ export class AdsService {
           pricedSharePct: Math.round(pricedShare * 100),
 
           /**
+           * The measure that actually settles the pricing question: what share
+           * of ad requests this level could serve. Unlike impressions it does
+           * not move when inventory sells out or a house ad fills a gap.
+           */
+          eligibleRequests: eligibleFor(level),
+          reachSharePct: nationalEligible > 0
+            ? Math.round((eligibleFor(level) / nationalEligible) * 100)
+            : 0,
+
+          /**
            * Positive means the level delivers more reach than its price
            * assumes — it is underpriced. Negative means overpriced.
            */
-          gapPct: nationalPerDay > 0 ? Math.round((actualShare - pricedShare) * 100) : 0,
+          gapPct: nationalEligible > 0
+            ? Math.round((eligibleFor(level) / nationalEligible - pricedShare) * 100)
+            : 0,
 
           // Below three campaigns any ratio is one advertiser's luck.
-          reliable: (b?.campaigns ?? 0) >= 3 && (b?.days ?? 0) >= 30,
+          // Reach needs request volume, not campaign count — 5,000 requests is
+          // enough to trust a ratio even with one campaign running.
+          reliable: nationalEligible >= 5000,
         };
       }),
     };

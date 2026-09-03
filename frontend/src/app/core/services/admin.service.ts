@@ -157,8 +157,11 @@ export interface ReachLevel {
   clicks: number;
   ctr: number;
   averageMonthlyCents: number;
-  /** Share of national reach actually delivered. */
+  /** Share of national reach actually delivered, by impressions won. */
   actualSharePct: number;
+  /** Ad requests this level could have served — the honest reach measure. */
+  eligibleRequests: number;
+  reachSharePct: number;
   /** Share the rate card assumes. */
   pricedSharePct: number;
   /** Positive: delivers more than it charges for, so underpriced. */
@@ -169,6 +172,8 @@ export interface ReachLevel {
 
 export interface ReachAnalysis {
   hasBaseline: boolean;
+  /** Total ad requests measured. The verdicts are noise below a few thousand. */
+  totalRequests: number;
   levels: ReachLevel[];
 }
 

@@ -80,6 +80,10 @@ Optional: ADMIN_NAME="Your Name"
     await seedDemoAds();
   }
 
+  // House ads. Always seeded, not opt-in: they fill unsold inventory and give
+  // the rate card a national baseline to measure against.
+  await seedHouseAds();
+
   // Place taxonomy. Always seeded — search and ad targeting depend on it, and
   // it is reference data rather than demo data.
   await seedPlaces();
@@ -92,6 +96,93 @@ Optional: ADMIN_NAME="Your Name"
   const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
   console.log(`Total admin accounts: ${adminCount}`);
   console.log('Sign in normally, then open /admin.');
+}
+
+/**
+ * RentBoard's own adverts.
+ *
+ * Two jobs. An empty slot is wasted space, so unsold inventory promotes the
+ * site instead of showing nothing. And a permanently running nationwide
+ * campaign gives the reach analysis a baseline — without one there is nothing
+ * to compare a suburb campaign against, and the rate card cannot be checked.
+ *
+ * They never displace a paid placement: house ads are ranked after every paid
+ * campaign regardless of targeting.
+ */
+// Fixed, valid UUIDs so the seed is idempotent. 'ad' and 'b0' are hex; a
+// readable-but-invalid id like '...house1' fails at insert.
+const HOUSE_ADVERTISER_ID = '00000000-0000-0000-0000-0000000000b0';
+
+async function seedHouseAds() {
+  const advertiser = await prisma.advertiser.upsert({
+    where: { id: HOUSE_ADVERTISER_ID },
+    update: {},
+    create: {
+      id: HOUSE_ADVERTISER_ID,
+      companyName: 'RentBoard',
+      contactName: 'RentBoard',
+      contactEmail: 'hello@rentboard.co.za',
+      notes: 'House ads. Not a paying advertiser — do not invoice.',
+    },
+  });
+
+  const now = new Date();
+  const farFuture = new Date('2099-01-01');
+
+  const ads = [
+    {
+      id: '00000000-0000-0000-0000-0000000000b1',
+      name: '[HOUSE] How it works — sidebar',
+      placement: 'board_sidebar' as const,
+      headline: 'New to RentBoard?',
+      body: 'No agents, no application fees. See how renting direct from landlords works.',
+      ctaLabel: 'How it works',
+      targetUrl: '/how-it-works',
+    },
+    {
+      id: '00000000-0000-0000-0000-0000000000b2',
+      name: '[HOUSE] List a room — in-grid',
+      placement: 'board_inline' as const,
+      headline: 'Have a room to let?',
+      body: 'Listing is free, and always will be. No commission, no agent in the middle.',
+      ctaLabel: 'List a room free',
+      targetUrl: '/auth/register',
+    },
+    {
+      id: '00000000-0000-0000-0000-0000000000b3',
+      name: '[HOUSE] Safety — room detail',
+      placement: 'room_detail' as const,
+      headline: 'Before you pay a deposit',
+      body: 'View the room in person, insist on a written lease, and never pay before you see it.',
+      ctaLabel: 'Read the guidance',
+      targetUrl: '/how-it-works',
+    },
+  ];
+
+  for (const ad of ads) {
+    const data = {
+      ...ad,
+      advertiserId: advertiser.id,
+      // Nationwide on purpose: this is the baseline every targeted campaign is
+      // measured against.
+      province: null,
+      city: null,
+      suburbSlug: null,
+      startsAt: now,
+      endsAt: farFuture,
+      monthlyRateCents: 0,
+      status: 'active' as const,
+      approvedAt: now,
+      isHouseAd: true,
+    };
+    await prisma.adCampaign.upsert({
+      where: { id: data.id },
+      update: data,
+      create: data,
+    });
+  }
+
+  console.log(`Seeded ${ads.length} house ads (nationwide, fill-only).`);
 }
 
 /**

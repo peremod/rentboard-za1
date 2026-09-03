@@ -695,6 +695,14 @@ model AdCampaign {
   impressions  Int          @default(0)
   clicks       Int          @default(0)
 
+  /// RentBoard's own advert, not a sold placement.
+  ///
+  /// Fills a slot no paying advertiser matched, so empty inventory promotes
+  /// the site rather than showing nothing. Excluded from revenue reporting,
+  /// and served only after every paid campaign has been considered — a house
+  /// ad must never displace a placement someone paid for.
+  isHouseAd    Boolean      @default(false)
+
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
