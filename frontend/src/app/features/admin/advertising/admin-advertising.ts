@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe, DecimalPipe, LowerCasePipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
-import { AdminService, AdCampaign, AdEnquiry } from '../../../core/services/admin.service';
+import { AdminService, AdCampaign, AdEnquiry, ReachAnalysis } from '../../../core/services/admin.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { ADMIN_NAV } from '../admin-nav';
@@ -21,6 +21,78 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)">
+
+      @if (reach(); as r) {
+        <section class="dash-section">
+          <div class="dash-section-title">Are the rates right?</div>
+
+          @if (!r.hasBaseline) {
+            <p class="muted">
+              Nothing to compare against yet. This needs at least one nationwide
+              campaign running alongside targeted ones — without a national
+              baseline there is no way to tell whether a suburb campaign is
+              reaching 3% of traffic or 30%.
+            </p>
+          } @else {
+            <p class="muted">
+              The rate card assumes each targeting level reaches a share of
+              national traffic. This is what they actually deliver, measured as
+              impressions per day so campaigns of different lengths compare
+              fairly.
+            </p>
+
+            <table class="growth-table">
+              <thead>
+                <tr>
+                  <th>Targeting</th>
+                  <th>Campaigns</th>
+                  <th>Impressions/day</th>
+                  <th>Actual reach</th>
+                  <th>Priced at</th>
+                  <th>Verdict</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (l of r.levels; track l.level) {
+                  <tr>
+                    <td>{{ l.level }}</td>
+                    <td>{{ l.campaigns }}</td>
+                    <td>{{ l.impressionsPerDay }}</td>
+                    <td>{{ l.actualSharePct }}%</td>
+                    <td>{{ l.pricedSharePct }}%</td>
+                    <td>
+                      @if (!l.reliable) {
+                        <span class="muted">Too little data</span>
+                      } @else if (l.gapPct > 8) {
+                        <span class="verdict verdict--under">
+                          Underpriced by {{ l.gapPct }} points
+                        </span>
+                      } @else if (l.gapPct < -8) {
+                        <span class="verdict verdict--over">
+                          Overpriced by {{ -l.gapPct }} points
+                        </span>
+                      } @else {
+                        <span class="verdict verdict--ok">About right</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+
+            <p class="field-hint">
+              'Too little data' means fewer than three campaigns or under a month
+              at that level — below that any ratio is one advertiser's luck
+              rather than a pattern. A gap under 8 points is noise.
+            </p>
+            <p class="field-hint">
+              If a level is underpriced, raise it in
+              <code>backend/src/modules/ads/ad-rates.ts</code> and the admin form,
+              Advertise page and this table all follow.
+            </p>
+          }
+        </section>
+      }
 
       <section class="dash-section">
         <div class="dash-section-title">
@@ -318,6 +390,7 @@ export class AdminAdvertising implements OnInit {
   saving = signal(false);
   formError = signal<string | null>(null);
   advertisers = signal<{ id: string; companyName: string }[]>([]);
+  reach = signal<ReachAnalysis | null>(null);
   imagePath = signal<string | null>(null);
   uploading = signal(false);
   uploadError = signal<string | null>(null);
@@ -344,6 +417,11 @@ export class AdminAdvertising implements OnInit {
     this.admin.listAdvertisers().subscribe({
       next: (list) => this.advertisers.set(list),
       error: () => {},
+    });
+
+    this.admin.getReachAnalysis().subscribe({
+      next: (r) => this.reach.set(r),
+      error: () => {},   // the page must still work without it
     });
 
     this.admin.listEnquiries().subscribe({

@@ -130,7 +130,31 @@ more than one that has been profiled, and the `/advertise` page says so.
 
 ---
 
-## 5. Allocation and competition
+## 5. Checking the rates are right
+
+The rate card multipliers were reasoned, not measured. `/admin/advertising`
+carries a **Are the rates right?** table that measures them.
+
+For each targeting level it shows impressions per day, what share of national
+reach that actually represents, and what share the price assumes. The verdict
+column names the gap:
+
+- **Underpriced** — the level delivers more reach than its price assumes
+- **Overpriced** — it delivers less
+- **Too little data** — fewer than three campaigns, or under a month
+
+That last one matters. Below three campaigns a ratio is one advertiser's luck,
+not a pattern, and a gap under 8 points is noise either way.
+
+**It needs a national campaign to compare against.** Without one there is no
+baseline, and the table says so rather than showing a misleading zero. If every
+campaign you sell is targeted, run one nationwide placement — even a house ad
+for RentBoard itself — so the comparison has a denominator.
+
+To change a rate, edit `backend/src/modules/ads/ad-rates.ts`. The admin form,
+the Advertise page and this table all read from it.
+
+## 6. Allocation and competition
 
 - Targeting is contextual: suburb, city, province, room type — matched against
   the page, never the person.
@@ -156,7 +180,7 @@ mean advertisers paying variable prices for inventory nobody else wants.
 
 ---
 
-## 6. What is not built
+## 7. What is not built
 
 - **No self-service portal.** Advertisers cannot log in, upload creatives or
   see live stats themselves. Everything routes through the admin and the

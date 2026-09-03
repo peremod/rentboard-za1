@@ -115,6 +115,17 @@ export class AdsController {
     return this.adsService.createCampaign(dto);
   }
 
+  @Get('reach-analysis')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Does each targeting level deliver the reach its price assumes?',
+    description: 'Compares measured impressions per day against the rate card multipliers.',
+  })
+  reachAnalysis() {
+    return this.adsService.getReachAnalysis();
+  }
+
   @Get('campaigns')
   @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()

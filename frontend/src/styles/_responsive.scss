@@ -566,3 +566,9 @@
   // something unreadable.
   .rate-table { display: block; overflow-x: auto; white-space: nowrap; }
 }
+
+// Rate-verdict badges on the advertising reach table.
+.verdict { font-size: .78rem; font-weight: 600; }
+.verdict--under { color: var(--sage); }   // delivering more than it charges for
+.verdict--over  { color: var(--terra); }
+.verdict--ok    { color: var(--slate); font-weight: 400; }

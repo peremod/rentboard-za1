@@ -1166,6 +1166,19 @@ head_ "26. Board advertising"
 req GET "/api/ads?placement=board_sidebar&province=Gauteng"
 check "ads endpoint is public" 200 "$STATUS" "$BODY"
 
+# The rate card must be readable by a prospective advertiser.
+req GET /api/ads/rates
+check "rate card is public" 200 "$STATUS" "$BODY"
+
+# Narrower targeting must cost less than national, or the pricing is backwards.
+NAT=$(echo "$BODY" | jq -r '.placements[0].rates[] | select(.level=="national") | .monthlyCents')
+SUB=$(echo "$BODY" | jq -r '.placements[0].rates[] | select(.level=="suburb") | .monthlyCents')
+if [[ -n "$NAT" && -n "$SUB" && "$SUB" -lt "$NAT" ]]; then
+  green "  PASS  suburb rate is below national ($SUB < $NAT)"; PASS=$((PASS+1))
+else
+  red "  FAIL  suburb rate is not below national (national=$NAT suburb=$SUB)"; FAIL=$((FAIL+1))
+fi
+
 if echo "$BODY" | jq -e 'type == "array"' >/dev/null 2>&1; then
   green "  PASS  returns an array, empty is valid"; PASS=$((PASS+1))
 else
@@ -1241,6 +1254,26 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
       # Advertisers must be listable — the campaign form populates from this.
   req GET /api/ads/advertisers "" "$ADMIN_TOKEN"
   check "admin lists advertisers for the campaign form" 200 "$STATUS" "$BODY"
+
+  req GET /api/ads/reach-analysis "" "$ADMIN_TOKEN"
+  check "admin reads reach analysis" 200 "$STATUS" "$BODY"
+
+  # The whole point is comparing delivered reach against what the rate assumes.
+  if echo "$BODY" | jq -e '.levels | any(.; has("actualSharePct") and has("pricedSharePct") and has("gapPct"))' >/dev/null 2>&1; then
+    green "  PASS  reach analysis compares actual against priced share"; PASS=$((PASS+1))
+  else
+    red "  FAIL  reach analysis missing the comparison fields"; FAIL=$((FAIL+1))
+  fi
+
+  # A conclusion drawn from one campaign is noise, and must be marked as such.
+  if echo "$BODY" | jq -e '.levels | any(.; has("reliable"))' >/dev/null 2>&1; then
+    green "  PASS  each level is flagged reliable or not"; PASS=$((PASS+1))
+  else
+    red "  FAIL  no reliability flag on reach levels"; FAIL=$((FAIL+1))
+  fi
+
+  req GET /api/ads/reach-analysis "" "$LTOKEN"
+  check "landlord CANNOT read reach analysis" 403 "$STATUS" "$BODY"
 
   req GET "/api/ads/campaigns?status=active" "" "$ADMIN_TOKEN"
       if echo "$BODY" | jq -e --arg id "$CAMP_ID" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then

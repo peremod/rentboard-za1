@@ -149,6 +149,29 @@ export interface AdminKpis {
   queues: { openReports: number; pendingVerifications: number; newEnquiries: number };
 }
 
+export interface ReachLevel {
+  level: 'national' | 'province' | 'city' | 'suburb';
+  campaigns: number;
+  totalImpressions: number;
+  impressionsPerDay: number;
+  clicks: number;
+  ctr: number;
+  averageMonthlyCents: number;
+  /** Share of national reach actually delivered. */
+  actualSharePct: number;
+  /** Share the rate card assumes. */
+  pricedSharePct: number;
+  /** Positive: delivers more than it charges for, so underpriced. */
+  gapPct: number;
+  /** False when there is too little data to draw a conclusion. */
+  reliable: boolean;
+}
+
+export interface ReachAnalysis {
+  hasBaseline: boolean;
+  levels: ReachLevel[];
+}
+
 export interface AdCampaign {
   id: string;
   name: string;
@@ -214,6 +237,11 @@ export class AdminService {
   }
 
   // ── Advertising ──────────────────────────────────────────────────────────
+
+  /** Whether each targeting level delivers the reach its price assumes. */
+  getReachAnalysis() {
+    return this.http.get<ReachAnalysis>(`${this.api}/ads/reach-analysis`);
+  }
 
   listCampaigns(status?: string) {
     const q = status ? `?status=${status}` : '';

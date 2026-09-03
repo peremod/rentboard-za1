@@ -1,6 +1,9 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { rateCard, suggestedRateCents, targetLevel, MINIMUM_MONTHLY_CENTS } from './ad-rates';
+import {
+  rateCard, suggestedRateCents, targetLevel, TargetLevel,
+  TARGET_MULTIPLIERS, MINIMUM_MONTHLY_CENTS,
+} from './ad-rates';
 import {
   CreateCampaignDto, ReviewCampaignDto, CreateAdvertiserDto,
   CreateAdEnquiryDto, UpdateEnquiryDto,
@@ -188,6 +191,94 @@ export class AdsService {
       include: { _count: { select: { campaigns: true } } },
       orderBy: { companyName: 'asc' },
     });
+  }
+
+  /**
+   * Does each targeting level deliver the reach its price assumes?
+   *
+   * The rate card multipliers (national 1, province 0.5, city 0.28, suburb
+   * 0.15) were reasoned, not measured. This measures them: it compares actual
+   * impressions per active day at each level against the national average, and
+   * puts that beside what the price implies.
+   *
+   * Impressions is a lifetime counter, so it is normalised per active day —
+   * otherwise a campaign that ran three months would dwarf one that ran a week
+   * regardless of reach.
+   */
+  async getReachAnalysis() {
+    const campaigns = await this.prisma.adCampaign.findMany({
+      where: { status: { in: ['active', 'paused', 'ended'] }, impressions: { gt: 0 } },
+      select: {
+        placement: true, impressions: true, clicks: true, monthlyRateCents: true,
+        province: true, city: true, suburbSlug: true,
+        startsAt: true, endsAt: true, createdAt: true,
+      },
+    });
+
+    const now = Date.now();
+    const DAY = 24 * 60 * 60 * 1000;
+
+    const buckets = new Map<string, { impressions: number; clicks: number; days: number; campaigns: number; rateSum: number }>();
+
+    for (const c of campaigns) {
+      const level = targetLevel(c);
+      // Days actually served: start to whichever came first, end or now.
+      const start = c.startsAt.getTime();
+      const stop = Math.min(c.endsAt.getTime(), now);
+      const days = Math.max(1, Math.round((stop - start) / DAY));
+
+      const bucket = buckets.get(level) ?? { impressions: 0, clicks: 0, days: 0, campaigns: 0, rateSum: 0 };
+      bucket.impressions += c.impressions;
+      bucket.clicks += c.clicks;
+      bucket.days += days;
+      bucket.campaigns += 1;
+      bucket.rateSum += c.monthlyRateCents;
+      buckets.set(level, bucket);
+    }
+
+    const levels: TargetLevel[] = ['national', 'province', 'city', 'suburb'];
+    const perDay = (level: TargetLevel) => {
+      const b = buckets.get(level);
+      return b && b.days > 0 ? b.impressions / b.days : 0;
+    };
+
+    const nationalPerDay = perDay('national');
+
+    return {
+      // Everything below is meaningless without campaigns at the national
+      // level to compare against, and the UI says so rather than showing 0%.
+      hasBaseline: nationalPerDay > 0,
+      levels: levels.map((level) => {
+        const b = buckets.get(level);
+        const impressionsPerDay = perDay(level);
+
+        // What share of national reach this level actually delivers.
+        const actualShare = nationalPerDay > 0 ? impressionsPerDay / nationalPerDay : 0;
+        const pricedShare = TARGET_MULTIPLIERS[level];
+
+        return {
+          level,
+          campaigns: b?.campaigns ?? 0,
+          totalImpressions: b?.impressions ?? 0,
+          impressionsPerDay: Math.round(impressionsPerDay),
+          clicks: b?.clicks ?? 0,
+          ctr: b && b.impressions > 0 ? +((b.clicks / b.impressions) * 100).toFixed(2) : 0,
+          averageMonthlyCents: b && b.campaigns > 0 ? Math.round(b.rateSum / b.campaigns) : 0,
+
+          actualSharePct: Math.round(actualShare * 100),
+          pricedSharePct: Math.round(pricedShare * 100),
+
+          /**
+           * Positive means the level delivers more reach than its price
+           * assumes — it is underpriced. Negative means overpriced.
+           */
+          gapPct: nationalPerDay > 0 ? Math.round((actualShare - pricedShare) * 100) : 0,
+
+          // Below three campaigns any ratio is one advertiser's luck.
+          reliable: (b?.campaigns ?? 0) >= 3 && (b?.days ?? 0) >= 30,
+        };
+      }),
+    };
   }
 
   /** The rate card, for the Advertise page and the admin form. */
