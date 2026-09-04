@@ -49,6 +49,52 @@ export class WhatsappService {
    * record it on a Message row — this is what lets a landlord's reply be
    * matched back to the right conversation thread by handleIncomingWebhook().
    */
+  /**
+   * Sends a sign-in code to a number directly, without a landlord config.
+   *
+   * Separate from notifyLandlord, which sends to a landlord's configured
+   * number for their own listings. This goes to whoever is signing in, so it
+   * uses the platform's own WhatsApp number.
+   *
+   * Throws rather than swallowing: unlike a notification, if the code does not
+   * arrive the person cannot sign in, and silently succeeding would leave them
+   * waiting for a message that is never coming.
+   */
+  async sendOtp(phone: string, code: string, ttlMinutes: number): Promise<void> {
+    if (!this.phoneNumberId || !this.accessToken) {
+      // In development this is the whole delivery mechanism, so log it rather
+      // than leaving no way to test the flow at all.
+      this.logger.warn(`[WhatsApp not configured] OTP for ${phone}: ${code}`);
+      return;
+    }
+
+    const url = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`;
+    const body = {
+      messaging_product: 'whatsapp',
+      to: phone.replace('+', ''),
+      type: 'text',
+      text: {
+        body: `${code} is your RentBoard sign-in code. It expires in ${ttlMinutes} minutes.\n\n` +
+              `If you did not ask to sign in, ignore this message and do not share the code.`,
+      },
+    };
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text();
+      this.logger.error(`WhatsApp OTP failed (${res.status}): ${detail.slice(0, 300)}`);
+      throw new Error('Could not send the code. Please try email instead.');
+    }
+  }
+
   async notifyLandlord(landlordProfileId: string, message: string): Promise<string | null> {
     const config = await this.getConfig(landlordProfileId);
     if (!config?.waEnabled) return null;

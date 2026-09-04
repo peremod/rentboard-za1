@@ -140,8 +140,20 @@ export class RoomsService {
   }
 
   async update(id: string, dto: UpdateRoomDto, landlordId: string) {
-    await this.assertOwner(id, landlordId);
+    const before = await this.assertOwner(id, landlordId);
     this.assertPhotoLimit(dto.imagePaths);
+
+    // Someone with an open application has effectively made an offer at the
+    // old rent. Changing it silently means they could be accepted into a
+    // tenancy they never agreed to.
+    if (
+      dto.rentCents !== undefined &&
+      dto.rentCents !== before.rentCents &&
+      before.status === 'active'
+    ) {
+      this.notifyRentChange(id, before.rentCents, dto.rentCents).catch(() => {});
+    }
+
     return this.prisma.room.update({
       where: { id },
       data: {
@@ -266,6 +278,8 @@ export class RoomsService {
       this.prisma.room.update({ where: { id }, data: { status: 'deleted' } }),
     ]);
 
+    this.notifySavers(id, 'removed').catch(() => {});
+
     for (const application of stillOpen) {
       this.notifications
         .sendRoomUnavailableEmail(application.tenant.email, {
@@ -304,6 +318,8 @@ export class RoomsService {
       }),
       this.prisma.room.update({ where: { id }, data: { status: 'let', letAt: new Date() } }),
     ]);
+
+    this.notifySavers(id, 'let').catch(() => {});
 
     // Best-effort: a failed email must not roll back the letting.
     for (const application of stillOpen) {
@@ -469,6 +485,88 @@ export class RoomsService {
       label: `${r.city}, ${r.province}`,
       roomCount: r._count.id,
     }));
+  }
+
+  /**
+   * Tells everyone who saved a room that it is gone.
+   *
+   * They never applied, so no other notification reaches them — the room just
+   * stops existing. notifiedUnavailableAt guards against sending twice if a
+   * landlord lets, undoes, and lets again.
+   */
+  /** Tells open applicants the rent moved, and that they may withdraw. */
+  private async notifyRentChange(roomId: string, oldRentCents: number, newRentCents: number) {
+    try {
+      const room = await this.prisma.room.findUniqueOrThrow({
+        where: { id: roomId },
+        select: { title: true, relistCount: true },
+      });
+
+      const open = await this.prisma.application.findMany({
+        where: {
+          roomId,
+          cycle: room.relistCount,
+          archivedAt: null,
+          status: { in: ['pending', 'viewed', 'shortlisted'] },
+        },
+        include: { tenant: { select: { email: true, fullName: true } } },
+      });
+      if (open.length === 0) return;
+
+      for (const application of open) {
+        this.notifications
+          .sendRentChangedEmail(application.tenant.email, {
+            tenantName: application.tenant.fullName,
+            roomTitle: room.title,
+            roomId,
+            oldRentCents,
+            newRentCents,
+          })
+          .catch(() => {});
+      }
+
+      this.logger.log(
+        `Rent on ${roomId} changed ${oldRentCents} -> ${newRentCents}; told ${open.length} applicant(s)`,
+      );
+    } catch (err) {
+      this.logger.error(`Could not notify rent change for ${roomId}`, err as Error);
+    }
+  }
+
+  private async notifySavers(roomId: string, reason: 'let' | 'removed') {
+    try {
+      const room = await this.prisma.room.findUnique({
+        where: { id: roomId },
+        select: { title: true, locationDisplay: true },
+      });
+      if (!room) return;
+
+      const saves = await this.prisma.savedRoom.findMany({
+        where: { roomId, notifiedUnavailableAt: null },
+        include: { tenant: { select: { email: true, fullName: true } } },
+      });
+      if (saves.length === 0) return;
+
+      await this.prisma.savedRoom.updateMany({
+        where: { id: { in: saves.map((s) => s.id) } },
+        data: { notifiedUnavailableAt: new Date() },
+      });
+
+      for (const save of saves) {
+        this.notifications
+          .sendSavedRoomGoneEmail(save.tenant.email, {
+            tenantName: save.tenant.fullName,
+            roomTitle: room.title,
+            locationDisplay: room.locationDisplay,
+            reason,
+          })
+          .catch(() => {});
+      }
+
+      this.logger.log(`Told ${saves.length} saver(s) that room ${roomId} is ${reason}`);
+    } catch (err) {
+      this.logger.error(`Could not notify savers for room ${roomId}`, err as Error);
+    }
   }
 
   private async assertOwner(roomId: string, landlordId: string) {

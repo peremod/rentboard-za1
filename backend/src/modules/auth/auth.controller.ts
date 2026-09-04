@@ -14,6 +14,8 @@ import {
 } from './dto/account-recovery.dto';
 import { AccountRecoveryService } from './account-recovery.service';
 import { PasswordlessService } from './passwordless.service';
+import { PhoneOtpService } from './phone-otp.service';
+import { PhoneCodeDto, VerifyPhoneDto } from './dto/phone-otp.dto';
 import { MagicLinkDto, VerifyMagicLinkDto } from './dto/passwordless.dto';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -29,6 +31,7 @@ export class AuthController {
   constructor(
     private recovery: AccountRecoveryService,
     private passwordless: PasswordlessService,
+    private phoneOtp: PhoneOtpService,
     private authService: AuthService, private config: ConfigService) {}
 
   @Post('register')
@@ -122,6 +125,26 @@ export class AuthController {
   @ApiOperation({ summary: 'Exchange a sign-in link for a session' })
   async verifyMagicLink(@Body() dto: VerifyMagicLinkDto, @Res({ passthrough: true }) res: Response) {
     const user = await this.passwordless.consumeMagicLink(dto.token);
+    const result = await this.authService.issueSessionFor(user);
+    this.setRefreshCookie(res, result.refreshToken);
+    const { refreshToken, ...body } = result;
+    return body;
+  }
+
+  @Post('phone/request-code')
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send a sign-in code over WhatsApp' })
+  requestPhoneCode(@Body() dto: PhoneCodeDto) {
+    return this.phoneOtp.requestCode(dto.phone);
+  }
+
+  @Post('phone/verify')
+  @Throttle({ default: { limit: 10, ttl: 15 * 60 * 1000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Exchange a phone code for a session' })
+  async verifyPhoneCode(@Body() dto: VerifyPhoneDto, @Res({ passthrough: true }) res: Response) {
+    const user = await this.phoneOtp.verifyCode(dto.phone, dto.code);
     const result = await this.authService.issueSessionFor(user);
     this.setRefreshCookie(res, result.refreshToken);
     const { refreshToken, ...body } = result;

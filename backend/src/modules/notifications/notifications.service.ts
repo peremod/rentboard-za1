@@ -362,6 +362,73 @@ export class NotificationsService {
     );
   }
 
+  /**
+   * Tells someone a room they saved is gone.
+   *
+   * They never applied, so nothing else would tell them — the room simply
+   * stops being there. Sent once per room, and framed as useful rather than
+   * apologetic: the point is to get them looking again while they are still
+   * looking.
+   */
+  async sendSavedRoomGoneEmail(
+    to: string,
+    d: { tenantName: string; roomTitle: string; locationDisplay: string; reason: 'let' | 'removed' },
+  ) {
+    const what = d.reason === 'let'
+      ? 'has been let to someone else'
+      : 'has been taken down by the landlord';
+
+    await this.send(
+      to,
+      `${d.roomTitle} is no longer available`,
+      `<p>Hi ${d.tenantName},</p>
+       <p>A room you saved — <strong>${d.roomTitle}</strong> in ${d.locationDisplay} —
+       ${what}.</p>
+       <p>Rooms move quickly here. If you have not already, saving a search means
+       we can tell you the moment something similar is posted, rather than you
+       checking back.</p>
+       <p><a href="${this.frontend}/">Browse rooms</a> ·
+          <a href="${this.frontend}/tenant/dashboard">Set up an alert</a></p>`,
+      { template: 'saved_room_gone' },
+    );
+  }
+
+  /**
+   * Tells open applicants the rent changed.
+   *
+   * Someone waiting on a decision has effectively made an offer at the old
+   * price. Changing it silently means they could be accepted into a tenancy
+   * they never agreed to, which is the kind of thing that ends in a Rental
+   * Housing Tribunal complaint.
+   */
+  async sendRentChangedEmail(
+    to: string,
+    d: { tenantName: string; roomTitle: string; roomId: string; oldRentCents: number; newRentCents: number },
+  ) {
+    const zar = (cents: number) =>
+      new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 0 })
+        .format(cents / 100);
+
+    const direction = d.newRentCents > d.oldRentCents ? 'increased' : 'decreased';
+
+    await this.send(
+      to,
+      `Rent changed on ${d.roomTitle}`,
+      `<p>Hi ${d.tenantName},</p>
+       <p>The landlord has ${direction} the rent on <strong>${d.roomTitle}</strong>,
+       which you have applied for.</p>
+       <p style="font-size:1.05rem">
+         <s style="color:#7A6E60">${zar(d.oldRentCents)}</s> →
+         <strong>${zar(d.newRentCents)}</strong> per month
+       </p>
+       <p>Your application is still open. If the new rent does not work for you,
+       you can withdraw it from your dashboard — no explanation needed.</p>
+       <p><a href="${this.frontend}/rooms/${d.roomId}">View the room</a> ·
+          <a href="${this.frontend}/tenant/dashboard">Your applications</a></p>`,
+      { template: 'rent_changed' },
+    );
+  }
+
   async sendRoomUnavailableEmail(to: string, d: { tenantName: string; roomTitle: string }) {
     await this.send(
       to,

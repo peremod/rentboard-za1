@@ -6,6 +6,8 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AccountRecoveryService } from './account-recovery.service';
 import { PasswordlessService } from './passwordless.service';
+import { PhoneOtpService } from './phone-otp.service';
+import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { ReferralsModule } from '../referrals/referrals.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -15,6 +17,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
   imports: [
     NotificationsModule,
     ReferralsModule,
+    WhatsappModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -30,7 +33,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AccountRecoveryService, PasswordlessService, JwtStrategy, GoogleStrategy],
+  providers: [AuthService, AccountRecoveryService, PasswordlessService, PhoneOtpService, JwtStrategy, GoogleStrategy],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

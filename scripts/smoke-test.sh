@@ -1850,6 +1850,72 @@ req POST /api/auth/magic-link/verify '{}'
 check "rejects a missing token" 400 "$STATUS" "$BODY"
 
 
+# -- 37. Undo accept & phone sign-in ---------------------------------------
+head_ "37. Undo accept & phone sign-in"
+
+# Accepting is the most destructive landlord action: it lets the room and
+# rejects everyone else. Reversing it must reinstate only the collateral.
+req POST /api/rooms "$ROOM_JSON" "$LTOKEN"
+UNDO_ROOM=$(echo "$BODY" | jq -r '.id // empty')
+if [[ -n "$UNDO_ROOM" ]]; then
+  req PATCH "/api/rooms/$UNDO_ROOM" '{"heroImagePath":"/smoke-test-placeholder.jpg"}' "$LTOKEN"
+  req POST "/api/rooms/$UNDO_ROOM/publish" "" "$LTOKEN"
+
+  req POST /api/applications "{\"roomId\":\"$UNDO_ROOM\",\"coverNote\":\"First applicant for undo test.\"}" "$TTOKEN"
+  UNDO_APP1=$(echo "$BODY" | jq -r '.id // empty')
+  req POST /api/applications "{\"roomId\":\"$UNDO_ROOM\",\"coverNote\":\"Second applicant for undo test.\"}" "$ITOKEN"
+  UNDO_APP2=$(echo "$BODY" | jq -r '.id // empty')
+
+  if [[ -n "$UNDO_APP1" && -n "$UNDO_APP2" ]]; then
+    req POST "/api/applications/$UNDO_APP1/accept" "" "$LTOKEN"
+    check "landlord accepts one applicant" 200 "$STATUS" "$BODY"
+
+    req POST "/api/applications/$UNDO_APP1/undo-accept" "" "$LTOKEN"
+    check "acceptance can be undone" 200 "$STATUS" "$BODY"
+    REINSTATED=$(echo "$BODY" | jq -r '.reinstated // 0')
+    if [[ "$REINSTATED" -ge 1 ]]; then
+      green "  PASS  the auto-rejected applicant was reinstated"; PASS=$((PASS+1))
+    else
+      red "  FAIL  nobody reinstated after undo (got $REINSTATED)"; FAIL=$((FAIL+1))
+    fi
+
+    req GET "/api/rooms/$UNDO_ROOM"
+    if [[ "$(echo "$BODY" | jq -r '.status')" == "active" ]]; then
+      green "  PASS  the room is back on the board"; PASS=$((PASS+1))
+    else
+      red "  FAIL  room did not return to active"; FAIL=$((FAIL+1))
+    fi
+
+    req POST "/api/applications/$UNDO_APP1/undo-accept" "" "$LTOKEN"
+    check "cannot undo an acceptance that was already undone" 400 "$STATUS" "$BODY"
+
+    req POST "/api/applications/$UNDO_APP1/undo-accept" "" "$TTOKEN"
+    check "tenant CANNOT undo an acceptance" 403 "$STATUS" "$BODY"
+  fi
+fi
+
+# Phone sign-in must not reveal whether a number has an account.
+req POST /api/auth/phone/request-code '{"phone":"0821234567"}'
+check "phone code request accepted" 200 "$STATUS" "$BODY"
+PHONE_MSG=$(echo "$BODY" | jq -r '.message')
+
+req POST /api/auth/phone/request-code '{"phone":"0839999999"}'
+if [[ "$(echo "$BODY" | jq -r '.message')" == "$PHONE_MSG" ]]; then
+  green "  PASS  identical response for known and unknown numbers"; PASS=$((PASS+1))
+else
+  red "  FAIL  phone response reveals whether an account exists"; FAIL=$((FAIL+1))
+fi
+
+req POST /api/auth/phone/request-code '{"phone":"12345"}'
+check "rejects a malformed number" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/phone/verify '{"phone":"0821234567","code":"000000"}'
+check "rejects a wrong code" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/phone/verify '{"phone":"0821234567","code":"123"}'
+check "rejects a short code" 400 "$STATUS" "$BODY"
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

@@ -54,6 +54,18 @@ export class ApplicationsController {
     return this.applicationsService.shortlist(id, user.id);
   }
 
+  @Post(':id/undo-accept')
+  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Reverse an acceptance within 30 minutes',
+    description: 'Reinstates applicants this acceptance rejected and puts the room back on the board.',
+  })
+  undoAccept(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.applicationsService.undoAccept(id, user.id);
+  }
+
   @Post(':id/unshortlist')
   @UseGuards(JwtAuthGuard, LandlordGuard)
   @ApiBearerAuth()

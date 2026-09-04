@@ -198,6 +198,79 @@ export class ApplicationsService {
    * the landlord has read it, and pretending otherwise would restart the
    * response-time clock and mislead the tenant.
    */
+  /**
+   * Reverses an acceptance within a short window.
+   *
+   * Accepting is the most destructive action a landlord can take: it marks the
+   * room let, auto-rejects everyone else, and emails all of them. A mis-click
+   * or a tenant who pulls out an hour later was previously unrecoverable, and
+   * the landlord's only option was to relist — which starts a new cycle and
+   * loses every applicant permanently.
+   *
+   * The window matches undo-let at 30 minutes. Beyond that the rejected
+   * applicants have had the email and may have taken other rooms, so silently
+   * reinstating them would be worse than making the landlord relist.
+   */
+  async undoAccept(applicationId: string, landlordId: string) {
+    const application = await this.getOwnedApplication(applicationId, landlordId);
+
+    if (application.status !== 'accepted') {
+      throw new BadRequestException('This application was not accepted');
+    }
+
+    const UNDO_WINDOW_MS = 30 * 60 * 1000;
+    const decidedAt = application.decidedAt?.getTime() ?? 0;
+    if (Date.now() - decidedAt > UNDO_WINDOW_MS) {
+      throw new BadRequestException(
+        'The 30-minute window to undo has passed. The other applicants have already been told. ' +
+        'You can relist the room to start again.',
+      );
+    }
+
+    // Only reinstate the ones this acceptance rejected — not applicants the
+    // landlord had rejected deliberately beforehand.
+    const collateral = await this.prisma.application.findMany({
+      where: {
+        roomId: application.roomId,
+        cycle: application.cycle,
+        id: { not: applicationId },
+        status: 'rejected',
+        rejectionReason: 'Another applicant was chosen for this room.',
+        decidedAt: { gte: new Date(decidedAt - 60_000) },
+      },
+      select: { id: true },
+    });
+
+    await this.prisma.$transaction([
+      this.prisma.application.update({
+        where: { id: applicationId },
+        data: { status: 'shortlisted', decidedAt: null },
+      }),
+      this.prisma.application.updateMany({
+        where: { id: { in: collateral.map((c) => c.id) } },
+        // Back to shortlisted rather than pending: the landlord had read them,
+        // and resetting that would restart the response-time clock.
+        data: { status: 'shortlisted', decidedAt: null, rejectionReason: null },
+      }),
+      this.prisma.room.update({
+        where: { id: application.roomId },
+        data: { status: 'active', letAt: null },
+      }),
+    ]);
+
+    this.logger.log(
+      `Acceptance undone for ${applicationId}; ${collateral.length} rejection(s) reversed`,
+    );
+
+    return {
+      undone: true,
+      reinstated: collateral.length,
+      message: collateral.length > 0
+        ? `Acceptance undone. ${collateral.length} other applicant${collateral.length === 1 ? ' was' : 's were'} reinstated.`
+        : 'Acceptance undone. The room is back on the board.',
+    };
+  }
+
   async unshortlist(applicationId: string, landlordId: string) {
     const application = await this.getOwnedApplication(applicationId, landlordId);
     if (application.status !== 'shortlisted') {
