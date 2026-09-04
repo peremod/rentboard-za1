@@ -572,3 +572,25 @@
 .verdict--under { color: var(--sage); }   // delivering more than it charges for
 .verdict--over  { color: var(--terra); }
 .verdict--ok    { color: var(--slate); font-weight: 400; }
+
+// ── Passwordless sign-in ────────────────────────────────────────────────
+.auth__divider {
+  display: flex; align-items: center; gap: .75rem;
+  margin: 1.25rem 0; color: var(--slate); font-size: .78rem;
+
+  &::before, &::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+}
+.auth__magic {
+  width: 100%; padding: .7rem; border-radius: var(--r8);
+  border: 1.5px solid var(--border); background: var(--white);
+  color: var(--ink); font-weight: 600; font-size: .88rem; cursor: pointer;
+
+  &:hover:not(:disabled) { border-color: var(--terra); color: var(--terra); }
+  &:disabled { opacity: .5; cursor: not-allowed; }
+}
+.auth__fine {
+  font-size: .75rem; color: var(--slate); text-align: center;
+  margin-top: .5rem; line-height: 1.5;
+}

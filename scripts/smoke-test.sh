@@ -1822,6 +1822,34 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
 fi
 
 
+# -- 36. Passwordless sign-in ----------------------------------------------
+# The point of this feature is a returning user who has forgotten everything,
+# so the assertions are about not leaking whether an account exists.
+head_ "36. Passwordless sign-in"
+req POST /api/auth/magic-link "{\"email\":\"$LANDLORD_EMAIL\"}"
+check "magic link for a real account" 200 "$STATUS" "$BODY"
+REAL_MAGIC=$(echo "$BODY" | jq -r '.message')
+
+req POST /api/auth/magic-link '{"email":"nobody-here@rentboard.test"}'
+check "magic link for an unknown account" 200 "$STATUS" "$BODY"
+FAKE_MAGIC=$(echo "$BODY" | jq -r '.message')
+
+if [[ "$REAL_MAGIC" == "$FAKE_MAGIC" ]]; then
+  green "  PASS  identical response either way (no membership oracle)"; PASS=$((PASS+1))
+else
+  red "  FAIL  responses differ — reveals whether an account exists"; FAIL=$((FAIL+1))
+fi
+
+req POST /api/auth/magic-link '{"email":"not-an-email"}'
+check "rejects a malformed address" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/magic-link/verify '{"token":"clearly-not-a-real-token"}'
+check "rejects an invalid sign-in token" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/magic-link/verify '{}'
+check "rejects a missing token" 400 "$STATUS" "$BODY"
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

@@ -53,6 +53,24 @@ import { AuthService } from '../../../core/services/auth.service';
           </button>
         </form>
 
+        @if (magicSent()) {
+          <p class="auth__foot">✅ {{ magicMessage() }}</p>
+        } @else {
+          <div class="auth__divider"><span>or</span></div>
+
+          <!-- The likely path for a returning user. Most people find a room,
+               stop using the site for a year, and come back with no idea what
+               their password was. -->
+          <button type="button" class="auth__magic"
+                  [disabled]="!emailForMagic() || sendingMagic()"
+                  (click)="sendMagicLink()">
+            {{ sendingMagic() ? 'Sending…' : '✉️ Email me a sign-in link instead' }}
+          </button>
+          <p class="auth__fine">
+            No password needed. The link works once and expires in 15 minutes.
+          </p>
+        }
+
         <p class="auth__foot">
           <a routerLink="/auth/forgot-password">Forgot your password?</a>
         </p>
@@ -70,12 +88,41 @@ export class Login {
   private route = inject(ActivatedRoute);
 
   loading = signal(false);
+  sendingMagic = signal(false);
+  magicSent = signal(false);
+  magicMessage = signal('');
   error = signal<string | null>(null);
 
   form = this.fb.group({
     email: ['', [Validators.required, Validators.email]],
     password: ['', Validators.required],
   });
+
+  /** Reuses whatever is already typed in the email field. */
+  emailForMagic(): string {
+    return (this.form.value.email ?? '').trim();
+  }
+
+  sendMagicLink() {
+    const email = this.emailForMagic();
+    if (!email) return;
+
+    this.sendingMagic.set(true);
+    this.auth.requestMagicLink(email).subscribe({
+      next: (res) => {
+        this.sendingMagic.set(false);
+        this.magicMessage.set(res.message);
+        this.magicSent.set(true);
+      },
+      error: () => {
+        this.sendingMagic.set(false);
+        // Deliberately the same message as success: whether an account exists
+        // is not something an unauthenticated caller should learn.
+        this.magicMessage.set('If that address has an account, a sign-in link is on its way.');
+        this.magicSent.set(true);
+      },
+    });
+  }
 
   onSubmit() {
     if (this.form.invalid) return;

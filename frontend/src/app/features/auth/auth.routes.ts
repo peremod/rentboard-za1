@@ -13,6 +13,11 @@ export const AUTH_ROUTES: Routes = [
     title: 'Create Your Free Account — RentBoard',
   },
   {
+    path: 'magic',
+    loadComponent: () => import('./magic/magic-link').then((m) => m.MagicLink),
+    title: 'Signing in — RentBoard',
+  },
+  {
     path: 'forgot-password',
     loadComponent: () => import('./forgot-password/forgot-password').then((m) => m.ForgotPassword),
     title: 'Reset your password — RentBoard',

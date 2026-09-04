@@ -63,8 +63,17 @@ model User {
   phone          String?
   isVerified     Boolean  @default(false)
   isActive       Boolean  @default(true)
+  /// 'email', 'magic_link', 'google', 'facebook'. Kept as a string rather than
+  /// an enum so adding a provider does not need a migration.
   authProvider   String   @default("email")
   authProviderId String?
+
+  /// Verified mobile number, for OTP sign-in over WhatsApp or SMS.
+  ///
+  /// Separate from `phone`, which a landlord enters for contact purposes and
+  /// nobody has checked. Signing someone in on an unverified number would let
+  /// anyone claim an account by typing a number they do not own.
+  phoneVerified  Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   lastLoginAt    DateTime?
@@ -931,6 +940,10 @@ enum ReferralReward {
 enum AuthTokenType {
   password_reset
   email_change
+  /// Passwordless sign-in. Single use, 15 minutes.
+  magic_link
+  /// One-time code sent to a verified phone, over WhatsApp or SMS.
+  phone_otp
 }
 
 enum AlertFrequency {

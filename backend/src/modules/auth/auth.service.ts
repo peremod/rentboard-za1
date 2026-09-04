@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import type { User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { RegisterDto } from './dto/register.dto';
@@ -103,6 +104,20 @@ export class AuthService {
 
     this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } }).catch(() => {});
 
+    return this.buildAuthResponse(user);
+  }
+
+  /**
+   * Issues a session for an already-authenticated user.
+   *
+   * Public so the magic-link and OAuth paths can reuse it — each proves
+   * identity a different way, but what happens afterwards is identical, and
+   * duplicating token issuance is how the paths drift apart.
+   */
+  async issueSessionFor(user: User): Promise<AuthResponse> {
+    if (!user.isActive) {
+      throw new UnauthorizedException('Your account has been suspended. Please contact support.');
+    }
     return this.buildAuthResponse(user);
   }
 

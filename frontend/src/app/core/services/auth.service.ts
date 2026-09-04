@@ -85,6 +85,17 @@ export class AuthService {
     );
   }
 
+  /** Passwordless sign-in. Always resolves the same way, account or not. */
+  requestMagicLink(email: string, role?: 'TENANT' | 'LANDLORD') {
+    return this.http.post<{ message: string }>(`${this.api}/auth/magic-link`, { email, role });
+  }
+
+  verifyMagicLink(token: string) {
+    return this.http
+      .post<AuthResponse>(`${this.api}/auth/magic-link/verify`, { token })
+      .pipe(tap((res) => this.setSession(res)));
+  }
+
   /** Always resolves the same way, existing account or not. */
   forgotPassword(email: string) {
     return this.http.post<{ message: string }>(`${this.api}/auth/forgot-password`, { email });

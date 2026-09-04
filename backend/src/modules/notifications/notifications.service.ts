@@ -228,6 +228,45 @@ export class NotificationsService {
     );
   }
 
+  /**
+   * Sign-in link. Deliberately plain: a short email with one obvious action,
+   * because these are opened on a phone by someone who just wants back in.
+   */
+  async sendMagicLinkEmail(to: string, d: { fullName: string; token: string; ttlMinutes: number }) {
+    const link = `${this.frontend}/auth/magic?token=${encodeURIComponent(d.token)}`;
+    await this.send(
+      to,
+      'Your RentBoard sign-in link',
+      `<p>Hi ${d.fullName},</p>
+       <p>Tap below to sign in. No password needed.</p>
+       <p style="margin:1.5rem 0">
+         <a href="${link}" style="background:#C04E28;color:#fff;padding:.75rem 1.5rem;
+            border-radius:6px;text-decoration:none;font-weight:700">Sign in to RentBoard</a>
+       </p>
+       <p style="font-size:.8rem;color:#7A6E60">
+         This link works once and expires in ${d.ttlMinutes} minutes. If you did not
+         ask for it, you can ignore this email — nobody can get into your account
+         without it.
+       </p>`,
+      { template: 'magic_link' },
+    );
+  }
+
+  /** Sent when a sign-in link is requested for an address with no account. */
+  async sendNoAccountEmail(to: string, d: { role: 'TENANT' | 'LANDLORD' }) {
+    const url = `${this.frontend}/auth/register?role=${d.role.toLowerCase()}`;
+    await this.send(
+      to,
+      'No RentBoard account for this address',
+      `<p>Someone asked for a sign-in link for this address, but there is no
+          RentBoard account attached to it.</p>
+       <p>If that was you, you can create one — it takes a minute and is free.</p>
+       <p><a href="${url}">Create an account</a></p>
+       <p style="font-size:.8rem;color:#7A6E60">If it was not you, ignore this email.</p>`,
+      { template: 'no_account' },
+    );
+  }
+
   async sendPasswordResetEmail(to: string, d: { fullName: string; token: string; ttlMinutes: number }) {
     const link = `${this.frontend}/auth/reset-password?token=${encodeURIComponent(d.token)}`;
     await this.send(

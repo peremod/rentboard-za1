@@ -13,6 +13,8 @@ import {
   RequestEmailChangeDto, ConfirmEmailChangeDto,
 } from './dto/account-recovery.dto';
 import { AccountRecoveryService } from './account-recovery.service';
+import { PasswordlessService } from './passwordless.service';
+import { MagicLinkDto, VerifyMagicLinkDto } from './dto/passwordless.dto';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -26,6 +28,7 @@ const REFRESH_COOKIE_PATH = '/api/auth';
 export class AuthController {
   constructor(
     private recovery: AccountRecoveryService,
+    private passwordless: PasswordlessService,
     private authService: AuthService, private config: ConfigService) {}
 
   @Post('register')
@@ -101,6 +104,29 @@ export class AuthController {
   // ── Account recovery ────────────────────────────────────────────────────
   // Rate limited harder than the defaults: these endpoints accept an email and
   // send mail, so they are the obvious target for enumeration and spam.
+
+  @Post('magic-link')
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Request a passwordless sign-in link',
+    description: 'Always reports success, whether or not the address has an account.',
+  })
+  magicLink(@Body() dto: MagicLinkDto) {
+    return this.passwordless.requestMagicLink(dto.email, dto.role);
+  }
+
+  @Post('magic-link/verify')
+  @Throttle({ default: { limit: 10, ttl: 15 * 60 * 1000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Exchange a sign-in link for a session' })
+  async verifyMagicLink(@Body() dto: VerifyMagicLinkDto, @Res({ passthrough: true }) res: Response) {
+    const user = await this.passwordless.consumeMagicLink(dto.token);
+    const result = await this.authService.issueSessionFor(user);
+    this.setRefreshCookie(res, result.refreshToken);
+    const { refreshToken, ...body } = result;
+    return body;
+  }
 
   @Post('forgot-password')
   @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
