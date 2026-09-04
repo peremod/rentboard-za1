@@ -51,6 +51,60 @@ git push -u origin develop
 
 ---
 
+## 2b. Free alternatives to Railway
+
+Railway has no free tier any more. Two combinations work at zero cost, with
+real trade-offs.
+
+**Free-tier terms change often. Verify current limits before committing** —
+what follows was accurate when written and these providers revise it regularly.
+
+### Recommended: Render (app) + Neon (database)
+
+| | Free tier | Catch |
+|---|---|---|
+| **Render** web service | 750 hours/month | **Sleeps after ~15 min idle.** Next request takes 30–60s |
+| **Neon** Postgres | ~0.5 GB | Pauses on inactivity, resumes automatically in a second or two |
+
+Neon rather than Render's own free Postgres, because Render's free database
+has historically expired after a fixed period and taken the data with it. Neon's
+free tier does not expire — it just sleeps.
+
+`render.yaml` in the repo root is a ready blueprint: Render dashboard → New →
+Blueprint → point at the repo. It needs no GitHub token and no CI secrets,
+which makes it the easier of the two to start with.
+
+Then set `DATABASE_URL` from Neon in the Render dashboard, along with the
+ImageKit, Resend and PayFast values.
+
+### Alternative: Fly.io
+
+More generous on uptime and closer to a real production setup — it does not
+sleep the same way. It requires a card on file even for the free allowance, and
+Postgres is unmanaged, meaning backups are yours to arrange. Worth it if you
+are comfortable with a bit more operations work.
+
+### What the sleeping actually costs you
+
+Cold starts matter more here than on a typical side project:
+
+- **PayFast ITN**: PayFast retries, so a payment eventually confirms even if
+  the first call hits a sleeping service. Slow, not broken
+- **Resend webhooks**: also retried
+- **The daily digest and monthly advertiser reports** are cron jobs inside the
+  app. **A sleeping service does not run them.** On a free tier, expect these
+  to fire unreliably. Not a problem for staging; it is a reason to pay for
+  production
+- **Anyone you show the site to** will hit a 30-second first load and assume it
+  is broken. Warm it up before a demo by loading it yourself first
+
+### When to pay
+
+Move off free when you have real users. Roughly $5–7/month on Render's starter
+plan removes the sleeping, which fixes cold starts and makes the scheduled jobs
+reliable. That is the point where free stops being a saving and starts being a
+liability.
+
 ## 3. Railway — backend and database
 
 1. **New Project** → Deploy from GitHub repo → select the repo

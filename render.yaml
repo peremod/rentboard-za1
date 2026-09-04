@@ -1,0 +1,79 @@
+# Render blueprint — free-tier staging.
+#
+# An alternative to the Railway workflow in .github/workflows/. Render deploys
+# straight from the repo on push, so it needs no CI token and no secrets in
+# GitHub — which is why it is the easier of the two to start with.
+#
+# Set it up: Render dashboard → New → Blueprint → point at this repo.
+#
+# THE FREE TIER SLEEPS after roughly 15 minutes of no traffic, and the next
+# request takes 30–60 seconds to wake it. That is survivable for staging and a
+# poor experience for real users, so treat this as a staging target rather than
+# a production one.
+#
+# Free-tier terms change. Check Render's current pricing page before relying on
+# any of the limits described here.
+
+services:
+  - type: web
+    name: rentboard-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    region: frankfurt          # closest Render region to South Africa
+    branch: develop            # staging; main would be production
+    healthCheckPath: /health
+
+    # migrate deploy, never migrate dev — dev can prompt for a destructive
+    # reset, which must never be possible against a deployed database.
+    preDeployCommand: npx prisma migrate deploy
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+
+      # Generated once by Render and kept. Never reuse development secrets.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 15m
+
+      # Set by hand in the dashboard once the URLs are known — they are
+      # circular, so the first deploy will have them wrong.
+      - key: FRONTEND_URL
+        sync: false
+      - key: API_URL
+        sync: false
+
+      - key: DATABASE_URL
+        sync: false            # from Neon or Render Postgres, see docs
+
+      - key: IMAGEKIT_PUBLIC_KEY
+        sync: false
+      - key: IMAGEKIT_PRIVATE_KEY
+        sync: false
+      - key: IMAGEKIT_URL_ENDPOINT
+        sync: false
+
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: RESEND_WEBHOOK_SECRET
+        sync: false
+      - key: ADMIN_ALERT_EMAIL
+        sync: false
+
+      - key: PAYFAST_MERCHANT_ID
+        sync: false
+      - key: PAYFAST_MERCHANT_KEY
+        sync: false
+      - key: PAYFAST_PASSPHRASE
+        sync: false
+      - key: PAYFAST_SANDBOX
+        value: "true"
