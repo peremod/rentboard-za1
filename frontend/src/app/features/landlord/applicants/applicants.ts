@@ -5,6 +5,7 @@ import { Application } from '../../../core/models/application.model';
 import { MessageThread } from '../../../shared/components/message-thread/message-thread';
 import { ReviewList } from '../../../shared/components/review-list/review-list';
 import { ReviewsService } from '../../../core/services/reviews.service';
+import { DialogService } from '../../../core/services/dialog.service';
 import { TenantReferences } from '../../../core/models/review.model';
 
 /**
@@ -73,6 +74,22 @@ import { TenantReferences } from '../../../core/models/review.model';
               <div class="applicant-card__body">
                 @if (app.coverNote) { <p class="cover-note">"{{ app.coverNote }}"</p> }
 
+                <!-- Accepting lets the room and rejects everyone else, so the
+                     way back has to be visible at the moment it matters. -->
+                @if (app.status === 'accepted' && canUndo(app)) {
+                  <div class="undo-banner">
+                    <span>
+                      Accepted. The room is off the board and the other applicants
+                      have been told.
+                    </span>
+                    <button type="button" class="btn btn-sm btn-outline"
+                            [disabled]="undoing() === app.id" (click)="undoAccept(app)">
+                      {{ undoing() === app.id ? 'Undoing…' : 'Undo' }}
+                    </button>
+                  </div>
+                  <p class="undo-note">You can reverse this for 30 minutes.</p>
+                }
+
                 @if (!['accepted','rejected','withdrawn'].includes(app.status)) {
                   <div class="applicant-card__actions">
                     @if (app.status !== 'shortlisted') {
@@ -132,6 +149,11 @@ import { TenantReferences } from '../../../core/models/review.model';
     .refs-toggle { background: none; border: 1px solid #E0D5C4; border-radius: 6px; padding: .35rem .75rem;
                    font-size: .78rem; font-weight: 600; cursor: pointer; color: #3A3228; }
     .refs-note { font-size: .72rem; color: #7A6E60; line-height: 1.6; margin-top: .6rem; }
+    .undo-banner { display: flex; align-items: center; justify-content: space-between;
+                   gap: .75rem; flex-wrap: wrap; padding: .7rem .9rem; margin-bottom: .4rem;
+                   background: rgba(61,112,64,.08); border: 1px solid rgba(61,112,64,.25);
+                   border-radius: 8px; font-size: .85rem; color: #3A3228; }
+    .undo-note { font-size: .75rem; color: #7A6E60; margin-bottom: .5rem; }
     .applicant-group { margin: 1.25rem 0 .5rem; }
     .applicant-group__title { font-size: .95rem; font-weight: 700; color: #3A3228; }
     .applicant-group__count { color: #7A6E60; font-weight: 400; }
@@ -150,7 +172,9 @@ import { TenantReferences } from '../../../core/models/review.model';
 })
 export class Applicants implements OnInit {
   private reviewsService = inject(ReviewsService);
+  private dialogs = inject(DialogService);
 
+  undoing = signal<string | null>(null);
   openRefs = signal<string | null>(null);
   refs = signal<TenantReferences | null>(null);
   refsLoading = signal(false);
@@ -185,6 +209,39 @@ export class Applicants implements OnInit {
   isFirstOf(app: { id: string }, band: 'other' | 'decided') {
     const list = band === 'other' ? this.others() : this.decided();
     return list.length > 0 && list[0].id === app.id;
+  }
+
+  /**
+   * The undo window is 30 minutes from the decision, matching the server. The
+   * button is hidden rather than shown-and-failing once it has passed.
+   */
+  canUndo(app: Application): boolean {
+    if (app.status !== 'accepted' || !app.decidedAt) return false;
+    return Date.now() - new Date(app.decidedAt).getTime() < 30 * 60 * 1000;
+  }
+
+  async undoAccept(app: Application) {
+    const confirmed = await this.dialogs.confirm(
+      'Undo this acceptance?',
+      'The room goes back on the board and the applicants this acceptance rejected are reinstated. ' +
+      'Anyone you rejected yourself stays rejected.',
+      'Undo it',
+      'Leave it',
+    );
+    if (!confirmed) return;
+
+    this.undoing.set(app.id);
+    this.applicationsService.undoAccept(app.id).subscribe({
+      next: (res) => {
+        this.undoing.set(null);
+        this.dialogs.success('Acceptance undone', res.message);
+        this.ngOnInit();   // the existing refresh path, as relist uses
+      },
+      error: (err) => {
+        this.undoing.set(null);
+        this.dialogs.error(err?.error?.message ?? 'That could not be undone.');
+      },
+    });
   }
 
   toggleRefs(app: { id: string; tenant?: { id: string } }) {

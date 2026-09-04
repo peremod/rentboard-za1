@@ -85,6 +85,17 @@ export class AuthService {
     );
   }
 
+  /** Sends a sign-in code over WhatsApp. Same response either way. */
+  requestPhoneCode(phone: string) {
+    return this.http.post<{ message: string }>(`${this.api}/auth/phone/request-code`, { phone });
+  }
+
+  verifyPhoneCode(phone: string, code: string) {
+    return this.http
+      .post<AuthResponse>(`${this.api}/auth/phone/verify`, { phone, code })
+      .pipe(tap((res) => this.setSession(res)));
+  }
+
   /** Passwordless sign-in. Always resolves the same way, account or not. */
   requestMagicLink(email: string, role?: 'TENANT' | 'LANDLORD') {
     return this.http.post<{ message: string }>(`${this.api}/auth/magic-link`, { email, role });

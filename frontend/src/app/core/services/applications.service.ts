@@ -31,6 +31,13 @@ export class ApplicationsService {
     return this.http.post<Application>(`${this.api}/applications/${id}/withdraw`, {});
   }
 
+  /** Reverses an acceptance. Only valid within 30 minutes. */
+  undoAccept(id: string) {
+    return this.http.post<{ undone: boolean; reinstated: number; message: string }>(
+      `${this.api}/applications/${id}/undo-accept`, {},
+    );
+  }
+
   unshortlist(id: string) {
     return this.http.post<Application>(`${this.api}/applications/${id}/unshortlist`, {});
   }

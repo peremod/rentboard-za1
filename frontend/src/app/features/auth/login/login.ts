@@ -69,6 +69,47 @@ import { AuthService } from '../../../core/services/auth.service';
           <p class="auth__fine">
             No password needed. The link works once and expires in 15 minutes.
           </p>
+
+          <!-- WhatsApp is close to universal here, and a number is something
+               people keep long after they have forgotten a password. -->
+          @if (!phoneMode()) {
+            <button type="button" class="auth__magic" style="margin-top:.5rem"
+                    (click)="phoneMode.set(true)">
+              💬 Use my phone number instead
+            </button>
+          } @else {
+            <div class="phone-signin">
+              @if (!codeSent()) {
+                <div class="auth__field">
+                  <label for="phone">Mobile number</label>
+                  <input id="phone" type="tel" [(ngModel)]="phone"
+                         [ngModelOptions]="{ standalone: true }"
+                         placeholder="082 123 4567" autocomplete="tel"/>
+                </div>
+                <button type="button" class="auth__submit"
+                        [disabled]="!phone.trim() || sendingCode()" (click)="sendCode()">
+                  {{ sendingCode() ? 'Sending…' : 'Send me a code on WhatsApp' }}
+                </button>
+              } @else {
+                <p class="auth__fine">{{ codeMessage() }}</p>
+                <div class="auth__field">
+                  <label for="code">6-digit code</label>
+                  <input id="code" type="text" inputmode="numeric" maxlength="6"
+                         [(ngModel)]="code" [ngModelOptions]="{ standalone: true }"
+                         placeholder="000000" autocomplete="one-time-code"/>
+                </div>
+                @if (phoneError()) { <p class="auth__error" role="alert">{{ phoneError() }}</p> }
+                <button type="button" class="auth__submit"
+                        [disabled]="code.trim().length !== 6 || verifying()" (click)="verifyCode()">
+                  {{ verifying() ? 'Checking…' : 'Sign in' }}
+                </button>
+                <button type="button" class="auth__magic" style="margin-top:.5rem"
+                        (click)="codeSent.set(false)">
+                  Use a different number
+                </button>
+              }
+            </div>
+          }
         }
 
         <p class="auth__foot">
@@ -89,6 +130,14 @@ export class Login {
 
   loading = signal(false);
   sendingMagic = signal(false);
+  phoneMode = signal(false);
+  phone = '';
+  code = '';
+  sendingCode = signal(false);
+  codeSent = signal(false);
+  codeMessage = signal('');
+  verifying = signal(false);
+  phoneError = signal<string | null>(null);
   magicSent = signal(false);
   magicMessage = signal('');
   error = signal<string | null>(null);
@@ -97,6 +146,39 @@ export class Login {
     email: ['', [Validators.required, Validators.email]],
     password: ['', Validators.required],
   });
+
+  sendCode() {
+    this.sendingCode.set(true);
+    this.phoneError.set(null);
+
+    this.auth.requestPhoneCode(this.phone.trim()).subscribe({
+      next: (res) => {
+        this.sendingCode.set(false);
+        this.codeMessage.set(res.message);
+        this.codeSent.set(true);
+      },
+      error: (err) => {
+        this.sendingCode.set(false);
+        this.phoneError.set(err?.error?.message ?? 'Could not send a code. Check the number and try again.');
+      },
+    });
+  }
+
+  verifyCode() {
+    this.verifying.set(true);
+    this.phoneError.set(null);
+
+    this.auth.verifyPhoneCode(this.phone.trim(), this.code.trim()).subscribe({
+      next: (res) =>
+        this.router.navigate([
+          res.user.role === 'LANDLORD' ? '/landlord/dashboard' : '/tenant/dashboard',
+        ]),
+      error: (err) => {
+        this.verifying.set(false);
+        this.phoneError.set(err?.error?.message ?? 'That code is wrong or has expired.');
+      },
+    });
+  }
 
   /** Reuses whatever is already typed in the email field. */
   emailForMagic(): string {

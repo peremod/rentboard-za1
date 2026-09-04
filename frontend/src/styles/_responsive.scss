@@ -594,3 +594,10 @@
   font-size: .75rem; color: var(--slate); text-align: center;
   margin-top: .5rem; line-height: 1.5;
 }
+
+// Phone sign-in block on the login card.
+.phone-signin {
+  margin-top: .75rem;
+  padding-top: .85rem;
+  border-top: 1px solid var(--border);
+}

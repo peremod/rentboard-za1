@@ -15,6 +15,8 @@ export interface Application {
   roomId: string;
   tenantId: string;
   status: ApplicationStatus;
+  /** When the landlord accepted or rejected. Drives the 30-minute undo window. */
+  decidedAt?: string | null;
   /** True once the room was relisted or let to someone else. */
   isArchived?: boolean;
   /** Human-readable reason, present only when isArchived. */
