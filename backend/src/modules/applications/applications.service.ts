@@ -54,7 +54,35 @@ export class ApplicationsService {
         roomId_tenantId_cycle: { roomId: dto.roomId, tenantId, cycle: room.relistCount },
       },
     });
-    if (existing) throw new ConflictException('You have already applied for this room');
+    if (existing) {
+      // Withdrawing is meant to be reversible while the room is still
+      // available. The unique constraint is per cycle, so a withdrawn
+      // application occupies the slot and blocked re-applying entirely —
+      // the tenant was told 'you have already applied' for one they had
+      // deliberately taken back.
+      if (existing.status === 'withdrawn') {
+        const reopened = await this.prisma.application.update({
+          where: { id: existing.id },
+          data: {
+            status: 'pending',
+            decidedAt: null,
+            coverNote: dto.coverNote ? sanitizeText(dto.coverNote) : existing.coverNote,
+            // Reset the clock: the landlord is being asked to look again.
+            createdAt: new Date(),
+            viewedAt: null,
+          },
+        });
+
+        await this.prisma.room
+          .update({ where: { id: dto.roomId }, data: { applicationCount: { increment: 1 } } })
+          .catch(() => {});
+
+        this.logger.log(`Withdrawn application ${existing.id} reopened by tenant ${tenantId}`);
+        return reopened;
+      }
+
+      throw new ConflictException('You have already applied for this room');
+    }
 
     const [application, tenant] = await Promise.all([
       this.prisma.application.create({

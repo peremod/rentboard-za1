@@ -102,7 +102,11 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
                 @if (room.status !== 'draft') {
                   <button type="button" class="btn btn-sm btn-ghost-light"
                           [disabled]="removing() === room.id" (click)="removeListing(room)">
-                    {{ removing() === room.id ? 'Removing…' : 'Remove' }}
+                    @if (removing() === room.id) {
+                      Working…
+                    } @else {
+                      {{ (room.applicationCount ?? 0) === 0 ? 'Delete' : 'Remove' }}
+                    }
                   </button>
                 }
                 @if (billingEnabled && !room.isFeatured && room.status === 'active') {
@@ -373,14 +377,41 @@ export class LandlordDashboard implements OnInit {
    * Removes a published listing entirely. Confirmed hard, because open
    * applicants are closed and emailed and that cannot be taken back.
    */
+  /**
+   * A listing nobody applied for can be deleted outright. One with
+   * applications is removed instead — those records belong to the tenants too,
+   * and the privacy policy commits to keeping them for two years.
+   */
   async removeListing(room: Room) {
     const applicants = room.applicationCount ?? 0;
-    const warning = applicants > 0
-      ? `${applicants} applicant${applicants === 1 ? ' is' : 's are'} told the room is gone. This cannot be undone.`
-      : 'This cannot be undone.';
+
+    if (applicants === 0) {
+      const confirmed = await this.dialogs.confirm(
+        'Delete this listing?',
+        `"${room.title}" will be deleted completely. Nobody has applied for it, so nothing else is lost. This cannot be undone.`,
+        'Delete permanently',
+        'Keep it',
+      );
+      if (!confirmed) return;
+
+      this.removing.set(room.id);
+      this.roomsService.deletePermanently(room.id).subscribe({
+        next: () => {
+          this.removing.set(null);
+          this.rooms.update((list) => list.filter((r) => r.id !== room.id));
+        },
+        error: (err) => {
+          this.removing.set(null);
+          this.dialogs.error(err?.error?.message ?? 'That could not be deleted.');
+        },
+      });
+      return;
+    }
+
     const confirmed = await this.dialogs.confirm(
       'Remove this listing?',
-      warning,
+      `${applicants} applicant${applicants === 1 ? ' is' : 's are'} told the room is gone, and it comes off the board. ` +
+      'Their applications are kept, so the listing is not deleted outright. This cannot be undone.',
       'Remove',
       'Keep it',
     );
@@ -392,6 +423,7 @@ export class LandlordDashboard implements OnInit {
       error: () => this.removing.set(null),
     });
   }
+
 
   /** my-rooms returns active, reserved and drafts together; split for display. */
   /** On the board, or reserved. Paused rooms get their own section. */

@@ -111,6 +111,17 @@ export class RoomsService {
     return this.http.post<Room>(`${this.api}/rooms/${id}/pause`, {});
   }
 
+  /**
+   * Deletes a listing outright. The API refuses when it has had applications,
+   * since those records are not the landlord's alone to erase.
+   */
+  deletePermanently(id: string) {
+    this.bustCache();
+    return this.http.delete<{ deleted: boolean; title: string }>(
+      `${this.api}/rooms/${id}/permanent`,
+    );
+  }
+
   /** Removes a published listing. Open applicants are closed and emailed. */
   removelisting(id: string) {
     this.bustCache();

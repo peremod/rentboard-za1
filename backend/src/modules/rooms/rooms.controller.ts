@@ -154,6 +154,17 @@ export class RoomsController {
     return this.roomsService.undoLet(id, user.id);
   }
 
+  @Delete(':id/permanent')
+  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete a listing outright',
+    description: 'Only possible when it has never had an application — those records are not the landlord\'s alone to erase.',
+  })
+  hardDelete(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.roomsService.hardDelete(id, user.id);
+  }
+
   @Delete(':id')
   @UseGuards(JwtAuthGuard, LandlordGuard)
   @ApiBearerAuth()

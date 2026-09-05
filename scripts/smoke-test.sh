@@ -1916,6 +1916,59 @@ req POST /api/auth/phone/verify '{"phone":"0821234567","code":"123"}'
 check "rejects a short code" 400 "$STATUS" "$BODY"
 
 
+# -- 38. Withdraw then re-apply, and permanent delete -----------------------
+head_ "38. Re-apply & permanent delete"
+
+req POST /api/rooms "$ROOM_JSON" "$LTOKEN"
+REAPPLY_ROOM=$(echo "$BODY" | jq -r '.id // empty')
+if [[ -n "$REAPPLY_ROOM" ]]; then
+  req PATCH "/api/rooms/$REAPPLY_ROOM" '{"heroImagePath":"/smoke-test-placeholder.jpg"}' "$LTOKEN"
+  req POST "/api/rooms/$REAPPLY_ROOM/publish" "" "$LTOKEN"
+
+  req POST /api/applications "{\"roomId\":\"$REAPPLY_ROOM\",\"coverNote\":\"Applying, will withdraw, will return.\"}" "$TTOKEN"
+  RA_APP=$(echo "$BODY" | jq -r '.id // empty')
+
+  if [[ -n "$RA_APP" ]]; then
+    req POST "/api/applications/$RA_APP/withdraw" "" "$TTOKEN"
+    check "tenant withdraws" 201 "$STATUS" "$BODY"
+
+    # The unique constraint is per cycle, so a withdrawn application used to
+    # occupy the slot and block this entirely.
+    req POST /api/applications "{\"roomId\":\"$REAPPLY_ROOM\",\"coverNote\":\"Changed my mind, applying again.\"}" "$TTOKEN"
+    if [[ "$STATUS" == "201" ]]; then
+      green "  PASS  can re-apply after withdrawing"; PASS=$((PASS+1))
+      RA_STATUS=$(echo "$BODY" | jq -r '.status')
+      if [[ "$RA_STATUS" == "pending" ]]; then
+        green "  PASS  the reopened application is pending again"; PASS=$((PASS+1))
+      else
+        red "  FAIL  reopened application status is '$RA_STATUS'"; FAIL=$((FAIL+1))
+      fi
+    else
+      red "  FAIL  re-applying after withdrawal returned $STATUS"; FAIL=$((FAIL+1))
+      grey "        $(echo "$BODY" | head -c 200)"
+    fi
+
+    # A room with applications must not be deletable outright.
+    req DELETE "/api/rooms/$REAPPLY_ROOM/permanent" "" "$LTOKEN"
+    check "cannot hard-delete a room that has applications" 400 "$STATUS" "$BODY"
+  fi
+fi
+
+# A room nobody applied for can be deleted completely.
+req POST /api/rooms "$ROOM_JSON" "$LTOKEN"
+CLEAN_ROOM=$(echo "$BODY" | jq -r '.id // empty')
+if [[ -n "$CLEAN_ROOM" ]]; then
+  req DELETE "/api/rooms/$CLEAN_ROOM/permanent" "" "$LTOKEN"
+  check "can hard-delete a room with no applications" 200 "$STATUS" "$BODY"
+
+  req GET "/api/rooms/$CLEAN_ROOM" "" "$LTOKEN"
+  check "the deleted room is gone entirely" 404 "$STATUS" "$BODY"
+
+  req DELETE "/api/rooms/$CLEAN_ROOM/permanent" "" "$ITOKEN"
+  check "non-owner CANNOT hard-delete" 404 "$STATUS" "$BODY"
+fi
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

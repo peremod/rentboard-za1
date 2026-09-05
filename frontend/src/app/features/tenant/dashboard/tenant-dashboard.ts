@@ -156,7 +156,7 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
               <div class="portal-row-actions">
                 @if (app.room && app.room.status === 'active') {
                   <a class="btn btn-sm btn-outline" [routerLink]="['/rooms', app.room.id]">
-                    Apply again
+                    {{ app.status === 'withdrawn' ? 'Apply again' : 'Apply again' }}
                   </a>
                 } @else if (app.room) {
                   <a class="btn btn-sm btn-ghost-light" [routerLink]="['/rooms', app.room.id]">View room</a>
@@ -510,6 +510,9 @@ export class TenantDashboard implements OnInit {
 
     return this.applications()
       .filter((a) => {
+        // Withdrawing is the tenant's own decision, not the room going away.
+        // It belongs under Closed with a Re-apply action, not here.
+        if (a.status === 'withdrawn') return false;
         if (!a.isArchived || a.status === 'accepted') return false;
         const roomId = a.room?.id;
         if (!roomId || a.room?.status !== 'active') return false;

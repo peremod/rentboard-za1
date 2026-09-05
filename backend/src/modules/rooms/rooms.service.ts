@@ -259,6 +259,39 @@ export class RoomsService {
    * applications and messages reference it, and the privacy policy commits to
    * retaining application records for 2 years after outcome.
    */
+  /**
+   * Permanently deletes a listing, row and all.
+   *
+   * Only when nothing depends on it. A room that has had applications carries
+   * other people's records: their cover notes, the messages between them, and
+   * the tenancy if it went that far. Deleting the room cascades all of that
+   * away, and those are not the landlord's to erase — the privacy policy
+   * commits to keeping applications for two years after outcome, and a tenant
+   * in a deposit dispute may need the history.
+   *
+   * So: no applications ever, hard delete. Otherwise soft delete, which takes
+   * it off the board and tells the applicants, and keeps the record.
+   */
+  async hardDelete(id: string, landlordId: string) {
+    const room = await this.assertOwner(id, landlordId);
+
+    const applicationCount = await this.prisma.application.count({ where: { roomId: id } });
+    if (applicationCount > 0) {
+      throw new BadRequestException(
+        `This listing has had ${applicationCount} application${applicationCount === 1 ? '' : 's'}, ` +
+        'so it cannot be deleted outright — those records belong to the tenants too. ' +
+        'Removing it takes it off the board and tells anyone still waiting.',
+      );
+    }
+
+    // Saved-room entries are ours to clear: they are just a bookmark.
+    await this.prisma.savedRoom.deleteMany({ where: { roomId: id } });
+    await this.prisma.room.delete({ where: { id } });
+
+    this.logger.log(`Room ${id} permanently deleted by landlord ${landlordId}`);
+    return { deleted: true, id, title: room.title };
+  }
+
   async softDelete(id: string, landlordId: string) {
     const room = await this.assertOwner(id, landlordId);
     if (room.status === 'draft') {
