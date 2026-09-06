@@ -1179,6 +1179,9 @@ else
   red "  FAIL  suburb rate is not below national (national=$NAT suburb=$SUB)"; FAIL=$((FAIL+1))
 fi
 
+# The rate-card request above replaced BODY, so ask for the ads again before
+# asserting anything about their shape.
+req GET "/api/ads?placement=board_sidebar&province=Gauteng"
 if echo "$BODY" | jq -e 'type == "array"' >/dev/null 2>&1; then
   green "  PASS  returns an array, empty is valid"; PASS=$((PASS+1))
 else
@@ -1964,8 +1967,16 @@ if [[ -n "$CLEAN_ROOM" ]]; then
   req GET "/api/rooms/$CLEAN_ROOM" "" "$LTOKEN"
   check "the deleted room is gone entirely" 404 "$STATUS" "$BODY"
 
-  req DELETE "/api/rooms/$CLEAN_ROOM/permanent" "" "$ITOKEN"
-  check "non-owner CANNOT hard-delete" 404 "$STATUS" "$BODY"
+  # A tenant is stopped by LandlordGuard before ownership is ever checked, so
+  # 403 is the correct answer here — 404 would mean the guard had been skipped.
+  req DELETE "/api/rooms/$CLEAN_ROOM/permanent" "" "$TTOKEN"
+  check "tenant CANNOT hard-delete (blocked by role)" 403 "$STATUS" "$BODY"
+
+  # A different landlord gets past the guard and must then fail on ownership.
+  if [[ -n "${OTHER_LTOKEN:-}" ]]; then
+    req DELETE "/api/rooms/$CLEAN_ROOM/permanent" "" "$OTHER_LTOKEN"
+    check "another landlord CANNOT hard-delete someone else's room" 404 "$STATUS" "$BODY"
+  fi
 fi
 
 
