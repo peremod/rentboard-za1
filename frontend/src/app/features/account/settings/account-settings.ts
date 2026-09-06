@@ -39,6 +39,7 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
               @if (auth.user()?.phoneVerified) {
                 <p class="field-hint">
                   ✅ Verified — you can sign in with a WhatsApp code using this number.
+                  Changing it here will need verifying again.
                 </p>
               } @else if (verifyStep() === 'idle') {
                 <p class="field-hint">
@@ -284,9 +285,17 @@ export class AccountSettings {
 
     const { fullName, phone } = this.profileForm.getRawValue();
     this.auth.updateProfile({ fullName: fullName!, phone: phone ?? undefined }).subscribe({
-      next: () => {
+      next: (updated) => {
         this.savingProfile.set(false);
-        this.profileMessage.set('Saved.');
+        // Show what the server actually stored: it canonicalises the number to
+        // +27 form, and saving a different one clears the verification.
+        this.profileForm.patchValue({ phone: updated.phone ?? '' }, { emitEvent: false });
+        this.profileForm.markAsPristine();
+        this.profileMessage.set(
+          updated.phoneVerified === false && updated.phone
+            ? 'Saved. Verify the number to use it for signing in.'
+            : 'Saved.',
+        );
       },
       error: (err) => {
         this.savingProfile.set(false);

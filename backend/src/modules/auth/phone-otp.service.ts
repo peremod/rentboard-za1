@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { normaliseSaMobile } from '../../common/utils/phone.util';
 
 const OTP_TTL_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
@@ -25,13 +26,9 @@ export class PhoneOtpService {
     private whatsapp: WhatsappService,
   ) {}
 
-  /** +27821234567 — one canonical form, so a number matches however it was typed. */
+  /** Delegates to the shared helper — two copies of this drifted once already. */
   private normalise(raw: string): string | null {
-    const digits = raw.replace(/[^\d+]/g, '');
-    if (/^0[6-8]\d{8}$/.test(digits)) return `+27${digits.slice(1)}`;
-    if (/^\+27[6-8]\d{8}$/.test(digits)) return digits;
-    if (/^27[6-8]\d{8}$/.test(digits)) return `+${digits}`;
-    return null;
+    return normaliseSaMobile(raw);
   }
 
   private hash(code: string, phone: string) {

@@ -1994,13 +1994,27 @@ fi
 req PATCH /api/users/me '{"phone":"0821234567"}' "$LTOKEN"
 check "save a phone number" 200 "$STATUS" "$BODY"
 
+# Stored canonically, so verification and sign-in match the same string. Two
+# forms of one number is what silently broke phone sign-in.
 req GET /api/auth/me "" "$LTOKEN"
 SAVED_PHONE=$(echo "$BODY" | jq -r '.phone // ""')
-if [[ "$SAVED_PHONE" == "0821234567" ]]; then
-  green "  PASS  the number reads back after saving"; PASS=$((PASS+1))
+if [[ "$SAVED_PHONE" == "+27821234567" ]]; then
+  green "  PASS  the number is stored in canonical +27 form"; PASS=$((PASS+1))
 else
-  red "  FAIL  saved number came back as '$SAVED_PHONE'"; FAIL=$((FAIL+1))
+  red "  FAIL  saved number came back as '$SAVED_PHONE', expected +27821234567"; FAIL=$((FAIL+1))
 fi
+
+# Saving the same number in a different format must not look like a change.
+req PATCH /api/users/me '{"phone":"+27821234567"}' "$LTOKEN"
+SAME=$(echo "$BODY" | jq -r '.phone')
+if [[ "$SAME" == "+27821234567" ]]; then
+  green "  PASS  the same number in another format stays canonical"; PASS=$((PASS+1))
+else
+  red "  FAIL  reformatting the number produced '$SAME'"; FAIL=$((FAIL+1))
+fi
+
+req PATCH /api/users/me '{"phone":"12345"}' "$LTOKEN"
+check "rejects a malformed number on save" 400 "$STATUS" "$BODY"
 
 # Saving a number must NOT be enough to sign in with it.
 VERIFIED_FLAG=$(echo "$BODY" | jq -r '.phoneVerified')
