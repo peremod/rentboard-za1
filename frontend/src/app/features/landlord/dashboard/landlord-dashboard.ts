@@ -105,7 +105,7 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
                     @if (removing() === room.id) {
                       Working…
                     } @else {
-                      {{ (room.applicationCount ?? 0) === 0 ? 'Delete' : 'Remove' }}
+                      {{ room.applicationCount === 0 ? 'Delete' : 'Remove' }}
                     }
                   </button>
                 }
@@ -330,7 +330,7 @@ export class LandlordDashboard implements OnInit {
    * notified, which cannot be undone after the 30-minute window.
    */
   async markLet(room: Room) {
-    const applicants = room.applicationCount ?? 0;
+    const applicants = room.applicationCount;
     const confirmed = await this.dialogs.confirm(
       'Mark this room as let?',
       applicants > 0
@@ -383,7 +383,7 @@ export class LandlordDashboard implements OnInit {
    * and the privacy policy commits to keeping them for two years.
    */
   async removeListing(room: Room) {
-    const applicants = room.applicationCount ?? 0;
+    const applicants = room.applicationCount;
 
     if (applicants === 0) {
       const confirmed = await this.dialogs.confirm(
@@ -477,7 +477,7 @@ export class LandlordDashboard implements OnInit {
   }
 
   totalApplicants() {
-    return this.rooms().reduce((sum, r) => sum + (r.applicationCount ?? 0), 0);
+    return this.rooms().reduce((sum, r) => sum + r.applicationCount, 0);
   }
 
   totalViews() {
