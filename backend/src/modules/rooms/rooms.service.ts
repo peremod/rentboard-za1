@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AlertsService } from '../alerts/alerts.service';
@@ -25,6 +25,8 @@ const UNDO_LET_WINDOW_MINUTES = 30;
 
 @Injectable()
 export class RoomsService {
+  private readonly logger = new Logger(RoomsService.name);
+
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,

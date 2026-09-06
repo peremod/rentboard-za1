@@ -234,6 +234,11 @@ model Application {
   tenant     User              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   status     ApplicationStatus @default(pending)
   coverNote  String?
+
+  /// Why the landlord rejected. Also distinguishes a deliberate rejection from
+  /// one caused by accepting someone else, which undo-accept must reverse
+  /// while leaving deliberate ones alone.
+  rejectionReason String?
   viewedAt   DateTime?
   decidedAt  DateTime?
 

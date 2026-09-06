@@ -354,7 +354,13 @@ export class ApplicationsService {
     const [updated, tenant] = await Promise.all([
       this.prisma.application.update({
         where: { id: applicationId },
-        data: { status: 'rejected', decidedAt: new Date() },
+        data: {
+          status: 'rejected',
+          decidedAt: new Date(),
+          // Persisted so undo-accept can tell a deliberate rejection from one
+          // caused by accepting someone else.
+          rejectionReason: dto.reason ? sanitizeText(dto.reason) : 'Rejected by the landlord.',
+        },
       }),
       this.prisma.user.findUniqueOrThrow({ where: { id: application.tenantId } }),
     ]);
@@ -416,7 +422,12 @@ export class ApplicationsService {
     });
 
     for (const other of others) {
-      await this.prisma.application.update({ where: { id: other.id }, data: { status: 'rejected', decidedAt: new Date() } });
+      await this.prisma.application.update({
+        where: { id: other.id },
+        // The reason is the marker undo-accept matches on to reinstate exactly
+        // these and no others.
+        data: { status: 'rejected', decidedAt: new Date(), rejectionReason: reason },
+      });
       await this.notifications.sendRejectionEmail(other.tenant.email, {
         tenantName: other.tenant.fullName,
         roomTitle: other.room.title,
