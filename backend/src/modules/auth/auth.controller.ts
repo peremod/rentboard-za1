@@ -15,7 +15,7 @@ import {
 import { AccountRecoveryService } from './account-recovery.service';
 import { PasswordlessService } from './passwordless.service';
 import { PhoneOtpService } from './phone-otp.service';
-import { PhoneCodeDto, VerifyPhoneDto } from './dto/phone-otp.dto';
+import { PhoneCodeDto, VerifyPhoneDto, ConfirmNumberDto } from './dto/phone-otp.dto';
 import { MagicLinkDto, VerifyMagicLinkDto } from './dto/passwordless.dto';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -129,6 +129,28 @@ export class AuthController {
     this.setRefreshCookie(res, result.refreshToken);
     const { refreshToken, ...body } = result;
     return body;
+  }
+
+  @Post('phone/verify-number')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send a code to verify the number on your account' })
+  requestPhoneVerification(@CurrentUser() user: { id: string }) {
+    return this.phoneOtp.requestVerification(user.id);
+  }
+
+  @Post('phone/confirm-number')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm the code and enable WhatsApp sign-in' })
+  confirmPhoneVerification(
+    @Body() dto: ConfirmNumberDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.phoneOtp.confirmVerification(user.id, dto.code);
   }
 
   @Post('phone/request-code')

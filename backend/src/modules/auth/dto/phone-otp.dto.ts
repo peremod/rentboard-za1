@@ -20,3 +20,10 @@ export class VerifyPhoneDto {
   @IsString() @Length(6, 6, { message: 'The code is 6 digits' })
   code!: string;
 }
+
+/** Confirming a number already on the account — no phone field needed. */
+export class ConfirmNumberDto {
+  @ApiProperty({ example: '482913' })
+  @IsString() @Length(6, 6, { message: 'The code is 6 digits' })
+  code!: string;
+}

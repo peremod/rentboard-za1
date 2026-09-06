@@ -6,6 +6,8 @@ export interface User {
   role: UserRole;
   fullName: string;
   phone?: string | null;
+  /** True once a code sent to that number has been confirmed. */
+  phoneVerified?: boolean;
   /** Marketing consent. Transactional mail is unaffected by this. */
   marketingEmails?: boolean;
   avatarPath?: string | null;
@@ -28,6 +30,8 @@ export interface RegisterDto {
   password: string;
   fullName: string;
   phone?: string | null;
+  /** True once a code sent to that number has been confirmed. */
+  phoneVerified?: boolean;
   /** Marketing consent. Transactional mail is unaffected by this. */
   marketingEmails?: boolean;
   role: 'TENANT' | 'LANDLORD';

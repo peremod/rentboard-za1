@@ -91,6 +91,91 @@ export class PhoneOtpService {
     };
   }
 
+  /**
+   * Sends a code to verify a number the user has just saved.
+   *
+   * Separate from requestCode, which is for signing in. This one is
+   * authenticated and targets the number on the account, because without a
+   * verification step phoneVerified is never true and phone sign-in can never
+   * find anyone — which is exactly how it shipped.
+   */
+  async requestVerification(userId: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.phone) {
+      throw new BadRequestException('Add a mobile number to your profile first.');
+    }
+
+    const phone = this.normalise(user.phone);
+    if (!phone) {
+      throw new BadRequestException('The number on your profile is not a valid South African mobile.');
+    }
+
+    // Someone else may already have verified this number — numbers get
+    // recycled, and two accounts signing in on one number is a takeover.
+    const taken = await this.prisma.user.findFirst({
+      where: { phone, phoneVerified: true, id: { not: userId } },
+    });
+    if (taken) {
+      throw new BadRequestException('That number is already verified on another account.');
+    }
+
+    const recent = await this.prisma.authToken.count({
+      where: {
+        userId,
+        type: 'phone_otp',
+        createdAt: { gte: new Date(Date.now() - 15 * 60_000) },
+      },
+    });
+    if (recent >= 3) {
+      throw new BadRequestException('Too many codes requested. Please wait 15 minutes.');
+    }
+
+    const code = String(crypto.randomInt(100000, 999999));
+    await this.prisma.authToken.create({
+      data: {
+        userId,
+        tokenHash: this.hash(code, phone),
+        type: 'phone_otp',
+        expiresAt: new Date(Date.now() + OTP_TTL_MINUTES * 60_000),
+      },
+    });
+
+    await this.whatsapp.sendOtp(phone, code, OTP_TTL_MINUTES);
+    this.logger.log(`Verification code sent to ${phone} for user ${userId}`);
+    return { message: `Code sent to ${phone} on WhatsApp.` };
+  }
+
+  /** Confirms the code and marks the number usable for sign-in. */
+  async confirmVerification(userId: string, code: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const phone = user.phone ? this.normalise(user.phone) : null;
+    if (!phone) throw new BadRequestException('No mobile number on this account.');
+
+    const record = await this.prisma.authToken.findUnique({
+      where: { tokenHash: this.hash(code.trim(), phone) },
+    });
+
+    if (!record || record.userId !== userId || record.type !== 'phone_otp' ||
+        record.usedAt || record.expiresAt < new Date()) {
+      throw new BadRequestException('That code is wrong or has expired. Request a new one.');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.authToken.updateMany({
+        where: { userId, type: 'phone_otp', usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        // Store the canonical form, so sign-in matches however it was typed.
+        data: { phone, phoneVerified: true },
+      }),
+    ]);
+
+    this.logger.log(`Phone verified for user ${userId}`);
+    return { verified: true, phone, message: 'Number verified. You can now sign in with WhatsApp.' };
+  }
+
   /** Verifies a code and returns the user for the caller to issue a session. */
   async verifyCode(rawPhone: string, code: string) {
     const phone = this.normalise(rawPhone);

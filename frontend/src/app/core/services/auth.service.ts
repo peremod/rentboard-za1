@@ -85,6 +85,22 @@ export class AuthService {
     );
   }
 
+  /** Sends a code to verify the number already on the account. */
+  requestPhoneVerification() {
+    return this.http.post<{ message: string }>(`${this.api}/auth/phone/verify-number`, {});
+  }
+
+  confirmPhoneVerification(code: string) {
+    return this.http
+      .post<{ verified: boolean; phone: string; message: string }>(
+        `${this.api}/auth/phone/confirm-number`, { code },
+      )
+      .pipe(tap(() => {
+        const current = this._user();
+        if (current) this._user.set({ ...current, phoneVerified: true });
+      }));
+  }
+
   /** Sends a sign-in code over WhatsApp. Same response either way. */
   requestPhoneCode(phone: string) {
     return this.http.post<{ message: string }>(`${this.api}/auth/phone/request-code`, { phone });

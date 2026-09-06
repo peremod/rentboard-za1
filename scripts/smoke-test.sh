@@ -1980,6 +1980,50 @@ if [[ -n "$CLEAN_ROOM" ]]; then
 fi
 
 
+# -- 39. Phone verification -------------------------------------------------
+# Without this step phoneVerified is never true, and phone sign-in can never
+# find an account — which is how it originally shipped.
+head_ "39. Phone verification"
+req GET /api/auth/me "" "$LTOKEN"
+if echo "$BODY" | jq -e 'has("phone") and has("phoneVerified")' >/dev/null 2>&1; then
+  green "  PASS  /auth/me returns phone and phoneVerified"; PASS=$((PASS+1))
+else
+  red "  FAIL  /auth/me omits phone — settings will look unsaved after reload"; FAIL=$((FAIL+1))
+fi
+
+req PATCH /api/users/me '{"phone":"0821234567"}' "$LTOKEN"
+check "save a phone number" 200 "$STATUS" "$BODY"
+
+req GET /api/auth/me "" "$LTOKEN"
+SAVED_PHONE=$(echo "$BODY" | jq -r '.phone // ""')
+if [[ "$SAVED_PHONE" == "0821234567" ]]; then
+  green "  PASS  the number reads back after saving"; PASS=$((PASS+1))
+else
+  red "  FAIL  saved number came back as '$SAVED_PHONE'"; FAIL=$((FAIL+1))
+fi
+
+# Saving a number must NOT be enough to sign in with it.
+VERIFIED_FLAG=$(echo "$BODY" | jq -r '.phoneVerified')
+if [[ "$VERIFIED_FLAG" == "false" ]]; then
+  green "  PASS  a saved number is not verified by default"; PASS=$((PASS+1))
+else
+  red "  FAIL  phoneVerified is $VERIFIED_FLAG on a number nobody confirmed"; FAIL=$((FAIL+1))
+fi
+
+req POST /api/auth/phone/verify-number "" "$LTOKEN"
+if [[ "$STATUS" == "200" || "$STATUS" == "400" ]]; then
+  green "  PASS  verification request handled  ($STATUS)"; PASS=$((PASS+1))
+else
+  red "  FAIL  verification request returned $STATUS"; FAIL=$((FAIL+1))
+fi
+
+req POST /api/auth/phone/confirm-number '{"code":"000000"}' "$LTOKEN"
+check "rejects a wrong verification code" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/phone/verify-number ""
+check "verification requires auth" 401 "$STATUS"
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

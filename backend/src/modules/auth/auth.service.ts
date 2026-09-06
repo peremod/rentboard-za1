@@ -214,6 +214,10 @@ export class AuthService {
       select: {
         id: true, email: true, role: true, fullName: true,
         avatarPath: true, isVerified: true, createdAt: true,
+        // phone and phoneVerified were missing, so account settings showed an
+        // empty phone field after every reload — the value had saved, but the
+        // form had no way to read it back and it looked lost.
+        phone: true, phoneVerified: true, marketingEmails: true,
       },
     });
   }

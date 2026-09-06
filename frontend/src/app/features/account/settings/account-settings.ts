@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ChangeDetectionStrategy, Component, inject, signal, effect } from '@angular/core';
+import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 
@@ -13,7 +13,7 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
 @Component({
   selector: 'app-account-settings',
   standalone: true,
-  imports: [ReactiveFormsModule, PortalShell],
+  imports: [FormsModule, ReactiveFormsModule, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems()" [roleLabel]="roleLabel()">
@@ -31,6 +31,42 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
             <input id="phone" type="tel" formControlName="phone" autocomplete="tel"
                    placeholder="e.g. 082 123 4567"/>
             <p class="field-hint">Used for WhatsApp notifications. Never shown publicly.</p>
+
+            <!-- Without verification the number cannot sign anyone in, which
+                 is how phone sign-in shipped: saved numbers, and a login that
+                 could never find them. -->
+            @if (auth.user()?.phone) {
+              @if (auth.user()?.phoneVerified) {
+                <p class="field-hint">
+                  ✅ Verified — you can sign in with a WhatsApp code using this number.
+                </p>
+              } @else if (verifyStep() === 'idle') {
+                <p class="field-hint">
+                  Not verified yet. Verifying lets you sign in with a WhatsApp code
+                  instead of a password.
+                </p>
+                <button type="button" class="btn btn-sm btn-outline"
+                        [disabled]="verifying()" (click)="startVerification()">
+                  {{ verifying() ? 'Sending…' : 'Verify this number' }}
+                </button>
+              } @else {
+                <p class="field-hint">{{ verifyMessage() }}</p>
+                <div class="form-row">
+                  <label for="otp">6-digit code</label>
+                  <input id="otp" type="text" inputmode="numeric" maxlength="6"
+                         [(ngModel)]="otpCode" [ngModelOptions]="{ standalone: true }"
+                         placeholder="000000" autocomplete="one-time-code"/>
+                </div>
+                <button type="button" class="btn btn-sm btn-primary"
+                        [disabled]="otpCode.trim().length !== 6 || verifying()"
+                        (click)="confirmVerification()">
+                  {{ verifying() ? 'Checking…' : 'Confirm' }}
+                </button>
+                <button type="button" class="btn btn-sm btn-ghost-light"
+                        (click)="verifyStep.set('idle')">Cancel</button>
+              }
+              @if (verifyError()) { <p class="field-error" role="alert">{{ verifyError() }}</p> }
+            }
           </div>
 
           @if (profileMessage()) { <p class="field-hint">{{ profileMessage() }}</p> }
@@ -136,10 +172,29 @@ export class AccountSettings {
           { label: 'Settings', icon: '⚙️', route: '/account/settings' },
         ];
 
+  marketingOn = signal(true);
+
   profileForm = this.fb.group({
-    fullName: [this.auth.user()?.fullName ?? '', [Validators.required, Validators.minLength(2)]],
-    phone: [this.auth.user()?.phone ?? ''],
+    fullName: ['', [Validators.required, Validators.minLength(2)]],
+    phone: [''],
   });
+
+  constructor() {
+    // Fill from the user signal whenever it resolves. Reading it once at
+    // construction meant an empty form on a hard reload, because /auth/me had
+    // not returned yet — which looked exactly like the save had failed.
+    effect(() => {
+      const user = this.auth.user();
+      if (!user) return;
+      if (this.profileForm.pristine) {
+        this.profileForm.patchValue(
+          { fullName: user.fullName, phone: user.phone ?? '' },
+          { emitEvent: false },
+        );
+      }
+      this.marketingOn.set(user.marketingEmails ?? true);
+    });
+  }
 
   passwordForm = this.fb.group({
     currentPassword: ['', Validators.required],
@@ -152,8 +207,13 @@ export class AccountSettings {
     currentPassword: ['', Validators.required],
   });
 
-  marketingOn = signal(this.auth.user()?.marketingEmails ?? true);
   marketingMessage = signal<string | null>(null);
+
+  verifyStep = signal<'idle' | 'code'>('idle');
+  verifying = signal(false);
+  verifyMessage = signal('');
+  verifyError = signal<string | null>(null);
+  otpCode = '';
 
   savingProfile = signal(false);
   profileMessage = signal<string | null>(null);
@@ -177,6 +237,41 @@ export class AccountSettings {
       error: () => {
         this.marketingOn.set(!on);   // roll back the checkbox
         this.marketingMessage.set('Could not save that. Please try again.');
+      },
+    });
+  }
+
+  /** Sends a code to the number already saved on the account. */
+  startVerification() {
+    this.verifying.set(true);
+    this.verifyError.set(null);
+
+    this.auth.requestPhoneVerification().subscribe({
+      next: (res) => {
+        this.verifying.set(false);
+        this.verifyMessage.set(res.message);
+        this.verifyStep.set('code');
+      },
+      error: (err) => {
+        this.verifying.set(false);
+        this.verifyError.set(err?.error?.message ?? 'Could not send a code. Save the number first.');
+      },
+    });
+  }
+
+  confirmVerification() {
+    this.verifying.set(true);
+    this.verifyError.set(null);
+
+    this.auth.confirmPhoneVerification(this.otpCode.trim()).subscribe({
+      next: () => {
+        this.verifying.set(false);
+        this.verifyStep.set('idle');
+        this.otpCode = '';
+      },
+      error: (err) => {
+        this.verifying.set(false);
+        this.verifyError.set(err?.error?.message ?? 'That code is wrong or has expired.');
       },
     });
   }
