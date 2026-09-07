@@ -254,14 +254,15 @@ export class AuthController {
     // (rentboard.co.za and api.rentboard.co.za), so the cookie is same-site and
     // 'strict' is both correct and the strongest CSRF protection available.
     //
-    // In development they are different ORIGINS on localhost. Whether a browser
-    // treats that as same-site has varied, and when it does not, 'strict' means
-    // the cookie is stored and then never sent — which presents as being signed
-    // out on every reload with a valid cookie sitting in the jar.
+    // Development uses 'none' only because localhost:4200 and localhost:3000
+    // are different origins and browsers have not always agreed on whether
+    // that counts as same-site. Chrome does — the request trace shows
+    // sec-fetch-site: same-site — so 'strict' would work here too; 'none' is
+    // kept for other browsers and older versions where it does not.
     //
     // 'none' requires Secure, and Chrome accepts Secure cookies over
-    // http://localhost because localhost is a trustworthy origin. So this is
-    // safe on plain HTTP in dev and never applies anywhere else.
+    // http://localhost because localhost is a trustworthy origin, so this is
+    // safe on plain HTTP and applies nowhere but development.
     res.cookie(REFRESH_COOKIE, token, {
       httpOnly: true,
       secure: true,
