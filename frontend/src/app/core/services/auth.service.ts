@@ -93,6 +93,11 @@ export class AuthService {
    * no user, and redirected to login — reloading any guarded page signed the
    * person out even though their refresh cookie was perfectly valid.
    */
+  /** True once the startup refresh has settled, either way. */
+  get sessionSettled(): boolean {
+    return this.restoreDone;
+  }
+
   sessionReady(): Observable<boolean> {
     if (this.restoreDone) return of(this.isAuthenticated());
     return this.restoreSession().pipe(map(() => this.isAuthenticated()));

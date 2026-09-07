@@ -1,5 +1,5 @@
 import { ApplicationConfig, provideZonelessChangeDetection } from '@angular/core';
-import { provideRouter, withEnabledBlockingInitialNavigation, withComponentInputBinding, withInMemoryScrolling, withPreloading, withNavigationErrorHandler, PreloadAllModules } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withInMemoryScrolling, withPreloading, withNavigationErrorHandler, PreloadAllModules } from '@angular/router';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
 import { IMAGE_LOADER, ImageLoaderConfig } from '@angular/common';
@@ -18,11 +18,6 @@ export const appConfig: ApplicationConfig = {
     provideZonelessChangeDetection(),
     provideRouter(
       routes,
-      // Blocks the first render until the initial navigation, guards included,
-      // has resolved. Without it the router renders while authGuard is still
-      // waiting on the session refresh, so a reload showed the login page for
-      // a moment before landing on the dashboard.
-      withEnabledBlockingInitialNavigation(),
       withComponentInputBinding(),
       withPreloading(PreloadAllModules),
       withInMemoryScrolling({ scrollPositionRestoration: 'top', anchorScrolling: 'enabled' }),

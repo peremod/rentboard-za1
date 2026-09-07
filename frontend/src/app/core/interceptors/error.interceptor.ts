@@ -52,6 +52,10 @@ function attemptSilentRefreshAndRetry(
   return auth.restoreSession().pipe(
     switchMap((user) => {
       if (!user) {
+        // Same reasoning: only treat this as an expired session once the
+        // startup refresh has actually settled.
+        if (!auth.sessionSettled) return throwError(() => new Error('Session not ready'));
+
         dialogs.alert('Signed out', 'Your session has expired. Please log in again.', 'warning', 'Log in');
         auth.logout();
         router.navigate(['/auth/login'], { queryParams: { returnUrl: router.url } });
@@ -63,6 +67,12 @@ function attemptSilentRefreshAndRetry(
       return next(retried);
     }),
     catchError((err) => {
+      // During startup the app has no access token yet, so any request that
+      // races the session refresh comes back 401. Redirecting on that is what
+      // painted the login page for a moment on every reload — the session was
+      // about to be restored successfully.
+      if (!auth.sessionSettled) return throwError(() => err);
+
       dialogs.alert('Signed out', 'Your session has expired. Please log in again.', 'warning', 'Log in');
       auth.logout();
       router.navigate(['/auth/login'], { queryParams: { returnUrl: router.url } });
