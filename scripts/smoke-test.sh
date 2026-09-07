@@ -2010,6 +2010,17 @@ fi
 head_ "39. Phone verification"
 # The login response must carry the phone too — settings reads the user signal,
 # which is populated from login, not only from /auth/me.
+# Login must issue the refresh cookie. Without it every page reload signs the
+# person out, and the failure is invisible from the API response.
+LOGIN_HEADERS=$(curl -s -D - -o /dev/null -X POST "$API/api/auth/login" \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$LANDLORD_EMAIL\",\"password\":\"$PASSWORD\"}" 2>/dev/null)
+if echo "$LOGIN_HEADERS" | grep -qi 'set-cookie:.*rb_refresh'; then
+  green "  PASS  login issues the refresh cookie"; PASS=$((PASS+1))
+else
+  red "  FAIL  login sets no rb_refresh cookie — reloads will sign people out"; FAIL=$((FAIL+1))
+fi
+
 req POST /api/auth/login "{\"email\":\"$LANDLORD_EMAIL\",\"password\":\"$PASSWORD\"}"
 if echo "$BODY" | jq -e '.user | has("phone")' >/dev/null 2>&1; then
   green "  PASS  the login response carries phone"; PASS=$((PASS+1))
