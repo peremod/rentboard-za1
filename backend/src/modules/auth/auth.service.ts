@@ -28,6 +28,13 @@ export interface AuthResponse {
     fullName: string;
     avatarPath?: string | null;
     isVerified: boolean;
+    /**
+     * Account settings reads these straight from the login response, so
+     * omitting them left the form blank and a saved number looked lost.
+     */
+    phone?: string | null;
+    phoneVerified?: boolean;
+    marketingEmails?: boolean;
   };
 }
 
