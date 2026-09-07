@@ -114,11 +114,13 @@ export class AuthController {
     // Attributes must match the ones it was set with, or the browser treats
     // this as a different cookie and leaves the original in place — logout
     // would appear to work while the session stayed alive.
+    // Attributes must match the ones it was set with, or the browser treats
+    // this as a different cookie and leaves the original in place.
     res.clearCookie(REFRESH_COOKIE, {
       path: REFRESH_COOKIE_PATH,
       httpOnly: true,
-      secure: true,
-      sameSite: this.config.get<string>('env') === 'development' ? 'none' : 'strict',
+      secure: this.config.get<string>('env') !== 'development',
+      sameSite: 'strict',
     });
     return { loggedOut: true };
   }
@@ -250,25 +252,25 @@ export class AuthController {
   private setRefreshCookie(res: Response, token: string) {
     const isDev = this.config.get<string>('env') === 'development';
 
-    // In production the app and API share a registrable domain
-    // (rentboard.co.za and api.rentboard.co.za), so the cookie is same-site and
-    // 'strict' is both correct and the strongest CSRF protection available.
+    // sameSite 'strict' everywhere, and the request trace confirms it works in
+    // development: Chrome reports sec-fetch-site: same-site for localhost:4200
+    // calling localhost:3000, because ports do not affect same-site.
     //
-    // Development uses 'none' only because localhost:4200 and localhost:3000
-    // are different origins and browsers have not always agreed on whether
-    // that counts as same-site. Chrome does — the request trace shows
-    // sec-fetch-site: same-site — so 'strict' would work here too; 'none' is
-    // kept for other browsers and older versions where it does not.
+    // I briefly set 'none' here on the theory that dev was cross-site. It was
+    // not, and 'none' stopped the cookie being sent at all — the opposite of
+    // the intended effect. Strict is both correct and the stronger CSRF
+    // protection, so it stays.
     //
-    // 'none' requires Secure, and Chrome accepts Secure cookies over
-    // http://localhost because localhost is a trustworthy origin, so this is
-    // safe on plain HTTP and applies nowhere but development.
+    // secure is off in development only. A Secure cookie over plain http is
+    // discarded by some browsers, and dev is the only environment not served
+    // over HTTPS.
     res.cookie(REFRESH_COOKIE, token, {
       httpOnly: true,
-      secure: true,
-      sameSite: isDev ? 'none' : 'strict',
+      secure: !isDev,
+      sameSite: 'strict',
       path: REFRESH_COOKIE_PATH,
       maxAge: (this.config.get<number>('jwt.refreshTokenTtlDays') ?? 30) * 24 * 60 * 60 * 1000,
     });
   }
+
 }
