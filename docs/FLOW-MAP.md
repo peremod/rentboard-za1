@@ -231,3 +231,54 @@ deliberate — check this list when adding an endpoint.
 - `POST /stripe/webhook`
 - `GET /whatsapp/webhook`
 - `POST /whatsapp/webhook`
+
+---
+
+## How each layer is verified
+
+Three layers, each catching what the others cannot.
+
+| Layer | Command | Covers | Blind to |
+|---|---|---|---|
+| Route audit | `node scripts/route-audit.mjs` | Routes resolve, guards present, links valid | Anything at runtime |
+| API smoke test | `./scripts/smoke-test.sh` | ~340 endpoint assertions, permissions, state transitions | Everything visual |
+| Browser tests | `npm run e2e` | The journeys where being wrong costs a user something | Everything not written down |
+
+**The middle layer passed through every UI bug found in the last two weeks.**
+A withdrawn application filed under the wrong heading, a saved phone number
+that never displayed, a missing FormsModule, checkboxes stacked above their
+labels — 340 API assertions, none of them caught it. That is not a flaw in the
+API tests; those bugs simply are not visible from the API.
+
+### Running the browser tests
+
+```bash
+npm install
+npm run e2e:install     # once, downloads Chromium
+# with both servers running:
+npm run e2e
+npm run e2e:ui          # interactive, for writing new ones
+```
+
+### What is covered, and why those
+
+Each spec exists because that exact flow broke:
+
+- **application-lifecycle** — withdraw, then re-apply. Broken three ways at
+  once: it stayed under 'Your applications', re-applying was blocked by the
+  unique constraint, and an old archived row resurfaced under 'Available again'
+- **account-settings** — a saved phone number surviving sign-out. Broken twice,
+  in two places, and both times the save worked while the form showed nothing
+- **listing-wizard** — editing must not duplicate a listing. Paging forward
+  through an edit used to create a second one
+- **board.mobile** — filters on one row, a room card above the fold, a checkbox
+  beside its label. All three regressed at phone width while looking fine on a
+  desktop
+
+### What is deliberately not covered
+
+Browser tests are slow and go stale, so this is a small suite by choice.
+Payments, email delivery, WhatsApp and the admin portal are left out: they
+depend on third parties or on data that is awkward to set up, and the API tests
+already cover their logic. If a flow here breaks twice, add a spec for it —
+that is the rule that produced the four above.
