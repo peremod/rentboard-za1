@@ -111,7 +111,15 @@ export class AuthController {
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const rawToken = req.cookies?.[REFRESH_COOKIE];
     if (rawToken) await this.authService.revokeToken(rawToken);
-    res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
+    // Attributes must match the ones it was set with, or the browser treats
+    // this as a different cookie and leaves the original in place — logout
+    // would appear to work while the session stayed alive.
+    res.clearCookie(REFRESH_COOKIE, {
+      path: REFRESH_COOKIE_PATH,
+      httpOnly: true,
+      secure: true,
+      sameSite: this.config.get<string>('env') === 'development' ? 'none' : 'strict',
+    });
     return { loggedOut: true };
   }
 
@@ -240,11 +248,24 @@ export class AuthController {
   }
 
   private setRefreshCookie(res: Response, token: string) {
-    const isSecureEnv = this.config.get<string>('env') !== 'development';
+    const isDev = this.config.get<string>('env') === 'development';
+
+    // In production the app and API share a registrable domain
+    // (rentboard.co.za and api.rentboard.co.za), so the cookie is same-site and
+    // 'strict' is both correct and the strongest CSRF protection available.
+    //
+    // In development they are different ORIGINS on localhost. Whether a browser
+    // treats that as same-site has varied, and when it does not, 'strict' means
+    // the cookie is stored and then never sent — which presents as being signed
+    // out on every reload with a valid cookie sitting in the jar.
+    //
+    // 'none' requires Secure, and Chrome accepts Secure cookies over
+    // http://localhost because localhost is a trustworthy origin. So this is
+    // safe on plain HTTP in dev and never applies anywhere else.
     res.cookie(REFRESH_COOKIE, token, {
       httpOnly: true,
-      secure: isSecureEnv, // both staging and production are served over HTTPS — only local dev is plain HTTP
-      sameSite: 'strict',
+      secure: true,
+      sameSite: isDev ? 'none' : 'strict',
       path: REFRESH_COOKIE_PATH,
       maxAge: (this.config.get<number>('jwt.refreshTokenTtlDays') ?? 30) * 24 * 60 * 60 * 1000,
     });
