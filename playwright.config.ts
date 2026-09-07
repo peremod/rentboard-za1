@@ -33,9 +33,20 @@ export default defineConfig({
   },
 
   projects: [
-    { name: 'desktop', use: { ...devices['Desktop Chrome'] } },
-    // Most South African tenants will be on a phone, and several layout bugs
-    // this project has hit only appeared at narrow widths.
-    { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /.*\.mobile\.spec\.ts/ },
+    {
+      name: 'desktop',
+      use: { ...devices['Desktop Chrome'] },
+      // Without this the desktop project also picks up the mobile specs, and
+      // layout assertions written for a 412px viewport run at 1280px and fail
+      // for entirely the wrong reason.
+      testIgnore: /.*\.mobile\.spec\.ts/,
+    },
+    {
+      // Most South African tenants will be on a phone, and several layout bugs
+      // this project has hit only appeared at narrow widths.
+      name: 'mobile',
+      use: { ...devices['Pixel 7'] },
+      testMatch: /.*\.mobile\.spec\.ts/,
+    },
   ],
 });

@@ -254,11 +254,23 @@ API tests; those bugs simply are not visible from the API.
 
 ```bash
 npm install
-npm run e2e:install     # once, downloads Chromium
-# with both servers running:
-npm run e2e
-npm run e2e:ui          # interactive, for writing new ones
+npm run e2e:install     # once — downloads Chromium and its system libraries
+
+# then, with BOTH servers already running:
+cd backend  && npm run start:dev     # terminal 1
+cd frontend && npm start             # terminal 2
+npm run e2e                          # terminal 3, from the repo root
+npm run e2e:ui                       # interactive, for writing new specs
 ```
+
+`npm run e2e` installs Chromium first if it is missing, so a fresh clone does
+not fail with seven identical 'Executable doesn't exist' errors. The install
+needs `sudo` the first time on Linux, for the system libraries Chromium links
+against.
+
+**The servers are not started for you.** Playwright can be configured to boot
+them, but that hides which of the two is broken when a test fails — and on this
+project a failing frontend build has been the more common cause.
 
 ### What is covered, and why those
 
