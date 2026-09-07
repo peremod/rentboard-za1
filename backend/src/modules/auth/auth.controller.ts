@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Req, Res, Query, UseGuards, UnauthorizedException, Next, ServiceUnavailableException, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Req, Res, Query, UseGuards, UnauthorizedException, Next, ServiceUnavailableException, HttpCode, HttpStatus, Logger } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import * as passport from 'passport';
 import { GoogleStrategy } from './strategies/google.strategy';
@@ -28,6 +28,8 @@ const REFRESH_COOKIE_PATH = '/api/auth';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private recovery: AccountRecoveryService,
     private passwordless: PasswordlessService,
@@ -89,7 +91,16 @@ export class AuthController {
   @ApiOperation({ summary: 'Rotate the refresh token, issue a new access token' })
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const rawToken = req.cookies?.[REFRESH_COOKIE];
-    if (!rawToken) throw new UnauthorizedException('No session found. Please log in again.');
+    if (!rawToken) {
+      // Logged because a missing cookie and a rejected one look identical from
+      // the browser — both just sign the person out. Naming which cookies did
+      // arrive distinguishes 'never set' from 'not sent on this request'.
+      this.logger.warn(
+        `Refresh called with no ${REFRESH_COOKIE} cookie. Cookies present: ` +
+        `${Object.keys(req.cookies ?? {}).join(', ') || 'none'}`,
+      );
+      throw new UnauthorizedException('No session found. Please log in again.');
+    }
 
     const result = await this.authService.refresh(rawToken);
     return this.respondWithSession(res, result);
