@@ -62,6 +62,16 @@ command -v jq >/dev/null || { red "jq is required: sudo apt install -y jq"; exit
 echo "RentBoard ZA smoke test → $API"
 
 # ── 1. Infrastructure ──────────────────────────────────────────────────────
+# ── A note on $BODY ─────────────────────────────────────────────────────
+# `req` overwrites the global STATUS and BODY. Any assertion reading BODY must
+# come immediately after the request it is about — inserting a new check
+# between a request and its assertion silently repoints the assertion at the
+# wrong response. That has caused three false failures in this file, each of
+# which looked like an application bug.
+#
+# When adding a check, put it after the existing assertions for that request,
+# not between the request and them.
+
 # ── Optional captures ───────────────────────────────────────────────────
 # Declared empty because set -u aborts on an unset variable, and each of
 # these is assigned inside a section that may be skipped. A later section
@@ -2036,16 +2046,19 @@ else
   red "  FAIL  reformatting the number produced '$SAME'"; FAIL=$((FAIL+1))
 fi
 
-req PATCH /api/users/me '{"phone":"12345"}' "$LTOKEN"
-check "rejects a malformed number on save" 400 "$STATUS" "$BODY"
-
-# Saving a number must NOT be enough to sign in with it.
+# Saving a number must NOT be enough to sign in with it. Read from its own
+# request: BODY is global and the next call overwrites it, which is exactly how
+# this assertion ended up reading a 400 error body.
+req GET /api/auth/me "" "$LTOKEN"
 VERIFIED_FLAG=$(echo "$BODY" | jq -r '.phoneVerified')
 if [[ "$VERIFIED_FLAG" == "false" ]]; then
   green "  PASS  a saved number is not verified by default"; PASS=$((PASS+1))
 else
   red "  FAIL  phoneVerified is $VERIFIED_FLAG on a number nobody confirmed"; FAIL=$((FAIL+1))
 fi
+
+req PATCH /api/users/me '{"phone":"12345"}' "$LTOKEN"
+check "rejects a malformed number on save" 400 "$STATUS" "$BODY"
 
 req POST /api/auth/phone/verify-number "" "$LTOKEN"
 if [[ "$STATUS" == "200" || "$STATUS" == "400" ]]; then
