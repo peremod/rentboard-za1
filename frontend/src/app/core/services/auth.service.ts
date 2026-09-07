@@ -1,7 +1,7 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { tap, catchError, of, Observable } from 'rxjs';
+import { tap, catchError, of, Observable, map, shareReplay, finalize } from 'rxjs';
 import { environment } from '@env/environment';
 import { AuthResponse, LoginDto, RegisterDto, User } from '../models/user.model';
 
@@ -25,6 +25,10 @@ export class AuthService {
   private http = inject(HttpClient);
   private router = inject(Router);
   private api = environment.apiUrl;
+
+  /** The in-flight startup refresh, shared by every caller. */
+  private restore?: Observable<User | null>;
+  private restoreDone = false;
 
   private readonly _user = signal<User | null>(null);
   private readonly _accessToken = signal<string | null>(null);
@@ -67,12 +71,31 @@ export class AuthService {
    * signed-out, same as before this pass existed.
    */
   restoreSession(): Observable<User | null> {
-    return this.http.post<AuthResponse>(`${this.api}/auth/refresh`, {}, { withCredentials: true }).pipe(
-      tap((res) => this.setSession(res)),
-      catchError(() => of(null)),
-      // Re-map to just the user for callers that only care whether it worked.
-      // (tap above already populated the signals on success.)
-    ) as unknown as Observable<User | null>;
+    // Shared so concurrent callers — App on startup and every guard on the
+    // first navigation — wait on one request rather than each firing their own.
+    this.restore ??= this.http
+      .post<AuthResponse>(`${this.api}/auth/refresh`, {}, { withCredentials: true })
+      .pipe(
+        tap((res) => this.setSession(res)),
+        map((res) => res.user as User),
+        catchError(() => of(null)),
+        finalize(() => { this.restoreDone = true; }),
+        shareReplay({ bufferSize: 1, refCount: false }),
+      );
+    return this.restore;
+  }
+
+  /**
+   * Resolves once the startup refresh has finished, either way.
+   *
+   * Guards need this. restoreSession is asynchronous but isAuthenticated() is
+   * a synchronous signal read, so on a hard page load the guard ran first, saw
+   * no user, and redirected to login — reloading any guarded page signed the
+   * person out even though their refresh cookie was perfectly valid.
+   */
+  sessionReady(): Observable<boolean> {
+    if (this.restoreDone) return of(this.isAuthenticated());
+    return this.restoreSession().pipe(map(() => this.isAuthenticated()));
   }
 
   /**

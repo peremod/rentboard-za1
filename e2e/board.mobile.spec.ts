@@ -12,7 +12,11 @@ test.describe('board on a phone', () => {
     await page.goto('/');
 
     const filters = page.getByRole('button', { name: /filters/i });
-    const sort = page.locator('.sort-select, select').first();
+    // .sort-select only. A comma selector with .first() matched the hero's
+    // province dropdown, which sits far higher up the page — so the test was
+    // measuring the distance to an unrelated element and reporting a layout
+    // bug that did not exist.
+    const sort = page.locator('.sort-select');
     await expect(filters).toBeVisible();
 
     const f = await filters.boundingBox();

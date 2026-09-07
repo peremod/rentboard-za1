@@ -23,11 +23,14 @@ test.describe('tenant application lifecycle', () => {
     await expect(firstRoom).toBeVisible();
     await firstRoom.click();
 
-    await page.getByRole('button', { name: /apply/i }).first().click();
+    // The apply form is already on the page — there is no step that opens it.
+    // My first attempt clicked the submit button to 'open' the form and then
+    // clicked it again, racing its own disabled 'Sending…' state.
     await page.getByPlaceholder(/introduce yourself/i).fill(
       'I am interested in this room and can move in at the start of next month.',
     );
-    await page.getByRole('button', { name: /send|submit|apply/i }).last().click();
+    await page.getByRole('button', { name: /apply free/i }).click();
+    await expect(page.getByText(/application sent/i)).toBeVisible();
 
     await gotoAuthed(page, '/tenant/dashboard');
     const live = page.locator('section', { hasText: 'Your applications' });
@@ -47,11 +50,11 @@ test.describe('tenant application lifecycle', () => {
 
     // Re-applying must work, and move it back to live.
     await closed.getByRole('link', { name: /apply again/i }).first().click();
-    await page.getByRole('button', { name: /apply/i }).first().click();
     await page.getByPlaceholder(/introduce yourself/i).fill(
       'I withdrew earlier but I am still interested and would like to be considered.',
     );
-    await page.getByRole('button', { name: /send|submit|apply/i }).last().click();
+    await page.getByRole('button', { name: /apply free/i }).click();
+    await expect(page.getByText(/application sent/i)).toBeVisible();
 
     await gotoAuthed(page, '/tenant/dashboard');
     await expect(page.locator('section', { hasText: 'Your applications' })).toBeVisible();
