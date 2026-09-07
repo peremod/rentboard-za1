@@ -31,6 +31,30 @@ export async function logout(page: Page) {
 }
 
 /**
+ * Navigates to a guarded page and waits for the session to rehydrate.
+ *
+ * page.goto reloads the app, and the access token lives in memory only — it is
+ * deliberately not in localStorage. On every hard navigation the app has to
+ * silently refresh using the httpOnly cookie before the route guard will let
+ * anything render, so asserting immediately races that round trip and the
+ * locator times out on a page that was never going to render.
+ *
+ * Fails loudly if the refresh did not restore the session, rather than timing
+ * out 30 seconds later against a login form.
+ */
+export async function gotoAuthed(page: Page, path: string) {
+  await page.goto(path);
+  await page.waitForLoadState('networkidle');
+
+  if (page.url().includes('/auth/login')) {
+    throw new Error(
+      `Session was not restored after navigating to ${path} — landed on the login page. ` +
+      'The silent refresh via the httpOnly cookie did not succeed.',
+    );
+  }
+}
+
+/**
  * Publishes a room and returns its title.
  *
  * Walks the real wizard rather than seeding through the API, because the

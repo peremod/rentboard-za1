@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { register, login, logout, uniqueEmail } from './helpers';
+import { register, login, logout, uniqueEmail, gotoAuthed } from './helpers';
 
 /**
  * The withdraw → re-apply loop.
@@ -24,12 +24,12 @@ test.describe('tenant application lifecycle', () => {
     await firstRoom.click();
 
     await page.getByRole('button', { name: /apply/i }).first().click();
-    await page.getByLabel(/cover note|message/i).fill(
+    await page.getByPlaceholder(/introduce yourself/i).fill(
       'I am interested in this room and can move in at the start of next month.',
     );
     await page.getByRole('button', { name: /send|submit|apply/i }).last().click();
 
-    await page.goto('/tenant/dashboard');
+    await gotoAuthed(page, '/tenant/dashboard');
     const live = page.locator('section', { hasText: 'Your applications' });
     await expect(live).toBeVisible();
 
@@ -48,12 +48,12 @@ test.describe('tenant application lifecycle', () => {
     // Re-applying must work, and move it back to live.
     await closed.getByRole('link', { name: /apply again/i }).first().click();
     await page.getByRole('button', { name: /apply/i }).first().click();
-    await page.getByLabel(/cover note|message/i).fill(
+    await page.getByPlaceholder(/introduce yourself/i).fill(
       'I withdrew earlier but I am still interested and would like to be considered.',
     );
     await page.getByRole('button', { name: /send|submit|apply/i }).last().click();
 
-    await page.goto('/tenant/dashboard');
+    await gotoAuthed(page, '/tenant/dashboard');
     await expect(page.locator('section', { hasText: 'Your applications' })).toBeVisible();
   });
 });

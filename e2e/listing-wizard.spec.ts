@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { register, uniqueEmail } from './helpers';
+import { register, uniqueEmail, gotoAuthed } from './helpers';
 
 /**
  * Editing a live listing must not create a second one.
@@ -12,7 +12,7 @@ test.describe('listing wizard', () => {
   test('editing a listing does not duplicate it', async ({ page }) => {
     await register(page, 'landlord', uniqueEmail('e2e-wizard'));
 
-    await page.goto('/landlord/rooms/new');
+    await gotoAuthed(page, '/landlord/rooms/new');
     const title = `E2E room ${Date.now()}`;
 
     await page.getByLabel('Room type').selectOption({ index: 1 });
@@ -33,7 +33,7 @@ test.describe('listing wizard', () => {
     await expect(page.getByRole('button', { name: /^cancel$/i })).toBeVisible();
 
     await page.getByRole('button', { name: /next/i }).click();
-    await page.goto('/landlord/dashboard');
+    await gotoAuthed(page, '/landlord/dashboard');
 
     const before = await page.locator('.app-card, app-room-card').count();
 
@@ -41,7 +41,7 @@ test.describe('listing wizard', () => {
     await page.getByRole('link', { name: /continue|edit/i }).first().click();
     await page.getByRole('button', { name: /next/i }).click();
     await page.getByRole('button', { name: /next/i }).click();
-    await page.goto('/landlord/dashboard');
+    await gotoAuthed(page, '/landlord/dashboard');
 
     const after = await page.locator('.app-card, app-room-card').count();
     expect(after, 'editing created a duplicate listing').toBe(before);

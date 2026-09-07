@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { register, login, logout, uniqueEmail } from './helpers';
+import { register, login, logout, uniqueEmail, gotoAuthed } from './helpers';
 
 /**
  * A saved phone number must still be there after signing in again.
@@ -14,7 +14,7 @@ test.describe('account settings', () => {
     const email = uniqueEmail('e2e-settings');
     await register(page, 'landlord', email);
 
-    await page.goto('/account/settings');
+    await gotoAuthed(page, '/account/settings');
     await page.getByLabel('Phone number').fill('0821234567');
     await page.getByRole('button', { name: /save changes/i }).click();
     await expect(page.getByText(/saved/i)).toBeVisible();
@@ -26,7 +26,7 @@ test.describe('account settings', () => {
     // And signing in fresh is the path that actually broke.
     await logout(page);
     await login(page, email);
-    await page.goto('/account/settings');
+    await gotoAuthed(page, '/account/settings');
     await expect(page.getByLabel('Phone number')).toHaveValue('+27821234567');
 
     // Saving must not be enough to sign in with — verification is separate.

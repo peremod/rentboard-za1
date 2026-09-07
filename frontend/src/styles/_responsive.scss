@@ -166,7 +166,10 @@
   .search-bar { flex-direction: column; }
   .search-input-wrap, .search-select { width: 100%; min-width: 0; }
 
-  .results-header { flex-direction: column; align-items: flex-start; gap: .5rem; }
+  // NOTE: results-header layout is defined once, further down, in the
+  // 'Results header on mobile' block. It used to stack here too, and that rule
+  // sat in a narrower media query than the fix, so the fix never applied and
+  // Filters and Sort stayed stacked on a phone.
 
   // Two columns at this size, one below
   .room-grid { grid-template-columns: 1fr 1fr; }
