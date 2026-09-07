@@ -1273,21 +1273,21 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
 
   # Reach must come from eligibility, not impressions won — otherwise selling
   # more inventory would look like the targeting reached more people.
-  if echo "$BODY" | jq -e '.levels | any(.; has("eligibleRequests") and has("reachSharePct"))' >/dev/null 2>&1; then
+  if echo "$BODY" | jq -e '.levels | all(.[]; has("eligibleRequests") and has("reachSharePct"))' >/dev/null 2>&1; then
     green "  PASS  reach measured by eligible requests"; PASS=$((PASS+1))
   else
     red "  FAIL  reach analysis is not using eligibility"; FAIL=$((FAIL+1))
   fi
 
   # The whole point is comparing delivered reach against what the rate assumes.
-  if echo "$BODY" | jq -e '.levels | any(.; has("actualSharePct") and has("pricedSharePct") and has("gapPct"))' >/dev/null 2>&1; then
+  if echo "$BODY" | jq -e '.levels | all(.[]; has("actualSharePct") and has("pricedSharePct") and has("gapPct"))' >/dev/null 2>&1; then
     green "  PASS  reach analysis compares actual against priced share"; PASS=$((PASS+1))
   else
     red "  FAIL  reach analysis missing the comparison fields"; FAIL=$((FAIL+1))
   fi
 
   # A conclusion drawn from one campaign is noise, and must be marked as such.
-  if echo "$BODY" | jq -e '.levels | any(.; has("reliable"))' >/dev/null 2>&1; then
+  if echo "$BODY" | jq -e '.levels | all(.[]; has("reliable"))' >/dev/null 2>&1; then
     green "  PASS  each level is flagged reliable or not"; PASS=$((PASS+1))
   else
     red "  FAIL  no reliability flag on reach levels"; FAIL=$((FAIL+1))
