@@ -95,7 +95,12 @@ export class AuthController {
       // Logged because a missing cookie and a rejected one look identical from
       // the browser — both just sign the person out. Naming which cookies did
       // arrive distinguishes 'never set' from 'not sent on this request'.
-      this.logger.warn(
+      // debug, not warn. Every anonymous page load attempts a refresh and has
+      // no cookie by definition, so at warn level this filled the log with an
+      // expected condition and made a genuinely broken session indis-
+      // tinguishable from someone simply browsing signed out. I read it as
+      // evidence of a bug more than once.
+      this.logger.debug(
         `Refresh called with no ${REFRESH_COOKIE} cookie. Cookies present: ` +
         `${Object.keys(req.cookies ?? {}).join(', ') || 'none'}`,
       );
