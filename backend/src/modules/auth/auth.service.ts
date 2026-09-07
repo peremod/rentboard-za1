@@ -238,6 +238,12 @@ export class AuthService {
         fullName: user.fullName,
         avatarPath: user.avatarPath,
         isVerified: user.isVerified,
+        // Included so account settings can show a saved number immediately
+        // after signing in. Without these the form had nothing to display and
+        // a stored number looked like it had never saved.
+        phone: user.phone,
+        phoneVerified: user.phoneVerified,
+        marketingEmails: user.marketingEmails,
       },
     };
   }

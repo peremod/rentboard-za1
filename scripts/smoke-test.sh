@@ -1935,6 +1935,20 @@ if [[ -n "$REAPPLY_ROOM" ]]; then
     req POST "/api/applications/$RA_APP/withdraw" "" "$TTOKEN"
     check "tenant withdraws" 201 "$STATUS" "$BODY"
 
+    # A withdrawal is the tenant's own decision, not the room going away. If it
+    # were archived, the dashboard would file it under 'Available again', which
+    # is for rooms the landlord relisted.
+    if [[ "$(echo "$BODY" | jq -r '.archivedAt // "null"')" == "null" ]]; then
+      green "  PASS  withdrawing does not archive the application"; PASS=$((PASS+1))
+    else
+      red "  FAIL  withdraw set archivedAt — it will show as 'Available again'"; FAIL=$((FAIL+1))
+    fi
+    if [[ "$(echo "$BODY" | jq -r '.status')" == "withdrawn" ]]; then
+      green "  PASS  status is withdrawn"; PASS=$((PASS+1))
+    else
+      red "  FAIL  status after withdrawing is '$(echo "$BODY" | jq -r '.status')'"; FAIL=$((FAIL+1))
+    fi
+
     # The unique constraint is per cycle, so a withdrawn application used to
     # occupy the slot and block this entirely.
     req POST /api/applications "{\"roomId\":\"$REAPPLY_ROOM\",\"coverNote\":\"Changed my mind, applying again.\"}" "$TTOKEN"
@@ -1984,6 +1998,15 @@ fi
 # Without this step phoneVerified is never true, and phone sign-in can never
 # find an account — which is how it originally shipped.
 head_ "39. Phone verification"
+# The login response must carry the phone too — settings reads the user signal,
+# which is populated from login, not only from /auth/me.
+req POST /api/auth/login "{\"email\":\"$LANDLORD_EMAIL\",\"password\":\"$PASSWORD\"}"
+if echo "$BODY" | jq -e '.user | has("phone")' >/dev/null 2>&1; then
+  green "  PASS  the login response carries phone"; PASS=$((PASS+1))
+else
+  red "  FAIL  login omits phone — settings shows a blank field after signing in"; FAIL=$((FAIL+1))
+fi
+
 req GET /api/auth/me "" "$LTOKEN"
 if echo "$BODY" | jq -e 'has("phone") and has("phoneVerified")' >/dev/null 2>&1; then
   green "  PASS  /auth/me returns phone and phoneVerified"; PASS=$((PASS+1))
