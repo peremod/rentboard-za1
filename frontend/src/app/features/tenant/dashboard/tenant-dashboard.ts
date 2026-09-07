@@ -458,9 +458,25 @@ export class TenantDashboard implements OnInit {
     );
   }
 
-  /** Rooms this tenant currently has a live application on. */
+  /**
+   * Rooms with an application in the current cycle, live OR withdrawn.
+   *
+   * Withdrawn counts here on purpose. Built from live applications alone, an
+   * older archived row for the same room stopped being suppressed the moment
+   * the tenant withdrew, so it resurfaced under 'Available again' — which read
+   * exactly as though withdrawing had moved it there.
+   *
+   * Someone who has just withdrawn does not need to be invited back to the
+   * same room; the Closed section already offers Apply again if they change
+   * their mind.
+   */
   private liveRoomIds() {
-    return new Set(this.activeApplications().map((a) => a.room?.id).filter(Boolean) as string[]);
+    return new Set(
+      this.applications()
+        .filter((a) => !a.isArchived)
+        .map((a) => a.room?.id)
+        .filter(Boolean) as string[],
+    );
   }
 
   /**
@@ -480,7 +496,10 @@ export class TenantDashboard implements OnInit {
       if (shownAbove.has(a.id)) return false;
       const isFinished = a.isArchived || a.status === 'withdrawn' || a.status === 'rejected';
       if (!isFinished) return false;
-      // A superseded application for a room they have re-applied to is noise.
+      // An older archived row for a room they have applied to again is noise —
+      // but only the ARCHIVED one is hidden. The current withdrawn application
+      // must still appear, or withdrawing makes it disappear from the dashboard
+      // altogether.
       const roomId = a.room?.id;
       if (roomId && live.has(roomId) && a.isArchived) return false;
       return true;
