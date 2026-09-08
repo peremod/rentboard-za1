@@ -85,7 +85,7 @@ function attemptSilentRefreshAndRetry(
         if (!auth.sessionSettled) return throwError(() => new Error('Session not ready'));
 
         dialogs.alert('Signed out', 'Your session has expired. Please log in again.', 'warning', 'Log in');
-        auth.logout();
+        auth.clearSession();
         redirectToLogin(router);
         return throwError(() => new Error('Session expired'));
       }
@@ -102,7 +102,7 @@ function attemptSilentRefreshAndRetry(
       if (!auth.sessionSettled) return throwError(() => err);
 
       dialogs.alert('Signed out', 'Your session has expired. Please log in again.', 'warning', 'Log in');
-      auth.logout();
+      auth.clearSession();
       redirectToLogin(router);
       return throwError(() => err);
     }),

@@ -2086,6 +2086,8 @@ check "verification requires auth" 401 "$STATUS"
 
 
 # -- 40. Refresh token rotation and races ----------------------------------
+# A 401 must not revoke the refresh token. The interceptor used to call logout
+# on any 401, which destroyed the session it was about to restore.
 # Rotation must stop a stolen token without signing people out for a race that
 # a browser creates routinely.
 head_ "40. Refresh rotation"

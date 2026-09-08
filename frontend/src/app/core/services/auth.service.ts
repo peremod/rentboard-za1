@@ -184,12 +184,30 @@ export class AuthService {
     });
   }
 
+  /**
+   * Signs out deliberately: revokes server-side and goes home.
+   *
+   * Only for a person choosing to log out. The error interceptor used to call
+   * this on a 401, which meant a request that raced the startup refresh
+   * revoked the very session being restored and navigated home — the reload
+   * landing on '/' rather than the dashboard.
+   */
   logout() {
-    // Best-effort — revoke server-side even though we clear local state regardless.
     this.http.post(`${this.api}/auth/logout`, {}, { withCredentials: true }).subscribe({ error: () => {} });
+    this.clearSession();
+    this.router.navigate(['/']);
+  }
+
+  /**
+   * Drops local session state without revoking anything or navigating.
+   *
+   * For the interceptor: when a token has expired, forgetting it locally is
+   * the whole job. Revoking the refresh token as well destroys the means of
+   * recovery, and navigating fights whatever the router is already doing.
+   */
+  clearSession() {
     this._user.set(null);
     this._accessToken.set(null);
-    this.router.navigate(['/']);
   }
 
   /** Called by errorInterceptor after a successful silent refresh, to update in-memory state before retrying the original request. */
