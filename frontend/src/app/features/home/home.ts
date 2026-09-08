@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, OnDestroy, OnInit, ViewChild,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, OnDestroy, OnInit, ViewChild, computed,
   afterNextRender, inject, signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -27,7 +27,7 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
   imports: [FormsModule, RouterLink, RoomCard, SkeletonCard, TranslatePipe, AdSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="hero">
+    <section class="hero" [class.hero--splash]="splash()">
       <div class="hero-inner">
         <div class="hero-eyebrow">🇿🇦 {{ 'hero.eyebrow' | translate }}</div>
         <!-- Alternates between the two audiences. A board serving both needs
@@ -50,6 +50,17 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
           <div class="hero-stat"><strong>9 provinces</strong><span>and growing</span></div>
         </div>
       </div>
+
+      @if (splash()) {
+        <!-- A cue, not an automatic jump. Auto-scrolling takes control away
+             from someone who arrived meaning to search, and screen readers
+             have no sensible way to follow it. -->
+        <button type="button" class="hero-scroll-cue" (click)="scrollToBoard($event)"
+                aria-label="Skip to rooms">
+          <span>{{ roomCount() }} rooms</span>
+          <span class="hero-scroll-cue__chevron" aria-hidden="true">⌄</span>
+        </button>
+      }
     </section>
 
     <div class="trust-strip">
@@ -334,6 +345,36 @@ export class Home implements OnInit, OnDestroy {
     },
   ];
 
+  /**
+   * On a phone the hero fills the screen and the board sits one swipe below.
+   *
+   * Measured before this: the first room card sat 1156px down a 528px
+   * viewport, so a tenant scrolled past two screens of marketing to reach the
+   * thing they came for. A full-height hero is not fewer pixels, but it is one
+   * deliberate swipe with a visible count of what is below, rather than an
+   * indeterminate scroll through stacked sections.
+   *
+   * Skipped for anyone who has been here before: a returning tenant wants
+   * rooms, not the pitch. Desktop is unaffected — there is room for both.
+   */
+  /**
+   * Whether the hero fills the screen before the board.
+   *
+   * On a phone the first room card sat over two screens down, behind the hero,
+   * search bar and filters — on a board whose purpose is showing rooms. This
+   * makes the hero exactly one screen instead: a single brand impression, then
+   * one swipe to the listings.
+   *
+   * Deliberately not a timed overlay. A splash that hides the board delays the
+   * thing people came for, damages Largest Contentful Paint, and irritates
+   * anyone arriving for the second time. The board stays in the DOM
+   * throughout — this only changes how much room the hero takes.
+   */
+  splash = signal(false);
+
+  /** Shown on the cue, so it says what is below rather than just 'scroll'. */
+  roomCount = computed(() => this.rooms().length);
+
   heroIndex = signal(0);
   swapping = signal(false);
   heroMessage = () => this.heroMessages[this.heroIndex()];
@@ -396,13 +437,44 @@ export class Home implements OnInit, OnDestroy {
   ngOnInit() {
     this.fetchRooms();
 
+    // Phone widths only, and only in the browser — window does not exist
+    // during prerender, and a full-height hero baked into the static HTML
+    // would apply on desktop too.
+    afterNextRender(() => this.splash.set(window.innerWidth <= 768), { injector: this.injector });
+
     // A landlord already knows they can list; lead with the tenant message
     // for everyone else, and for signed-out visitors.
     if (this.auth.isLandlord()) this.heroIndex.set(1);
 
+    afterNextRender(() => this.decideSplash(), { injector: this.injector });
+
     // Browser only: an interval on the server would never be cleared, and the
     // prerendered HTML should just carry the first message.
     afterNextRender(() => this.startHeroRotation(), { injector: this.injector });
+  }
+
+  /**
+   * Splash on a phone, for first-time visitors only.
+   *
+   * The flag is a plain UI preference in localStorage, not a tracker: it says
+   * 'this browser has seen the home page', carries no identifier, and is never
+   * sent anywhere.
+   */
+  private decideSplash() {
+    const isPhone = window.matchMedia('(max-width: 700px)').matches;
+    if (!isPhone) return;
+
+    try {
+      const seen = localStorage.getItem('rb_seen_home');
+      if (!seen) {
+        this.splash.set(true);
+        localStorage.setItem('rb_seen_home', '1');
+      }
+    } catch {
+      // Private browsing can refuse localStorage. Showing the splash is the
+      // safe default — it is one swipe, not a barrier.
+      this.splash.set(true);
+    }
   }
 
   private startHeroRotation() {

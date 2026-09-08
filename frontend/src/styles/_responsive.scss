@@ -604,3 +604,71 @@
   padding-top: .85rem;
   border-top: 1px solid var(--border);
 }
+
+// ── Phone: one screen of hero, then rooms ───────────────────────────────
+//
+// Measured at 1156px before the first room card on a 528px-tall viewport —
+// better than two full screens of hero, search bar and filters on a board whose
+// purpose is showing rooms.
+//
+// Deliberately NOT a timed splash overlay. A splash that hides the board delays
+// the thing people came for, hurts Largest Contentful Paint, and irritates
+// anyone returning for the second time. This gets the same single-impression
+// effect by making the hero exactly one screen: a full brand moment, then one
+// swipe to rooms, with the board already in the DOM for search engines and for
+// anyone who scrolls before it settles.
+@media (max-width: 768px) {
+  // Driven by the .hero--splash flag rather than the media query alone, so the
+  // component decides and the prerendered HTML never ships a full-height hero
+  // that a desktop visitor would briefly see.
+  .hero--splash {
+    // dvh, not vh: on mobile Chrome the address bar makes vh taller than the
+    // visible area, which would push the board below the fold again.
+    min-height: calc(100dvh - var(--nav-height, 64px));
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 2rem 1rem 3.5rem;
+    position: relative;
+  }
+
+  // Tighter within that screen so the CTAs and the cue both fit.
+  .hero--splash h1 { font-size: clamp(1.9rem, 8vw, 2.6rem); line-height: 1.15; }
+  .hero--splash .hero-sub { font-size: .92rem; margin-top: .6rem; }
+  .hero--splash .hero-stats { margin-top: 1.25rem; }
+
+  // A visible cue that there is more below. Without it a full-screen hero
+  // reads as the whole page.
+  .hero-scroll-cue {
+    position: absolute;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .25rem;
+    color: rgba(255, 255, 255, .65);
+    font-size: .72rem;
+    letter-spacing: .04em;
+    background: none;
+    border: none;
+    cursor: pointer;
+
+    &__chevron { font-size: 1.2rem; animation: hero-nudge 2s ease-in-out infinite; }
+  }
+
+  @keyframes hero-nudge {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(4px); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero-scroll-cue__chevron { animation: none; }
+  }
+}
+
+// Desktop already shows rooms without scrolling; the cue would be noise.
+@media (min-width: 769px) {
+  .hero-scroll-cue { display: none; }
+}

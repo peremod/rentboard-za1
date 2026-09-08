@@ -28,19 +28,33 @@ test.describe('board on a phone', () => {
     const sMid = s!.y + s!.height / 2;
     expect(Math.abs(fMid - sMid), 'Filters and Sort are stacked, not side by side').toBeLessThan(24);
 
-    // How far a phone user scrolls before seeing a single room.
-    //
-    // Measured at 1156px on a 528px-tall viewport — better than two full
-    // screens of hero, search bar and filters before the first listing, on a
-    // board whose entire purpose is showing rooms. That is a design decision
-    // rather than a defect, so this asserts a ceiling rather than the ideal:
-    // it holds the current position and fails if anything pushes rooms further
-    // down. Lower the number when the hero is tightened.
+    // The hero now occupies exactly one screen on a phone, so the first room
+    // should sit roughly one viewport down — one swipe, not the two-plus
+    // screens it used to be.
     const firstCard = page.locator('app-room-card').first();
     await expect(firstCard).toBeVisible();
     const card = await firstCard.boundingBox();
-    expect(card!.y, 'rooms moved further down the page than they already were')
-      .toBeLessThan(1250);
+
+    const viewport = page.viewportSize()!.height;
+    expect(card!.y, 'the first room should be about one swipe below the hero')
+      .toBeLessThan(viewport * 1.9);
+  });
+
+  test('the hero fills one screen and offers a way down', async ({ page }) => {
+    await page.goto('/');
+
+    const hero = page.locator('.hero');
+    const box = await hero.boundingBox();
+    const viewport = page.viewportSize()!.height;
+
+    // One screen, not two — and not so short that it stops being a hero.
+    expect(box!.height, 'the hero should fill roughly one screen on a phone')
+      .toBeGreaterThan(viewport * 0.7);
+    expect(box!.height, 'the hero should not exceed one screen')
+      .toBeLessThan(viewport * 1.15);
+
+    // A full-screen hero with no cue reads as the entire page.
+    await expect(page.locator('.hero-scroll-cue')).toBeVisible();
   });
 
   test('an amenity checkbox sits beside its label, not above it', async ({ page }) => {
