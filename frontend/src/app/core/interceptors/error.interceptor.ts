@@ -34,7 +34,14 @@ const AUTH_ENDPOINTS_NO_RETRY = ['/auth/login', '/auth/register', '/auth/refresh
  * and every layer had to be unwound by another reload before the real
  * destination was reached. That is the 'refresh four times' behaviour.
  */
-function redirectToLogin(router: Router) {
+function redirectToLogin(router: Router, auth: AuthService) {
+  // If the app currently holds a valid session, this 401 is stale — a request
+  // that set off before the startup refresh completed, carrying no token or an
+  // expired one. The guard has already let the person in. Signing them out on
+  // the strength of a reply to a question asked earlier is how a reload ended
+  // up back at the login page with a working session.
+  if (auth.isAuthenticated()) return;
+
   const current = router.url;
 
   // Already there: do not stack another layer.
@@ -61,6 +68,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       const isAuthEndpoint = AUTH_ENDPOINTS_NO_RETRY.some((p) => req.url.includes(p));
 
       if (err.status === 401 && !isAuthEndpoint) {
+        // Temporary: names the request that triggered a sign-out, which is the
+        // one detail the redirect itself never revealed.
+        console.warn('[401]', req.method, req.url, '| authenticated =', auth.isAuthenticated());
         return attemptSilentRefreshAndRetry(req, next, auth, router, dialogs);
       }
 
@@ -86,7 +96,7 @@ function attemptSilentRefreshAndRetry(
 
         dialogs.alert('Signed out', 'Your session has expired. Please log in again.', 'warning', 'Log in');
         auth.clearSession();
-        redirectToLogin(router);
+        redirectToLogin(router, auth);
         return throwError(() => new Error('Session expired'));
       }
       // Re-issue the original request — authInterceptor will attach the
@@ -103,7 +113,7 @@ function attemptSilentRefreshAndRetry(
 
       dialogs.alert('Signed out', 'Your session has expired. Please log in again.', 'warning', 'Log in');
       auth.clearSession();
-      redirectToLogin(router);
+      redirectToLogin(router, auth);
       return throwError(() => err);
     }),
   );
