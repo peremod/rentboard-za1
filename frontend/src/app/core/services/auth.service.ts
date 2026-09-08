@@ -1,4 +1,5 @@
-import { Injectable, inject, signal, computed } from '@angular/core';
+import { Injectable, inject, signal, computed, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { tap, catchError, of, Observable, map, shareReplay, finalize } from 'rxjs';
@@ -29,6 +30,7 @@ export class AuthService {
   /** The in-flight startup refresh, shared by every caller. */
   private restore?: Observable<User | null>;
   private restoreDone = false;
+  private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
 
   private readonly _user = signal<User | null>(null);
   private readonly _accessToken = signal<string | null>(null);
@@ -71,6 +73,15 @@ export class AuthService {
    * signed-out, same as before this pass existed.
    */
   restoreSession(): Observable<User | null> {
+    // Never on the server. Node has no cookie jar, so this always failed there
+    // and the server rendered the signed-out shell — which the browser painted
+    // for a moment before hydration restored the real session. That is the
+    // login flash on reload, and every cookieless refresh call in the API log.
+    if (!this.isBrowser) {
+      this.restoreDone = true;
+      return of(null);
+    }
+
     // Shared so concurrent callers — App on startup and every guard on the
     // first navigation — wait on one request rather than each firing their own.
     this.restore ??= this.http
