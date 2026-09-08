@@ -39,6 +39,11 @@ export class AuthService {
   readonly sessionResolved = signal(false);
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
 
+  /** Exposed for the interceptor, which must not fetch during SSR. */
+  get isBrowserPlatform(): boolean {
+    return this.isBrowser;
+  }
+
   private readonly _user = signal<User | null>(null);
   private readonly _accessToken = signal<string | null>(null);
 
