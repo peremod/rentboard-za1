@@ -23,6 +23,34 @@ const AUTH_ENDPOINTS_NO_RETRY = ['/auth/login', '/auth/register', '/auth/refresh
  * efficient — a shared-refresh-lock is a reasonable follow-up, not done
  * here to keep this change reviewable.
  */
+
+/**
+ * Sends someone to the login page once, keeping the destination they were
+ * actually trying to reach.
+ *
+ * router.url is the CURRENT url, so redirecting from the login page put the
+ * login page in its own returnUrl. Repeated 401s nested it further each time —
+ * producing /auth/login?returnUrl=/auth/login?returnUrl=/tenant/dashboard —
+ * and every layer had to be unwound by another reload before the real
+ * destination was reached. That is the 'refresh four times' behaviour.
+ */
+function redirectToLogin(router: Router) {
+  const current = router.url;
+
+  // Already there: do not stack another layer.
+  if (current.startsWith('/auth/login')) return;
+
+  // If we somehow arrived with a nested returnUrl, keep the innermost one —
+  // that is the page the person actually wanted.
+  let returnUrl = current;
+  let guard = 0;
+  while (returnUrl.includes('returnUrl=') && guard++ < 5) {
+    returnUrl = decodeURIComponent(returnUrl.split('returnUrl=')[1] ?? returnUrl);
+  }
+
+  router.navigate(['/auth/login'], { queryParams: { returnUrl } });
+}
+
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const dialogs = inject(DialogService);
@@ -58,7 +86,7 @@ function attemptSilentRefreshAndRetry(
 
         dialogs.alert('Signed out', 'Your session has expired. Please log in again.', 'warning', 'Log in');
         auth.logout();
-        router.navigate(['/auth/login'], { queryParams: { returnUrl: router.url } });
+        redirectToLogin(router);
         return throwError(() => new Error('Session expired'));
       }
       // Re-issue the original request — authInterceptor will attach the
@@ -75,7 +103,7 @@ function attemptSilentRefreshAndRetry(
 
       dialogs.alert('Signed out', 'Your session has expired. Please log in again.', 'warning', 'Log in');
       auth.logout();
-      router.navigate(['/auth/login'], { queryParams: { returnUrl: router.url } });
+      redirectToLogin(router);
       return throwError(() => err);
     }),
   );

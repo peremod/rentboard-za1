@@ -36,10 +36,18 @@ export class App implements OnInit {
       const url = this.router.url;
       if (!url.startsWith('/auth/login')) return;
 
-      const returnUrl = new URLSearchParams(url.split('?')[1] ?? '').get('returnUrl');
-      this.router.navigateByUrl(
-        returnUrl ?? (this.auth.isLandlord() ? '/landlord/dashboard' : '/tenant/dashboard'),
-      );
+      // Unwrap any nested returnUrl and never navigate back to a login page,
+      // which would leave the person exactly where they started.
+      let target = new URLSearchParams(url.split('?')[1] ?? '').get('returnUrl') ?? '';
+      let guard = 0;
+      while (target.includes('returnUrl=') && guard++ < 5) {
+        target = decodeURIComponent(target.split('returnUrl=')[1] ?? '');
+      }
+
+      if (!target || target.startsWith('/auth/login')) {
+        target = this.auth.isLandlord() ? '/landlord/dashboard' : '/tenant/dashboard';
+      }
+      this.router.navigateByUrl(target);
     });
   }
 }

@@ -22,7 +22,12 @@ export const authGuard: CanActivateFn = (_route, state) => {
   return auth.sessionReady().pipe(
     map(() => {
         if (auth.isAuthenticated()) return true;
-        return router.createUrlTree(['/auth/login'], { queryParams: { returnUrl: state.url } });
+        // Never nest: if the attempted url is already a login url, keep the
+        // destination it carries rather than wrapping it again.
+        const attempted = state.url.startsWith('/auth/login')
+          ? decodeURIComponent(state.url.split('returnUrl=')[1] ?? '/')
+          : state.url;
+        return router.createUrlTree(['/auth/login'], { queryParams: { returnUrl: attempted } });
     }),
   );
 };
