@@ -94,23 +94,15 @@ export class AuthService {
       return of(null);
     }
 
-    // Temporary: remove once the reload behaviour is confirmed working.
-    console.info('[auth] restoreSession → requesting refresh');
 
     // Shared so concurrent callers — App on startup and every guard on the
     // first navigation — wait on one request rather than each firing their own.
     this.restore ??= this.http
       .post<AuthResponse>(`${this.api}/auth/refresh`, {}, { withCredentials: true })
       .pipe(
-        tap((res) => {
-          this.setSession(res);
-          console.info('[auth] refresh OK, user =', res.user?.email ?? '(none)');
-        }),
+        tap((res) => this.setSession(res)),
         map((res) => res.user as User),
-        catchError((err) => {
-          console.warn('[auth] refresh FAILED', err?.status, err?.error?.message ?? '');
-          return of(null);
-        }),
+        catchError(() => of(null)),
         finalize(() => this.sessionResolved.set(true)),
         shareReplay({ bufferSize: 1, refCount: false }),
       );

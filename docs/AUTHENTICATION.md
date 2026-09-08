@@ -97,3 +97,47 @@ The login page now offers "Email me a sign-in link instead" beneath the
 password field. That phrasing matters: it is not presented as a fallback for
 people who failed to log in, but as an equal option, because for this usage
 pattern it is the better one.
+
+---
+
+## 6. Session persistence across a reload
+
+Reloading a guarded page used to sign people out. It took a long time to fix
+because it was six separate faults presenting as one symptom, and fixing any
+one of them changed the behaviour without resolving it.
+
+| Fault | Effect | Fixed in |
+|---|---|---|
+| Login sent no credentials | Browser discarded the `Set-Cookie`, so the refresh cookie was never stored | v1.46.2 |
+| Guards read `isAuthenticated()` synchronously | Decided before the refresh returned | v1.46.0 |
+| Refresh rotation had no grace window | Two in-flight refreshes looked like token theft, revoking every session | v1.47.0 |
+| The 401 handler called `logout()` | Revoked the session it was about to restore, and navigated home | v1.47.2 |
+| Login redirects used `router.url` | Nested `returnUrl` inside itself, needing four reloads to unwind | v1.47.1 |
+| Dashboard calls fired before the refresh | Four guaranteed 401s per load, each triggering a redirect | v1.47.6 |
+
+### The shape of the fix
+
+Requests to our own API now **wait** for the startup refresh to settle before
+being sent, rather than racing it and handling the fallout downstream. Every
+earlier attempt treated a symptom of that race.
+
+Two supporting rules:
+
+- **A 401 that arrives while authenticated is stale.** It is a reply to a
+  question asked before the session existed, and must not sign anyone out.
+- **Nothing authenticated is fetched during SSR.** There is no cookie on the
+  server, so those requests can only fail. Guarded routes are client-rendered,
+  so the browser loads the data a moment later.
+
+### What made this hard to diagnose
+
+Three different consoles were in play — the browser, the API server, and the
+frontend dev server, which prints SSR output. "The log" meant a different one
+at different times, and the same message appearing in a different console
+meant something completely different.
+
+The thing that finally resolved it was three `console.info` lines in the
+client, added late. They showed the refresh succeeding, the guard passing, and
+the redirect happening anyway — which located the fault in the interceptor in
+a single reload, after several rounds of reasoning about cookie attributes that
+were never the cause.

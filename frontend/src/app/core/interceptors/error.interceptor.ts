@@ -68,9 +68,6 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       const isAuthEndpoint = AUTH_ENDPOINTS_NO_RETRY.some((p) => req.url.includes(p));
 
       if (err.status === 401 && !isAuthEndpoint) {
-        // Temporary: names the request that triggered a sign-out, which is the
-        // one detail the redirect itself never revealed.
-        console.warn('[401]', req.method, req.url, '| authenticated =', auth.isAuthenticated());
         return attemptSilentRefreshAndRetry(req, next, auth, router, dialogs);
       }
 
