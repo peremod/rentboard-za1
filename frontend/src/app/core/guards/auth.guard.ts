@@ -21,6 +21,8 @@ export const authGuard: CanActivateFn = (_route, state) => {
   // guarded page simply for reloading it.
   return auth.sessionReady().pipe(
     map(() => {
+      // Temporary: remove once the reload behaviour is confirmed working.
+      console.info('[guard] decided. authenticated =', auth.isAuthenticated(), 'for', state.url);
         if (auth.isAuthenticated()) return true;
         // Never nest: if the attempted url is already a login url, keep the
         // destination it carries rather than wrapping it again.
