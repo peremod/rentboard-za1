@@ -49,7 +49,10 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
               <a class="btn btn-ghost btn-sm" routerLink="/tenant/dashboard">{{ 'nav.dashboard' | translate }}</a>
             }
             <button type="button" class="btn btn-ghost btn-sm" (click)="logout()">{{ 'nav.logout' | translate }}</button>
-          } @else {
+          } @else if (auth.sessionResolved()) {
+            <!-- Only once the startup refresh has settled. Before that the app
+                 does not know whether anyone is signed in, and showing Log in
+                 to someone who is signed in makes every reload flash. -->
             <a class="btn btn-ghost btn-sm" routerLink="/auth/login">{{ 'nav.login' | translate }}</a>
             <a class="btn btn-primary btn-sm" routerLink="/auth/register">{{ 'nav.get_started' | translate }}</a>
           }

@@ -29,7 +29,14 @@ export class AuthService {
 
   /** The in-flight startup refresh, shared by every caller. */
   private restore?: Observable<User | null>;
-  private restoreDone = false;
+
+  /**
+   * Whether the startup refresh has finished, as a signal so templates can
+   * wait for it. Until it flips, the app does not yet know whether anyone is
+   * signed in — rendering signed-out UI in that window is what makes a reload
+   * flash before settling.
+   */
+  readonly sessionResolved = signal(false);
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
 
   private readonly _user = signal<User | null>(null);
@@ -78,7 +85,7 @@ export class AuthService {
     // for a moment before hydration restored the real session. That is the
     // login flash on reload, and every cookieless refresh call in the API log.
     if (!this.isBrowser) {
-      this.restoreDone = true;
+      this.sessionResolved.set(true);
       return of(null);
     }
 
@@ -90,7 +97,7 @@ export class AuthService {
         tap((res) => this.setSession(res)),
         map((res) => res.user as User),
         catchError(() => of(null)),
-        finalize(() => { this.restoreDone = true; }),
+        finalize(() => this.sessionResolved.set(true)),
         shareReplay({ bufferSize: 1, refCount: false }),
       );
     return this.restore;
@@ -106,11 +113,11 @@ export class AuthService {
    */
   /** True once the startup refresh has settled, either way. */
   get sessionSettled(): boolean {
-    return this.restoreDone;
+    return this.sessionResolved();
   }
 
   sessionReady(): Observable<boolean> {
-    if (this.restoreDone) return of(this.isAuthenticated());
+    if (this.sessionResolved()) return of(this.isAuthenticated());
     return this.restoreSession().pipe(map(() => this.isAuthenticated()));
   }
 
