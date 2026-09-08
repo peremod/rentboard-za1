@@ -178,8 +178,66 @@ export class AuthService {
     }
 
     if (stored.revokedAt) {
-      // Reuse of an already-rotated token — treat as theft, nuke every
-      // session for this user rather than trusting anything further.
+      /**
+       * A token presented after rotation is either theft or a race, and the
+       * two look identical at this point. The difference is timing.
+       *
+       * A browser can have two refresh calls in flight at once — a page load
+       * and an interceptor retry, say — both carrying the token that was valid
+       * when they were sent. The first rotates it; the second arrives
+       * milliseconds later holding what is now the previous token. Treating
+       * that as theft signs the person out of everything, which is exactly the
+       * bug it is meant to prevent.
+       *
+       * Real theft does not arrive 200ms after the legitimate rotation from
+       * the same client. So within a short grace window we hand back the token
+       * that replaced it rather than revoking; outside it, the original
+       * behaviour stands.
+       */
+      const REUSE_GRACE_MS = 10_000;
+      const rotatedAgo = Date.now() - stored.revokedAt.getTime();
+
+      if (stored.replacedById && rotatedAgo < REUSE_GRACE_MS) {
+        const replacement = await this.prisma.refreshToken.findUnique({
+          where: { id: stored.replacedById },
+          include: { user: true },
+        });
+
+        if (replacement && !replacement.revokedAt && replacement.expiresAt > new Date()) {
+          this.logger.debug(
+            `Refresh race for user ${stored.userId} (${rotatedAgo}ms after rotation) — ` +
+            'returning the current session rather than revoking',
+          );
+          // A fresh access token, but NO new refresh token: rotating again
+          // would invalidate the one the winning request already handed the
+          // browser, turning this race into the next one. An empty
+          // refreshToken tells the controller to leave the cookie alone.
+          const payload: JwtPayload = {
+            sub: replacement.user.id,
+            email: replacement.user.email,
+            role: replacement.user.role,
+            fullName: replacement.user.fullName,
+          };
+          return {
+            accessToken: this.jwt.sign(payload),
+            refreshToken: '',
+            user: {
+              id: replacement.user.id,
+              email: replacement.user.email,
+              role: replacement.user.role,
+              fullName: replacement.user.fullName,
+              avatarPath: replacement.user.avatarPath,
+              isVerified: replacement.user.isVerified,
+              phone: replacement.user.phone,
+              phoneVerified: replacement.user.phoneVerified,
+              marketingEmails: replacement.user.marketingEmails,
+            },
+          };
+        }
+      }
+
+      // Outside the grace window, or the replacement is gone: treat as theft
+      // and nuke every session rather than trusting anything further.
       this.logger.warn(`Refresh token reuse detected for user ${stored.userId} — revoking all sessions`);
       await this.prisma.refreshToken.updateMany({
         where: { userId: stored.userId, revokedAt: null },

@@ -255,6 +255,11 @@ export class AuthController {
   }
 
   private setRefreshCookie(res: Response, token: string) {
+    // An empty token means a refresh race was resolved by returning the
+    // existing session. The browser already holds the valid cookie, and
+    // overwriting it with nothing would sign them out.
+    if (!token) return;
+
     const isDev = this.config.get<string>('env') === 'development';
 
     // sameSite 'strict' everywhere, and the request trace confirms it works in

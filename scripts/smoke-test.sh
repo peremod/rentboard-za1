@@ -2085,6 +2085,54 @@ req POST /api/auth/phone/verify-number ""
 check "verification requires auth" 401 "$STATUS"
 
 
+# -- 40. Refresh token rotation and races ----------------------------------
+# Rotation must stop a stolen token without signing people out for a race that
+# a browser creates routinely.
+head_ "40. Refresh rotation"
+RT_COOKIES=$(mktemp)
+curl -s -c "$RT_COOKIES" -o /dev/null -X POST "$API/api/auth/login" \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"$LANDLORD_EMAIL\",\"password\":\"$PASSWORD\"}" 2>/dev/null
+OLD_RT=$(grep rb_refresh "$RT_COOKIES" | awk '{print $NF}')
+
+if [[ -n "$OLD_RT" ]]; then
+  green "  PASS  login issued a refresh token"; PASS=$((PASS+1))
+
+  # First use rotates it.
+  RT1=$(curl -s -b "$RT_COOKIES" -c "$RT_COOKIES" -o /dev/null -w '%{http_code}' \
+    -X POST "$API/api/auth/refresh" -H 'Content-Type: application/json' -d '{}' 2>/dev/null)
+  if [[ "$RT1" == "200" || "$RT1" == "201" ]]; then
+    green "  PASS  first refresh succeeds and rotates"; PASS=$((PASS+1))
+  else
+    red "  FAIL  first refresh returned $RT1"; FAIL=$((FAIL+1))
+  fi
+
+  # Immediately replaying the consumed token is a race, not theft: it must
+  # return a session rather than revoking everything.
+  RACE=$(mktemp)
+  printf 'localhost\tFALSE\t/api/auth\tFALSE\t0\trb_refresh\t%s\n' "$OLD_RT" > "$RACE"
+  RT2=$(curl -s -b "$RACE" -o /dev/null -w '%{http_code}' \
+    -X POST "$API/api/auth/refresh" -H 'Content-Type: application/json' -d '{}' 2>/dev/null)
+  if [[ "$RT2" == "200" || "$RT2" == "201" ]]; then
+    green "  PASS  replaying the just-rotated token is treated as a race"; PASS=$((PASS+1))
+  else
+    red "  FAIL  a refresh race returned $RT2 — this signs people out on reload"; FAIL=$((FAIL+1))
+  fi
+
+  # And the session survives it.
+  RT3=$(curl -s -b "$RT_COOKIES" -o /dev/null -w '%{http_code}' \
+    -X POST "$API/api/auth/refresh" -H 'Content-Type: application/json' -d '{}' 2>/dev/null)
+  if [[ "$RT3" == "200" || "$RT3" == "201" ]]; then
+    green "  PASS  the current session still works after the race"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the race revoked the live session (got $RT3)"; FAIL=$((FAIL+1))
+  fi
+
+  rm -f "$RACE"
+fi
+rm -f "$RT_COOKIES"
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"
