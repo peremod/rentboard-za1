@@ -5,7 +5,6 @@ import { provideClientHydration, withEventReplay } from '@angular/platform-brows
 import { IMAGE_LOADER, ImageLoaderConfig } from '@angular/common';
 import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
-import { credentialsInterceptor } from './core/interceptors/credentials.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 import { environment } from '@env/environment';
 
@@ -43,7 +42,7 @@ export const appConfig: ApplicationConfig = {
         window.location.href = event.url;
       }),
     ),
-    provideHttpClient(withFetch(), withInterceptors([credentialsInterceptor, authInterceptor, errorInterceptor])),
+    provideHttpClient(withFetch(), withInterceptors([authInterceptor, errorInterceptor])),
     provideClientHydration(withEventReplay()),
 
     /**
