@@ -38,7 +38,9 @@ test.describe('tenant application lifecycle', () => {
 
     // Withdraw it.
     await live.getByRole('button', { name: /withdraw/i }).first().click();
-    await page.getByRole('button', { name: /^withdraw$/i }).click();   // dialog
+    // Scoped to the dialog: the row's own Withdraw button matches the same
+    // name, so an unscoped locator hits a strict-mode violation.
+    await page.getByRole('alertdialog').getByRole('button', { name: /^withdraw$/i }).click();
 
     // It must land in Closed, and NOT in Available again.
     const closed = page.locator('section', { hasText: 'Closed applications' });

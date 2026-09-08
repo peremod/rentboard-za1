@@ -15,18 +15,21 @@ test.describe('listing wizard', () => {
     await gotoAuthed(page, '/landlord/rooms/new');
     const title = `E2E room ${Date.now()}`;
 
-    await page.getByLabel('Room type').selectOption({ index: 1 });
-    await page.getByLabel('Title').fill(title);
-    await page.getByLabel('Description').fill(
+    // The wizard's labels have no `for` and do not wrap their inputs, so
+    // getByLabel cannot associate them. Positional locators within the step
+    // are the honest option until the markup gains ids.
+    await page.locator('select[formcontrolname="roomType"]').selectOption({ index: 1 });
+    await page.locator('input[formcontrolname="title"]').fill(title);
+    await page.locator('textarea[formcontrolname="description"]').fill(
       'A bright room in a quiet house, close to transport and shops. Suitable for a working professional.',
     );
     await page.getByRole('button', { name: /next/i }).click();
 
-    await page.getByLabel('Monthly rent (ZAR)').fill('3500');
-    await page.getByLabel('Province').selectOption('Gauteng');
-    await page.getByLabel('City / suburb').fill('Johannesburg');
-    await page.getByLabel('Location display').fill('Braamfontein, Johannesburg');
-    await page.getByLabel('Available from').fill('2026-12-01');
+    await page.locator('input[formcontrolname="rent"]').fill('3500');
+    await page.locator('select[formcontrolname="province"]').selectOption('Gauteng');
+    await page.locator('input[formcontrolname="city"]').fill('Johannesburg');
+    await page.locator('input[formcontrolname="locationDisplay"]').fill('Braamfontein, Johannesburg');
+    await page.locator('input[formcontrolname="availableFrom"]').fill('2026-12-01');
     await page.getByRole('button', { name: /next/i }).click();
 
     // Cancel must exist on every step — it was missing on step 1 for a while.

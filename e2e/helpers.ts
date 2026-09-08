@@ -22,7 +22,8 @@ export async function login(page: Page, email: string) {
   await page.getByLabel('Email address').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: /^log in$/i }).click();
-  await expect(page).toHaveURL(/dashboard/);
+  // Signing in lands on the person's own dashboard, not the public board.
+  await expect(page).toHaveURL(/\/(tenant|landlord)\/dashboard/);
 }
 
 export async function logout(page: Page) {

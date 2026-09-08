@@ -226,8 +226,23 @@ export class Login {
     this.auth.loginWithGoogle('TENANT', returnUrl);
   }
 
+  /**
+   * Where to land after signing in.
+   *
+   * Falls back to the person's own dashboard, not the public board. Someone
+   * who has just logged in is almost always going somewhere that needed the
+   * login; dropping them on the home page makes them navigate again.
+   *
+   * A returnUrl pointing back at an auth page is ignored, since honouring it
+   * would return them to the form they just completed.
+   */
   private redirectAfterLogin() {
     const returnUrl = this.route.snapshot.queryParams['returnUrl'];
-    this.router.navigateByUrl(returnUrl && returnUrl !== '/' ? returnUrl : '/');
+    const dashboard = this.auth.isLandlord() ? '/landlord/dashboard' : '/tenant/dashboard';
+
+    const usable =
+      returnUrl && returnUrl !== '/' && !returnUrl.startsWith('/auth');
+
+    this.router.navigateByUrl(usable ? returnUrl : dashboard);
   }
 }
