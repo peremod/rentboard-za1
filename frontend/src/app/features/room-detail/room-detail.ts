@@ -12,8 +12,10 @@ import { ReviewList } from '../../shared/components/review-list/review-list';
 import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
 import { ReviewsService } from '../../core/services/reviews.service';
 import { NavigationHistoryService } from '../../core/services/navigation-history.service';
+import { SeoService } from '../../core/services/seo.service';
 import { Review } from '../../core/models/review.model';
 import { AMENITY_LABELS } from '../../core/models/room.model';
+import { environment } from '@env/environment';
 
 /**
  * Room detail — gallery, full description, and the apply flow.
@@ -225,6 +227,7 @@ export class RoomDetail implements OnInit {
   private roomsService = inject(RoomsService);
   private reviewsService = inject(ReviewsService);
   private history = inject(NavigationHistoryService);
+  private seo = inject(SeoService);
 
   /** Resolved once in ngOnInit — see the service for why timing matters. */
   back = signal<{ url: string; label: string }>({ url: '/', label: '← Back to all rooms' });
@@ -282,9 +285,112 @@ export class RoomDetail implements OnInit {
     });
 
     this.roomsService.getRoom(this.id()).subscribe({
-      next: (r) => this.room.set(r),
-      error: () => this.notFound.set(true),
+      next: (r) => {
+        this.room.set(r);
+        this.applySeo(r);
+      },
+      error: () => {
+        this.notFound.set(true);
+        // A room that has been let or removed must not stay indexed under a
+        // 200 with the site's default copy — that is a soft 404.
+        this.seo.apply({
+          title: 'Room no longer available — RentBoard',
+          description: 'This room is no longer listed. Browse other rooms to rent across South Africa on RentBoard.',
+          noIndex: true,
+        });
+        this.seo.setJsonLd('room', null);
+      },
     });
+  }
+
+  /**
+   * Room pages are the only content we have at volume, so their metadata is
+   * where organic traffic is won or lost. Before this, every room URL shipped
+   * the homepage <title> and description — meaning hundreds of pages competed
+   * with each other and with '/' for exactly the same query.
+   *
+   * The title follows the pattern people actually search: room type, suburb,
+   * price. The JSON-LD is Product + Offer rather than a real-estate type
+   * because a room let is priced, available on a date, and reviewed — which
+   * is what earns a rich result in Google.
+   */
+  private applySeo(r: Room) {
+    const rand = Math.round(r.rentCents / 100).toLocaleString('en-ZA');
+    const title = `${r.title} — ${r.locationDisplay} · R${rand}/month | RentBoard`;
+
+    const description = [
+      `${this.roomTypeLabel(r.roomType)} to rent in ${r.locationDisplay}, ${r.province} at R${rand} per month`,
+      r.billsIncluded ? 'with bills included' : null,
+      r.availableFrom ? `available from ${new Date(r.availableFrom).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}` : null,
+      'Apply free — no agent fees.',
+    ]
+      .filter(Boolean)
+      .join(', ')
+      .replace(', Apply free', '. Apply free')
+      .slice(0, 158);
+
+    const hero = r.heroImagePath
+      ? `${environment.imagekitUrl}/${r.heroImagePath}?tr=w-1200,h-630,c-maintain_ratio,q-80,f-auto`
+      : undefined;
+
+    this.seo.apply({
+      title,
+      description,
+      path: `/rooms/${r.id}`,
+      image: hero,
+      // A let or paused room stays reachable by its direct link, but should
+      // drop out of the index rather than send searchers to a dead listing.
+      noIndex: r.status !== 'active',
+      /**
+       * No hreflang cluster. The title and description of a room are written
+       * by the landlord in their own words and are never translated, so
+       * /zu/rooms/abc serves the same text as /rooms/abc. Claiming ten
+       * alternates for identical content is an error Google reports, not a
+       * ranking gain — the chrome around the listing is translated, the
+       * listing itself is not.
+       */
+      alternates: false,
+    });
+
+    this.seo.setJsonLd('room', {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: r.title,
+      description: r.description ?? description,
+      image: hero ? [hero] : undefined,
+      category: this.roomTypeLabel(r.roomType),
+      offers: {
+        '@type': 'Offer',
+        price: (r.rentCents / 100).toFixed(2),
+        priceCurrency: 'ZAR',
+        availability:
+          r.status === 'active' ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        url: `${environment.siteUrl}/rooms/${r.id}`,
+        priceValidUntil: r.availableFrom,
+        areaServed: {
+          '@type': 'City',
+          name: r.city,
+          containedInPlace: { '@type': 'AdministrativeArea', name: r.province },
+        },
+      },
+      aggregateRating:
+        r.landlord?.landlordProfile?.rating && r.landlord.landlordProfile.ratingCount
+          ? {
+              '@type': 'AggregateRating',
+              ratingValue: r.landlord.landlordProfile.rating,
+              reviewCount: r.landlord.landlordProfile.ratingCount,
+            }
+          : undefined,
+    });
+  }
+
+  private roomTypeLabel(type: Room['roomType']) {
+    return {
+      shared_house: 'Room in a shared house',
+      en_suite: 'En-suite room',
+      studio: 'Studio',
+      private: 'Private room',
+    }[type];
   }
 
   apply(roomId: string) {

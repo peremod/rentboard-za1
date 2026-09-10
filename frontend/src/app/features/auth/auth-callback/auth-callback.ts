@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 
@@ -24,8 +25,15 @@ import { AuthService } from '../../../core/services/auth.service';
 export class AuthCallback implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
+  private platformId = inject(PLATFORM_ID);
 
   ngOnInit() {
+    // Nothing to read during prerender: there is no URL fragment on the
+    // server, and the fragment is the entire point of this component. Without
+    // this guard the build logs 'window is not defined' and prerenders a
+    // component that can never do its job server-side.
+    if (!isPlatformBrowser(this.platformId)) return;
+
     const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const token = params.get('token');
     const returnUrl = params.get('returnUrl');

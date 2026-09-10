@@ -30,8 +30,26 @@ services:
     preDeployCommand: npx prisma migrate deploy
 
     envVars:
+      # NODE_ENV is a BUILD concern: Nest and Express both want `production`
+      # here for performance and to suppress verbose error output, even though
+      # this is a staging box. Keep it as-is.
       - key: NODE_ENV
         value: production
+
+      # APP_ENV is the DEPLOYMENT concern, and is what actually decides
+      # indexability, CORS origins and payment sandbox mode. It must say
+      # `staging` here. Gating those on NODE_ENV instead is what would make
+      # this box fully crawlable while every file looked correct.
+      - key: APP_ENV
+        value: staging
+
+      # Public origin of the FRONTEND for this environment, no trailing slash.
+      # Builds sitemap.xml and robots.txt. There is no fallback — the API
+      # refuses to start without it, deliberately, because the old fallback
+      # was the production origin.
+      - key: SITE_URL
+        value: https://staging.rentboard.co.za
+
       - key: PORT
         value: 3000
 

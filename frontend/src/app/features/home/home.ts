@@ -437,11 +437,6 @@ export class Home implements OnInit, OnDestroy {
   ngOnInit() {
     this.fetchRooms();
 
-    // Phone widths only, and only in the browser — window does not exist
-    // during prerender, and a full-height hero baked into the static HTML
-    // would apply on desktop too.
-    afterNextRender(() => this.splash.set(window.innerWidth <= 768), { injector: this.injector });
-
     // A landlord already knows they can list; lead with the tenant message
     // for everyone else, and for signed-out visitors.
     if (this.auth.isLandlord()) this.heroIndex.set(1);

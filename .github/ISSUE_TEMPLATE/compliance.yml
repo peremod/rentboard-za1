@@ -1,0 +1,45 @@
+name: Compliance or legal
+description: POPIA, PAIA, Rental Housing Act, consent, or data retention
+labels: ["type:compliance", "priority:P1", "needs:triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        "Built to South African law" is a clause in the mission, not a footnote. Items here have statutory deadlines, so they default to P1.
+
+        **If this concerns an individual's personal data, do not paste that data into this issue.** Reference the request by its internal ID.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - POPIA — consent, retention, or processing
+        - PAIA — access request or manual accuracy
+        - Information Officer registration
+        - Rental Housing Act / PIE Act
+        - Cookie policy vs actual tracking
+        - Terms or disclaimer accuracy
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What is out of line
+      description: What the law or our own published policy requires, and what we currently do.
+    validations:
+      required: true
+
+  - type: input
+    id: deadline
+    attributes:
+      label: Statutory deadline, if any
+      placeholder: "PAIA acknowledgement: 5 business days from 2026-09-08"
+
+  - type: checkboxes
+    id: tracking-order
+    attributes:
+      label: If this involves adding tracking
+      options:
+        - label: I understand the policy, consent flow and privacy page must change in the same release as the tracking — not afterwards

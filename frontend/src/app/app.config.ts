@@ -1,9 +1,13 @@
 import { ApplicationConfig, provideZonelessChangeDetection } from '@angular/core';
-import { provideRouter, withComponentInputBinding, withInMemoryScrolling, withPreloading, withNavigationErrorHandler, PreloadAllModules } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withInMemoryScrolling, withPreloading, withNavigationErrorHandler } from '@angular/router';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
 import { IMAGE_LOADER, ImageLoaderConfig } from '@angular/common';
 import { routes } from './app.routes';
+import { PublicPreloadStrategy } from './core/preloading/public-preload.strategy';
+import { provideRouteSeo } from './core/seo/route-seo';
+import { provideLocaleRouting, provideRememberedLocaleRedirect } from './core/i18n/locale-routing';
+import { LOCALE_URL_SERIALIZER_PROVIDER } from './core/i18n/locale-url-serializer';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 import { environment } from '@env/environment';
@@ -18,7 +22,13 @@ export const appConfig: ApplicationConfig = {
     provideRouter(
       routes,
       withComponentInputBinding(),
-      withPreloading(PreloadAllModules),
+      /**
+       * Was PreloadAllModules, which downloaded the landlord, tenant and admin
+       * chunks on the homepage for visitors who could not reach them. See
+       * PublicPreloadStrategy for the reasoning; this alone removed the
+       * largest non-image item from the first-load waterfall.
+       */
+      withPreloading(PublicPreloadStrategy),
       withInMemoryScrolling({ scrollPositionRestoration: 'top', anchorScrolling: 'enabled' }),
       /**
        * PRE-LAUNCH-CHECKLIST.md #11 — a failed lazy-route chunk load (most
@@ -42,6 +52,26 @@ export const appConfig: ApplicationConfig = {
         window.location.href = event.url;
       }),
     ),
+    /**
+     * Order matters: the locale must be resolved from the URL before the SEO
+     * layer computes canonical, hreflang and og:locale against it.
+     */
+    provideLocaleRouting(),
+    provideRememberedLocaleRedirect(),
+
+    /**
+     * Makes every internal link keep the visitor's language. Without it, one
+     * click on any routerLink drops an isiZulu reader back to English.
+     */
+    LOCALE_URL_SERIALIZER_PROVIDER,
+
+    /**
+     * Applies each route's `data.seo` block — description, canonical, Open
+     * Graph, robots — on every NavigationEnd. Route `title` still drives
+     * <title> on its own.
+     */
+    provideRouteSeo(),
+
     provideHttpClient(withFetch(), withInterceptors([authInterceptor, errorInterceptor])),
     provideClientHydration(withEventReplay()),
 

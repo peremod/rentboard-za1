@@ -1,0 +1,71 @@
+name: Feature or change
+description: Something the product should do that it does not
+labels: ["type:feature", "needs:triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every feature has to earn its place. The mission is the test: *RentBoard gives South African landlords and tenants a direct line to each other — free to apply, no agent, built to South African law.* A feature that does not serve that is a feature that makes the product harder to explain.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: Describe the problem, not the solution. What is someone unable to do today?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: who
+    attributes:
+      label: Who has this problem
+      options:
+        - Landlords
+        - Tenants
+        - Both sides
+        - Admin / internal
+    validations:
+      required: true
+
+  - type: textarea
+    id: mission-fit
+    attributes:
+      label: How this serves the mission
+      description: If you cannot answer this in one sentence, the feature probably is not ready to build.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: metric
+    attributes:
+      label: Which metric should move
+      description: Definitions live in the Notion KPIs database.
+      options:
+        - Rooms let per month (North Star)
+        - Landlord response time
+        - Application → response rate
+        - Active listings
+        - Organic / direct session share
+        - Revenue
+        - None — this is a fix, not a growth change
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Optional. Leave blank if you would rather the solution be designed.
+
+  - type: dropdown
+    id: milestone
+    attributes:
+      label: Which milestone does this belong to
+      options:
+        - M1 — Legally live
+        - M2 — Supply seeded
+        - M3 — Loop proven
+        - M4 — Public beta
+        - M5 — Break-even
+        - M6 — Province scale
+        - Unsure

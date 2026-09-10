@@ -11,6 +11,9 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
+    // Translation bundles are imported as modules rather than fetched — see
+    // core/i18n/translation-bundles.ts for why.
+    "resolveJsonModule": true,
     "sourceMap": true,
     "declaration": false,
     "experimentalDecorators": true,

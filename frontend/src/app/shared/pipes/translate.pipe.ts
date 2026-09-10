@@ -7,7 +7,7 @@ import { I18nService } from '../../core/services/i18n.service';
  *
  * Deliberately impure (`pure: false`) and reads i18n.currentLang() as part
  * of transform — that registers the pipe as a dependent of the language
- * signal, so every instance across the app re-renders when setLanguage()
+ * signal, so every instance across the app re-renders when the locale changes
  * is called, without each component needing its own subscription plumbing.
  */
 @Pipe({ name: 'translate', standalone: true, pure: false })

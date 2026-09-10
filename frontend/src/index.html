@@ -1,18 +1,55 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-ZA">
 <head>
   <meta charset="utf-8"/>
   <title>RentBoard — Rooms to Rent in South Africa, No Agent Fees</title>
   <base href="/"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="description" content="Find a room to rent direct from landlords across South Africa. Free to apply, always. No estate agent, no application fees."/>
+  <meta name="theme-color" content="#C04E28"/>
   <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
+
   <!-- Room images are served from ImageKit and include the LCP element on
        both the board and room detail, so the connection is opened early. -->
   <link rel="preconnect" href="https://ik.imagekit.io"/>
+
+  <!--
+    Fonts, loaded without blocking render.
+
+    A plain <link rel="stylesheet"> to Google Fonts is render-blocking: the
+    browser will not paint until that stylesheet has been fetched from a
+    third-party origin, resolved, and parsed. On a slow South African mobile
+    connection that alone was pushing First Contentful Paint out by several
+    hundred milliseconds on every page load.
+
+    The pattern below fetches the stylesheet at low priority and applies it
+    once it arrives, so text paints immediately in the fallback face and
+    swaps when the webfont lands (`display=swap` is already in the URL). The
+    <noscript> copy keeps the fonts working with JavaScript disabled.
+
+    Preferred next step: self-host the two families under /assets/fonts and
+    drop the third-party origin entirely — that removes two DNS + TLS
+    handshakes from the critical path. Tracked in SEO-LIGHTHOUSE-CHECKLIST.md.
+  -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap"
+        media="print" onload="this.media='all'"/>
+  <noscript>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap"/>
+  </noscript>
+
+  <!-- Social defaults. SeoService overwrites these per route; they exist so a
+       crawler that renders no JavaScript still gets a usable card. -->
+  <meta property="og:site_name" content="RentBoard"/>
+  <meta property="og:type" content="website"/>
+  <meta property="og:locale" content="en_ZA"/>
+  <meta property="og:title" content="RentBoard — Rooms to Rent in South Africa, No Agent Fees"/>
+  <meta property="og:description" content="Find a room to rent direct from landlords across South Africa. Free to apply, always."/>
+  <meta property="og:image" content="https://rentboard.co.za/assets/images/og-default.png"/>
+  <meta name="twitter:card" content="summary_large_image"/>
 </head>
 <body>
   <app-root></app-root>

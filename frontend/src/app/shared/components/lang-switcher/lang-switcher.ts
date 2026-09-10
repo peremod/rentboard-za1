@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { I18nService } from '../../../core/services/i18n.service';
-import { LanguageCode } from '../../../core/models/language.model';
+import { LanguageCode, localizePath, stripLocalePrefix } from '../../../core/models/language.model';
 
 /** Dropdown language switcher — lives in the navbar. */
 @Component({
@@ -36,10 +37,38 @@ import { LanguageCode } from '../../../core/models/language.model';
 })
 export class LangSwitcher {
   i18n = inject(I18nService);
+  private router = inject(Router);
   open = signal(false);
 
+  /**
+   * Navigates to the same page under the chosen locale rather than swapping
+   * translations in place.
+   *
+   * Changing language used to leave the URL untouched, which meant the
+   * isiZulu version of a page had no address: it could not be linked, shared,
+   * bookmarked, crawled or ranked. Navigating makes the choice part of the
+   * URL, so I18nService picks it up through provideLocaleRouting and the SEO
+   * layer emits the matching canonical and hreflang.
+   *
+   * The query string and fragment are preserved — switching language while
+   * halfway through a filtered board search should not discard the filters.
+   */
   select(code: LanguageCode) {
-    this.i18n.setLanguage(code);
     this.open.set(false);
+
+    // Set first, navigate second. I18nService.use() updates currentLang
+    // synchronously before awaiting the bundle, and LocaleUrlSerializer reads
+    // it — so the outgoing URL is built against the language just chosen
+    // rather than the one being left.
+    void this.i18n.use(code);
+
+    const [pathWithHash, query] = this.router.url.split('?');
+    const [pathname, hash] = pathWithHash.split('#');
+    const { path } = stripLocalePrefix(pathname);
+
+    const target =
+      localizePath(path, code) + (query ? `?${query}` : '') + (hash ? `#${hash}` : '');
+
+    void this.router.navigateByUrl(target);
   }
 }

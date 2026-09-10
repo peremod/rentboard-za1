@@ -1,12 +1,18 @@
-# CI — runs on every PR and push to main/develop.
+# CI — runs on every PR and push to a long-lived branch.
 # Mirrors CONTRIBUTING.md §7 pre-PR checklist so nothing merges broken.
+#
+# `master` is listed because it is the branch this repository actually uses.
+# The workflow previously triggered only on `main` and `develop`, neither of
+# which exists here — so every one of the 148 tags to date was cut without a
+# single CI run. `main`/`develop` are kept so the rename in CONTRIBUTING.md §8
+# can happen without a window where nothing is checked.
 name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [master, main, develop]
   pull_request:
-    branches: [main, develop]
+    branches: [master, main, develop]
 
 jobs:
   frontend:
@@ -24,18 +30,65 @@ jobs:
         # a routerLink to nowhere, or an endpoint under /admin without AdminGuard.
         run: node scripts/route-audit.mjs
 
+      - name: i18n and locale audit
+        # Fails on a malformed bundle, a placeholder dropped in translation, or
+        # the frontend and backend locale lists drifting apart — which would
+        # make sitemap.xml advertise locale URLs that do not exist.
+        run: node scripts/i18n-audit.mjs
+
       - name: Install
         working-directory: frontend
         run: npm ci
       - name: Lint
         working-directory: frontend
         run: npm run lint
+      - name: Typecheck
+        # `ng build` typechecks, but only for the production configuration.
+        # This catches a type error in code that only the staging or
+        # development environment file reaches.
+        working-directory: frontend
+        run: npx tsc --noEmit -p tsconfig.app.json
       - name: Test
         working-directory: frontend
         run: npx ng test --watch=false
+
+      # Every environment is built, not just production. The three differ by
+      # file replacement, so a broken staging environment file is invisible
+      # until a staging deploy fails — which is the worst time to find it.
       - name: Build (production)
         working-directory: frontend
         run: npm run build:prod
+      - name: Build (staging)
+        working-directory: frontend
+        run: npm run build:staging
+      - name: Build (development)
+        working-directory: frontend
+        run: npx ng build --configuration development
+
+      - name: Environment parity
+        # Each environment file must define the same keys. A key present in
+        # production and missing from staging is a runtime undefined that no
+        # typecheck catches, because each file is compiled in isolation.
+        run: node scripts/env-parity.mjs
+
+      - name: Prerendered output sanity
+        working-directory: frontend
+        run: |
+          set -e
+          PRERENDER=dist/rentboard-frontend/browser
+          for page in index.html pricing/index.html how-it-works/index.html advertise/index.html; do
+            test -f "$PRERENDER/$page" || { echo "❌ $page was not prerendered"; exit 1; }
+          done
+          # Locale-prefixed pages must prerender too, or a crawler gets a
+          # client-side shell where translated HTML was promised.
+          for locale in af zu; do
+            test -f "$PRERENDER/$locale/index.html" || { echo "❌ /$locale was not prerendered"; exit 1; }
+          done
+          # Metadata must be in the served HTML, not applied after hydration.
+          grep -q 'rel="canonical"' "$PRERENDER/pricing/index.html" || { echo "❌ no canonical in prerendered output"; exit 1; }
+          grep -q 'hreflang=' "$PRERENDER/pricing/index.html" || { echo "❌ no hreflang alternates in prerendered output"; exit 1; }
+          grep -q 'name="robots"' "$PRERENDER/pricing/index.html" || { echo "❌ no robots directive in prerendered output"; exit 1; }
+          echo "✅ prerender, canonical, hreflang and robots all present"
       - name: Bundle size budget check
         working-directory: frontend
         run: |

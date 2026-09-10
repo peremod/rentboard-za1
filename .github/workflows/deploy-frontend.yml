@@ -4,14 +4,16 @@ name: Deploy Frontend
 
 on:
   push:
-    branches: [main, develop]
+    branches: [master, main, develop]
     paths: ['frontend/**']
 
 jobs:
   deploy:
     name: Deploy to Vercel
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'main' && 'production' || 'staging' }}
+    # 'master' and 'main' both map to production so the branch rename in
+    # CONTRIBUTING.md §8 can happen without a deploy gap.
+    environment: ${{ (github.ref_name == 'main' || github.ref_name == 'master') && 'production' || 'staging' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -30,11 +32,11 @@ jobs:
 
       - name: Build (production config on main, staging config on develop)
         working-directory: frontend
-        run: npm run ${{ github.ref_name == 'main' && 'build:prod' || 'build:staging' }}
+        run: npm run ${{ (github.ref_name == 'main' || github.ref_name == 'master') && 'build:prod' || 'build:staging' }}
 
       - name: Deploy to Vercel
         working-directory: frontend
-        run: vercel deploy --prebuilt ${{ github.ref_name == 'main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
+        run: vercel deploy --prebuilt ${{ (github.ref_name == 'main' || github.ref_name == 'master') && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

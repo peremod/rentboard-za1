@@ -1,0 +1,105 @@
+# Label taxonomy. Synced by .github/workflows/labels.yml on every change to
+# this file, so the label set is version-controlled rather than something
+# somebody edited in the UI eight months ago.
+#
+# Four dimensions, each with a prefix so they sort together and stay legible:
+#   type:      what kind of work
+#   priority:  how urgently, tied to the P1 guardrail
+#   area:      which part of the system
+#   needs:     what is blocking it
+
+# ── type ──
+- name: "type:bug"
+  color: "d73a4a"
+  description: "Something works differently than it should"
+- name: "type:feature"
+  color: "0e8a16"
+  description: "New capability or change to an existing one"
+- name: "type:seo"
+  color: "fbca04"
+  description: "Lighthouse, indexing, metadata or Core Web Vitals"
+- name: "type:compliance"
+  color: "5319e7"
+  description: "POPIA, PAIA, Rental Housing Act. Statutory deadlines apply"
+- name: "type:security"
+  color: "b60205"
+  description: "Vulnerability or hardening"
+- name: "type:debt"
+  color: "c5def5"
+  description: "Refactor, cleanup, dependency upgrade"
+- name: "type:docs"
+  color: "0075ca"
+  description: "Documentation only"
+
+# ── priority ──
+- name: "priority:P1"
+  color: "b60205"
+  description: "Auth, payments or publishing broken. Guardrail: zero unresolved past 24h"
+- name: "priority:P2"
+  color: "d93f0b"
+  description: "A core flow is degraded"
+- name: "priority:P3"
+  color: "fef2c0"
+  description: "Cosmetic or edge case"
+
+# ── area ──
+- name: "area:auth"
+  color: "1d76db"
+  description: "Sessions, tokens, guards, OAuth"
+- name: "area:listings"
+  color: "1d76db"
+  description: "Room creation wizard, editing, relist"
+- name: "area:applications"
+  color: "1d76db"
+  description: "Applying, shortlisting, messaging"
+- name: "area:payments"
+  color: "1d76db"
+  description: "Stripe, PayFast, subscriptions, boosts"
+- name: "area:search"
+  color: "1d76db"
+  description: "Board, filters, suggestions"
+- name: "area:i18n"
+  color: "1d76db"
+  description: "Translations, locale routing, hreflang"
+- name: "area:infra"
+  color: "1d76db"
+  description: "CI, deploys, environments, capacity"
+- name: "area:admin"
+  color: "1d76db"
+  description: "Admin console, verification queue, reports"
+
+# ── needs ──
+- name: "needs:triage"
+  color: "ededed"
+  description: "Not yet assessed. Default on every new issue"
+- name: "needs:design"
+  color: "ededed"
+  description: "Blocked on a design decision"
+- name: "needs:legal"
+  color: "ededed"
+  description: "Blocked on legal or compliance review"
+- name: "needs:reproduction"
+  color: "ededed"
+  description: "Cannot be worked until reproducible"
+
+# ── milestones as labels, for filtering across issues and PRs ──
+- name: "M1:legally-live"
+  color: "006b75"
+- name: "M2:supply-seeded"
+  color: "006b75"
+- name: "M3:loop-proven"
+  color: "006b75"
+- name: "M4:public-beta"
+  color: "006b75"
+- name: "M5:break-even"
+  color: "006b75"
+- name: "M6:province-scale"
+  color: "006b75"
+
+# ── special ──
+- name: "good first issue"
+  color: "7057ff"
+  description: "Small, well-scoped, safe to get wrong"
+- name: "blocked"
+  color: "000000"
+  description: "Cannot proceed. Say why in a comment"

@@ -1,0 +1,30 @@
+# Keeps GitHub labels in sync with .github/labels.yml.
+#
+# Labels edited by hand in the UI drift, get duplicated with slightly different
+# colours, and nobody can tell which of "bug" and "type:bug" is the real one.
+# Defining them in a file makes the taxonomy reviewable in a diff like
+# everything else.
+name: Sync labels
+
+on:
+  push:
+    branches: [master, main]
+    paths: ['.github/labels.yml']
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: crazy-max/ghaction-github-labeler@v5
+        with:
+          yaml-file: .github/labels.yml
+          # Does not delete labels absent from the file — an accidental
+          # deletion here would strip labels off every historical issue.
+          # Remove unwanted labels manually, once, on purpose.
+          skip-delete: true
+          dry-run: false

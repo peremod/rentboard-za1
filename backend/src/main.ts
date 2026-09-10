@@ -6,15 +6,25 @@ import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
+import { validateEnvironment, corsOrigins, isProductionDeployment, appEnv } from './config/environment';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+
+  // Before anything else. A misconfigured environment should fail here, loudly,
+  // rather than serve traffic that is subtly wrong for a week.
+  validateEnvironment();
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true, // required for Stripe webhook signature verification
   });
 
-  const isProduction = process.env.NODE_ENV === 'production';
+  /**
+   * Deployment environment, not build environment. NODE_ENV is `production` on
+   * staging too — see config/environment.ts for why that distinction matters
+   * and what it broke.
+   */
+  const isProduction = isProductionDeployment();
 
   app.use(helmet({
     contentSecurityPolicy: {
@@ -31,9 +41,10 @@ async function bootstrap() {
   app.use(cookieParser());
 
   app.enableCors({
-    origin: isProduction
-      ? ['https://rentboard.co.za', 'https://www.rentboard.co.za']
-      : ['http://localhost:4200'],
+    // Derived from APP_ENV and FRONTEND_URL. The previous hard-coded pair keyed
+    // off NODE_ENV, so Render staging allowed only rentboard.co.za and rejected
+    // every request from the staging frontend.
+    origin: corsOrigins(),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'stripe-signature'],
@@ -71,7 +82,12 @@ async function bootstrap() {
 
   const port = parseInt(process.env.PORT ?? '3000', 10);
   await app.listen(port);
-  logger.log(`RentBoard API running on port ${port} [${process.env.NODE_ENV}]`);
+  // Both values, always. Seeing `APP_ENV=staging NODE_ENV=production` in the
+  // logs is the fastest way to confirm the distinction is working rather than
+  // wondering which one a given behaviour keyed off.
+  logger.log(
+    `RentBoard API on port ${port} — APP_ENV=${appEnv()} NODE_ENV=${process.env.NODE_ENV ?? 'unset'}`,
+  );
 }
 
 bootstrap();

@@ -1,0 +1,47 @@
+name: SEO or performance regression
+description: A Lighthouse budget failed, a page dropped out of the index, or metadata is wrong
+labels: ["type:seo", "needs:triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this when the monthly audit or a CI Lighthouse run fails, or when Search Console reports something new. Ordinary bugs go in the bug template.
+
+  - type: dropdown
+    id: symptom
+    attributes:
+      label: What failed
+      options:
+        - Lighthouse budget failed in CI
+        - Lighthouse score dropped in the monthly audit
+        - Page missing from the index / Search Console error
+        - Wrong or duplicate title, description or canonical
+        - hreflang cluster error
+        - Sitemap URL not returning 200
+        - Soft 404 reported
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: Affected URL
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Lighthouse report link, Search Console screenshot, or the failing CI step.
+    validations:
+      required: true
+
+  - type: textarea
+    id: served-html
+    attributes:
+      label: What the served HTML contains
+      description: |
+        Metadata applied after hydration is invisible to a crawler, and that failure looks identical to success in a browser. Check the served HTML, not the rendered page:
+        `curl -s <url> | grep -E 'canonical|hreflang|name="robots"|name="description"'`
+      render: shell
