@@ -69,6 +69,16 @@ services:
       - key: DATABASE_URL
         sync: false            # from Neon or Render Postgres, see docs
 
+      # Google sign-in. Without these the handshake returns 503 and the
+      # button appears to do nothing — see docs/AUTHENTICATION.md. The
+      # callback must match the URI registered for THIS environment.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+
       - key: IMAGEKIT_PUBLIC_KEY
         sync: false
       - key: IMAGEKIT_PRIVATE_KEY

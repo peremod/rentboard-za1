@@ -127,6 +127,12 @@ JWT_EXPIRES_IN=15m
 FRONTEND_URL=https://staging-rentboard.vercel.app
 API_URL=https://rentboard-api-staging.up.railway.app
 
+# Google sign-in. The callback must match the URI registered in the Google
+# Cloud console for THIS environment — see docs/AUTHENTICATION.md.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_CALLBACK_URL=https://rentboard-api-staging.up.railway.app/api/auth/google/callback
+
 IMAGEKIT_PUBLIC_KEY=
 IMAGEKIT_PRIVATE_KEY=
 IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/l4on8rrpx

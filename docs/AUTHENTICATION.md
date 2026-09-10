@@ -40,6 +40,61 @@ pretence that the password added a second factor.
 
 ## 3. The social providers, honestly
 
+### Google — setting it up
+
+Google sign-in is built and wired; it refuses to start the handshake until
+credentials exist, returning a 503 that names the two variables. That is
+deliberate — the alternative is a redirect to a Google error page that tells
+the visitor nothing.
+
+**1. Create the project and credentials**
+
+1. Google Cloud Console → create a project (or reuse one)
+2. **APIs & Services → OAuth consent screen**
+   - User type: **External**
+   - App name, support email, developer contact
+   - Scopes: `email` and `profile` only. Nothing else is requested, and asking
+     for more triggers a verification review you do not need
+   - While in **Testing**, only accounts listed under Test users can sign in.
+     Publish before launch, or real users hit "app is blocked"
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**
+   - Application type: **Web application**
+   - Authorised redirect URIs — add one per environment:
+
+```
+http://localhost:3000/api/auth/google/callback
+https://<staging-api-host>/api/auth/google/callback
+https://api.rentboard.co.za/api/auth/google/callback
+```
+
+The path is not configurable by accident: it is the `@Get('google/callback')`
+route under the global `api` prefix. A mismatch produces `redirect_uri_mismatch`
+and nothing else.
+
+**2. Set the variables**
+
+```bash
+GOOGLE_CLIENT_ID=1234567890-abc.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-...
+GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
+```
+
+`GOOGLE_CALLBACK_URL` must match the environment it runs in. It defaults to
+localhost if unset, which works in development and silently breaks staging —
+so set it explicitly on every deploy target, exactly as registered above.
+
+**3. Check it**
+
+Restart the backend and click "Continue with Google". A 503 means the
+credentials are not loaded; `redirect_uri_mismatch` means the URI in the
+console does not match `GOOGLE_CALLBACK_URL` character for character, including
+scheme, port and trailing path.
+
+**One behaviour worth knowing.** Signing in with Google for an email that
+already has a password account links the two rather than creating a duplicate.
+The reverse is also true: a Google-created account can add a password later
+through the reset flow, because the email is proven either way.
+
 ### Facebook — worth adding
 
 Real OAuth, widely used in South Africa, works. The cost is Meta's app review
