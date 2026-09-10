@@ -122,7 +122,6 @@ NODE_ENV=production
 PORT=3000
 
 JWT_SECRET=            # openssl rand -base64 48
-JWT_REFRESH_SECRET=    # openssl rand -base64 48  — must differ from the above
 JWT_EXPIRES_IN=15m
 
 FRONTEND_URL=https://staging-rentboard.vercel.app

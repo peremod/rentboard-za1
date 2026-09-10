@@ -90,7 +90,6 @@ Gating deployment behaviour on `NODE_ENV` had two real consequences on the Rende
 | `SITE_URL` unset | The old fallback was the production origin, so a misconfigured staging box published production URLs and looked fine in every log. There is now no fallback. |
 | `SITE_URL` has a trailing slash | Canonical URLs are built by concatenation |
 | Non-production `SITE_URL` pointing at the production domain | Duplicate-site signal to search engines |
-| `JWT_SECRET` equals `JWT_REFRESH_SECRET` | A stolen access token could then mint refresh tokens |
 | `PAYFAST_SANDBOX=true` in production | Real payments would go to the sandbox |
 | Missing `IMAGEKIT_PRIVATE_KEY`, `RESEND_API_KEY` or `ADMIN_ALERT_EMAIL` in production | Silent feature loss |
 
@@ -111,7 +110,6 @@ breaks quietly:
 | `SITE_URL` | Builds `sitemap.xml` and `robots.txt`. Required — the API will not start without it. |
 | `NODE_ENV` | Build concern only. `production` on staging too. Never gate behaviour on it. |
 | `DATABASE_URL` | Obvious, and the most expensive to get wrong. |
-| `JWT_SECRET` / `JWT_REFRESH_SECRET` | A shared secret means a staging token authenticates against production. |
 | `PAYFAST_SANDBOX` | `true` everywhere except production. |
 | `FRONTEND_URL` | CORS origin and email link targets. |
 

@@ -81,7 +81,11 @@ export function validateEnvironment(): void {
   }
 
   // ── Required everywhere ──
-  for (const key of ['SITE_URL', 'FRONTEND_URL', 'DATABASE_URL', 'JWT_SECRET', 'JWT_REFRESH_SECRET']) {
+  // JWT_REFRESH_SECRET is deliberately NOT here. Refresh tokens are random
+  // strings stored as SHA-256 hashes in the refresh_tokens table, not signed
+  // JWTs, so there is no secret to set. Requiring it stopped the app booting
+  // for a variable nothing reads.
+  for (const key of ['SITE_URL', 'FRONTEND_URL', 'DATABASE_URL', 'JWT_SECRET']) {
     if (!process.env[key]) errors.push(`${key} is required but not set.`);
   }
 
@@ -95,10 +99,6 @@ export function validateEnvironment(): void {
     errors.push(
       `SITE_URL is "${siteUrl}" but APP_ENV is "${env}". A non-production deployment publishing production URLs will be treated by search engines as a duplicate of the real site.`,
     );
-  }
-
-  if (process.env.JWT_SECRET && process.env.JWT_SECRET === process.env.JWT_REFRESH_SECRET) {
-    errors.push('JWT_SECRET and JWT_REFRESH_SECRET must differ. Sharing them defeats the point of having two.');
   }
 
   // ── Production-only requirements ──
