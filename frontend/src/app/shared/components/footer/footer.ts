@@ -35,7 +35,6 @@ import { RouterLink } from '@angular/router';
           <h4>For Tenants</h4>
           <ul>
             <li><a routerLink="/">Browse rooms</a></li>
-            <li><a routerLink="/tenant/passport">Renter's Passport</a></li>
             <li><a routerLink="/tenant/dashboard">My applications</a></li>
             <li><a routerLink="/auth/register">Create account</a></li>
           </ul>

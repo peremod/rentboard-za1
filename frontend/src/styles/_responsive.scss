@@ -672,3 +672,16 @@
 @media (min-width: 769px) {
   .hero-scroll-cue { display: none; }
 }
+
+// ── Signed-out apply block on room detail ───────────────────────────────
+// The primary action for a visitor who has found a room they want. It was a
+// link inside a sentence, which read as body copy rather than the thing to do.
+.btn-block { display: flex; width: 100%; justify-content: center; }
+
+.apply-alt {
+  font-size: .8rem;
+  color: var(--slate);
+  text-align: center;
+  margin-top: .6rem;
+  line-height: 1.6;
+}

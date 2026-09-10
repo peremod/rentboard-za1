@@ -97,7 +97,22 @@ import { environment } from '@env/environment';
 
         <div class="room-detail__apply">
           @if (!auth.isAuthenticated()) {
-            <p>Interested? <a [routerLink]="['/auth/login']" [queryParams]="{returnUrl: '/rooms/' + r.id}">Log in to apply</a> — it's free.</p>
+            <!-- A button, not a sentence with a link in it. This is the
+                 primary action for every signed-out visitor on the page that
+                 matters most, and it was styled as body copy. -->
+            <h3>Apply for this room</h3>
+            <p class="muted">Free to apply. No agent, no application fee.</p>
+            <a class="btn btn-primary btn-block"
+               [routerLink]="['/auth/login']"
+               [queryParams]="{ returnUrl: '/rooms/' + r.id }">
+              Log in to apply →
+            </a>
+            <p class="apply-alt">
+              No account?
+              <a [routerLink]="['/auth/register']" [queryParams]="{ returnUrl: '/rooms/' + r.id }">
+                Create one free
+              </a> — it takes a minute.
+            </p>
           } @else if (auth.isLandlord()) {
             <p class="muted">Landlord accounts can't apply to rooms.</p>
           } @else if (applied()) {
