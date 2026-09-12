@@ -48,7 +48,7 @@ export class AuthCallback implements OnInit {
         if (returnUrl && returnUrl !== '/') {
           this.router.navigateByUrl(decodeURIComponent(returnUrl));
         } else {
-          this.router.navigate([user?.role === 'LANDLORD' ? '/landlord/dashboard' : '/tenant/dashboard']);
+          this.router.navigate([this.auth.homeRouteFor(user?.role ?? 'TENANT')]);
         }
       },
       error: () => this.router.navigate(['/auth/login'], { queryParams: { error: 'session_error' } }),

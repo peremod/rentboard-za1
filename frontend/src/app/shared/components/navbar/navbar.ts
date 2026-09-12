@@ -37,12 +37,14 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
 
         <div class="nav-actions">
           <app-lang-switcher/>
-          @if (auth.isAdmin()) {
-            <a routerLink="/admin/dashboard" routerLinkActive="active"
-               (click)="mobileOpen.set(false)">Admin</a>
-          }
           @if (auth.isAuthenticated()) {
-            @if (auth.isLandlord()) {
+            <!-- One dashboard per account. An admin used to get both an Admin
+                 link and a Dashboard button pointing at the tenant view, which
+                 is empty for an account with no tenant profile. -->
+            @if (auth.isAdmin()) {
+              <a class="btn btn-ghost btn-sm" routerLink="/admin/dashboard"
+                 routerLinkActive="active">Admin</a>
+            } @else if (auth.isLandlord()) {
               <a class="btn btn-ghost btn-sm" routerLink="/landlord/dashboard">{{ 'nav.dashboard' | translate }}</a>
               <a class="btn btn-primary btn-sm" routerLink="/landlord/rooms/new">+ List a room</a>
             } @else {

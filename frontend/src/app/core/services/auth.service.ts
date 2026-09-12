@@ -54,6 +54,30 @@ export class AuthService {
   readonly isTenant = computed(() => this._user()?.role === 'TENANT');
   readonly isAdmin = computed(() => this._user()?.role === 'ADMIN');
 
+  /**
+   * Where this user's own dashboard is.
+   *
+   * Every redirect used to ask 'landlord or not', which sent admins to the
+   * tenant dashboard — so signing in as an admin produced two dashboards, one
+   * of them showing an empty tenant view that made no sense for the account.
+   *
+   * One place, three roles. A new role gets handled here rather than in the
+   * five call sites that each guessed.
+   */
+  homeRoute(): string {
+    const role = this._user()?.role;
+    if (role === 'ADMIN') return '/admin/dashboard';
+    if (role === 'LANDLORD') return '/landlord/dashboard';
+    return '/tenant/dashboard';
+  }
+
+  /** For callers holding a user object before the session signal is set. */
+  homeRouteFor(role: string): string {
+    if (role === 'ADMIN') return '/admin/dashboard';
+    if (role === 'LANDLORD') return '/landlord/dashboard';
+    return '/tenant/dashboard';
+  }
+
   login(dto: LoginDto) {
     return this.http.post<AuthResponse>(`${this.api}/auth/login`, dto).pipe(tap((res) => this.setSession(res)));
   }

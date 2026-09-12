@@ -1698,6 +1698,16 @@ req GET /api/analytics/content-signals "" "$LTOKEN"
 check "landlord CANNOT read content signals" 403 "$STATUS" "$BODY"
 
 if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  # An admin has no tenant or landlord profile, so those endpoints should not
+  # pretend otherwise — the frontend equivalent was an admin being sent to an
+  # empty tenant dashboard.
+  req GET /api/applications/mine "" "$ADMIN_TOKEN"
+  if [[ "$STATUS" == "403" || "$STATUS" == "200" ]]; then
+    green "  PASS  tenant endpoint handles an admin token sensibly  ($STATUS)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  tenant endpoint returned $STATUS for an admin"; FAIL=$((FAIL+1))
+  fi
+
   req GET /api/admin/growth "" "$ADMIN_TOKEN"
   check "admin reads growth metrics" 200 "$STATUS" "$BODY"
 

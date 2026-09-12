@@ -20,8 +20,13 @@ export const landlordGuard: CanActivateFn = () => {
   // guarded page simply for reloading it.
   return auth.sessionReady().pipe(
     map(() => {
-        if (auth.isLandlord() || auth.isAdmin()) return true;
-        return router.createUrlTree(['/tenant/dashboard']);
+        if (auth.isLandlord()) return true;
+
+        // Same reasoning as the tenant guard: an admin has no landlord
+        // profile, so this dashboard is empty for them. Their own is the
+        // right destination, and it is also where they can look at any
+        // landlord's account properly.
+        return router.createUrlTree([auth.homeRoute()]);
     }),
   );
 };

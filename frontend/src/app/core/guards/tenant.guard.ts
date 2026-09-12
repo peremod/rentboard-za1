@@ -20,8 +20,14 @@ export const tenantGuard: CanActivateFn = () => {
   // guarded page simply for reloading it.
   return auth.sessionReady().pipe(
     map(() => {
-        if (auth.isTenant() || auth.isAdmin()) return true;
-        return router.createUrlTree(['/landlord/dashboard']);
+        if (auth.isTenant()) return true;
+
+        // Admins were admitted here, which is half of why signing in as an
+        // admin produced two dashboards. An admin has no tenant profile, so
+        // the page renders empty and means nothing for that account — send
+        // them to their own dashboard instead of a hollow copy of someone
+        // else's.
+        return router.createUrlTree([auth.homeRoute()]);
     }),
   );
 };

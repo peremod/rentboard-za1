@@ -158,10 +158,21 @@ export class AccountSettings {
   private fb = inject(FormBuilder);
   auth = inject(AuthService);
 
-  roleLabel = () => (this.auth.isLandlord() ? 'Landlord' : 'Tenant');
+  roleLabel = () =>
+    this.auth.isAdmin() ? 'Admin' : this.auth.isLandlord() ? 'Landlord' : 'Tenant';
 
+  /**
+   * The sidebar follows the account's own area. An admin editing their profile
+   * used to get the tenant sidebar, offering a dashboard they have no profile
+   * for — the same confusion as the two dashboards in the navbar.
+   */
   navItems = (): PortalNavItem[] =>
-    this.auth.isLandlord()
+    this.auth.isAdmin()
+      ? [
+          { label: 'Admin', icon: '🛠', route: '/admin/dashboard', exact: true },
+          { label: 'Settings', icon: '⚙️', route: '/account/settings' },
+        ]
+    : this.auth.isLandlord()
       ? [
           { label: 'Dashboard', icon: '📊', route: '/landlord/dashboard', exact: true },
           { label: 'Verification', icon: '🪪', route: '/landlord/verification' },

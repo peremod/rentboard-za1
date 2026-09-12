@@ -45,7 +45,7 @@ export class App implements OnInit {
       }
 
       if (!target || target.startsWith('/auth/login')) {
-        target = this.auth.isLandlord() ? '/landlord/dashboard' : '/tenant/dashboard';
+        target = this.auth.homeRoute();
       }
       this.router.navigateByUrl(target);
     });

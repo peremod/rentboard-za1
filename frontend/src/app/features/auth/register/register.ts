@@ -146,7 +146,7 @@ export class Register implements OnInit {
       referralCode: raw.referralCode?.trim() || undefined,
       role: this.role(),
     }).subscribe({
-      next: (res) => this.router.navigate([res.user.role === 'LANDLORD' ? '/landlord/dashboard' : '/tenant/dashboard']),
+      next: (res) => this.router.navigate([this.auth.homeRouteFor(res.user.role)]),
       error: (err) => {
         this.loading.set(false);
         this.error.set(err?.error?.message ?? 'Something went wrong. Please try again.');

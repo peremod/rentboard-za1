@@ -173,7 +173,7 @@ export class Login {
     this.auth.verifyPhoneCode(this.phone.trim(), this.code.trim()).subscribe({
       next: (res) =>
         this.router.navigate([
-          res.user.role === 'LANDLORD' ? '/landlord/dashboard' : '/tenant/dashboard',
+          this.auth.homeRouteFor(res.user.role),
         ]),
       error: (err) => {
         this.verifying.set(false);
@@ -238,7 +238,7 @@ export class Login {
    */
   private redirectAfterLogin() {
     const returnUrl = this.route.snapshot.queryParams['returnUrl'];
-    const dashboard = this.auth.isLandlord() ? '/landlord/dashboard' : '/tenant/dashboard';
+    const dashboard = this.auth.homeRoute();
 
     const usable =
       returnUrl && returnUrl !== '/' && !returnUrl.startsWith('/auth');

@@ -50,7 +50,7 @@ export class MagicLink implements OnInit {
     this.auth.verifyMagicLink(token).subscribe({
       next: (res) =>
         this.router.navigate([
-          res.user.role === 'LANDLORD' ? '/landlord/dashboard' : '/tenant/dashboard',
+          this.auth.homeRouteFor(res.user.role),
         ]),
       error: (err) =>
         this.error.set(
