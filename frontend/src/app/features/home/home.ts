@@ -241,6 +241,21 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
       </aside>
 
       <main class="board__main">
+        <!-- Above the results, not inside the filter drawer. Someone whose
+             lease ended this week is the most urgent visitor the board has,
+             and burying this behind a Filters button costs them two taps. -->
+        <div class="quick-filters">
+          <button type="button"
+                  class="quick-chip"
+                  [class.quick-chip--on]="availableNow"
+                  (click)="toggleAvailableNow()">
+            ⚡ Available now
+          </button>
+          @if (availableNow) {
+            <span class="quick-filters__note">Free now or within two weeks</span>
+          }
+        </div>
+
         <div class="results-header">
           <button type="button" class="filter-toggle-btn" (click)="filtersOpen.set(true)"
                   [attr.aria-expanded]="filtersOpen()" aria-controls="filter-panel">
@@ -391,6 +406,7 @@ export class Home implements OnInit, OnDestroy {
   province = '';
   roomType = '';
   billsIncluded = false;
+  availableNow = false;
   couplesAllowed = false;
   dssAccepted = false;
   guarantorAccepted = false;
@@ -502,6 +518,7 @@ export class Home implements OnInit, OnDestroy {
       roomType: (this.roomType || undefined) as any,
       maxRentCents: this.maxRentCents ? +this.maxRentCents : undefined,
       billsIncluded: this.billsIncluded || undefined,
+      availableNow: this.availableNow || undefined,
       couplesAllowed: this.couplesAllowed || undefined,
       dssAccepted: this.dssAccepted || undefined,
       guarantorAccepted: this.guarantorAccepted || undefined,
@@ -569,7 +586,7 @@ export class Home implements OnInit, OnDestroy {
   activeFilterCount(): number {
     return [
       this.province, this.roomType, this.maxRentCents, this.housemates,
-      this.billsIncluded, this.couplesAllowed, this.studentsWelcome,
+      this.billsIncluded, this.availableNow, this.couplesAllowed, this.studentsWelcome,
       this.dssAccepted, this.guarantorAccepted, this.petsAllowed,
     ].filter(Boolean).length;
   }
@@ -581,6 +598,7 @@ export class Home implements OnInit, OnDestroy {
     this.housemates = '';
     this.searchTerm = '';
     this.billsIncluded = false;
+    this.availableNow = false;
     this.couplesAllowed = false;
     this.studentsWelcome = false;
     this.dssAccepted = false;
@@ -661,6 +679,13 @@ export class Home implements OnInit, OnDestroy {
     this.searchDebounce = setTimeout(() => { this.page = 1; this.fetchRooms(); }, 400);
   }
 
+  /** The urgent search: rooms free now or very soon. */
+  toggleAvailableNow() {
+    this.availableNow = !this.availableNow;
+    this.analytics.track('board.filtered');
+    this.onFilterChange();
+  }
+
   onFilterChange() {
     // The saved confirmation belongs to the old filter set.
     this.searchSaved.set(false);
@@ -676,6 +701,7 @@ export class Home implements OnInit, OnDestroy {
       province: this.province || undefined,
       roomType: (this.roomType as any) || undefined,
       billsIncluded: this.billsIncluded || undefined,
+      availableNow: this.availableNow || undefined,
       couplesAllowed: this.couplesAllowed || undefined,
       dssAccepted: this.dssAccepted || undefined,
       guarantorAccepted: this.guarantorAccepted || undefined,

@@ -38,7 +38,7 @@ export class RoomsService {
   async findAll(filters: RoomFiltersDto) {
     const {
       search, roomType, province, city, maxRentCents, minRentCents,
-      billsIncluded, couplesAllowed, dssAccepted, guarantorAccepted, petsAllowed,
+      billsIncluded, couplesAllowed, dssAccepted, guarantorAccepted, petsAllowed, availableNow,
       sortBy = 'newest', page = 1, limit = 12,
     } = filters;
 
@@ -54,6 +54,12 @@ export class RoomsService {
       ...(petsAllowed && { petsAllowed: true }),
       ...(maxRentCents && { rentCents: { lte: maxRentCents } }),
       ...(minRentCents && { rentCents: { gte: minRentCents } }),
+      // 'Available now' means within a fortnight, not strictly today. Someone
+      // searching on the 25th counts a room free on the 1st as immediate, and
+      // a same-day filter would return almost nothing on most days.
+      ...(availableNow && {
+        availableFrom: { lte: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) },
+      }),
       ...(search && {
         OR: [
           { title: { contains: search, mode: 'insensitive' } },

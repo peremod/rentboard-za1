@@ -35,6 +35,7 @@ export class RoomsService {
     if (filters.city) params = params.set('city', filters.city);
     if (filters.maxRentCents) params = params.set('maxRentCents', filters.maxRentCents);
     if (filters.billsIncluded) params = params.set('billsIncluded', 'true');
+    if (filters.availableNow) params = params.set('availableNow', 'true');
     if (filters.couplesAllowed) params = params.set('couplesAllowed', 'true');
     if (filters.dssAccepted) params = params.set('dssAccepted', 'true');
     if (filters.guarantorAccepted) params = params.set('guarantorAccepted', 'true');

@@ -69,6 +69,8 @@ export interface RoomFilters {
   city?: string;
   maxRentCents?: number;
   minRentCents?: number;
+  /** Rooms free now or within a fortnight — the urgent search. */
+  availableNow?: boolean;
   billsIncluded?: boolean;
   couplesAllowed?: boolean;
   dssAccepted?: boolean;

@@ -2135,6 +2135,38 @@ fi
 rm -f "$RT_COOKIES"
 
 
+# -- 41. Available-now filter ----------------------------------------------
+# The urgent search: someone whose lease has ended. The filter and the card
+# badge must use the same window, or one contradicts the other.
+head_ "41. Available now"
+req GET "/api/rooms?availableNow=true"
+check "availableNow filter is accepted" 200 "$STATUS" "$BODY"
+
+NOW_TOTAL=$(echo "$BODY" | jq -r '.total // 0')
+req GET /api/rooms
+ALL_TOTAL=$(echo "$BODY" | jq -r '.total // 0')
+
+if [[ "$NOW_TOTAL" -le "$ALL_TOTAL" ]]; then
+  green "  PASS  it narrows the board ($NOW_TOTAL of $ALL_TOTAL)"; PASS=$((PASS+1))
+else
+  red "  FAIL  availableNow returned MORE rooms than no filter"; FAIL=$((FAIL+1))
+fi
+
+# Every room it returns must genuinely be available inside the window.
+req GET "/api/rooms?availableNow=true&limit=20"
+CUTOFF=$(date -u -d '+14 days' +%Y-%m-%d 2>/dev/null || date -u -v+14d +%Y-%m-%d)
+LATE=$(echo "$BODY" | jq -r --arg c "$CUTOFF" '[.data[]? | select(.availableFrom > $c)] | length')
+if [[ "$LATE" == "0" ]]; then
+  green "  PASS  every result is available within the fortnight"; PASS=$((PASS+1))
+else
+  red "  FAIL  $LATE result(s) are not available until after $CUTOFF"; FAIL=$((FAIL+1))
+fi
+
+# It must combine with other filters rather than replacing them.
+req GET "/api/rooms?availableNow=true&province=Gauteng"
+check "combines with a province filter" 200 "$STATUS" "$BODY"
+
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

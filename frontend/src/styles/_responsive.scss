@@ -685,3 +685,43 @@
   margin-top: .6rem;
   line-height: 1.6;
 }
+
+// ── Quick filters ───────────────────────────────────────────────────────
+// Above the results rather than inside the filter drawer. Someone whose lease
+// ended this week is the most urgent visitor the board has, and two taps to
+// reach the filter is two taps too many.
+.quick-filters {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  flex-wrap: wrap;
+  margin-bottom: .85rem;
+}
+
+.quick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .45rem .9rem;
+  font-size: .85rem;
+  font-weight: 600;
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-full);
+  color: var(--ink2);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+
+  &:hover { border-color: var(--terra2); color: var(--terra); }
+}
+
+.quick-chip--on {
+  background: var(--terra);
+  border-color: var(--terra);
+  color: #fff;
+}
+
+.quick-filters__note { font-size: .78rem; color: var(--slate); }
+
+// Matches the quick-filter chip so the badge and the filter read as one idea.
+.badge-now { background: rgba(61, 112, 64, .12); color: var(--sage); border: 1px solid rgba(61, 112, 64, .3); }

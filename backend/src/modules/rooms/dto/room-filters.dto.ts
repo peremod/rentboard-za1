@@ -27,7 +27,27 @@ export class RoomFiltersDto {
 
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(0) minRentCents?: number;
 
+  /**
+   * Rooms someone can move into now.
+   *
+   * Defined as available within the next 14 days rather than strictly today.
+   * A room free on the 1st is 'immediate' to someone searching on the 25th,
+   * and a same-day-only filter would return almost nothing on most days —
+   * which teaches people the filter is broken rather than that the board is
+   * empty.
+   */
+  @ApiPropertyOptional({ description: 'Only rooms available within the next 14 days' })
+  @IsOptional() @Type(() => Boolean) @IsBoolean()
+  availableNow?: boolean;
+
   @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) @IsBoolean() billsIncluded?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Only rooms available now or within the next week. For someone whose lease has ended or who has just arrived in a city — the most urgent search there is.',
+  })
+  @IsOptional() @Type(() => Boolean) @IsBoolean()
+  availableNow?: boolean;
   @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) @IsBoolean() couplesAllowed?: boolean;
   @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) @IsBoolean() dssAccepted?: boolean;
   @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) @IsBoolean() guarantorAccepted?: boolean;
