@@ -42,12 +42,6 @@ export class RoomFiltersDto {
 
   @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) @IsBoolean() billsIncluded?: boolean;
 
-  @ApiPropertyOptional({
-    description:
-      'Only rooms available now or within the next week. For someone whose lease has ended or who has just arrived in a city — the most urgent search there is.',
-  })
-  @IsOptional() @Type(() => Boolean) @IsBoolean()
-  availableNow?: boolean;
   @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) @IsBoolean() couplesAllowed?: boolean;
   @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) @IsBoolean() dssAccepted?: boolean;
   @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) @IsBoolean() guarantorAccepted?: boolean;

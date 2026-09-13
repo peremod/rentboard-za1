@@ -682,7 +682,9 @@ export class Home implements OnInit, OnDestroy {
   /** The urgent search: rooms free now or very soon. */
   toggleAvailableNow() {
     this.availableNow = !this.availableNow;
-    this.analytics.track('board.filtered');
+    // No tracking call here: Home does not inject AnalyticsService, and the
+    // board.filtered event is recorded by the filter panel already. Counting
+    // it twice would inflate the funnel.
     this.onFilterChange();
   }
 

@@ -127,6 +127,19 @@ export class RoomCard {
     return Date.now() - new Date(published).getTime() < 7 * 24 * 60 * 60 * 1000;
   });
 
+  /**
+   * Free now or within a fortnight — the same window the board filter uses.
+   *
+   * The two must agree: a badge appearing on rooms the filter excludes, or
+   * missing from rooms it includes, makes both untrustworthy. If the window
+   * changes, change it in rooms.service.ts and here together.
+   */
+  availableNow = computed(() => {
+    const from = this.room().availableFrom;
+    if (!from) return false;
+    return new Date(from).getTime() <= Date.now() + 14 * 24 * 60 * 60 * 1000;
+  });
+
   roomTypeLabel = computed(() => {
     const labels: Record<string, string> = {
       shared_house: '🏠 Shared house',
