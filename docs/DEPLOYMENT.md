@@ -59,7 +59,37 @@ real trade-offs.
 **Free-tier terms change often. Verify current limits before committing** —
 what follows was accurate when written and these providers revise it regularly.
 
-### Recommended: Render (app) + Neon (database)
+### Neon — the database
+
+Create the project first: the backend cannot start without its connection
+strings, and it is the only piece with no free alternative worth having.
+
+1. neon.tech → new project, region **eu-central-1 (Frankfurt)** — the closest
+   to South Africa, roughly 150ms rather than 250ms from Cape Town
+2. Create a branch for staging if you want production isolated later; the free
+   tier allows it and a shared database between environments is how test data
+   ends up in front of real users
+3. Copy **both** connection strings from the dashboard
+
+Neon gives two, and they are not interchangeable:
+
+| Variable | Which string | Used by |
+|---|---|---|
+| `DATABASE_URL` | **Pooled** — host contains `-pooler` | The running app |
+| `DIRECT_URL` | **Unpooled** | `prisma migrate` only |
+
+`schema.prisma` already declares `directUrl`, so this works once both are set.
+Running migrations against the pooled string fails with an advisory-lock error
+that reads like a permissions problem and is not one.
+
+Append `?sslmode=require` to both. Neon rejects unencrypted connections, and
+the failure is a timeout rather than a clear message.
+
+**The free tier sleeps after five minutes of inactivity.** It wakes in about a
+second, so the first request after a quiet period is slow but not broken —
+worth knowing before you conclude the API has a performance problem.
+
+### Then: Render (app) + Neon (database)
 
 | | Free tier | Catch |
 |---|---|---|
