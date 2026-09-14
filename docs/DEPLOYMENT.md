@@ -290,6 +290,27 @@ Then check by hand the things a smoke test cannot see:
 
 ---
 
+## 8b. A note on fonts
+
+Angular's `optimization.fonts` inlines Google Fonts at **build** time by
+downloading the stylesheet. That makes the build require internet and fail
+outright when the request is slow, proxied or blocked:
+
+```
+An unhandled exception occurred: Inlining of fonts failed.
+```
+
+It is disabled in the production configuration. Fonts load normally at runtime
+via the `<link>` in index.html, which is where they were coming from anyway.
+
+**Worth doing properly before launch:** self-host the two families. Every
+visitor currently makes a request to `fonts.googleapis.com`, which is a
+third-party request on a site whose cookie notice says there are no
+third-party trackers. Google Fonts does not set cookies, so the claim still
+holds, but it does expose visitor IPs to Google and removing it would make the
+promise unambiguous. It also removes a render-blocking round trip, which is
+worth real Lighthouse points.
+
 ## 9. What will probably break first
 
 In roughly this order:
