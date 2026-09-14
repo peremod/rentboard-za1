@@ -4,7 +4,6 @@ import { RouterLink, Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { DialogService } from '../../../core/services/dialog.service';
-import { StripeService } from '../../../core/services/stripe.service';
 import { Room } from '../../../core/models/room.model';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
@@ -232,7 +231,6 @@ export class LandlordDashboard implements OnInit {
   private roomsService = inject(RoomsService);
   private router = inject(Router);
   private dialogs = inject(DialogService);
-  private stripe = inject(StripeService);
 
   billingEnabled = BILLING_ENABLED;
 
@@ -321,7 +319,14 @@ export class LandlordDashboard implements OnInit {
 
   /** Kept for when BILLING_ENABLED flips back to true — see feature-flags.ts. */
   boost(roomId: string) {
-    this.stripe.boostRoom(roomId);
+    // No payment provider is wired. Stripe was removed (it does not operate
+    // in South Africa for receiving payments) and PayFast recurring billing is
+    // not built. Boost is hidden while BILLING_ENABLED is false.
+    this.dialogs.alert(
+      'Not available yet',
+      'Boosting a listing is not open yet. Nothing has been charged.',
+      'info',
+    );
   }
 
   /**

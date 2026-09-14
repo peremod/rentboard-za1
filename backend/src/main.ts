@@ -16,7 +16,6 @@ async function bootstrap() {
   validateEnvironment();
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    rawBody: true, // required for Stripe webhook signature verification
   });
 
   /**
@@ -30,10 +29,7 @@ async function bootstrap() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", 'js.stripe.com'],
-        connectSrc: ["'self'", 'api.stripe.com', 'graph.facebook.com'],
         imgSrc: ["'self'", 'data:', 'ik.imagekit.io'],
-        frameSrc: ['js.stripe.com', 'hooks.stripe.com'],
       },
     },
   }));
@@ -47,7 +43,7 @@ async function bootstrap() {
     origin: corsOrigins(),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'stripe-signature'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-payfast-signature'],
   });
 
   app.setGlobalPrefix('api', { exclude: ['health', 'robots.txt', 'sitemap.xml'] });

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { DialogService } from '../../../core/services/dialog.service';
 import { RouterLink } from '@angular/router';
-import { StripeService } from '../../../core/services/stripe.service';
 
 /**
  * Pricing shown here MUST match the live Stripe Price objects configured in
@@ -68,7 +68,7 @@ import { StripeService } from '../../../core/services/stripe.service';
   `],
 })
 export class Upgrade {
-  private stripe = inject(StripeService);
+  private dialogs = inject(DialogService);
   interval = signal<'monthly' | 'annual'>('monthly');
 
   upgrade(planTier: 'pro' | 'agency') {

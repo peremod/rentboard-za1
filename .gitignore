@@ -13,6 +13,19 @@ build/
 .env.*.local
 !.env.example
 
+# Test artefacts — Playwright writes traces, screenshots and videos here on
+# every failing run. They are large, binary, and meaningless outside the run
+# that produced them.
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# A nested backend/backend or frontend/frontend means npm install ran from the
+# wrong directory. Ignoring them stops the mistake reaching a commit.
+backend/backend/
+frontend/frontend/
+
 # Logs
 *.log
 npm-debug.log*

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { DialogService } from '../../../core/services/dialog.service';
 import { RouterLink } from '@angular/router';
-import { StripeService } from '../../../core/services/stripe.service';
 
 /**
  * Renter's Passport — a portable pre-verification badge tenants can buy to
@@ -47,7 +47,7 @@ import { StripeService } from '../../../core/services/stripe.service';
   `],
 })
 export class Passport {
-  private stripe = inject(StripeService);
+  private dialogs = inject(DialogService);
   interval = signal<'monthly' | 'annual'>('monthly');
 
   purchase() {

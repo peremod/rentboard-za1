@@ -27,12 +27,11 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ApplicationsModule } from './modules/applications/applications.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { MessagesModule } from './modules/messages/messages.module';
-// Billing temporarily disabled (Stripe + Renter's Passport paused) — see
-// PRE-LAUNCH-CHECKLIST.md "Temporarily disabled" section. Uncomment this
-// import and the registration below, plus StripeController's endpoints in
-// the frontend, to re-enable.
-// import { StripeModule } from './modules/stripe/stripe.module';
-
+// Billing is not wired to a provider. Stripe was removed in v1.54.0: it does
+// not operate in South Africa for receiving payments, so a ZA-registered
+// business cannot accept money through it. PayFast already handles verification
+// payments; subscriptions and boosts would need PayFast recurring billing,
+// which is not built. See docs/PAYMENTS.md.
 /**
  * Root module — foundation release.
  * Feature modules (Auth, Rooms, Applications, Messages, WhatsApp...)
@@ -72,7 +71,6 @@ import { MessagesModule } from './modules/messages/messages.module';
     ApplicationsModule,
     UploadsModule,
     MessagesModule,
-    // StripeModule, // temporarily disabled — see comment above
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_INTERCEPTOR, useClass: LastSeenInterceptor }],

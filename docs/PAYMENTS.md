@@ -1,3 +1,17 @@
+# Payments
+
+> **Stripe was removed in v1.54.0.** Stripe does not operate in South Africa
+> for *receiving* payments — a ZA-registered business cannot accept money
+> through it. It had been wired for subscriptions, room boosts and the Renter's
+> Passport, none of which could ever have taken a rand. PayFast is the provider.
+>
+> What that leaves: PayFast handles one-off verification payments, and that
+> works. Recurring billing — landlord plans, boosts, Passport — is **not
+> built**. PayFast supports subscriptions via its recurring billing API, so the
+> path exists, but the pages behind BILLING_ENABLED are stubs that say nothing
+> has been charged rather than taking money through a provider that cannot
+> receive it.
+
 # Payments — PayFast
 
 The once-off R149 landlord verification fee. Written 28 Aug 2026.
