@@ -26,8 +26,16 @@ git checkout -b feat/room-relist-analytics
 <type>(<scope>): <short description>
 ```
 
-**Types:** `feat fix docs style refactor perf test chore ci`
-**Scopes:** `rooms auth users messages payments screening passport admin seo api cdn db ci deps release`
+**Types:** `feat fix docs style refactor perf test chore ci revert`
+
+**Scopes** — domain:
+`rooms auth login users tenant landlord messages payments billing screening passport account admin board home ads ui i18n seo`
+
+**Scopes** — platform and tooling:
+`api backend frontend ssr router routes cdn db env build deploy e2e ci deps release`
+
+A subject may open with a proper noun (`docs(deploy): Neon setup`) — only
+PascalCase and SHOUTING are rejected.
 
 ```bash
 git commit -m "feat(rooms): add one-click relist"
