@@ -33,7 +33,26 @@ jobs:
         # indexable if and only if it is production.
         run: |
           set -euo pipefail
-          API="https://api-staging.rentboard.co.za"
+          HOST="api-staging.rentboard.co.za"
+          API="https://$HOST"
+
+          # Staging does not exist yet — as of writing, rentboard.co.za and
+          # every subdomain of it fail to resolve. Until the Render service and
+          # its DNS are stood up there is nothing to assert against, and a job
+          # that goes red on every push for a reason nobody can act on is worse
+          # than no job: it trains people to ignore the one signal this
+          # repository has that a backend deploy happened at all.
+          #
+          # So: not resolving means not deployed yet, and that is reported and
+          # skipped. Resolving but misconfigured is a real failure and still
+          # fails. The check arms itself the moment staging is real, with no
+          # edit needed here.
+          if ! getent hosts "$HOST" >/dev/null 2>&1; then
+            echo "⏭️  $HOST does not resolve — staging has not been stood up yet."
+            echo "    Nothing to verify. This check starts enforcing automatically"
+            echo "    once the Render service and its DNS exist."
+            exit 0
+          fi
 
           # Render starts deploying when the push lands, out of band from this
           # workflow, so this races it. The free tier also sleeps after ~15
@@ -45,7 +64,7 @@ jobs:
             sleep 10
           done
           curl -sf "$API/health" >/dev/null || {
-            echo "❌ $API/health never came up within 10 minutes."
+            echo "❌ $HOST resolves, but $API/health never came up within 10 minutes."
             echo "   Check the Render dashboard — the deploy may have failed or the service may be suspended."
             exit 1
           }
