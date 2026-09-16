@@ -2,7 +2,8 @@ import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
- * GET /health — used by Railway health checks, uptime monitors, and Docker HEALTHCHECK.
+ * GET /health — used by Render's healthCheckPath (see render.yaml), the
+ * verify-deployment workflow, uptime monitors, and Docker HEALTHCHECK.
  * Excluded from the /api global prefix (see main.ts setGlobalPrefix exclude list).
  */
 @Controller('health')
@@ -17,7 +18,7 @@ export class HealthController {
       status: dbOk ? 'ok' : 'degraded',
       db: dbOk ? 'connected' : 'unavailable',
       // NOTE: npm_package_version is only set by `npm run` scripts — Docker's
-      // `node dist/main` (see Dockerfile/railway.json) never sets it, so this
+      // `node dist/main` (see backend/Dockerfile) never sets it, so this
       // fallback is what actually shows in production. Keep it in sync with
       // package.json manually until this reads package.json directly instead.
       version: process.env.npm_package_version ?? '1.0.0',

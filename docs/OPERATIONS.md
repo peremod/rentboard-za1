@@ -86,7 +86,7 @@ Review at the quarterly OKR session; never move a milestone without moving its t
 
 | Time (SAST) | Block | What |
 |---|---|---|
-| 08:00–08:15 | Health check | Sentry error groups (auth/payments/publish first). Railway memory <400MB, p95 <500ms. No red CI on `main`/`develop`. |
+| 08:00–08:15 | Health check | Sentry error groups (auth/payments/publish first). Render service memory and p95 <500ms. No red CI on `master`/`develop`. |
 | 08:20–08:40 | Trust & Safety | `safety@` inbox, flagged listings, PAIA/privacy inbox. |
 | 16:30–16:45 | Growth pulse | Landlord signups vs rooms posted. Social mentions/DMs answered. |
 
@@ -133,9 +133,9 @@ git branch -r --merged origin/develop \
 
 ## 6. Incident escalation
 
-1. Hit `/health`; read Railway logs.
+1. Hit `/health`; read the Render service logs.
 2. DB-related? Supabase status page + connection count.
-3. Traffic spike? Railway Starter → Pro, 2 replicas (≈5-minute change, Capacity doc).
+3. Traffic spike? Move the Render service off the free tier to a paid instance (the free tier sleeps and does not scale).
 4. Post a one-line internal status. If customer-facing and >15 min, post on socials.
 5. Postmortem within 48h for any outage >10 min: root cause, fix, follow-up ticket.
 
@@ -145,7 +145,7 @@ git branch -r --merged origin/develop \
 
 - [ ] `CONTRIBUTING.md` release flow followed (tag, merge to `main`).
 - [ ] CI green on `main` post-merge.
-- [ ] Railway + Vercel deploy logs both report healthy.
+- [ ] Render + Vercel deploy logs both report healthy.
 - [ ] Production smoke: register → browse → apply → mark-as-let → relist → Stripe checkout.
 - [ ] Internal-link + slug spot check on changed routes (no 404, no redirect chains).
 - [ ] Changelog entry published.

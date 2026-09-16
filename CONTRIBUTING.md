@@ -123,7 +123,16 @@ CI (`.github/workflows/ci.yml`) re-runs all of this — fix locally first to avo
 | Git ref | Environment | Frontend | Backend |
 |---|---|---|---|
 | any branch | Preview | Vercel preview URL (auto per-PR) | — |
-| `develop` | Staging | `staging.rentboard.co.za` (Vercel) | Railway `staging` env |
-| `main` | Production | `rentboard.co.za` (Vercel) | Railway `production` env |
+| `develop` | Staging | `staging.rentboard.co.za` (Vercel) | Render, via `render.yaml` |
+| `main` | Production | `rentboard.co.za` (Vercel) | **none yet** — see below |
+
+Railway was dropped. Render deploys `develop` on push straight from the repo,
+so there is no GitHub Actions job for the backend any more; `verify-deployment.yml`
+asserts afterwards that staging came up configured as staging.
+
+Production has no backend deploy path. `render.yaml` defines only the free-tier
+staging service, and the free tier sleeps after ~15 minutes idle — not a
+production target. Adding one means a paid Render service plus a `master`
+entry in `verify-deployment.yml`.
 
 Staging and production use separate `.env` files and separate Supabase projects — never point staging at the production database.

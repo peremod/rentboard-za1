@@ -1,8 +1,17 @@
 # Render blueprint — free-tier staging.
 #
-# An alternative to the Railway workflow in .github/workflows/. Render deploys
-# straight from the repo on push, so it needs no CI token and no secrets in
-# GitHub — which is why it is the easier of the two to start with.
+# This is the backend deploy path. Railway was dropped, and its workflow and
+# railway.json went with it. Render deploys straight from the repo on push, so
+# it needs no CI token and no secrets in GitHub.
+#
+# The tradeoff of deploying out-of-band is that GitHub sees nothing: no job,
+# no status, no log. .github/workflows/verify-deployment.yml exists to put one
+# signal back — it waits for the deploy and asserts the environment came up
+# configured as staging.
+#
+# There is NO PRODUCTION SERVICE defined here yet. The free tier is not a
+# production target (see below), so production currently has no backend deploy
+# path at all.
 #
 # Set it up: Render dashboard → New → Blueprint → point at this repo.
 #
@@ -22,7 +31,7 @@ services:
     dockerContext: ./backend
     plan: free
     region: frankfurt          # closest Render region to South Africa
-    branch: develop            # staging; main would be production
+    branch: develop            # staging — the only environment Render serves
     healthCheckPath: /health
 
     # migrate deploy, never migrate dev — dev can prompt for a destructive

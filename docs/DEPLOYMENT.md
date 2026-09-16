@@ -4,8 +4,17 @@ Everything so far is proven on localhost. This gets it onto real infrastructure,
 where a different class of problem lives: environment variables, CORS, SSL,
 prerendering against a live API, and migrations on a database you cannot reset.
 
-The GitHub Actions workflows already exist and target **Railway** (backend +
-Postgres) and **Vercel** (frontend). This is the setup they expect.
+**Railway was dropped.** The backend deploys to **Render**, from `render.yaml`,
+straight from the repo on push to `develop` — there is no GitHub Actions
+workflow for it, and no token to set. Section 2b below is the live path;
+section 3 is kept only as a record of what was removed.
+
+The frontend still deploys to **Vercel** via `deploy-frontend.yml`.
+
+> This document still describes host URLs in the `*.up.railway.app` form in
+> places. Those are stale — the intended API hostnames are
+> `api-staging.rentboard.co.za` and `api.rentboard.co.za`. Worth a full pass
+> once the Render services are actually stood up and their URLs are known.
 
 Budget roughly two hours for the first run. Most of it is waiting for DNS and
 clicking through dashboards.
@@ -17,7 +26,8 @@ clicking through dashboards.
 | | Why | Cost |
 |---|---|---|
 | GitHub repo with the code pushed | The workflows deploy from it | Free |
-| Railway account | Backend and Postgres | ~$5/mo, free trial credit |
+| Render account | Backend | Free tier — see §2b for what the free tier costs you |
+| Neon account | Postgres | Free tier |
 | Vercel account | Frontend | Free tier is enough |
 | Resend account + a domain | Magic links and every notification | Free to 3,000/mo |
 | ImageKit account | Already have one | Free tier |
@@ -51,10 +61,11 @@ git push -u origin develop
 
 ---
 
-## 2b. Free alternatives to Railway
+## 2b. Render + Neon — the live setup
 
-Railway has no free tier any more. Two combinations work at zero cost, with
-real trade-offs.
+This is the path the repo is wired for: `render.yaml` deploys the backend,
+Neon hosts the database. Both are free-tier, with real trade-offs covered
+below.
 
 **Free-tier terms change often. Verify current limits before committing** —
 what follows was accurate when written and these providers revise it regularly.
@@ -135,7 +146,13 @@ plan removes the sleeping, which fixes cold starts and makes the scheduled jobs
 reliable. That is the point where free stops being a saving and starts being a
 liability.
 
-## 3. Railway — backend and database
+## 3. Railway — backend and database (REMOVED — do not follow)
+
+> Railway is no longer used. `deploy-backend.yml` and `backend/railway.json`
+> were deleted; `RAILWAY_TOKEN` is not needed and is not read by anything.
+> Use section 2b instead. This section stays only because the environment
+> variable list below is still the right list — only the host and the URLs
+> change.
 
 1. **New Project** → Deploy from GitHub repo → select the repo
 2. **Add Postgres**: New → Database → PostgreSQL. Railway sets `DATABASE_URL`
@@ -223,11 +240,18 @@ imagekitUrl: 'https://ik.imagekit.io/l4on8rrpx',
 Settings → Secrets and variables → Actions:
 
 ```
-RAILWAY_TOKEN     # Railway → Account Settings → Tokens
 VERCEL_TOKEN      # Vercel → Settings → Tokens
 VERCEL_ORG_ID     # .vercel/project.json after one local `vercel` run
 VERCEL_PROJECT_ID # same file
 ```
+
+These three are for the frontend only, and **none of them are currently set** —
+every run of `deploy-frontend.yml` has failed with `You defined "--token", but
+it's missing a value`. Nothing has ever deployed from GitHub Actions.
+
+The backend needs no secret here. Render deploys it from `render.yaml` on push
+to `develop`; its own environment variables are set in the Render dashboard
+(the `sync: false` entries in that file).
 
 ---
 

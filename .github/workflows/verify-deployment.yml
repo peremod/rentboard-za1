@@ -1,0 +1,60 @@
+# Asserts a deployed environment is configured the way it claims to be.
+#
+# This was the last step of deploy-backend.yml, which deployed to Railway.
+# Railway is gone and Render deploys straight from the repo (see render.yaml),
+# so there is no longer a GitHub job wrapped around the deploy — but the check
+# itself never needed one. It only curls the public API, so it works against
+# any host.
+#
+# Keeping it matters more now, not less: with Render deploying out-of-band,
+# nothing in GitHub otherwise reports whether a deploy happened or what
+# configuration it came up with.
+name: Verify deployment
+
+on:
+  push:
+    # Only develop. render.yaml deploys that branch to staging, and it is the
+    # only environment Render currently serves — there is no production
+    # service yet. Add master here in the same change that adds one, or this
+    # asserts against an API that does not exist and cries wolf.
+    branches: [develop]
+    paths: ['backend/**', 'render.yaml']
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Staging configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the Render deploy, then assert its configuration
+        # The API refuses to start on a misconfigured environment, so a healthy
+        # /health already proves SITE_URL, JWT secrets and APP_ENV are present.
+        # This asserts the part a health check cannot: that the deployment is
+        # indexable if and only if it is production.
+        run: |
+          set -euo pipefail
+          API="https://api-staging.rentboard.co.za"
+
+          # Render starts deploying when the push lands, out of band from this
+          # workflow, so this races it. The free tier also sleeps after ~15
+          # minutes idle and takes 30-60s to wake. Ten minutes covers a cold
+          # build plus a wake; a shorter window would fail on a slow deploy
+          # rather than on a real misconfiguration.
+          for i in $(seq 1 60); do
+            if curl -sf "$API/health" >/dev/null; then break; fi
+            sleep 10
+          done
+          curl -sf "$API/health" >/dev/null || {
+            echo "❌ $API/health never came up within 10 minutes."
+            echo "   Check the Render dashboard — the deploy may have failed or the service may be suspended."
+            exit 1
+          }
+
+          ROBOTS=$(curl -sf "$API/robots.txt")
+          echo "$ROBOTS"
+
+          echo "$ROBOTS" | grep -q "^Disallow: /$" \
+            || { echo "❌ STAGING IS CRAWLABLE. Check APP_ENV — it must be 'staging', not 'production'."; exit 1; }
+          echo "$ROBOTS" | grep -qv "rentboard.co.za/sitemap" \
+            || { echo "❌ staging is advertising production URLs — check SITE_URL"; exit 1; }
+          echo "✅ staging is healthy and refuses all crawlers"

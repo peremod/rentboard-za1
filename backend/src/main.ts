@@ -67,7 +67,7 @@ async function bootstrap() {
   }
 
   /**
-   * Graceful shutdown — important in production. When Railway (or Docker)
+   * Graceful shutdown — important in production. When Render (or Docker)
    * sends SIGTERM to stop the container during a deploy or scale-down,
    * this makes Nest run every registered OnModuleDestroy hook — including
    * PrismaService's (see prisma/prisma.service.ts, built in pass 0.1.0) —
