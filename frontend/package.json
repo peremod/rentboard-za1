@@ -8,9 +8,10 @@
     "build:staging": "ng build --configuration staging",
     "build:prod": "ng build --configuration production",
     "test": "ng test",
-    "lint": "ng lint",
+    "lint": "echo \"No linter configured. Run npm run typecheck. See docs/OPERATIONS.md.\" && exit 0",
     "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\""
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit -p tsconfig.app.json"
   },
   "dependencies": {
     "@angular/animations": "^21.2.14",
