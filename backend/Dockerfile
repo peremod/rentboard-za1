@@ -8,6 +8,12 @@ RUN npx prisma generate
 COPY . .
 RUN npm run build
 
+# Fail here rather than at startup. Without a rootDir, tsc infers the project
+# root from every file it compiles, and a single .ts outside src/ shifts the
+# output to dist/src/main.js — which only surfaces as 'Cannot find module
+# /app/dist/main' after the image has built, pushed and been deployed.
+RUN test -f dist/main.js || (echo "Build output missing: expected dist/main.js" && ls -R dist | head -30 && exit 1)
+
 FROM node:22-alpine AS production
 RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001
 WORKDIR /app
