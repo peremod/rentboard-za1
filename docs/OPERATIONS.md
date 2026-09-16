@@ -181,3 +181,37 @@ git branch -r --merged origin/develop \
 Marketing and planning documents are **not in this repository**. Brand, GTM, landing-page copy and the advertising playbook live in Notion → Company OS, because they need owners, statuses and dates rather than diffs. See the "Where Things Live" page there for the full split.
 
 Mission and vision in §1–2 are the canonical wording. Any other document that states them must quote these, not paraphrase. The Notion Company OS page holds the same text; if the two ever differ, that is a bug — fix both in one change.
+
+---
+
+## Linting
+
+**There is no linter installed.** Both `package.json` files carried a `lint`
+script — `ng lint` and `eslint --fix` — but neither project has ESLint as a
+dependency, so CI failed on a missing binary rather than on code quality. The
+backend script also ran `--fix`, which would have rewritten files inside CI and
+then built whatever it produced.
+
+The scripts now say so rather than failing, and CI runs `npm run typecheck`
+instead: `tsc --noEmit` across both projects. That is a real gate — it is what
+catches the class of error that has actually bitten this project, such as a
+template calling a method that does not exist, or a Prisma field that was never
+on the model.
+
+### Adding ESLint properly
+
+Worth doing, and it is its own task rather than something to bolt on while
+unblocking a deploy:
+
+```bash
+npm --prefix frontend install --save-dev angular-eslint eslint typescript-eslint
+npx --prefix frontend ng add angular-eslint
+
+npm --prefix backend install --save-dev eslint typescript-eslint \
+  eslint-config-prettier eslint-plugin-prettier
+```
+
+Expect a large number of findings on first run — around 60 components and 22
+controllers have never been linted. Triage them before turning the CI step on,
+or the first green build becomes a red one nobody can fix quickly, and the
+habit of ignoring CI starts there.
