@@ -215,3 +215,33 @@ Expect a large number of findings on first run — around 60 components and 22
 controllers have never been linted. Triage them before turning the CI step on,
 or the first green build becomes a red one nobody can fix quickly, and the
 habit of ignoring CI starts there.
+
+---
+
+## Testing
+
+**The backend has no test framework installed.** `package.json` carried
+`"test": "jest"` and `"test:e2e": "jest --config ./test/jest-e2e.json"` from
+the original Nest CLI scaffold, but `jest` was never added as a dependency and
+no `*.spec.ts` files exist — CI only discovered this once it started actually
+running (see the note at the top of `.github/workflows/ci.yml`), and `npm
+test` failed with `jest: not found` rather than a test failure.
+
+Both scripts now say so rather than failing. `npm run typecheck` is the real
+gate on the backend, same as linting.
+
+The frontend is unaffected — Angular CLI's `ng test` (Vitest) is installed
+and runs in CI.
+
+### Adding backend tests properly
+
+Also worth doing as its own task:
+
+```bash
+npm --prefix backend install --save-dev jest @types/jest ts-jest @nestjs/testing
+npx --prefix backend ts-jest config:init
+```
+
+Then restore the `test` / `test:e2e` scripts and write specs before wiring
+the CI step back to a real `jest` invocation — an empty gate that always
+passes is worse than an honest stub, for the same reason as linting above.

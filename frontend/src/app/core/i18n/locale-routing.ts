@@ -1,5 +1,6 @@
 import { EnvironmentProviders, inject, provideAppInitializer } from '@angular/core';
 import { CanMatchFn, NavigationEnd, Route, Router, UrlSegment } from '@angular/router';
+import { IS_DISCOVERING_ROUTES } from '@angular/ssr';
 import { filter } from 'rxjs';
 import { I18nService } from '../services/i18n.service';
 import { DEFAULT_LANGUAGE, isPrefixedLocale, stripLocalePrefix } from '../models/language.model';
@@ -16,9 +17,19 @@ import { DEFAULT_LANGUAGE, isPrefixedLocale, stripLocalePrefix } from '../models
  * 'en' is intentionally not a prefixed locale: English lives at the bare
  * path, so '/en/pricing' correctly falls through and 404s rather than
  * becoming a duplicate of '/pricing'.
+ *
+ * During SSR route discovery (the build-time walk that finds which client
+ * routes exist, so getPrerenderParams can be invoked for them) there are no
+ * real URL segments to test — Angular calls this with a synthetic, empty
+ * one. Rejecting on that would make the whole ':lang' branch look
+ * unreachable, and app.routes.ts's per-locale prerender routes would never
+ * get their getPrerenderParams called. IS_DISCOVERING_ROUTES is how Angular
+ * says "this isn't a real navigation" so the guard can let discovery through.
  */
-export const localeMatchGuard: CanMatchFn = (_route: Route, segments: UrlSegment[]) =>
-  segments.length > 0 && isPrefixedLocale(segments[0].path);
+export const localeMatchGuard: CanMatchFn = (_route: Route, segments: UrlSegment[]) => {
+  if (inject(IS_DISCOVERING_ROUTES, { optional: true })) return true;
+  return segments.length > 0 && isPrefixedLocale(segments[0].path);
+};
 
 /**
  * Applies the URL's locale on every navigation, before SEO metadata is set.
