@@ -333,6 +333,19 @@ holds, but it does expose visitor IPs to Google and removing it would make the
 promise unambiguous. It also removes a render-blocking round trip, which is
 worth real Lighthouse points.
 
+### Render: leave Root Directory empty
+
+`render.yaml` already sets `dockerContext: ./backend`. Setting **Root
+Directory** to `backend` in the dashboard as well makes Render look for
+`backend/backend` and fail at checkout, before any build output:
+
+```
+error: invalid local: resolve : lstat /opt/render/project/src/backend/backend
+```
+
+If the service was created by hand before the Blueprint, that field is likely
+still set. Clear it.
+
 ## 9. What will probably break first
 
 In roughly this order:

@@ -4,7 +4,6 @@
   "framework": "angular",
   "redirects": [
     {
-      "//": "The board lives at '/'. /rooms was published in the old sitemap and is what people type — a 301 (permanent) rather than a client-side redirect so the link equity actually transfers.",
       "source": "/rooms",
       "destination": "/",
       "permanent": true
@@ -12,30 +11,62 @@
   ],
   "headers": [
     {
-      "//": "Hashed build output (outputHashing: all) can never go stale under a given name, so it is cached for a year. This is the single largest repeat-visit win on a slow connection.",
       "source": "/(.*)\\.(js|css|woff2|svg|png|jpg|webp|avif)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
-    },
-    {
-      "source": "/assets/(.*)",
-      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
-    },
-    {
-      "//": "Security headers. Lighthouse Best Practices checks HSTS and clickjacking protection; these move that category to 100 and cost nothing at runtime.",
-      "source": "/(.*)",
       "headers": [
-        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-        { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(self), interest-cohort=()" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
       ]
     },
     {
-      "//": "Staging must never be indexed. environment.staging.ts already emits a noindex meta tag; this header covers non-HTML responses and any crawler that reads headers before rendering.",
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
       "source": "/(.*)",
-      "has": [{ "type": "host", "value": "staging.rentboard.co.za" }],
-      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
+      "headers": [
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=(self), interest-cohort=()"
+        }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "staging.rentboard.co.za"
+        }
+      ],
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
     }
   ]
 }
