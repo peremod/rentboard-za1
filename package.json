@@ -18,7 +18,8 @@
     "og:generate": "python3 scripts/generate-og-image.py",
     "e2e": "playwright install chromium --with-deps >/dev/null 2>&1 || playwright install chromium; playwright test",
     "e2e:ui": "playwright test --ui",
-    "e2e:install": "playwright install chromium --with-deps"
+    "e2e:install": "playwright install chromium --with-deps",
+    "migrate:staging": "cd backend && DATABASE_URL=\"$NEON_POOLED\" DIRECT_URL=\"$NEON_DIRECT\" npx prisma migrate deploy"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.5.0",

@@ -1,33 +1,29 @@
 # Deploying to Staging
 
-Everything so far is proven on localhost. This gets it onto real infrastructure,
-where a different class of problem lives: environment variables, CORS, SSL,
+Everything so far runs on a laptop. This puts it on real infrastructure, where a
+different class of problem lives: environment variables, CORS, SSL, cold starts,
 prerendering against a live API, and migrations on a database you cannot reset.
 
-**Railway was dropped.** The backend deploys to **Render**, from `render.yaml`,
-straight from the repo on push to `develop` — there is no GitHub Actions
-workflow for it, and no token to set. Section 2b below is the live path;
-section 3 is kept only as a record of what was removed.
+Three services, all free to start:
 
-The frontend still deploys to **Vercel** via `deploy-frontend.yml`.
+| Piece | Where | Why |
+|---|---|---|
+| Postgres | **Neon** | Free tier does not expire, only sleeps |
+| Backend (NestJS) | **Render** | Deploys from `render.yaml`, no CI token needed |
+| Frontend (Angular) | **Vercel** | Free, and handles Angular SSR |
 
-> This document still describes host URLs in the `*.up.railway.app` form in
-> places. Those are stale — the intended API hostnames are
-> `api-staging.rentboard.co.za` and `api.rentboard.co.za`. Worth a full pass
-> once the Render services are actually stood up and their URLs are known.
-
-Budget roughly two hours for the first run. Most of it is waiting for DNS and
+Budget about two hours for the first run, most of it waiting for DNS and
 clicking through dashboards.
 
----
+> Its two deploy workflows were deleted in v1.55.0 rather than left to fail on
+> every push: Render and Vercel both deploy on push by themselves, so a CI
+> deploy step is redundant here, not just broken.
 
 ## 1. What you need before starting
 
 | | Why | Cost |
 |---|---|---|
 | GitHub repo with the code pushed | The workflows deploy from it | Free |
-| Render account | Backend | Free tier — see §2b for what the free tier costs you |
-| Neon account | Postgres | Free tier |
 | Vercel account | Frontend | Free tier is enough |
 | Resend account + a domain | Magic links and every notification | Free to 3,000/mo |
 | ImageKit account | Already have one | Free tier |
@@ -61,11 +57,9 @@ git push -u origin develop
 
 ---
 
-## 2b. Render + Neon — the live setup
+## 2b. Hosting
 
-This is the path the repo is wired for: `render.yaml` deploys the backend,
-Neon hosts the database. Both are free-tier, with real trade-offs covered
-below.
+real trade-offs.
 
 **Free-tier terms change often. Verify current limits before committing** —
 what follows was accurate when written and these providers revise it regularly.
@@ -100,7 +94,7 @@ the failure is a timeout rather than a clear message.
 second, so the first request after a quiet period is slow but not broken —
 worth knowing before you conclude the API has a performance problem.
 
-### Then: Render (app) + Neon (database)
+### Render — the application host
 
 | | Free tier | Catch |
 |---|---|---|
@@ -146,16 +140,9 @@ plan removes the sleeping, which fixes cold starts and makes the scheduled jobs
 reliable. That is the point where free stops being a saving and starts being a
 liability.
 
-## 3. Railway — backend and database (REMOVED — do not follow)
-
-> Railway is no longer used. `deploy-backend.yml` and `backend/railway.json`
-> were deleted; `RAILWAY_TOKEN` is not needed and is not read by anything.
-> Use section 2b instead. This section stays only because the environment
-> variable list below is still the right list — only the host and the URLs
-> change.
+## 3. Render — the backend
 
 1. **New Project** → Deploy from GitHub repo → select the repo
-2. **Add Postgres**: New → Database → PostgreSQL. Railway sets `DATABASE_URL`
    automatically
 3. **Settings → Root Directory**: `backend`
 4. **Create a staging environment**: Settings → Environments → New → `staging`
@@ -172,13 +159,13 @@ JWT_SECRET=            # openssl rand -base64 48
 JWT_EXPIRES_IN=15m
 
 FRONTEND_URL=https://staging-rentboard.vercel.app
-API_URL=https://rentboard-api-staging.up.railway.app
+API_URL=https://<your-render-url>
 
 # Google sign-in. The callback must match the URI registered in the Google
 # Cloud console for THIS environment — see docs/AUTHENTICATION.md.
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-GOOGLE_CALLBACK_URL=https://rentboard-api-staging.up.railway.app/api/auth/google/callback
+GOOGLE_CALLBACK_URL=https://<your-render-url>/api/auth/google/callback
 
 IMAGEKIT_PUBLIC_KEY=
 IMAGEKIT_PRIVATE_KEY=
@@ -204,6 +191,24 @@ until step 4. Deploy the backend first, note its URL, then come back and set
 
 ---
 
+### Migrations are manual on the free tier
+
+Render's free tier rejects `preDeployCommand`, so nothing migrates the database
+for you. **Run this before every deploy that changes the schema:**
+
+```bash
+export NEON_POOLED="..."   # pooled, host has -pooler
+export NEON_DIRECT="..."   # unpooled
+npm run migrate:staging
+```
+
+This is worse than automatic and worth naming as such: it can be forgotten, and
+a forgotten migration means the API starts against a schema it does not expect
+— usually surfacing as a 500 on one endpoint rather than a clear failure.
+
+Add `preDeployCommand: npx prisma migrate deploy` back to `render.yaml` the day
+this moves to a paid instance.
+
 ## 4. Vercel — frontend
 
 1. **Add New → Project** → import the repo
@@ -215,45 +220,32 @@ until step 4. Deploy the backend first, note its URL, then come back and set
 ### Environment variable
 
 ```
-API_URL=https://rentboard-api-staging.up.railway.app
+API_URL=https://<your-render-url>
 ```
 
 Angular bakes environment values at build time, so `environment.staging.ts`
-must point at the Railway URL.
 
 **It currently assumes a custom domain you probably do not have yet** —
 `https://api-staging.rentboard.co.za/api`. Either point that subdomain at
-Railway, or change the file to the Railway URL for now. If it is wrong, every
 API call from staging fails and the site looks completely broken rather than
 partly broken, which at least makes it easy to spot.
 
 ```ts
 // frontend/src/environments/environment.staging.ts
-apiUrl: 'https://rentboard-api-staging.up.railway.app/api',
+apiUrl: 'https://<your-render-url>/api',
 imagekitUrl: 'https://ik.imagekit.io/l4on8rrpx',
 ```
 
 ---
 
-## 5. GitHub secrets
+## 5. No GitHub secrets needed
 
-Settings → Secrets and variables → Actions:
+Render deploys from `render.yaml` on push and Vercel deploys from its own
+project settings. Neither needs a token in GitHub, which is one fewer secret to
+rotate and one fewer thing to get wrong.
 
-```
-VERCEL_TOKEN      # Vercel → Settings → Tokens
-VERCEL_ORG_ID     # .vercel/project.json after one local `vercel` run
-VERCEL_PROJECT_ID # same file
-```
-
-These three are for the frontend only, and **none of them are currently set** —
-every run of `deploy-frontend.yml` has failed with `You defined "--token", but
-it's missing a value`. Nothing has ever deployed from GitHub Actions.
-
-The backend needs no secret here. Render deploys it from `render.yaml` on push
-to `develop`; its own environment variables are set in the Render dashboard
-(the `sync: false` entries in that file).
-
----
+CI still runs on every push — audits, type check, tests and build — but it does
+not deploy.
 
 ## 6. Migrate and seed
 
@@ -264,16 +256,22 @@ would destroy data.
 Once the first deploy succeeds, seed the reference data:
 
 ```bash
-railway run --environment staging npx ts-node prisma/seed.ts
+cd backend
+DATABASE_URL="$NEON_POOLED" DIRECT_URL="$NEON_DIRECT" npx ts-node prisma/seed.ts
 ```
 
 That creates places and house ads. Add the admin:
 
 ```bash
-railway run --environment staging \
+cd backend
+DATABASE_URL="$NEON_POOLED" DIRECT_URL="$NEON_DIRECT" \
   ADMIN_EMAIL=you@yourdomain.co.za ADMIN_PASSWORD='<strong>' \
   npx ts-node prisma/seed.ts
 ```
+
+Seeding runs from your laptop against Neon. Render is not involved and does not
+need to exist yet — proving the schema against cloud Postgres before any
+hosting is set up is worth doing on its own.
 
 **Do not seed demo ads or launch codes on staging** unless you want them there —
 both are opt-in flags and staging is where you show people the product.
@@ -296,7 +294,7 @@ silently dropping your own mail.
 ## 8. Prove it works
 
 ```bash
-API=https://rentboard-api-staging.up.railway.app \
+API=https://<your-render-url> \
 FRONTEND_URL=https://staging-rentboard.vercel.app \
 ./scripts/smoke-test.sh
 ```
@@ -348,7 +346,6 @@ In roughly this order:
 4. **Prerendered pages showing stale or empty data.** The board is prerendered;
    anything fetched in `ngOnInit` at build time bakes in whatever the API
    returned then. Ad slots already use `afterNextRender` for exactly this reason
-5. **Cold starts.** Railway's free tier sleeps. The first request after idle
    takes several seconds, which reads as broken
 
 ---

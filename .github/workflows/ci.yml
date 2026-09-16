@@ -59,13 +59,19 @@ jobs:
       - name: Build (production)
         working-directory: frontend
         run: npm run build:prod
+      - name: Build (staging)
+        working-directory: frontend
+        run: npm run build:staging
+      - name: Build (development)
+        working-directory: frontend
+        run: npx ng build --configuration development
 
-      # Both checks below read dist/, and production is the only build with
-      # indexable: true — staging and development deliberately strip
-      # canonical/hreflang and ship an unminified bundle (see
-      # SeoService.setCanonical and environment.ts). They must run here,
-      # before the staging/development builds overwrite this same dist/
-      # directory, or they end up asserting on the wrong build's output.
+      - name: Environment parity
+        # Each environment file must define the same keys. A key present in
+        # production and missing from staging is a runtime undefined that no
+        # typecheck catches, because each file is compiled in isolation.
+        run: node scripts/env-parity.mjs
+
       - name: Prerendered output sanity
         working-directory: frontend
         run: |
@@ -90,19 +96,6 @@ jobs:
           BUNDLE=$(find dist -name "main*.js" -path "*browser*" | xargs cat | gzip -c | wc -c)
           echo "Main bundle gzipped: ${BUNDLE} bytes"
           if [ "$BUNDLE" -gt 512000 ]; then echo "❌ Exceeds 500KB budget"; exit 1; fi
-
-      - name: Build (staging)
-        working-directory: frontend
-        run: npm run build:staging
-      - name: Build (development)
-        working-directory: frontend
-        run: npx ng build --configuration development
-
-      - name: Environment parity
-        # Each environment file must define the same keys. A key present in
-        # production and missing from staging is a runtime undefined that no
-        # typecheck catches, because each file is compiled in isolation.
-        run: node scripts/env-parity.mjs
 
   backend:
     name: Backend — Typecheck, Test, Build

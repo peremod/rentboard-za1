@@ -26,16 +26,8 @@ git checkout -b feat/room-relist-analytics
 <type>(<scope>): <short description>
 ```
 
-**Types:** `feat fix docs style refactor perf test chore ci revert`
-
-**Scopes** — domain:
-`rooms auth login users tenant landlord messages payments billing screening passport account admin board home ads ui i18n seo`
-
-**Scopes** — platform and tooling:
-`api backend frontend ssr router routes cdn db env build deploy e2e ci deps release`
-
-A subject may open with a proper noun (`docs(deploy): Neon setup`) — only
-PascalCase and SHOUTING are rejected.
+**Types:** `feat fix docs style refactor perf test chore ci`
+**Scopes:** `rooms auth users messages payments screening passport admin seo api cdn db ci deps release`
 
 ```bash
 git commit -m "feat(rooms): add one-click relist"
@@ -123,16 +115,7 @@ CI (`.github/workflows/ci.yml`) re-runs all of this — fix locally first to avo
 | Git ref | Environment | Frontend | Backend |
 |---|---|---|---|
 | any branch | Preview | Vercel preview URL (auto per-PR) | — |
-| `develop` | Staging | `staging.rentboard.co.za` (Vercel) | Render, via `render.yaml` |
-| `main` | Production | `rentboard.co.za` (Vercel) | **none yet** — see below |
-
-Railway was dropped. Render deploys `develop` on push straight from the repo,
-so there is no GitHub Actions job for the backend any more; `verify-deployment.yml`
-asserts afterwards that staging came up configured as staging.
-
-Production has no backend deploy path. `render.yaml` defines only the free-tier
-staging service, and the free tier sleeps after ~15 minutes idle — not a
-production target. Adding one means a paid Render service plus a `master`
-entry in `verify-deployment.yml`.
+| `develop` | Staging | `staging.rentboard.co.za` (Vercel) | Railway `staging` env |
+| `main` | Production | `rentboard.co.za` (Vercel) | Railway `production` env |
 
 Staging and production use separate `.env` files and separate Supabase projects — never point staging at the production database.

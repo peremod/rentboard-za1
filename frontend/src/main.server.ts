@@ -1,6 +1,6 @@
 import { bootstrapApplication } from '@angular/platform-browser';
 import type { BootstrapContext } from '@angular/platform-browser';
-import { config } from './app/app.config.server';
+import { appConfig } from './app/app.config';
 import { App } from './app/app';
 
 /**
@@ -10,6 +10,6 @@ import { App } from './app/app';
  * forwarded to bootstrapApplication — without it the platform is never
  * created and SSR fails with NG0401 (Missing Platform).
  */
-const bootstrap = (context: BootstrapContext) => bootstrapApplication(App, config, context);
+const bootstrap = (context: BootstrapContext) => bootstrapApplication(App, appConfig, context);
 
 export default bootstrap;
