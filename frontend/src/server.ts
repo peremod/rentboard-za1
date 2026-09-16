@@ -8,7 +8,9 @@ const angularApp = new AngularNodeAppEngine();
 
 app.use(express.static(browserDistFolder, { maxAge: '1y', index: false }));
 
-app.use('/**', (req, res, next) => {
+// No path pattern — this already matches every request that reaches it,
+// and Express 5's path-to-regexp no longer accepts '/**' as a route pattern.
+app.use((req, res, next) => {
   angularApp
     .handle(req)
     .then((response) => (response ? writeResponseToNodeResponse(response, res) : next()))
