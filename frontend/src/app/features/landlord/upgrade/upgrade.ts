@@ -72,6 +72,14 @@ export class Upgrade {
   interval = signal<'monthly' | 'annual'>('monthly');
 
   upgrade(planTier: 'pro' | 'agency') {
-    this.stripe.upgradePlan(planTier, this.interval());
+    // Billing has no payment provider. Stripe was removed — it does not
+    // operate in South Africa for receiving payments — and PayFast recurring
+    // billing is not built. This page is unreachable while BILLING_ENABLED is
+    // false; the stub keeps it honest if that flag is ever flipped early.
+    this.dialogs.alert(
+      'Not available yet',
+      'Paid plans are not open yet. Nothing has been charged.',
+      'info',
+    );
   }
 }
