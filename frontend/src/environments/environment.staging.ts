@@ -2,9 +2,9 @@
 export const environment = {
   production: false,
   envName: 'staging',
-  apiUrl: 'https://api-staging.rentboard.co.za/api',
+  apiUrl: 'https://rentboard-api.onrender.com',
   /** Origin used to build canonical and Open Graph URLs. No trailing slash. */
-  siteUrl: 'https://staging.rentboard.co.za',
+  siteUrl: 'https://rentboard-za1-lbcl50it5-peremods-projects.vercel.app/',
   /**
    * Deliberately false. Staging is a byte-identical copy of production copy;
    * if it were indexable it would fight production for every keyword and
