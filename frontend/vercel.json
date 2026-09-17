@@ -1,6 +1,6 @@
 {
   "buildCommand": "npm run build:prod",
-  "outputDirectory": "dist/rentboard-frontend",
+  "outputDirectory": "dist/rentboard-frontend/browser",
   "framework": "angular",
   "redirects": [
     {
@@ -68,5 +68,12 @@
         }
       ]
     }
-  ]
+  ],
+  "rewrites": [
+    {
+      "source": "/((?!assets/|_next/|.*\\..*).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "cleanUrls": true
 }

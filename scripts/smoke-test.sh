@@ -2121,9 +2121,12 @@ if [[ -n "$OLD_RT" ]]; then
 
   # Immediately replaying the consumed token is a race, not theft: it must
   # return a session rather than revoking everything.
-  RACE=$(mktemp)
-  printf 'localhost\tFALSE\t/api/auth\tFALSE\t0\trb_refresh\t%s\n' "$OLD_RT" > "$RACE"
-  RT2=$(curl -s -b "$RACE" -o /dev/null -w '%{http_code}' \
+  # Sent as a header rather than a cookie jar. A jar file has to name the
+  # domain, and hardcoding 'localhost' meant the cookie was silently dropped
+  # against a deployed API — the request arrived with no token at all and the
+  # 401 looked like the grace window failing.
+  RT2=$(curl -s -o /dev/null -w '%{http_code}' \
+    -H "Cookie: rb_refresh=$OLD_RT" \
     -X POST "$API/api/auth/refresh" -H 'Content-Type: application/json' -d '{}' 2>/dev/null)
   if [[ "$RT2" == "200" || "$RT2" == "201" ]]; then
     green "  PASS  replaying the just-rotated token is treated as a race"; PASS=$((PASS+1))
@@ -2140,7 +2143,6 @@ if [[ -n "$OLD_RT" ]]; then
     red "  FAIL  the race revoked the live session (got $RT3)"; FAIL=$((FAIL+1))
   fi
 
-  rm -f "$RACE"
 fi
 rm -f "$RT_COOKIES"
 
@@ -2188,4 +2190,4 @@ if [[ $FAIL -gt 0 ]]; then
 fi
 printf '\n'
 green "All checks passed — the core MVP flow works end to end."
-printf 'Next: click the same flow in the UI at http://localhost:4200\n'
+printf 'Next: click the same flow in the UI at %s\n' "$FE"
