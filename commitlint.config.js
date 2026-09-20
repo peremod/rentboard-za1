@@ -46,7 +46,9 @@ module.exports = {
       'board', 'home', 'ads', 'ui', 'i18n', 'seo',
       // Platform and tooling
       'api', 'backend', 'frontend', 'ssr', 'router', 'routes', 'cdn', 'db',
-      'env', 'build', 'deploy', 'e2e', 'ci', 'deps', 'release'
+      'env', 'build', 'deploy', 'e2e', 'ci', 'deps', 'release',
+      // Deploy targets and infrastructure, all in use since the Render move
+      'render', 'vercel', 'docker', 'prisma'
     ]]
   }
 };
