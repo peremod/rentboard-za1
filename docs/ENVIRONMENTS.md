@@ -157,24 +157,28 @@ which can stay green while one vital degrades.
 The weekly run also walks every URL in the live `sitemap.xml` and fails if any
 returns something other than 200.
 
-### `deploy-frontend.yml`
+### Deploys — no workflows at all
 
-Push to `master`/`main` → production. Push to `develop` → staging. Deploys the
-frontend to Vercel, and needs `VERCEL_TOKEN`, `VERCEL_ORG_ID` and
-`VERCEL_PROJECT_ID` set as Actions secrets. **None of them are set, so every
-run of this workflow has failed** — `Error: You defined "--token", but it's
-missing a value`. Nothing has ever deployed from it.
+Neither half of the app deploys from GitHub Actions any more. Both providers
+deploy from the repo themselves, which made the workflows redundant as well as
+broken:
 
-### Backend deploys — no workflow
+| | Deploys via | Removed workflow |
+|---|---|---|
+| Backend | Render, from `render.yaml`, on push to `develop` | `deploy-backend.yml` |
+| Frontend | Vercel's own Git integration | `deploy-frontend.yml` |
 
-There is no backend deploy workflow. Railway was dropped and `deploy-backend.yml`
-and `backend/railway.json` were removed with it; Render deploys `develop` on
-push straight from the repo via `render.yaml`, without GitHub.
+`deploy-backend.yml` went when Railway was dropped, along with
+`backend/railway.json`. `deploy-frontend.yml` went because it needed
+`VERCEL_TOKEN`, `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` as Actions secrets,
+none of which were ever set — every run of it failed with `Error: You defined
+"--token", but it's missing a value`, and it never deployed anything. Vercel
+was already deploying on its own the whole time.
 
-That means GitHub sees nothing for a backend deploy — no job, no status, no
-log. `verify-deployment.yml` puts one signal back: after a push to `develop` it
-waits for the Render deploy and asserts that staging is healthy and refuses
-crawlers.
+The cost is that GitHub now sees nothing for a deploy — no job, no status, no
+log. `verify-deployment.yml` puts one signal back on the backend side: after a
+push to `develop` it waits for the Render deploy and asserts that staging is
+healthy and refuses crawlers. There is no equivalent for the frontend yet.
 
 Production has no backend deploy path at all — `render.yaml` defines only the
 free-tier staging service.

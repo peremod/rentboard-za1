@@ -126,9 +126,12 @@ CI (`.github/workflows/ci.yml`) re-runs all of this — fix locally first to avo
 | `develop` | Staging | `staging.rentboard.co.za` (Vercel) | Render, via `render.yaml` |
 | `main` | Production | `rentboard.co.za` (Vercel) | **none yet** — see below |
 
-Railway was dropped. Render deploys `develop` on push straight from the repo,
-so there is no GitHub Actions job for the backend any more; `verify-deployment.yml`
-asserts afterwards that staging came up configured as staging.
+Neither half deploys from GitHub Actions. Railway was dropped and Render now
+deploys `develop` on push straight from the repo; Vercel's Git integration does
+the frontend the same way, so `deploy-frontend.yml` was removed too — it needed
+tokens nobody had set and had never deployed anything. `verify-deployment.yml`
+asserts afterwards that staging came up configured as staging; there is no
+equivalent signal for the frontend.
 
 Production has no backend deploy path. `render.yaml` defines only the free-tier
 staging service, and the free tier sleeps after ~15 minutes idle — not a
