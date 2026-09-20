@@ -127,7 +127,8 @@ Legal counts as much as code here: several of these are compliance-critical, not
 | Resend | `RESEND_API_KEY` | ❌ **Not set.** The API boots and logs `[email skipped]` instead of sending, so nothing breaks — but a landlord is never told an application arrived, which breaks the core loop in practice. Highest-value remaining credential |
 | WhatsApp Business API | `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_VERIFY_TOKEN` | Optional — email notifications never depend on this |
 | Stripe | see table above | Required for pass 0.8.0's payment flows |
-| Vercel / Railway deploy secrets | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `RAILWAY_TOKEN` | GitHub Actions secrets, not `.env` |
+| Vercel deploy secrets | `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | GitHub Actions secrets, not `.env`. Currently unset — the frontend deploy workflow has never succeeded. |
+| Render (backend) | none | Render deploys `develop` from `render.yaml` on push, no GitHub secret needed. Railway was dropped. |
 
 ## i18n — translation status (from §19, repeated here so it's not missed)
 

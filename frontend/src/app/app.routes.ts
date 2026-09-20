@@ -164,6 +164,11 @@ export const serverRoutes: ServerRoute[] = [
   // instead. Still fully crawlable — just not baked into the build output.
   { path: ':lang/legal/**', renderMode: RenderMode.Server },
   { path: ':lang/rooms/:id', renderMode: RenderMode.Server },
+  // Explicit, same reason as ':lang/legal/**' above. Without this, the
+  // builder's fallback logic hands the bare '**' entry's own prerender pass
+  // eachLocale as its getPrerenderParams — eachLocale supplies 'lang', not
+  // the '**' segment a plain catch-all needs, so that pass fails outright.
+  { path: ':lang/**', renderMode: RenderMode.Server },
 
   // ── Private areas, both trees ──
   { path: 'auth/**', renderMode: RenderMode.Client },

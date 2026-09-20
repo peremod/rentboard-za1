@@ -86,7 +86,7 @@ Review at the quarterly OKR session; never move a milestone without moving its t
 
 | Time (SAST) | Block | What |
 |---|---|---|
-| 08:00–08:15 | Health check | Sentry error groups (auth/payments/publish first). Railway memory <400MB, p95 <500ms. No red CI on `main`/`develop`. |
+| 08:00–08:15 | Health check | Sentry error groups (auth/payments/publish first). Render service memory and p95 <500ms. No red CI on `master`/`develop`. |
 | 08:20–08:40 | Trust & Safety | `safety@` inbox, flagged listings, PAIA/privacy inbox. |
 | 16:30–16:45 | Growth pulse | Landlord signups vs rooms posted. Social mentions/DMs answered. |
 
@@ -133,9 +133,9 @@ git branch -r --merged origin/develop \
 
 ## 6. Incident escalation
 
-1. Hit `/health`; read Railway logs.
+1. Hit `/health`; read the Render service logs.
 2. DB-related? Supabase status page + connection count.
-3. Traffic spike? Railway Starter → Pro, 2 replicas (≈5-minute change, Capacity doc).
+3. Traffic spike? Move the Render service off the free tier to a paid instance (the free tier sleeps and does not scale).
 4. Post a one-line internal status. If customer-facing and >15 min, post on socials.
 5. Postmortem within 48h for any outage >10 min: root cause, fix, follow-up ticket.
 
@@ -145,7 +145,7 @@ git branch -r --merged origin/develop \
 
 - [ ] `CONTRIBUTING.md` release flow followed (tag, merge to `main`).
 - [ ] CI green on `main` post-merge.
-- [ ] Railway + Vercel deploy logs both report healthy.
+- [ ] Render + Vercel deploy logs both report healthy.
 - [ ] Production smoke: register → browse → apply → mark-as-let → relist → Stripe checkout.
 - [ ] Internal-link + slug spot check on changed routes (no 404, no redirect chains).
 - [ ] Changelog entry published.
@@ -215,3 +215,33 @@ Expect a large number of findings on first run — around 60 components and 22
 controllers have never been linted. Triage them before turning the CI step on,
 or the first green build becomes a red one nobody can fix quickly, and the
 habit of ignoring CI starts there.
+
+---
+
+## Testing
+
+**The backend has no test framework installed.** `package.json` carried
+`"test": "jest"` and `"test:e2e": "jest --config ./test/jest-e2e.json"` from
+the original Nest CLI scaffold, but `jest` was never added as a dependency and
+no `*.spec.ts` files exist — CI only discovered this once it started actually
+running (see the note at the top of `.github/workflows/ci.yml`), and `npm
+test` failed with `jest: not found` rather than a test failure.
+
+Both scripts now say so rather than failing. `npm run typecheck` is the real
+gate on the backend, same as linting.
+
+The frontend is unaffected — Angular CLI's `ng test` (Vitest) is installed
+and runs in CI.
+
+### Adding backend tests properly
+
+Also worth doing as its own task:
+
+```bash
+npm --prefix backend install --save-dev jest @types/jest ts-jest @nestjs/testing
+npx --prefix backend ts-jest config:init
+```
+
+Then restore the `test` / `test:e2e` scripts and write specs before wiring
+the CI step back to a real `jest` invocation — an empty gate that always
+passes is worse than an honest stub, for the same reason as linting above.

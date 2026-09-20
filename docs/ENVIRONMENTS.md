@@ -157,10 +157,27 @@ which can stay green while one vital degrades.
 The weekly run also walks every URL in the live `sitemap.xml` and fails if any
 returns something other than 200.
 
-### `deploy-frontend.yml` / `deploy-backend.yml`
+### `deploy-frontend.yml`
 
-Push to `master`/`main` → production. Push to `develop` → staging. Both were
-also mis-mapped to non-existent branches and are fixed alongside `ci.yml`.
+Push to `master`/`main` → production. Push to `develop` → staging. Deploys the
+frontend to Vercel, and needs `VERCEL_TOKEN`, `VERCEL_ORG_ID` and
+`VERCEL_PROJECT_ID` set as Actions secrets. **None of them are set, so every
+run of this workflow has failed** — `Error: You defined "--token", but it's
+missing a value`. Nothing has ever deployed from it.
+
+### Backend deploys — no workflow
+
+There is no backend deploy workflow. Railway was dropped and `deploy-backend.yml`
+and `backend/railway.json` were removed with it; Render deploys `develop` on
+push straight from the repo via `render.yaml`, without GitHub.
+
+That means GitHub sees nothing for a backend deploy — no job, no status, no
+log. `verify-deployment.yml` puts one signal back: after a push to `develop` it
+waits for the Render deploy and asserts that staging is healthy and refuses
+crawlers.
+
+Production has no backend deploy path at all — `render.yaml` defines only the
+free-tier staging service.
 
 ---
 
