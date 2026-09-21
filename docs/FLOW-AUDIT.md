@@ -194,6 +194,46 @@ the UI, and it should be built before rent tracking is offered to landlords.
 
 ---
 
+## 2e. WhatsApp draft state machine (v1.58.0)
+
+```
+   (first inbound message) ──► collecting ──┬──► ready        ("DONE")
+                                            │        │
+                                            │        └──► claimed ──► Room (draft)
+                                            │
+                                            └──► abandoned    (14 days quiet)
+```
+
+A draft is created only for a number matching a landlord whose
+`phoneVerified` is true. An unrecognised number gets one reply explaining how
+to link and is then ignored — no draft, no record, nothing to enumerate.
+
+`claimed` is terminal and creates exactly one Room: the unique index on
+`roomId` is what makes a double claim impossible, and a claim of an
+already-claimed draft returns the same room rather than a second one.
+
+**The Room is created in `draft`, never `active`.** Publishing stays a
+deliberate act on the web, after the landlord has seen what the parser read.
+
+### Gaps
+
+**W1 — no voice notes.** A landlord who sends a voice note is told the bot
+reads photos and text. Transcription would mean an ASR provider: personal
+information leaving the country under POPIA s.72, and current ASR quality for
+isiZulu, Sesotho, Setswana and Xitsonga is poor enough that a confident wrong
+transcript is worse than asking for text. Open decision, not an oversight.
+
+**W2 — the claim screen cannot pick a yard.** Same cause as Y1: the wizard
+has no property picker, so a claimed draft always lands ungrouped.
+
+**W3 — one draft at a time per landlord.** A landlord collecting photos for
+two rooms at once has them merged into one draft, and has to claim and finish
+the first before starting the second. Threading by room would need the
+landlord to name each room in the chat, which is more ceremony than the
+feature is worth until someone asks for it.
+
+---
+
 ## 3. Cross-actor flows
 
 | Flow | Status |

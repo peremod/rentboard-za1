@@ -2308,7 +2308,7 @@ else
   red "  FAIL  no submitted event on the trail: $BODY"; FAIL=$((FAIL+1))
 fi
 
-if [[ -n "$ADMIN_TOKEN" ]]; then
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req PATCH "/api/verification/$SASSA_ID/review" '{"status":"approved"}' "$ADMIN_TOKEN"
   check "admin approves the income proof" 200 "$STATUS" "$BODY"
   if echo "$BODY" | jq -e '.documentPath == null and .documentDeletedAt != null' >/dev/null 2>&1; then
@@ -2363,7 +2363,7 @@ check "a tenant can list the reports they have raised" 200 "$STATUS" "$BODY"
 req GET /api/tenancies/flags/open "" "$TTOKEN"
 check "a non-admin cannot read the flag queue" 403 "$STATUS" "$BODY"
 
-if [[ -n "$ADMIN_TOKEN" ]]; then
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req GET /api/tenancies/flags/open "" "$ADMIN_TOKEN"
   check "admin can read the flag queue" 200 "$STATUS" "$BODY"
   req PATCH /api/tenancies/flags/recount "" "$ADMIN_TOKEN"
@@ -2475,13 +2475,52 @@ check "a tenant cannot set a landlord's reminder settings" 403 "$STATUS" "$BODY"
 req GET "/api/properties/rent/00000000-0000-4000-8000-000000000000" "" "$LTOKEN"
 check "rent history for a tenancy that does not exist" 404 "$STATUS" "$BODY"
 
-if [[ -n "$ADMIN_TOKEN" ]]; then
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req POST /api/properties/rent/run-reminders "" "$ADMIN_TOKEN"
   check "the overdue-rent reminder pass runs" 200 "$STATUS" "$BODY"
   req POST /api/properties/rent/run-reminders "" "$LTOKEN"
   check "a landlord cannot trigger the reminder pass" 403 "$STATUS" "$BODY"
 else
   grey "  SKIP  reminder pass — set ADMIN_TOKEN to include it"; SKIP=$((SKIP+1))
+fi
+
+# -- 47. WhatsApp-first listing creation ------------------------------------
+# A landlord sends photos and a sentence to the number and finds a draft
+# waiting on the web. The assertions that matter are the two that stop it
+# being abused: an unverified number creates nothing, and nothing a bot
+# parses ever reaches the board by itself.
+head_ "47. WhatsApp listing bot"
+
+req GET /api/whatsapp/drafts "" "$LTOKEN"
+check "landlord can list their WhatsApp drafts" 200 "$STATUS" "$BODY"
+req GET /api/whatsapp/drafts "" "$TTOKEN"
+check "a tenant cannot" 403 "$STATUS" "$BODY"
+
+req POST "/api/whatsapp/drafts/00000000-0000-4000-8000-000000000000/claim" "" "$LTOKEN"
+check "claiming a draft that is not yours is refused" 404 "$STATUS" "$BODY"
+
+if [[ -n "${WHATSAPP_APP_SECRET:-}" ]]; then
+  # A signed inbound message from a number with no verified landlord behind
+  # it must not create anything.
+  WA_PAYLOAD='{"entry":[{"changes":[{"value":{"contacts":[{"wa_id":"27820000001"}],"messages":[{"id":"wamid.smokebot","from":"27820000001","type":"text","text":{"body":"En suite room in Tembisa R3500"}}]}}]}]}'
+  WA_SIG="sha256=$(printf '%s' "$WA_PAYLOAD" \
+    | openssl dgst -sha256 -hmac "$WHATSAPP_APP_SECRET" -hex | awk '{print $NF}')"
+  WA_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/whatsapp/webhook" \
+    -H 'Content-Type: application/json' -H "x-hub-signature-256: $WA_SIG" -d "$WA_PAYLOAD" 2>/dev/null)
+  if [[ "$WA_STATUS" == "200" ]]; then
+    green "  PASS  a signed message from an unknown number is accepted and dropped  (200)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  signed bot message returned $WA_STATUS, expected 200"; FAIL=$((FAIL+1))
+  fi
+
+  req GET /api/whatsapp/drafts "" "$LTOKEN"
+  if echo "$BODY" | jq -e 'length == 0' >/dev/null 2>&1; then
+    green "  PASS  an unverified number creates no draft for anyone"; PASS=$((PASS+1))
+  else
+    red "  FAIL  a draft appeared from an unverified number: $(echo "$BODY" | jq -c 'length')"; FAIL=$((FAIL+1))
+  fi
+else
+  grey "  SKIP  inbound bot message — set WHATSAPP_APP_SECRET to include it"; SKIP=$((SKIP+1))
 fi
 
 # ── Summary ────────────────────────────────────────────────────────────────

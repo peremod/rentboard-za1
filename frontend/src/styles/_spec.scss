@@ -704,6 +704,19 @@ img{display:block;max-width:100%}
 .yard-new__row{display:flex;gap:.6rem}
 .yard-new__row label{flex:1}
 
+/* ═══ WHATSAPP DRAFT ═══ */
+.wa-draft{
+  border:1.5px solid var(--sage);border-left-width:4px;
+  background:rgba(61,112,64,.05);border-radius:var(--r4);
+  padding:.95rem 1rem;margin-bottom:1rem;
+}
+.wa-draft__head{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin-bottom:.4rem}
+.wa-draft__head strong{font-size:.9rem}
+.wa-draft__head span{font-size:.75rem;color:var(--ink2);white-space:nowrap}
+.wa-draft__parsed{font-size:.86rem;margin:0 0 .35rem;font-weight:700}
+.wa-draft__note{font-size:.78rem;color:var(--ink2);line-height:1.6;margin:0 0 .7rem}
+.wa-draft button{min-height:40px;padding-inline:1.1rem}
+
 /* ═══ SHIMMER ═══ */
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .shimmer{

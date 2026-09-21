@@ -92,15 +92,16 @@ model User {
   marketingEmails Boolean @default(true)
 
   authTokens          AuthToken[]
-  tenanciesAsLandlord Tenancy[]     @relation("TenanciesAsLandlord")
-  tenanciesAsTenant   Tenancy[]     @relation("TenanciesAsTenant")
-  reviewsWritten      Review[]      @relation("ReviewsWritten")
-  reviewsReceived     Review[]      @relation("ReviewsReceived")
-  reportsFiled        Report[]      @relation("ReportsFiled")
-  reportsAgainst      Report[]      @relation("ReportsAgainst")
-  flagsRaised         TenancyFlag[] @relation("FlagsRaised")
-  flagsAgainst        TenancyFlag[] @relation("FlagsAgainst")
-  properties          Property[]    @relation("PropertiesOwned")
+  tenanciesAsLandlord Tenancy[]       @relation("TenanciesAsLandlord")
+  tenanciesAsTenant   Tenancy[]       @relation("TenanciesAsTenant")
+  reviewsWritten      Review[]        @relation("ReviewsWritten")
+  reviewsReceived     Review[]        @relation("ReviewsReceived")
+  reportsFiled        Report[]        @relation("ReportsFiled")
+  reportsAgainst      Report[]        @relation("ReportsAgainst")
+  flagsRaised         TenancyFlag[]   @relation("FlagsRaised")
+  flagsAgainst        TenancyFlag[]   @relation("FlagsAgainst")
+  properties          Property[]      @relation("PropertiesOwned")
+  whatsappDrafts      WhatsappDraft[] @relation("WhatsappDrafts")
 
   /// Open or upheld post-tenancy flags against this account.
   ///
@@ -1510,4 +1511,73 @@ model RentPeriod {
   @@unique([tenancyId, periodStart])
   @@index([status, periodStart])
   @@map("rent_periods")
+}
+
+enum WhatsappDraftStatus {
+  /// Photos and text still arriving.
+  collecting
+  /// The landlord said they were done. Waiting for them to open the web and
+  /// publish — nothing goes live from WhatsApp alone.
+  ready
+  /// Turned into a Room draft. `roomId` says which.
+  claimed
+  /// Nothing for two weeks. Kept, not deleted, so a landlord who comes back
+  /// is not told their photos are gone.
+  abandoned
+}
+
+/// A listing being dictated over WhatsApp.
+///
+/// Most landlords in this market live on WhatsApp and do not want to fill in
+/// a seven-step web wizard on a phone. This lets them send photos and a
+/// sentence to a number and have a draft waiting for them.
+///
+/// **Nothing here ever goes live by itself.** The draft becomes a Room in
+/// `draft` status only when the landlord opens the site and claims it, and
+/// then still has to pass the ordinary publish rules — a cover photo and a
+/// 50-character description. A listing is a commitment to a stranger about
+/// somewhere they might live; it does not get published by a parser's guess.
+///
+/// Held separately from Room rather than creating a Room immediately, because
+/// Room requires a type, a rent, a province, a city and an availability date,
+/// and a half-finished WhatsApp conversation has none of them. Creating rows
+/// that cannot satisfy their own model would mean loosening the model for
+/// every other path.
+model WhatsappDraft {
+  id         String @id @default(uuid())
+  landlordId String
+  landlord   User   @relation("WhatsappDrafts", fields: [landlordId], references: [id], onDelete: Cascade)
+
+  /// The wa_id the messages came from. Recorded because a landlord may have
+  /// more than one number and the reply has to go back to the right one.
+  fromNumber String
+
+  status WhatsappDraftStatus @default(collecting)
+
+  /// Everything the landlord typed, in order. Kept raw as well as parsed:
+  /// the parser is deliberately simple and a human reading the original is
+  /// the fallback when it gets something wrong.
+  rawText    String?
+  /// ImageKit paths, in the order they arrived. The first becomes the cover.
+  imagePaths String[]
+
+  // What the parser made of it. Every one nullable — a missing field is a
+  // blank on the review screen, never a guess presented as fact.
+  parsedTitle     String?
+  parsedRentCents Int?
+  parsedRoomType  RoomType?
+  parsedProvince  String?
+  parsedCity      String?
+  parsedSuburb    String?
+
+  /// Set once claimed.
+  roomId String? @unique
+
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([landlordId, status])
+  @@index([status, lastMessageAt])
+  @@map("whatsapp_drafts")
 }

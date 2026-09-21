@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
+import { WhatsappDraftsService, WhatsappDraft } from '../../../core/services/whatsapp-drafts.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -26,6 +27,32 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
   template: `
     <app-portal-shell [navItems]="navItems()" roleLabel="Landlord"
                       [primaryAction]="{ label: '+ List a Room', route: '/landlord/rooms/new' }">
+
+      <!-- A listing dictated over WhatsApp, waiting to be finished. Top of
+           the page because the landlord sent it from their phone and is
+           coming here to find it — burying it below the stats would mean the
+           feature quietly not working. -->
+      @for (draft of whatsappDrafts.drafts(); track draft.id) {
+        <div class="wa-draft">
+          <div class="wa-draft__head">
+            <strong>💬 A listing you started on WhatsApp</strong>
+            <span>{{ draft.imagePaths.length }} photo{{ draft.imagePaths.length === 1 ? '' : 's' }}</span>
+          </div>
+          <p class="wa-draft__parsed">
+            {{ draft.parsedTitle || 'No title yet' }}
+            @if (draft.parsedRentCents) { · {{ draft.parsedRentCents | zarCents }}/mo }
+            @if (draft.parsedSuburb || draft.parsedCity) { · {{ draft.parsedSuburb || draft.parsedCity }} }
+          </p>
+          <p class="wa-draft__note">
+            Nothing is on the board yet. Open it to check what we read, add
+            anything missing, and publish.
+          </p>
+          <button type="button" class="btn btn-primary btn-sm"
+                  [disabled]="claiming() === draft.id" (click)="claimDraft(draft)">
+            {{ claiming() === draft.id ? 'Opening…' : 'Check and publish' }}
+          </button>
+        </div>
+      }
 
       <div class="insight-banner">
         📊
@@ -227,6 +254,9 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
   // would be more specific than those and would break the breakpoints.
 })
 export class LandlordDashboard implements OnInit {
+  protected readonly whatsappDrafts = inject(WhatsappDraftsService);
+  protected readonly claiming = signal<string | null>(null);
+
   auth = inject(AuthService);
   private roomsService = inject(RoomsService);
   private router = inject(Router);
@@ -267,6 +297,7 @@ export class LandlordDashboard implements OnInit {
   discardError = signal<string | null>(null);
 
   ngOnInit() {
+    this.whatsappDrafts.load().subscribe({ error: () => {} });
     this.roomsService.getLandlordRooms().subscribe({
       next: (rooms) => { this.rooms.set(rooms); this.loading.set(false); },
       error: () => this.loading.set(false),
@@ -494,6 +525,29 @@ export class LandlordDashboard implements OnInit {
     this.roomsService.getArchivedRooms().subscribe({
       next: (rooms) => { this.archivedRooms.set(rooms); this.loadingArchived.set(false); },
       error: () => this.loadingArchived.set(false),
+    });
+  }
+
+  /**
+   * Opens a WhatsApp draft as a room draft in the wizard.
+   *
+   * Goes to the edit wizard rather than publishing: the whole point is that
+   * the landlord sees what was read from their message before anyone else
+   * does. The API is idempotent, so a double tap on a slow connection returns
+   * the same room instead of creating two listings.
+   */
+  claimDraft(draft: WhatsappDraft) {
+    this.claiming.set(draft.id);
+    this.whatsappDrafts.claim(draft.id).subscribe({
+      next: ({ roomId }) => {
+        this.claiming.set(null);
+        this.whatsappDrafts.load().subscribe({ error: () => {} });
+        this.router.navigate(['/landlord/rooms', roomId, 'edit']);
+      },
+      error: () => {
+        this.claiming.set(null);
+        this.dialogs.alert('Could not open that', 'Please try again in a moment.', 'error');
+      },
     });
   }
 }

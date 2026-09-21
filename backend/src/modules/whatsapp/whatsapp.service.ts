@@ -23,6 +23,20 @@ export class WhatsappService {
   private readonly verifyToken?: string;
   private readonly appSecret?: string;
 
+  /**
+   * Set by WhatsappModule after construction.
+   *
+   * A property rather than a constructor parameter because ListingBotService
+   * has no dependency on this service but this one calls into it, and
+   * injecting both ways is a circular dependency Nest resolves only with
+   * forwardRef. One assignment in the module is clearer than that.
+   */
+  private listingBot?: { handleMessage(waId: string, message: unknown): Promise<string | null> };
+
+  setListingBot(bot: { handleMessage(waId: string, message: unknown): Promise<string | null> }) {
+    this.listingBot = bot;
+  }
+
   constructor(private config: ConfigService, private prisma: PrismaService) {
     this.apiVersion = this.config.get<string>('whatsapp.apiVersion') ?? 'v19.0';
     this.phoneNumberId = this.config.get<string>('whatsapp.phoneNumberId');
@@ -247,7 +261,20 @@ export class WhatsappService {
 
     const contextId = message.context?.id;
     if (!contextId) {
-      this.logger.log(`Inbound WhatsApp message with no reply-context — cannot match to a thread, ignoring: ${message.id}`);
+      // No reply-context, so this is not part of an existing conversation.
+      // It used to be dropped here. It is now offered to the listing bot,
+      // which is how a landlord starts a listing by sending photos to the
+      // number — see ListingBotService.
+      //
+      // Order matters: a reply to a thread must still be threaded, so the
+      // bot only ever sees messages that were going to be discarded anyway.
+      const waId: string | undefined = message.from ?? entry?.contacts?.[0]?.wa_id;
+      if (!waId || !this.listingBot) {
+        this.logger.log(`Inbound WhatsApp message with no reply-context and no sender — ignoring: ${message.id}`);
+        return;
+      }
+      const reply = await this.listingBot.handleMessage(waId, message);
+      if (reply) await this.sendToNumber(waId, reply);
       return;
     }
 
