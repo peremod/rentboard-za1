@@ -7,6 +7,17 @@ import { environment } from '@env/environment';
 import { AuthResponse, LoginDto, RegisterDto, User } from '../models/user.model';
 
 /**
+ * "This browser has signed in before."
+ *
+ * Not a credential and not trusted for anything — the refresh cookie is still
+ * the only thing that proves a session, and it is httpOnly, path-scoped to
+ * /api/auth and on a different host in production, so JavaScript cannot see
+ * it. This flag exists only so the app can tell a returning visitor from a
+ * first-time one without asking the server.
+ */
+const HAS_SESSION_KEY = 'rb_has_session';
+
+/**
  * AuthService — auth hardening (v0.9.2). See PRE-LAUNCH-CHECKLIST.md #2 /
  * README §20 for the full rationale. Summary of what changed from the
  * original localStorage-based design:
@@ -118,6 +129,22 @@ export class AuthService {
       return of(null);
     }
 
+    // Nobody has ever signed in in this browser, so there is no refresh cookie
+    // to exchange and the request can only 401. Skipping it removes a network
+    // round-trip from every anonymous page load — which is most of them, and
+    // exactly the ones whose speed decides how this site ranks — and removes
+    // the console error that 401 logs, which is a Lighthouse best-practices
+    // failure the audit asserts against.
+    //
+    // The flag can be stale in one direction only: set, with the cookie since
+    // expired. That path is unchanged — the refresh 401s and the catchError
+    // below clears both. It cannot be stale the other way, because it is
+    // written at the same moment the cookie is issued.
+    if (!this.hasSessionMarker()) {
+      this.sessionResolved.set(true);
+      return of(null);
+    }
+
 
     // Shared so concurrent callers — App on startup and every guard on the
     // first navigation — wait on one request rather than each firing their own.
@@ -126,7 +153,12 @@ export class AuthService {
       .pipe(
         tap((res) => this.setSession(res)),
         map((res) => res.user as User),
-        catchError(() => of(null)),
+        catchError(() => {
+          // The cookie is gone or expired. Forget the marker too, so the next
+          // load does not repeat a request that can only fail again.
+          this.setSessionMarker(false);
+          return of(null);
+        }),
         finalize(() => this.sessionResolved.set(true)),
         shareReplay({ bufferSize: 1, refCount: false }),
       );
@@ -232,6 +264,11 @@ export class AuthService {
   logout() {
     this.http.post(`${this.api}/auth/logout`, {}, { withCredentials: true }).subscribe({ error: () => {} });
     this.clearSession();
+    // Deliberately here and not in clearSession(): the interceptor calls that
+    // on an expired access token, where the refresh cookie is still good and
+    // the marker must survive. Signing out is the one case where the cookie
+    // really is being revoked.
+    this.setSessionMarker(false);
     this.router.navigate(['/']);
   }
 
@@ -247,6 +284,28 @@ export class AuthService {
     this._accessToken.set(null);
   }
 
+  /** Whether this browser has held a session before. See HAS_SESSION_KEY. */
+  private hasSessionMarker(): boolean {
+    try {
+      return localStorage.getItem(HAS_SESSION_KEY) === '1';
+    } catch {
+      // Private mode, or storage blocked. Assume a session might exist and
+      // attempt the refresh — the old behaviour, which is correct, just one
+      // request more expensive.
+      return true;
+    }
+  }
+
+  private setSessionMarker(present: boolean) {
+    if (!this.isBrowser) return;
+    try {
+      if (present) localStorage.setItem(HAS_SESSION_KEY, '1');
+      else localStorage.removeItem(HAS_SESSION_KEY);
+    } catch {
+      // Nothing to do. A missing marker costs one refresh request.
+    }
+  }
+
   /** Called by errorInterceptor after a successful silent refresh, to update in-memory state before retrying the original request. */
   applyRefreshedSession(res: AuthResponse) {
     this.setSession(res);
@@ -255,5 +314,9 @@ export class AuthService {
   private setSession(res: AuthResponse) {
     this._user.set(res.user);
     this._accessToken.set(res.accessToken);
+    // Written wherever a session begins or is renewed — login, register,
+    // Google, the startup refresh and the interceptor's silent refresh all
+    // route through here.
+    this.setSessionMarker(true);
   }
 }
