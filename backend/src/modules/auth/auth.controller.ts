@@ -171,6 +171,12 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
+  // Every other OTP route carries an explicit limit; this one did not, so it
+  // fell back to the global 150 per 15 minutes while its siblings sit at 5-10.
+  // It is authenticated, so this was never wide open, but it is the one code-
+  // guessing endpoint that was an order of magnitude more permissive than the
+  // rest for no stated reason. Matched to phone/verify.
+  @Throttle({ default: { limit: 10, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Confirm the code and enable WhatsApp sign-in' })
   confirmPhoneVerification(
     @Body() dto: ConfirmNumberDto,

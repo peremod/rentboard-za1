@@ -5,7 +5,22 @@ import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { normaliseSaMobile } from '../../common/utils/phone.util';
 
 const OTP_TTL_MINUTES = 10;
-const MAX_ATTEMPTS = 5;
+
+/*
+ * There was a `MAX_ATTEMPTS = 5` here that nothing ever read — the file
+ * contains no attempt counting at all. It described an intention rather than
+ * a control, which is the worst kind of constant to leave lying around: it
+ * reads like the protection exists.
+ *
+ * What actually limits code guessing is the per-route @Throttle in
+ * auth.controller.ts (10 per 15 minutes on both phone/verify and, as of this
+ * change, phone/confirm-number) against a six-digit space.
+ *
+ * A genuine per-code cap would be better, since throttling is per IP and this
+ * is not, but it needs somewhere to count: AuthToken has no attempts column,
+ * so it is a schema migration rather than a constant. Left undone deliberately
+ * rather than left looking done.
+ */
 
 /**
  * Phone sign-in with a code delivered over WhatsApp.
