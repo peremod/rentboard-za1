@@ -1,18 +1,23 @@
-import { Controller, Get, Post, Patch, Body, Query, UseGuards, HttpCode, HttpStatus, Req, Headers, ForbiddenException } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiExcludeEndpoint } from '@nestjs/swagger';
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, HttpCode, HttpStatus, Req, Headers, ForbiddenException, NotFoundException, ParseUUIDPipe } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiExcludeEndpoint, ApiOperation } from '@nestjs/swagger';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LandlordGuard } from '../../common/guards/landlord.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { WhatsappService } from './whatsapp.service';
+import { ListingBotService } from './listing-bot.service';
 import { UpdateWhatsappConfigDto } from './dto/update-whatsapp-config.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @ApiTags('whatsapp')
 @Controller('whatsapp')
 export class WhatsappController {
-  constructor(private whatsapp: WhatsappService, private prisma: PrismaService) {}
+  constructor(
+    private whatsapp: WhatsappService,
+    private prisma: PrismaService,
+    private listingBot: ListingBotService,
+  ) {}
 
   @Patch('config')
   @UseGuards(JwtAuthGuard, LandlordGuard)
@@ -68,5 +73,34 @@ export class WhatsappController {
     }
     await this.whatsapp.handleIncomingWebhook(body);
     return { received: true };
+  }
+
+  // ── WhatsApp-first listing creation ──────────────────────────────────────
+
+  @Get('drafts')
+  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Listings started over WhatsApp, waiting to be finished',
+    description:
+      'Nothing here is on the board. A draft becomes a room only when it is claimed, and then still has to pass the ordinary publish rules — a cover photo and a 50-character description.',
+  })
+  drafts(@CurrentUser() user: { id: string }) {
+    return this.listingBot.pending(user.id);
+  }
+
+  @Post('drafts/:id/claim')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Turn a WhatsApp draft into a room draft you can finish',
+    description:
+      'Idempotent: claiming twice returns the same room rather than creating a second one, because a landlord tapping twice on a slow connection should not end up with two listings.',
+  })
+  async claimDraft(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    const result = await this.listingBot.claim(id, user.id);
+    if (!result) throw new NotFoundException('No such draft');
+    return result;
   }
 }

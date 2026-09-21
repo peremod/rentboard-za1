@@ -56,3 +56,6 @@ backend/prisma/migrations/dev/
 *.save
 *.orig
 *.rej
+
+# Lighthouse CI run output — reports, not source.
+.lighthouseci/

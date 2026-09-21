@@ -608,3 +608,72 @@ own instruction to "say so on Mastande" cannot currently be followed in the UI
 — the dispute exists only in the API. Gaps Y1–Y3 in
 [`docs/FLOW-AUDIT.md`](./docs/FLOW-AUDIT.md). Build Y3 before offering rent
 tracking to landlords.
+
+---
+
+## 24. WhatsApp-first listing creation (v1.58.0)
+
+**Schema changed — run a migration:**
+```bash
+cd backend
+npx prisma migrate deploy && npx prisma generate
+```
+Additive: one table, one enum.
+
+A landlord sends photos and a sentence to the Mastande WhatsApp number and a
+draft is waiting the next time they open the site. It closes the gap the
+wizard cannot: the people this market is built for live on WhatsApp and will
+not work through a multi-step form on a phone, and a listing that never gets
+made helps nobody.
+
+```
+  landlord's WhatsApp  ──▶  signed webhook  ──▶  WhatsappDraft (collecting)
+                                                        │
+                        "DONE" ──────────────────────────┤
+                                                        ▼
+                        landlord claims on the web ──▶ Room (draft) ──▶ wizard
+```
+
+**Nothing sent to WhatsApp goes live.** The draft becomes a Room in `draft`
+status only when the landlord opens it on the web, and it still has to pass
+the ordinary publish rules. A listing is a commitment to a stranger about
+somewhere they might live; it does not get published on a parser's guess. The
+review step is what makes a deliberately dumb parser safe.
+
+**Only verified numbers.** The sender is matched on `phoneVerified`, never on
+`User.phone` alone — that field is typed in and unchecked, so matching on it
+would let anyone who knew a landlord's number list rooms as them. An
+unrecognised number gets one message explaining how to link, and silence after
+that, so the bot cannot be turned into a way to send strangers messages.
+
+**The parser is not an LLM, on purpose.** It reads a rand amount, a room type
+and a place name with regex and a lookup against the existing Place taxonomy.
+Three reasons, in `listing-parser.ts`: a landlord reviews every draft before
+anyone sees it so cleverness buys little; sending landlords' messages to a
+third-party model is personal information leaving the country under POPIA s.72
+and would contradict what `/advertise` sells this platform on; and regex works
+the same in all eleven official languages, where a model would be markedly
+worse at isiZulu and Sesotho — the feature would work best for the landlords
+who need it least. Anything it cannot work out comes back blank rather than
+guessed. A blank is honest.
+
+Rent takes the **first** plausible amount in R300–R50,000, not the largest:
+"R3500, deposit R7000" means 3500, and taking the biggest number would
+reliably pick the deposit. Places match on **name**, not slug — suburb slugs
+are city-prefixed (`ekurhuleni-tembisa`), so a slug match could never resolve
+"Tembisa".
+
+Photos are fetched from Meta (a two-hop media call) and uploaded to ImageKit
+server-side, capped at the same 20 the wizard enforces. No new secrets:
+`WHATSAPP_ACCESS_TOKEN` and `IMAGEKIT_PRIVATE_KEY` already existed. Inbound
+deliveries are rejected unless `X-Hub-Signature-256` verifies against
+`WHATSAPP_APP_SECRET`. With no secret configured the webhook refuses every
+delivery rather than trusting unsigned ones: a listing endpoint anyone can
+POST to is worse than one that is temporarily off.
+
+Drafts nobody claims are abandoned after 14 days by a nightly pass, so an
+unfinished conversation does not sit holding someone's photos indefinitely.
+
+**Still outstanding:** the wizard has no property picker, so a claimed draft
+cannot be dropped into a yard from the claim screen (gap Y1 in
+[`docs/FLOW-AUDIT.md`](./docs/FLOW-AUDIT.md)).
