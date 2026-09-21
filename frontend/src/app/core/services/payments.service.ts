@@ -21,6 +21,23 @@ export interface PaymentRecord {
   createdAt: string;
 }
 
+/**
+ * A fee we owe back and have not yet returned.
+ *
+ * PayFast refunds are issued from their dashboard rather than by API, so this
+ * is a worklist: move the money there, then record it here.
+ */
+export interface RefundDue {
+  id: string;
+  amountCents: number;
+  merchantReference: string;
+  providerReference?: string | null;
+  refundDueAt: string;
+  paidAt?: string | null;
+  referenceId?: string | null;
+  user: { id: string; fullName: string; email: string };
+}
+
 @Injectable({ providedIn: 'root' })
 export class PaymentsService {
   private http = inject(HttpClient);
@@ -35,6 +52,16 @@ export class PaymentsService {
 
   listMine() {
     return this.http.get<PaymentRecord[]>(`${this.api}/payments/mine`);
+  }
+
+  /** Admin only. Every rejected check whose fee has not gone back yet. */
+  refundsDue() {
+    return this.http.get<RefundDue[]>(`${this.api}/payments/refunds-due`);
+  }
+
+  /** Admin only. Records money already moved in the PayFast dashboard. */
+  recordRefund(paymentId: string, reason: string) {
+    return this.http.patch<PaymentRecord>(`${this.api}/payments/${paymentId}/refund`, { reason });
   }
 
   /**

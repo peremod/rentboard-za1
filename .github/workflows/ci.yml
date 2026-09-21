@@ -206,6 +206,13 @@ jobs:
           # a WhatsApp delivery and prove verification accepts a real signature
           # and refuses a tampered body. Without it those two checks skip.
           WHATSAPP_APP_SECRET: ci-whatsapp-app-secret-0123456789
+          # PayFast's own published sandbox merchant. Not a secret, and no
+          # money can move through it — it is here so the API will build a
+          # signed payment form, which is what the verification fee and the
+          # refund drive both need to reach a payment row at all.
+          PAYFAST_MERCHANT_ID: '10000100'
+          PAYFAST_MERCHANT_KEY: 46f0cd694581a
+          PAYFAST_SANDBOX: 'true'
 
       - name: API smoke test
         # With an admin token the suite runs its admin-only sections instead of
@@ -217,6 +224,19 @@ jobs:
           API: http://localhost:3000
           RESEND_WEBHOOK_SECRET: whsec_Q2lTbW9rZVRlc3RTZWNyZXRWYWx1ZTEyMzQ1
           WHATSAPP_APP_SECRET: ci-whatsapp-app-secret-0123456789
+          ADMIN_EMAIL: ci-admin@mastande.test
+          ADMIN_PASSWORD: CiSmokeAdmin123
+
+      - name: Refund promise
+        # The pricing page promises a full refund when we cannot verify
+        # someone. This drives that path, and it is separate from the smoke
+        # suite because reaching a paid check needs a PayFast ITN that PayFast
+        # itself confirms — so it seeds that one row directly and drives the
+        # rest through the real API. See the header of the script.
+        run: node scripts/refund-drive.mjs
+        env:
+          API_URL: http://localhost:3000
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_test
           ADMIN_EMAIL: ci-admin@mastande.test
           ADMIN_PASSWORD: CiSmokeAdmin123
 

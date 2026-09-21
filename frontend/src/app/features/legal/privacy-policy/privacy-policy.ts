@@ -2,9 +2,13 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 
 /**
  * Privacy Policy — POPIA (Protection of Personal Information Act 4 of 2013) compliant.
- * [PLACEHOLDER] values must be filled in with real company details before launch
- * (see project's Audit Fixes / MVP Summary docs — this is a legal document, have
- * it reviewed by a South African attorney before going live).
+ *
+ * The responsible party is named here as registered at CIPC. The Information
+ * Officer is still a placeholder: POPIA s.56 makes that a named person, not a
+ * role, and it is not something to invent — fill it in before launch.
+ *
+ * This is a legal document. Have a South African attorney review it, not just
+ * the fields that were blank.
  */
 @Component({
   selector: 'app-privacy-policy',
@@ -25,7 +29,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 
         <section>
           <h2>1. Who We Are (Responsible Party)</h2>
-          <p>Mastande is operated by <strong>[YOUR COMPANY NAME] (Pty) Ltd</strong>, CIPC Reg. No. <strong>[NUMBER]</strong>.
+          <p>Mastande is operated by <strong>Umastande (Pty) Ltd</strong>, CIPC Reg. No. <strong>2026/757331/07</strong>.
           For the purposes of POPIA, we are the <strong>Responsible Party</strong>.</p>
           <p><strong>Information Officer:</strong> [NAME] · privacy&#64;mastande.co.za</p>
         </section>

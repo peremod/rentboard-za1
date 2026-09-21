@@ -643,6 +643,17 @@ model Payment {
   failedAt      DateTime?
   failureReason String?
 
+  /// Set the moment a paid check is rejected. The pricing page promises a
+  /// refund if we cannot verify someone, and a promise that depends on an
+  /// admin remembering is not a promise — this is the obligation, recorded
+  /// automatically, and `refundedAt` below is the money actually moving.
+  ///
+  /// Separate from `status` on purpose. Status stays `paid` until the refund
+  /// is issued, because that is the truth about where the money is; mixing
+  /// the two would make the payment history lie for as long as the refund
+  /// takes. Paid + refundDueAt set + refundedAt null is the admin queue.
+  refundDueAt DateTime?
+
   /// Set when a refund is issued — the pricing page promises one if
   /// verification fails, so this must be recordable.
   refundedAt   DateTime?
@@ -653,6 +664,9 @@ model Payment {
 
   @@index([userId, status])
   @@index([status, createdAt])
+  /// The refunds-due queue: every paid check we rejected and have not yet
+  /// refunded. Indexed because it is read on every admin dashboard load.
+  @@index([refundDueAt, refundedAt])
   @@map("payments")
 }
 

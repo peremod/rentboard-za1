@@ -5,7 +5,7 @@ import { UploadsService } from '../../../core/services/uploads.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { PaymentsService } from '../../../core/services/payments.service';
 import { ActivatedRoute } from '@angular/router';
-import { VerificationType } from '../../../core/models/verification.model';
+import { VerificationType, VerificationRequest } from '../../../core/models/verification.model';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 
 /**
@@ -88,7 +88,19 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
                   submitted {{ req.createdAt | date:'d MMM yyyy' }}
                 </div>
                 @if (req.status === 'rejected' && req.reviewNote) {
-                  <div class="field-error">{{ req.reviewNote }} — you can submit a new document.</div>
+                  <div class="field-error">{{ req.reviewNote }}</div>
+                }
+                @if (refundState(req); as refund) {
+                  <div class="verify-refund">
+                    @if (refund === 'refunded') {
+                      💸 Your R149 has been refunded in full.
+                    } @else {
+                      💸 We could not verify this, so your R149 is being refunded in
+                      full. It takes a few working days to reach you.
+                    }
+                    You are welcome to try again with a clearer document — a new
+                    check is a new R149.
+                  </div>
                 }
               }
 
@@ -211,6 +223,20 @@ export class LandlordVerification implements OnInit {
 
   isApproved(type: VerificationType) {
     return this.verification.requests().some((r) => r.type === type && r.status === 'approved');
+  }
+
+  /**
+   * Whether a fee is coming back, read from the request's own trail.
+   *
+   * The trail is already the source of truth for what happened to a check, so
+   * the refund is read from it rather than adding a second field that could
+   * disagree with it. Returns null when no fee was involved — which is every
+   * check but a landlord's identity.
+   */
+  refundState(req: VerificationRequest): 'due' | 'refunded' | null {
+    const steps = (req.events ?? []).map((e) => e.step);
+    if (steps.includes('refunded')) return 'refunded';
+    return steps.includes('refund_due') ? 'due' : null;
   }
 
   statusLabel(status: string) {

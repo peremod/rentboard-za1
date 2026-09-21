@@ -3,6 +3,8 @@ import { RouterLink } from '@angular/router';
 import { DatePipe, LowerCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminService, AdminStats, AdminUser, AdminKpis } from '../../../core/services/admin.service';
+import { PaymentsService, RefundDue } from '../../../core/services/payments.service';
+import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ADMIN_NAV } from '../admin-nav';
 
@@ -16,7 +18,7 @@ import { ADMIN_NAV } from '../admin-nav';
 @Component({
   selector: 'app-admin-dashboard',
   standalone: true,
-  imports: [RouterLink, DatePipe, LowerCasePipe, FormsModule, PortalShell],
+  imports: [RouterLink, DatePipe, LowerCasePipe, FormsModule, PortalShell, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)">
@@ -129,6 +131,48 @@ import { ADMIN_NAV } from '../admin-nav';
         <p class="muted">Loading…</p>
       }
 
+      @if (refunds().length) {
+        <section class="dash-section">
+          <div class="dash-section-title">
+            Refunds owed
+            <span class="dash-count">({{ refunds().length }})</span>
+          </div>
+
+          <div class="insight-banner">
+            💸
+            <span>
+              The pricing page promises a full refund when we cannot verify
+              someone, so each of these is a commitment already made. PayFast
+              has no refund API — move the money in their dashboard, then
+              record it here.
+            </span>
+          </div>
+
+          @for (r of refunds(); track r.id) {
+            <div class="app-card">
+              <div class="app-info">
+                <div class="app-room">{{ r.user.fullName }} — {{ r.amountCents | zarCents }}</div>
+                <div class="app-location">
+                  {{ r.user.email }} · rejected {{ r.refundDueAt | date:'d MMM yyyy' }}
+                </div>
+                <div class="app-location">
+                  PayFast ref <code>{{ r.providerReference || r.merchantReference }}</code>
+                </div>
+                @if (refundError() === r.id) {
+                  <div class="field-error" role="alert">{{ refundErrorMessage() }}</div>
+                }
+              </div>
+              <div class="portal-row-actions">
+                <button type="button" class="btn btn-sm btn-outline"
+                        [disabled]="refunding() === r.id" (click)="markRefunded(r)">
+                  {{ refunding() === r.id ? 'Recording…' : 'Refunded in PayFast' }}
+                </button>
+              </div>
+            </div>
+          }
+        </section>
+      }
+
       <section class="dash-section">
         <div class="dash-section-title">Accounts</div>
 
@@ -201,6 +245,7 @@ import { ADMIN_NAV } from '../admin-nav';
 })
 export class AdminDashboard implements OnInit {
   private adminService = inject(AdminService);
+  private payments = inject(PaymentsService);
 
   readonly navItems: PortalNavItem[] = ADMIN_NAV;
 
@@ -214,6 +259,10 @@ export class AdminDashboard implements OnInit {
   suspendingId = signal<string | null>(null);
   query = '';
   suspendReason = '';
+  refunds = signal<RefundDue[]>([]);
+  refunding = signal<string | null>(null);
+  refundError = signal<string | null>(null);
+  refundErrorMessage = signal('');
 
   /** Arrow with sign, or nothing when there is no prior period to compare. */
   change(pct: number): string {
@@ -231,6 +280,45 @@ export class AdminDashboard implements OnInit {
       next: (s) => { this.stats.set(s); this.loading.set(false); },
       error: () => this.loading.set(false),
     });
+
+    this.loadRefunds();
+  }
+
+  private loadRefunds() {
+    this.payments.refundsDue().subscribe({
+      next: (r) => this.refunds.set(r),
+      // An empty section is the right failure here: the rest of the overview
+      // is more useful than an error about a queue that is usually empty.
+      error: () => this.refunds.set([]),
+    });
+  }
+
+  /**
+   * Records a refund already issued in PayFast.
+   *
+   * The reason is fixed rather than typed: every row in this list is here for
+   * the same reason, and it is written onto the person's own audit trail, so
+   * a free-text box would mostly produce inconsistent notes on a document
+   * someone reads about themselves.
+   */
+  markRefunded(refund: RefundDue) {
+    this.refunding.set(refund.id);
+    this.refundError.set(null);
+    this.payments
+      .recordRefund(refund.id, 'We could not verify your identity, so the fee was refunded in full.')
+      .subscribe({
+        next: () => {
+          this.refunding.set(null);
+          this.refunds.update((list) => list.filter((r) => r.id !== refund.id));
+        },
+        error: (err) => {
+          this.refunding.set(null);
+          this.refundError.set(refund.id);
+          this.refundErrorMessage.set(
+            err?.error?.message ?? 'Could not record that refund. Please try again.',
+          );
+        },
+      });
   }
 
   search() {

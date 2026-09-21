@@ -62,7 +62,7 @@ import { RouterLink } from '@angular/router';
 
       <div class="footer-bottom">
         <div>
-          &copy; {{ year }} [YOUR COMPANY NAME] (Pty) Ltd · CIPC Reg No. [NUMBER]<br/>
+          &copy; {{ year }} Umastande (Pty) Ltd · CIPC Reg No. 2026/757331/07<br/>
           Mastande is an intermediary platform — not an estate agent (PPRA).
           Not registered under the Property Practitioners Act 22 of 2019.
         </div>

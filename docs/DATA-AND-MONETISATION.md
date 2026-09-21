@@ -307,7 +307,7 @@ Ordered by how quickly each can start and how defensible each is.
 
 | Stream | Start when | Notes |
 |---|---|---|
-| Verification fee, R149 once-off | Now | Already built and priced |
+| Verification fee, R149 once-off | Now | Built, priced, and refundable in practice as well as on the pricing page (v1.59.0) |
 | Board advertising, flat monthly | ~500 daily users | No data leaves the platform |
 | Consent-based move referrals | After first 50 tenancies | Needs volume to interest partners |
 | Featured listings | Anytime | `isFeatured` and `RoomBoost` already exist in the schema |
@@ -376,9 +376,35 @@ Points that matter:
 
 ### What is already built
 
-`RoomBoost` and the Stripe module contain a working payment-session pattern,
-including webhook handling. Whichever gateway you choose, that shape is
-reusable — only the provider SDK and signature verification change.
+**Built and driven end to end as of v1.59.0.** PayFast, not Stripe: for a
+single R149 charge instant EFT matters more than card support, which is what
+the table above concluded.
+
+Every point in the list above is now code rather than intent:
+
+| Point | Where |
+|---|---|
+| Charge before review | `status: 'pending_payment'`, and `listPending()` excludes it |
+| Refund in full if we cannot verify | `review()` sets `refundDueAt` on rejection; the queue is on the admin dashboard |
+| The webhook is the source of truth | `handleItn`; the return URL only sets a message |
+| Idempotency | `confirmPaid` returns false on a retry and writes nothing twice |
+| CPA s.16 cooling-off | Stated on the pricing page |
+
+The fee also appears on the verification's own audit trail, which is what lets
+a landlord see why a badge was granted — or, on a rejection, that their money
+is on the way back.
+
+**One trade-off left open.** A rejection refunds in full, and a fresh attempt
+is a fresh R149. Someone whose ID photo was simply too blurry therefore pays
+twice in effect, and the business pays two PayFast transaction fees to end up
+where it started. Allowing one free resubmission against the existing payment
+would be kinder and cheaper. That is a pricing decision, not an engineering
+one, and the verification page states the current rule plainly rather than
+letting someone discover it at the second checkout.
+
+`RoomBoost` and the Stripe module still contain the subscription-shaped
+payment-session pattern, and both remain paused: `BILLING_ENABLED` is false and
+`StripeModule` is not registered in `app.module.ts`.
 
 ---
 

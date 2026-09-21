@@ -677,3 +677,98 @@ unfinished conversation does not sit holding someone's photos indefinitely.
 **Still outstanding:** the wizard has no property picker, so a claimed draft
 cannot be dropped into a yard from the claim screen (gap Y1 in
 [`docs/FLOW-AUDIT.md`](./docs/FLOW-AUDIT.md)).
+
+---
+
+## 25. Monetisation that a rejected check keeps honest (v1.59.0)
+
+**Schema changed — run a migration:**
+```bash
+cd backend
+npx prisma migrate deploy && npx prisma generate
+```
+Additive: one nullable column and one index on `payments`.
+
+Phase 3 is the smallest of the three passes, because the revenue model was
+already decided and mostly built. What it did was make the one commitment the
+product had written down but not kept.
+
+### What actually charges money
+
+One thing: **a landlord's identity check, R149 once off, over PayFast.**
+`requiresPayment()` in `verification.rules.ts` is the whole rule, and it is
+`role === 'LANDLORD' && type === 'identity'`.
+
+Everything a tenant submits is free — identity, SASSA confirmation, employer
+confirmation, bank activity, a previous landlord. That is the position, not an
+oversight waiting to be tidied: charging the side of this market with the least
+money to prove they are poor enough to need a room is the fastest way to lose
+it. There is **no listing fee and no application fee**, and the smoke suite
+asserts both rather than trusting anyone to remember.
+
+Boosts and the old subscription are still paused — `BILLING_ENABLED` is false
+and `StripeModule` is not registered in `app.module.ts`. This pass did not
+change either. Board advertising is unchanged and still the second stream.
+
+### The refund
+
+The pricing page has always said: *"If we cannot verify you, yes — you are
+refunded in full."* Nothing in the code kept that. Rejecting a paid check did
+nothing to the payment, there was no queue, and the promise rested on an admin
+remembering it.
+
+```
+   rejected  ──▶  refundDueAt set  ──▶  admin refunds in PayFast
+                        │                        │
+                  on the person's           recorded here
+                   audit trail          ──▶  refundedAt set
+```
+
+`refundDueAt` is deliberately separate from `status`. The status stays `paid`
+until the money actually goes back, because that is the truth about where the
+money is; folding the obligation into the status would make the payment
+history lie for as long as the refund takes. **Paid, owed, not yet returned**
+is the admin queue, and it is on the admin dashboard rather than only in the
+API — a promise that needs someone to call an endpoint by hand is not much
+better than one that needs them to remember.
+
+PayFast has no refund API. Money moves in their dashboard; this records it.
+
+### The fee is on the audit trail now
+
+Phase 1's premise was that a badge should have a visible basis. The fee was
+missing from it: the trail read `submitted → awaiting_payment → approved`, with
+the payment itself invisible in the middle. `VerificationService.confirmPaid()`
+now owns both the status change and the trail entry, so they cannot diverge,
+and a gateway retry writes neither twice.
+
+The person sees the whole thing — including, when it happens, that their
+money is coming back and that trying again costs again.
+
+### Known trade-off
+
+**A rejection refunds, and a fresh attempt is a fresh R149.** Someone whose ID
+photo was simply too blurry pays twice in effect, and the business eats two
+PayFast transaction fees. The alternative — one free resubmission against the
+existing payment — is kinder and cheaper, and it is a product decision rather
+than an engineering one. The wording on the verification page states the
+current rule plainly rather than hiding it.
+
+### Testing it
+
+`scripts/refund-drive.mjs` drives the whole path and runs in CI. It is separate
+from `scripts/smoke-test.sh` for one reason, stated in its header: reaching a
+*paid* check needs a valid PayFast ITN, and validating one needs PayFast to
+confirm it server-to-server. There is no way to reach that state from outside
+without a live gateway or a test backdoor in the payment handler, and a
+backdoor in a payment handler is worth more to an attacker than the test is to
+us. So it seeds that single row directly and drives everything else — including
+the real `confirmPaid` — through the API.
+
+### Legal identity
+
+The footer, the privacy policy and the PAIA manual now name the operating
+company: **Umastande (Pty) Ltd, CIPC Reg. No. 2026/757331/07**. The registered
+address, the Information Officer and the Information Regulator registration
+number are still blank, and deliberately so — POPIA s.56 makes the Information
+Officer a named person, not a role.

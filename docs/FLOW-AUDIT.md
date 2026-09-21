@@ -234,6 +234,52 @@ feature is worth until someone asks for it.
 
 ---
 
+## 2f. Verification payment state machine (v1.59.0)
+
+Only ever a landlord's identity check. Nothing a tenant submits reaches this
+machine at all, and neither does listing a room or applying for one.
+
+```
+   submitted ──► pending_payment ──► (PayFast ITN) ──► pending ──┬──► approved
+                       │                                        │
+                       │                                        └──► rejected
+                       │                                                │
+                       └──► never reviewed while unpaid                 ▼
+                                                              refundDueAt set
+                                                                        │
+                                                        admin refunds in PayFast
+                                                                        │
+                                                                        ▼
+                                                                  refundedAt set
+```
+
+`refundDueAt` is separate from `status` deliberately. Status stays `paid` until
+the money moves, because that is where the money is; the obligation is a
+different fact from the transaction. **Paid + refundDueAt + no refundedAt** is
+the admin queue.
+
+The ITN is the only thing that moves a check into the review queue, and
+`confirmPaid` is its single writer — status change and trail entry together, so
+neither can happen without the other, and a gateway retry does neither twice.
+
+### Gaps
+
+**M1 — a rejection refunds, and trying again costs again.** Someone whose ID
+photo was too blurry pays R149 twice in effect and the business pays two
+PayFast transaction fees. One free resubmission against the existing payment
+would be kinder and cheaper. A pricing decision, stated plainly on the
+verification page rather than discovered at the second checkout.
+
+**M2 — refunds are recorded, not issued.** PayFast has no refund API, so an
+admin moves the money in their dashboard and records it here. Nothing detects
+a refund that was promised and never paid beyond the queue not emptying.
+
+**M3 — nobody is emailed about a refund.** The landlord sees it on the
+verification page and on their audit trail when they next look. The rejection
+notification does not mention the money.
+
+---
+
 ## 3. Cross-actor flows
 
 | Flow | Status |
