@@ -10,7 +10,7 @@ import { RouterLink } from '@angular/router';
     <footer class="footer">
       <div class="footer-inner">
         <div>
-          <a class="footer-logo" routerLink="/">Rent<span>Board</span></a>
+          <a class="footer-logo" routerLink="/">Mas<span>tande</span></a>
           <p class="footer-desc">
             South Africa's dedicated room-letting notice board. Find rooms direct from
             landlords — no estate agent, no fees to apply.

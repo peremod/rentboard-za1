@@ -549,3 +549,62 @@ this platform's largest defamation exposure in South Africa.
 (`GET /tenancies/flags/open` is the queue), and neither party is notified when
 one is raised or decided. Both are recorded as gaps F1 and F2 in
 [`docs/FLOW-AUDIT.md`](./docs/FLOW-AUDIT.md).
+
+## 23. Yards and rent tracking (v1.57.0)
+
+**Schema changed — run a migration:**
+```bash
+cd backend
+npx prisma migrate deploy && npx prisma generate
+```
+Additive: two tables, one enum, three columns.
+
+### Yards
+
+Most landlords here are not letting a spare room — they run a yard, four to
+ten rooms behind one house. The product modelled each as an unrelated listing,
+so a landlord could not ask the two questions they actually have: how many of
+my rooms are empty, and who has applied anywhere on this property.
+
+`/landlord/yard` answers both. Grouping is optional throughout: a landlord with
+one room is never made to create a container, every room that existed before
+this works unchanged, and rooms not in a yard appear under their own heading
+rather than being hidden — a landlord who has grouped four of six rooms must
+still see the other two.
+
+**Deleting a yard never deletes its rooms.** A yard is a label, not an owner.
+
+**No street address, deliberately.** POPIA s.10 says collect only what the
+purpose requires, and telling one property from another needs a name and a
+suburb. The public room page has always shown the suburb rather than the
+street for the tenant's safety; holding the street elsewhere would undercut
+that.
+
+### Rent tracking
+
+A record, not a payment system. The landlord already collects by EFT, cash or
+a banking app; what they lack is a list of who is behind. So it is a toggle
+and a WhatsApp reminder, and nothing touches money.
+
+**Mastande does not assert that anyone owes anything.** A period is one
+party's unverified word, which decides two things:
+
+- the reminder says *"your landlord has marked September unpaid"*, names them,
+  and states that Mastande has checked nothing — a wrongly-flipped toggle must
+  not become the platform telling someone they are in debt;
+- the tenant can dispute, and it is recorded **beside** the landlord's record
+  rather than replacing it, and stops further reminders for that month.
+  Continuing to chase someone who has said they paid is how a reminder becomes
+  harassment.
+
+Reminders go to verified numbers only — `User.phone` is typed in and unchecked,
+and sending "your rent is unpaid" to an unverified number sends it to whoever
+holds it. The grace period is per landlord, because pay dates here are not
+uniform: a month-end wage and a SASSA schedule want different windows. 0
+disables reminders without disabling tracking.
+
+**Still outstanding:** there is no tenant-facing rent screen, so the reminder's
+own instruction to "say so on Mastande" cannot currently be followed in the UI
+— the dispute exists only in the API. Gaps Y1–Y3 in
+[`docs/FLOW-AUDIT.md`](./docs/FLOW-AUDIT.md). Build Y3 before offering rent
+tracking to landlords.

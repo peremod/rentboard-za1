@@ -198,6 +198,8 @@
   .hiw-grid { grid-template-columns: 1fr; }
   .footer-inner { grid-template-columns: 1fr; }
   .passport-steps { flex-direction: column; }
+  .yard-new__row { flex-direction: column; gap: 0; }
+  .yard-rent__actions { margin-left: 0; }
   .footer-bottom { flex-direction: column; gap: .85rem; }
   .footer-bottom > div:last-child { text-align: left !important; }
 

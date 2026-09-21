@@ -17,7 +17,7 @@ import { AuthService } from '../../../core/services/auth.service';
   template: `
     <div class="auth">
       <div class="auth__card">
-        <div class="auth__brand">Rent<span>Board</span></div>
+        <div class="auth__brand">Mas<span>tande</span></div>
 
         @if (error()) {
           <h1 class="auth__title">Link no longer valid</h1>

@@ -154,6 +154,46 @@ parties, but nothing shows it yet.
 
 ---
 
+## 2d. Rent period state machine (v1.57.0)
+
+```
+   (no record) ──► unpaid ──┬──► paid
+                     │      ├──► partial
+                     │      └──► waived        (landlord is not chasing)
+                     │
+                     └──► reminder sent (once) ──► tenant disputes ──► reminders stop
+```
+
+A period is **one party's unverified word**, which is why the reminder is
+phrased as "your landlord has marked this unpaid" and why the tenant's
+dispute sits beside the status rather than replacing it. Mastande does not
+know whether money arrived and does not claim to.
+
+`periodStart` is normalised to the first of the month at midnight UTC. The
+unique constraint is [tenancyId, periodStart], and two rows for "September"
+differing by a timezone offset would defeat it — leaving a landlord with two
+Septembers disagreeing.
+
+### Gaps
+
+**Y1 — no way to move a room into a yard from the room itself.** The yard
+screen can pull rooms in; the listing wizard and the room edit screen do not
+offer a property picker, so a new room always lands ungrouped and has to be
+grouped afterwards from the other screen.
+
+**Y2 — rent reminders are WhatsApp only.** A tenant with no verified mobile
+number gets nothing, and the period is marked handled so the nightly job does
+not rescan it. The landlord still sees it unpaid, but the tenant is never
+told. Email is the obvious second channel and is not wired.
+
+**Y3 — the tenant has no screen for rent.** They can dispute through the API
+and the reminder tells them to "say so on Mastande", but there is no page on
+the tenant dashboard that shows their rent record or offers the dispute
+button. That makes the reminder's own instruction currently unfollowable in
+the UI, and it should be built before rent tracking is offered to landlords.
+
+---
+
 ## 3. Cross-actor flows
 
 | Flow | Status |
@@ -170,6 +210,9 @@ parties, but nothing shows it yet.
 | Landlord verified → badge appears | ✅ end to end (v1.8.1): landlord submits at /landlord/verification, admin reviews at /admin/verifications, approval sets idVerified and the badge appears |
 | Tenant verified → Passport badge appears to landlords | ✅ end to end (v1.56.0): tenant submits at /tenant/passport, admin reviews in the same queue, identity + one income proof sets `hasPassport`, and the badge shows on the applicant card with its basis one tap away |
 | Previous landlord asked for a reference → answers | ✅ end to end (v1.56.0): admin sends from the queue, referee answers at /reference/:token with no account, outcome lands on the audit trail. An unanswered request expires to `unreachable`, which is explicitly not a negative signal |
+| Landlord groups rooms into a yard → vacancy and applicants roll up | ✅ (v1.57.0): `/landlord/yard` shows every property, room states per yard, and applicants across the whole property. Rooms not in a yard appear under their own heading rather than being dropped |
+| Landlord marks rent unpaid → tenant is reminded | ✅ (v1.57.0): a daily 09:00 SAST pass WhatsApps tenants whose landlord has marked the month unpaid, once per month per tenancy, verified numbers only. The message says it is the landlord's record and that Mastande has checked nothing |
+| Tenant disputes a month → reminders stop | ✅ (v1.57.0): the dispute is recorded beside the landlord's status, never overwriting it, and suppresses further reminders for that month |
 | Post-tenancy problem → reduced visibility | ✅ (v1.56.0): either party flags after the tenancy ends, `openFlagCount` increments, the board ranks that landlord's rooms last. Dismissal restores it immediately. ⚠️ No dedicated admin review screen yet — the queue is at `GET /tenancies/flags/open` |
 
 **X1 — saved rooms go stale silently.** The dashboard drops rooms that 404,

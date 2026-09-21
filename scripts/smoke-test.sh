@@ -2416,6 +2416,74 @@ else
   grey "  SKIP  signed-delivery checks — set WHATSAPP_APP_SECRET to the API's own to include them"; SKIP=$((SKIP+1))
 fi
 
+# -- 45. Yards (multi-room properties) --------------------------------------
+# A six-room yard was six unrelated listings until v1.57.0. The assertions
+# that matter are the two destructive ones: a mixed batch must apply nothing
+# rather than half, and deleting a yard must leave its rooms on the board.
+head_ "45. Yards"
+
+req POST /api/properties '{"name":"Smoke yard","suburb":"Tembisa","city":"Johannesburg","province":"Gauteng"}' "$LTOKEN"
+check "landlord creates a yard" 201 "$STATUS" "$BODY"
+YARD_ID=$(echo "$BODY" | jq -r '.id // empty')
+
+req POST /api/properties '{"name":"Tenant yard","city":"Johannesburg","province":"Gauteng"}' "$TTOKEN"
+check "a tenant cannot create a yard" 403 "$STATUS" "$BODY"
+
+req GET /api/properties/dashboard "" "$LTOKEN"
+check "yard dashboard returns" 200 "$STATUS" "$BODY"
+if echo "$BODY" | jq -e 'has("properties") and has("ungrouped") and has("totals")' >/dev/null 2>&1; then
+  green "  PASS  dashboard carries yards, ungrouped rooms and portfolio totals"; PASS=$((PASS+1))
+else
+  red "  FAIL  dashboard shape is wrong: $(echo "$BODY" | jq -c 'keys')"; FAIL=$((FAIL+1))
+fi
+
+if [[ -n "$YARD_ID" && -n "$ROOM_ID" ]]; then
+  req POST "/api/properties/$YARD_ID/rooms" "{\"roomIds\":[\"$ROOM_ID\"]}" "$LTOKEN"
+  check "a room moves into the yard" 200 "$STATUS" "$BODY"
+
+  # A room that is not the caller's must fail the WHOLE batch. Half-applying
+  # would leave a landlord believing a room moved when it did not.
+  req POST "/api/properties/$YARD_ID/rooms" "{\"roomIds\":[\"$ROOM_ID\",\"00000000-0000-4000-8000-000000000000\"]}" "$LTOKEN"
+  check "a batch containing a room that is not yours is refused whole" 400 "$STATUS" "$BODY"
+
+  # Deleting the yard must not delete the room.
+  req DELETE "/api/properties/$YARD_ID" "" "$LTOKEN"
+  check "the yard is deleted" 200 "$STATUS" "$BODY"
+  req GET "/api/rooms/$ROOM_ID"
+  if [[ "$STATUS" == "200" ]]; then
+    green "  PASS  its room survived — a yard is a label, not an owner"; PASS=$((PASS+1))
+  else
+    red "  FAIL  deleting a yard destroyed its room ($STATUS)"; FAIL=$((FAIL+1))
+  fi
+else
+  grey "  SKIP  yard room assignment — no room to move"; SKIP=$((SKIP+1))
+fi
+
+# -- 46. Rent tracking -------------------------------------------------------
+# A record, not a payment system. The assertion that matters is the last one:
+# a tenant's dispute must not overwrite the landlord's record, because neither
+# is checked and the platform does not claim to know which is true.
+head_ "46. Rent tracking"
+
+req PATCH /api/properties/rent/settings '{"rentGraceDays":5}' "$LTOKEN"
+check "landlord sets the reminder grace period" 200 "$STATUS" "$BODY"
+req PATCH /api/properties/rent/settings '{"rentGraceDays":40}' "$LTOKEN"
+check "an absurd grace period is refused" 400 "$STATUS" "$BODY"
+req PATCH /api/properties/rent/settings '{"rentGraceDays":5}' "$TTOKEN"
+check "a tenant cannot set a landlord's reminder settings" 403 "$STATUS" "$BODY"
+
+req GET "/api/properties/rent/00000000-0000-4000-8000-000000000000" "" "$LTOKEN"
+check "rent history for a tenancy that does not exist" 404 "$STATUS" "$BODY"
+
+if [[ -n "$ADMIN_TOKEN" ]]; then
+  req POST /api/properties/rent/run-reminders "" "$ADMIN_TOKEN"
+  check "the overdue-rent reminder pass runs" 200 "$STATUS" "$BODY"
+  req POST /api/properties/rent/run-reminders "" "$LTOKEN"
+  check "a landlord cannot trigger the reminder pass" 403 "$STATUS" "$BODY"
+else
+  grey "  SKIP  reminder pass — set ADMIN_TOKEN to include it"; SKIP=$((SKIP+1))
+fi
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"
