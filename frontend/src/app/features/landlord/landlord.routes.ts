@@ -35,5 +35,10 @@ export const LANDLORD_ROUTES: Routes = [
     loadComponent: () => import('./upgrade/upgrade').then((m) => m.Upgrade),
     title: 'Upgrade Your Plan — Mastande',
   },
+  {
+    path: 'yard',
+    loadComponent: () => import('./yard/yard').then((m) => m.Yard),
+    title: 'Your property — Mastande',
+  },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];

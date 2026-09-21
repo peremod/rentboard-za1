@@ -512,7 +512,7 @@ export class NotificationsService {
         .footer{background:#F5F0E8;padding:16px 24px;border-top:1px solid #DDD5C8;font-size:12px;color:#7A6E60}
       </style></head>
       <body><div style="padding:32px 16px"><div class="wrap">
-        <div class="header"><h2>Rent<span>Board</span></h2></div>
+        <div class="header"><h2>Mas<span>tande</span></h2></div>
         <div class="body">${content}</div>
         <div class="footer">© ${new Date().getFullYear()} Mastande — direct from landlords, no agent fees.</div>
       </div></div></body></html>`;

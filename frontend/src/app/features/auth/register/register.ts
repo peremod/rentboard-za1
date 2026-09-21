@@ -13,7 +13,7 @@ import { ReferralsService } from '../../../core/services/referrals.service';
   template: `
     <div class="auth">
       <div class="auth__card">
-        <div class="auth__brand">Rent<span>Board</span></div>
+        <div class="auth__brand">Mas<span>tande</span></div>
         <h1 class="auth__title">Create your free account</h1>
         <p class="auth__sub">Free to list. Free to apply. Always.</p>
 

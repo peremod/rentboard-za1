@@ -19,7 +19,7 @@ import { AuthService } from '../../../core/services/auth.service';
   template: `
     <div class="auth">
       <div class="auth__card">
-        <div class="auth__brand">Rent<span>Board</span></div>
+        <div class="auth__brand">Mas<span>tande</span></div>
         <h1 class="auth__title">Welcome back</h1>
         <p class="auth__sub">Log in to your account</p>
 

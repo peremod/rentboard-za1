@@ -17,7 +17,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
   template: `
     <nav class="nav">
       <div class="nav-inner">
-        <a class="nav-logo" routerLink="/">Rent<span>Board</span></a>
+        <a class="nav-logo" routerLink="/">Mas<span>tande</span></a>
 
         <div class="nav-links" [class.open]="mobileOpen()">
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"

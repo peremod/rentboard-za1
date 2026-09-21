@@ -628,6 +628,82 @@ img{display:block;max-width:100%}
 }
 .admin-reference strong{display:block;font-size:.85rem;margin-bottom:.25rem}
 
+/* ═══ YARD DASHBOARD ═══ */
+.yard-totals{display:flex;gap:.6rem;margin-bottom:1.25rem}
+.yard-total{
+  flex:1;text-align:center;padding:.85rem .5rem;
+  border:1.5px solid var(--border);border-radius:var(--r4);background:var(--white);
+}
+.yard-total strong{display:block;font-family:var(--font-mono);font-size:1.5rem;line-height:1.1}
+.yard-total span{font-size:.72rem;color:var(--ink2);text-transform:uppercase;letter-spacing:1px}
+.yard-total--good strong{color:var(--sage)}
+.yard-total--alert strong{color:var(--terra)}
+
+.yard{
+  border:1.5px solid var(--border);border-radius:var(--r4);
+  background:var(--white);margin-bottom:.85rem;overflow:hidden;
+}
+.yard__head{
+  display:flex;justify-content:space-between;align-items:center;gap:.75rem;
+  padding:.85rem 1rem;background:var(--cream2);
+}
+.yard__head strong{display:block;font-size:.92rem}
+.yard__head .muted{font-size:.78rem}
+.yard__counts{
+  display:flex;flex-wrap:wrap;gap:.75rem;padding:.6rem 1rem;
+  font-size:.78rem;color:var(--ink2);border-bottom:1px solid var(--border);
+}
+.yard__count--vacant{color:var(--sage);font-weight:700}
+.yard__count--alert{color:var(--terra);font-weight:700}
+.yard__empty{padding:1rem;margin:0;font-size:.82rem}
+
+.yard-room{padding:.75rem 1rem;border-bottom:1px solid var(--border)}
+.yard-room:last-child{border-bottom:none}
+.yard-room__main{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;font-size:.86rem}
+.yard-room__main a{font-weight:700}
+.yard-room__applicants{display:inline-block;margin-top:.35rem;font-size:.8rem;font-weight:700}
+
+.yard-rent{
+  display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
+  margin-top:.5rem;padding:.5rem .6rem;
+  background:var(--cream2);border-radius:var(--r4);font-size:.8rem;
+}
+.yard-rent__state{color:var(--ink2)}
+.yard-rent__actions{display:flex;gap:.35rem;margin-left:auto}
+.yard-rent__actions button{
+  /* `color` is explicit, not inherited. Without it these buttons rendered
+     white-on-white and were invisible on the page — the surrounding portal
+     sets a light colour, and a control that declares its own background must
+     declare its own foreground or it inherits one meant for a dark surface.
+     Neither the build nor the typecheck can see this; it took driving the
+     page in a browser. */
+  /* 44px, not the 22px this first rendered at. WCAG 2.5.8 puts the floor at
+     24×24 CSS px and these were under it; 44 is the figure that actually
+     works on a cheap phone with an imprecise touch screen, which is most of
+     this market. The vertical space is worth it on the one control a
+     landlord taps every month. */
+  min-height:44px;min-width:44px;
+  padding:.25rem .7rem;border-radius:var(--r4);border:1.5px solid var(--border);
+  background:var(--white);color:var(--ink);font-size:.78rem;cursor:pointer;
+}
+.yard-rent__actions button:hover:not(:disabled){border-color:var(--terra);color:var(--terra)}
+.yard-rent__disputed{
+  flex-basis:100%;font-size:.76rem;color:var(--gold);font-weight:700;
+}
+
+.yard-new{margin-top:1rem}
+.yard-new form{
+  border:1.5px solid var(--border);border-radius:var(--r4);
+  padding:1rem;background:var(--white);
+}
+.yard-new label{display:block;font-size:.82rem;margin-bottom:.6rem}
+.yard-new input{
+  display:block;width:100%;margin-top:.25rem;padding:.55rem;
+  border:1.5px solid var(--border);border-radius:var(--r4);font:inherit;
+}
+.yard-new__row{display:flex;gap:.6rem}
+.yard-new__row label{flex:1}
+
 /* ═══ SHIMMER ═══ */
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .shimmer{
