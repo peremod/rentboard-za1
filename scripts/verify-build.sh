@@ -53,8 +53,19 @@ else
 fi
 
 # ── 4. All three environments build ───────────────────────────────────────
+#
+# Order matters and used to be wrong. All three configurations write to the
+# same dist/, so whichever builds LAST is what step 6 then inspects — and step
+# 6 asserts production-only properties: canonical, hreflang, and an indexable
+# robots directive. Building development last meant step 6 read an unindexable
+# development build and reported four failures on every single run, followed by
+# "do not tag a release until these are resolved". Nothing was wrong with the
+# build; the script was checking the wrong one.
+#
+# Production is built last so the artefact left on disk is the one the
+# assertions are about. (ci.yml had the same bug and was fixed the same way.)
 step "Builds"
-for cfg in production staging development; do
+for cfg in development staging production; do
   if npm --prefix frontend run build -- --configuration "$cfg" >/tmp/build-$cfg.log 2>&1 \
      || npx --prefix frontend ng build --configuration "$cfg" >/tmp/build-$cfg.log 2>&1; then
     ok "$cfg build"
