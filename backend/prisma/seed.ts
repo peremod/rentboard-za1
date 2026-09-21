@@ -93,6 +93,11 @@ Optional: ADMIN_NAME="Your Name"
     await seedLaunchCodes();
   }
 
+  // Demo rooms. Opt-in, for the same reason as the demo ads.
+  if (process.env.SEED_DEMO_ROOMS === 'true') {
+    await seedDemoRooms();
+  }
+
   const adminCount = await prisma.user.count({ where: { role: 'ADMIN' } });
   console.log(`Total admin accounts: ${adminCount}`);
   console.log('Sign in normally, then open /admin.');
@@ -483,6 +488,105 @@ async function seedDemoAds() {
   }
 
   console.log(`Seeded ${campaigns.length} demo ad campaigns (all prefixed [DEMO]).`);
+}
+
+
+/**
+ * A handful of published rooms, so the board is not empty.
+ *
+ * Opt-in via SEED_DEMO_ROOMS=true, and never on production data — these are
+ * obviously fake listings and they belong nowhere near real traffic.
+ *
+ * Written because e2e/application-lifecycle.spec.ts says "the seed guarantees
+ * at least one room" and that was not true: the seed created an admin, the
+ * place taxonomy and house ads, and no rooms at all. The first time the e2e
+ * job ran in CI it failed on `app-room-card a` not existing, because the
+ * board it was applying from had nothing on it.
+ *
+ * Rooms are written directly rather than through the API on purpose. Publishing
+ * requires a cover photo, which requires an ImageKit upload, which CI has no
+ * credentials for — so the API path cannot produce a listed room in CI at all.
+ * A fixture that says so is better than a test that quietly needs a service
+ * nobody configured.
+ */
+async function seedDemoRooms() {
+  const landlordEmail = 'demo-landlord@rentboard.test';
+
+  const landlord = await prisma.user.upsert({
+    where: { email: landlordEmail },
+    update: {},
+    create: {
+      email: landlordEmail,
+      // No usable password: this account exists to own listings, not to be
+      // signed into. bcrypt will never match an empty-ish placeholder.
+      passwordHash: await bcrypt.hash(`seed-only-${Date.now()}-${Math.random()}`, SALT_ROUNDS),
+      fullName: 'Demo Landlord',
+      role: 'LANDLORD',
+      isActive: true,
+      isVerified: true,
+    },
+  });
+
+  const rooms = [
+    {
+      title: 'Sunny room in a shared house, Observatory',
+      roomType: 'shared_house' as const,
+      rentCents: 450000,
+      province: 'Western Cape',
+      city: 'Cape Town',
+      locationDisplay: 'Observatory, Cape Town',
+      amenities: ['wifi', 'furnished', 'washing_machine'],
+      housematesCount: 3,
+    },
+    {
+      title: 'En-suite room close to Wits, Braamfontein',
+      roomType: 'en_suite' as const,
+      rentCents: 520000,
+      province: 'Gauteng',
+      city: 'Johannesburg',
+      locationDisplay: 'Braamfontein, Johannesburg',
+      amenities: ['wifi', 'furnished', 'security'],
+      housematesCount: 2,
+    },
+    {
+      title: 'Studio with its own entrance, Morningside',
+      roomType: 'studio' as const,
+      rentCents: 680000,
+      province: 'KwaZulu-Natal',
+      city: 'Durban',
+      locationDisplay: 'Morningside, Durban',
+      amenities: ['wifi', 'parking', 'private_entrance'],
+      housematesCount: 0,
+    },
+  ];
+
+  for (const room of rooms) {
+    const existing = await prisma.room.findFirst({
+      where: { landlordId: landlord.id, title: room.title },
+    });
+    if (existing) continue;
+
+    await prisma.room.create({
+      data: {
+        ...room,
+        landlordId: landlord.id,
+        description:
+          'Seeded demo listing. Quiet house, close to transport, bills shared between housemates.',
+        status: 'active',
+        publishedAt: new Date(),
+        availableFrom: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        depositCents: room.rentCents,
+        billsIncluded: true,
+        // A path, not an upload: the frontend builds an ImageKit URL from it,
+        // and a broken image is fine in a fixture. What matters is that the
+        // room has a cover at all, since the board hides listings without one.
+        heroImagePath: 'demo/room-placeholder.jpg',
+        imagePaths: ['demo/room-placeholder.jpg'],
+      },
+    });
+  }
+
+  console.log(`Demo rooms seeded: ${rooms.length} listings under ${landlordEmail}`);
 }
 
 main()

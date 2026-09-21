@@ -23,9 +23,18 @@ if [[ -z "$EMAIL" ]]; then
   read -rp "Admin email: " EMAIL
 fi
 
-# -s keeps it off the screen; no shell history either way.
-read -rsp "Password for $EMAIL: " PASSWORD
-echo >&2
+if [[ -n "${ADMIN_PASSWORD:-}" ]]; then
+  # Non-interactive path, for CI. The prompt below exists so a password does
+  # not end up in shell history or in `ps` output, which is about command-line
+  # ARGUMENTS; an environment variable is neither, and it is already how
+  # prisma/seed.ts takes the same password. A runner with no TTY would
+  # otherwise hang here until the job timed out.
+  PASSWORD="$ADMIN_PASSWORD"
+else
+  # -s keeps it off the screen; no shell history either way.
+  read -rsp "Password for $EMAIL: " PASSWORD
+  echo >&2
+fi
 
 RESPONSE=$(curl -sS -X POST "$API/api/auth/login" \
   -H 'Content-Type: application/json' \

@@ -1,8 +1,10 @@
 {
+  "//": "Typechecks prisma/seed.ts, which tsconfig.json deliberately excludes (it is not part of the Nest build). The exclude list below is repeated rather than inherited on purpose: `extends` merges compilerOptions but REPLACES nothing else, so the parent's exclude — which lists \"prisma\" — still applied, and this config checked zero seed files. `npm run typecheck` ran it and passed on a seed.ts that would not compile; ts-node caught the error at runtime instead, writing `emailVerified` where the model says `isVerified`.",
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["prisma/**/*.ts", "src/**/*"]
+  "include": ["prisma/**/*.ts", "src/**/*"],
+  "exclude": ["node_modules", "dist", "test", "**/*.spec.ts"]
 }

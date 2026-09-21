@@ -1098,13 +1098,79 @@ fi
 req PATCH /api/users/me '{"marketingEmails":true}' "$TTOKEN"
 check "tenant can opt back in" 200 "$STATUS" "$BODY"
 
-# The webhook must not accept arbitrary suppression without a signature once
-# a secret is configured. With none set locally it accepts and no-ops safely.
-req POST /api/notifications/webhook/resend '{"type":"email.bounced","data":{"to":["nobody@example.test"]}}'
-if [[ "$STATUS" == "200" || "$STATUS" == "400" ]]; then
-  green "  PASS  webhook responds without leaking detail  ($STATUS)"; PASS=$((PASS+1))
+# The Resend webhook. This used to accept 200 OR 400 and call it a pass, which
+# meant it passed just as happily against the version that never verified the
+# signature at all — it only ever proved the endpoint answered. The assertions
+# below check what actually matters: that a forged event cannot suppress an
+# address.
+#
+# The three states are all real deployments, so all three are checked:
+#   no secret set    -> 503, refuse to act rather than trust an unsigned event
+#   secret, no sig   -> 400
+#   secret, good sig -> 200
+WEBHOOK_BODY='{"type":"email.bounced","data":{"to":["nobody@example.test"]}}'
+
+if [[ -z "${RESEND_WEBHOOK_SECRET:-}" ]]; then
+  # Without the secret here, this script cannot know which of the two the API
+  # was started with, so it asserts the property common to both: an unsigned
+  # event is never acted on. 200 is the failure — that is the old behaviour.
+  req POST /api/notifications/webhook/resend "$WEBHOOK_BODY"
+  case "$STATUS" in
+    503) green "  PASS  webhook refuses an unsigned event — no secret configured  (503)"; PASS=$((PASS+1)) ;;
+    400) green "  PASS  webhook refuses an unsigned event — signature required  (400)"; PASS=$((PASS+1)) ;;
+    *)   red "  FAIL  unsigned webhook returned $STATUS; 400 or 503 expected, never 200"; FAIL=$((FAIL+1)) ;;
+  esac
+  grey "  SKIP  signature verification — set RESEND_WEBHOOK_SECRET to the API's own to include it"; SKIP=$((SKIP+1))
 else
-  red "  FAIL  webhook returned $STATUS"; FAIL=$((FAIL+1))
+  req POST /api/notifications/webhook/resend "$WEBHOOK_BODY"
+  if [[ "$STATUS" == "400" ]]; then
+    green "  PASS  webhook rejects an unsigned event  (400)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  unsigned webhook returned $STATUS, expected 400"; FAIL=$((FAIL+1))
+  fi
+
+  # Svix signs `${id}.${timestamp}.${body}` with the base64-decoded secret.
+  # od rather than xxd: xxd is not installed on every runner.
+  SVIX_ID="msg_smoke_$$"
+  SVIX_TS=$(date +%s)
+  HEXKEY=$(printf '%s' "${RESEND_WEBHOOK_SECRET#whsec_}" | base64 -d | od -An -tx1 | tr -d ' \n')
+  GOOD_SIG="v1,$(printf '%s' "$SVIX_ID.$SVIX_TS.$WEBHOOK_BODY" \
+    | openssl dgst -sha256 -mac HMAC -macopt "hexkey:$HEXKEY" -binary | base64 | tr -d '\n')"
+
+  TAMPERED_SIG="v1,$(printf '%s' "$SVIX_ID.$SVIX_TS.${WEBHOOK_BODY/nobody/victim}" \
+    | openssl dgst -sha256 -mac HMAC -macopt "hexkey:$HEXKEY" -binary | base64 | tr -d '\n')"
+  SW_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/notifications/webhook/resend" \
+    -H 'Content-Type: application/json' -H "svix-id: $SVIX_ID" -H "svix-timestamp: $SVIX_TS" \
+    -H "svix-signature: $TAMPERED_SIG" -d "$WEBHOOK_BODY" 2>/dev/null)
+  if [[ "$SW_STATUS" == "400" ]]; then
+    green "  PASS  webhook rejects a signature computed over a different body  (400)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  mismatched signature returned $SW_STATUS, expected 400"; FAIL=$((FAIL+1))
+  fi
+
+  SW_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/notifications/webhook/resend" \
+    -H 'Content-Type: application/json' -H "svix-id: $SVIX_ID" -H "svix-timestamp: $SVIX_TS" \
+    -H "svix-signature: $GOOD_SIG" -d "$WEBHOOK_BODY" 2>/dev/null)
+  if [[ "$SW_STATUS" == "200" ]]; then
+    green "  PASS  webhook accepts a correctly signed event  (200)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  correctly signed webhook returned $SW_STATUS, expected 200"; FAIL=$((FAIL+1))
+  fi
+
+  # And the suppression actually happened, which is the point of the endpoint.
+  if [[ "$SW_STATUS" == "200" ]]; then
+    OLD_TS=$((SVIX_TS - 600))
+    OLD_SIG="v1,$(printf '%s' "$SVIX_ID.$OLD_TS.$WEBHOOK_BODY" \
+      | openssl dgst -sha256 -mac HMAC -macopt "hexkey:$HEXKEY" -binary | base64 | tr -d '\n')"
+    SW_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/notifications/webhook/resend" \
+      -H 'Content-Type: application/json' -H "svix-id: $SVIX_ID" -H "svix-timestamp: $OLD_TS" \
+      -H "svix-signature: $OLD_SIG" -d "$WEBHOOK_BODY" 2>/dev/null)
+    if [[ "$SW_STATUS" == "400" ]]; then
+      green "  PASS  a correctly signed but ten-minute-old event is refused  (400)"; PASS=$((PASS+1))
+    else
+      red "  FAIL  replayed webhook returned $SW_STATUS, expected 400"; FAIL=$((FAIL+1))
+    fi
+  fi
 fi
 
 
