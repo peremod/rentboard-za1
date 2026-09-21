@@ -73,10 +73,10 @@ model User {
   /// Separate from `phone`, which a landlord enters for contact purposes and
   /// nobody has checked. Signing someone in on an unverified number would let
   /// anyone claim an account by typing a number they do not own.
-  phoneVerified  Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  lastLoginAt    DateTime?
+  phoneVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
 
   /// Last authenticated request, rounded and written at most hourly.
   ///
@@ -85,27 +85,38 @@ model User {
   /// when, and it cannot reconstruct a session or a journey. lastLoginAt
   /// alone was not enough: with a 15-minute token and silent refresh, someone
   /// using the app daily may not log in for weeks.
-  lastSeenAt     DateTime?
+  lastSeenAt DateTime?
 
   /// POPIA s.69: marketing needs consent and a working opt-out. Transactional
   /// mail about a room you applied for is unaffected by this.
   marketingEmails Boolean @default(true)
 
-  authTokens      AuthToken[]
-  tenanciesAsLandlord Tenancy[] @relation("TenanciesAsLandlord")
-  tenanciesAsTenant   Tenancy[] @relation("TenanciesAsTenant")
-  reviewsWritten      Review[]  @relation("ReviewsWritten")
-  reviewsReceived     Review[]  @relation("ReviewsReceived")
-  reportsFiled    Report[]  @relation("ReportsFiled")
-  reportsAgainst  Report[]  @relation("ReportsAgainst")
-  emailLogs       EmailLog[]
-  payments        Payment[]
-  referralCodes   ReferralCode[] @relation("ReferralCodesOwned")
-  referralsMade   Referral[]     @relation("ReferralsMade")
-  referralReceived Referral?     @relation("ReferralReceived")
-  savedRooms      SavedRoom[]
-  savedSearches   SavedSearch[]
-  verifications   VerificationRequest[]
+  authTokens          AuthToken[]
+  tenanciesAsLandlord Tenancy[]     @relation("TenanciesAsLandlord")
+  tenanciesAsTenant   Tenancy[]     @relation("TenanciesAsTenant")
+  reviewsWritten      Review[]      @relation("ReviewsWritten")
+  reviewsReceived     Review[]      @relation("ReviewsReceived")
+  reportsFiled        Report[]      @relation("ReportsFiled")
+  reportsAgainst      Report[]      @relation("ReportsAgainst")
+  flagsRaised         TenancyFlag[] @relation("FlagsRaised")
+  flagsAgainst        TenancyFlag[] @relation("FlagsAgainst")
+
+  /// Open or upheld post-tenancy flags against this account.
+  ///
+  /// Denormalised because the board's ordering needs it in SQL and a join
+  /// per room is not worth it. Maintained in the same transaction as every
+  /// flag create and review, so it cannot drift from one of those — but it
+  /// CAN drift if rows are edited by hand, and AdminService.recountFlags()
+  /// exists to put it right.
+  openFlagCount    Int                   @default(0)
+  emailLogs        EmailLog[]
+  payments         Payment[]
+  referralCodes    ReferralCode[]        @relation("ReferralCodesOwned")
+  referralsMade    Referral[]            @relation("ReferralsMade")
+  referralReceived Referral?             @relation("ReferralReceived")
+  savedRooms       SavedRoom[]
+  savedSearches    SavedSearch[]
+  verifications    VerificationRequest[]
 
   landlordProfile LandlordProfile?
   tenantProfile   TenantProfile?
@@ -121,31 +132,31 @@ model User {
 }
 
 model LandlordProfile {
-  id               String   @id @default(uuid())
-  userId           String   @unique
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  companyName      String?
-  planTier         PlanTier @default(free)
-  planExpiresAt    DateTime?
-  stripeCustomerId String?  @unique
-  stripeSubscriptionId String? @unique
-  idVerified       Boolean  @default(false)
-  rating           Float?
-  ratingCount      Int      @default(0)
-  whatsappConfig   LandlordWhatsappConfig?
+  id                   String                  @id @default(uuid())
+  userId               String                  @unique
+  user                 User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName          String?
+  planTier             PlanTier                @default(free)
+  planExpiresAt        DateTime?
+  stripeCustomerId     String?                 @unique
+  stripeSubscriptionId String?                 @unique
+  idVerified           Boolean                 @default(false)
+  rating               Float?
+  ratingCount          Int                     @default(0)
+  whatsappConfig       LandlordWhatsappConfig?
 
   @@map("landlord_profiles")
 }
 
 model TenantProfile {
-  id                String   @id @default(uuid())
-  userId            String   @unique
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String    @id @default(uuid())
+  userId            String    @unique
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   employmentStatus  String?
   annualIncomeCents Int?
-  incomeVerified    Boolean  @default(false)
-  idVerified        Boolean  @default(false)
-  hasPassport       Boolean  @default(false)
+  incomeVerified    Boolean   @default(false)
+  idVerified        Boolean   @default(false)
+  hasPassport       Boolean   @default(false)
   passportExpiresAt DateTime?
 
   @@map("tenant_profiles")
@@ -153,65 +164,64 @@ model TenantProfile {
 
 /// Room — the core listing entity. Rooms-only MVP (no full-property lets).
 model Room {
-  id               String     @id @default(uuid())
-  landlordId       String
-  landlord         User       @relation(fields: [landlordId], references: [id], onDelete: Cascade)
+  id         String @id @default(uuid())
+  landlordId String
+  landlord   User   @relation(fields: [landlordId], references: [id], onDelete: Cascade)
 
-  roomType         RoomType
-  title            String
-  description      String?
-  status           RoomStatus @default(draft)
+  roomType    RoomType
+  title       String
+  description String?
+  status      RoomStatus @default(draft)
 
   /// Monthly rent in ZAR cents: R950/mo = 95000
-  rentCents        Int
-  depositCents      Int?
-  billsIncluded    Boolean    @default(false)
+  rentCents     Int
+  depositCents  Int?
+  billsIncluded Boolean @default(false)
 
-  province         String
-  city             String
-  locationDisplay  String
+  province        String
+  city            String
+  locationDisplay String
 
-  availableFrom    DateTime
-  housematesCount  Int        @default(0)
+  availableFrom   DateTime
+  housematesCount Int      @default(0)
 
-  couplesAllowed   Boolean    @default(false)
-  dssAccepted      Boolean    @default(false)
-  guarantorAccepted Boolean   @default(false)
-  petsAllowed      Boolean    @default(false)
+  couplesAllowed    Boolean @default(false)
+  dssAccepted       Boolean @default(false)
+  guarantorAccepted Boolean @default(false)
+  petsAllowed       Boolean @default(false)
 
   /// What the room and house actually have. Stored as a string array rather
   /// than 15 booleans: the list will grow, and a Postgres array can be
   /// filtered with `hasEvery` without a migration each time.
   ///
   /// Values come from AMENITIES in the frontend so the two stay in step.
-  amenities        String[]   @default([])
+  amenities String[] @default([])
 
-  heroImagePath    String?
-  imagePaths       String[]
+  heroImagePath String?
+  imagePaths    String[]
 
-  isFeatured       Boolean    @default(false)
-  featuredUntil    DateTime?
+  isFeatured    Boolean   @default(false)
+  featuredUntil DateTime?
 
-  viewCount        Int        @default(0)
-  applicationCount Int        @default(0)
-  relistCount      Int        @default(0)
+  viewCount        Int       @default(0)
+  applicationCount Int       @default(0)
+  relistCount      Int       @default(0)
   letAt            DateTime?
 
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-  publishedAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  publishedAt DateTime?
 
-  applications     Application[]
-  boosts           RoomBoost[]
-  tenancies        Tenancy[]
-  reviews          Review[]
-  savedBy          SavedRoom[]
+  applications Application[]
+  boosts       RoomBoost[]
+  tenancies    Tenancy[]
+  reviews      Review[]
+  savedBy      SavedRoom[]
+  reports      Report[]
 
   @@index([status])
   @@index([province, city])
   @@index([rentCents])
-  reports          Report[]
-
   @@index([landlordId])
   @@map("rooms")
 }
@@ -227,25 +237,25 @@ enum ApplicationStatus {
 
 /// A tenant's application to a room. One tenant can apply to a given room only once.
 model Application {
-  id         String            @id @default(uuid())
-  roomId     String
-  room       Room              @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  tenantId   String
-  tenant     User              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  status     ApplicationStatus @default(pending)
-  coverNote  String?
+  id        String            @id @default(uuid())
+  roomId    String
+  room      Room              @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  tenantId  String
+  tenant    User              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status    ApplicationStatus @default(pending)
+  coverNote String?
 
   /// Why the landlord rejected. Also distinguishes a deliberate rejection from
   /// one caused by accepting someone else, which undo-accept must reverse
   /// while leaving deliberate ones alone.
   rejectionReason String?
-  viewedAt   DateTime?
-  decidedAt  DateTime?
+  viewedAt        DateTime?
+  decidedAt       DateTime?
 
   /// Which letting cycle this application belongs to — mirrors Room.relistCount
   /// at the time it was submitted. Relisting a room starts a new cycle so its
   /// old applicants do not reappear as new ones.
-  cycle      Int      @default(0)
+  cycle Int @default(0)
 
   /// Set when the room is relisted or let to someone else. Archived
   /// applications stay visible to the tenant (with the reason) and are hidden
@@ -253,14 +263,14 @@ model Application {
   /// policy commits to retaining applications for 2 years after outcome.
   archivedAt DateTime?
 
-  messages   Message[]
+  messages Message[]
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Scoped to the cycle: a tenant who missed out may apply again after a
   // relist. The old constraint locked them out of the room permanently.
-  tenancy    Tenancy?
+  tenancy Tenancy?
 
   @@unique([roomId, tenantId, cycle])
   @@index([tenantId])
@@ -274,11 +284,11 @@ model Application {
 /// Only a SHA-256 hash of the token is stored: a leaked database must not hand
 /// an attacker working reset links. The raw token exists only in the email.
 model AuthToken {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  tokenHash String   @unique
+  tokenHash String        @unique
   type      AuthTokenType
   /// For email-change requests: the address being moved to, confirmed by the
   /// token before it is written to the account.
@@ -286,7 +296,7 @@ model AuthToken {
 
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([userId, type])
   @@index([expiresAt])
@@ -301,25 +311,25 @@ model AuthToken {
 /// resolution because a pattern across several reports is usually what shows a
 /// scammer, not any single one.
 model Report {
-  id        String       @id @default(uuid())
+  id String @id @default(uuid())
 
   /// Null when reported by a signed-out visitor.
   reporterId String?
-  reporter   User?        @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: SetNull)
+  reporter   User?   @relation("ReportsFiled", fields: [reporterId], references: [id], onDelete: SetNull)
 
   /// One of these is set. Reporting a room implicates its landlord, but the
   /// landlord may also be reported directly (e.g. off-platform conduct).
-  roomId    String?
-  room      Room?        @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  roomId         String?
+  room           Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
   reportedUserId String?
-  reportedUser   User?    @relation("ReportsAgainst", fields: [reportedUserId], references: [id], onDelete: SetNull)
+  reportedUser   User?   @relation("ReportsAgainst", fields: [reportedUserId], references: [id], onDelete: SetNull)
 
-  reason    ReportReason
-  details   String
+  reason       ReportReason
+  details      String
   /// Contact address for signed-out reporters, so we can follow up.
   contactEmail String?
 
-  status    ReportStatus @default(open)
+  status         ReportStatus @default(open)
   /// What the admin did and why. Shown to nobody but admins.
   resolutionNote String?
   reviewedById   String?
@@ -335,20 +345,20 @@ model Report {
 }
 
 enum ReportReason {
-  not_a_real_listing      // room does not exist, or photos are stolen
+  not_a_real_listing // room does not exist, or photos are stolen
   agent_posing_as_landlord
   upfront_payment_demanded // deposit before viewing — the biggest scam pattern
-  discriminatory           // PEPUDA / Constitution s.9
-  misleading_details       // price, size or condition materially wrong
+  discriminatory // PEPUDA / Constitution s.9
+  misleading_details // price, size or condition materially wrong
   harassment
-  already_let              // still advertised after being taken
+  already_let // still advertised after being taken
   other
 }
 
 enum ReportStatus {
   open
   investigating
-  actioned      // listing removed, account suspended, or similar
+  actioned // listing removed, account suspended, or similar
   dismissed
 }
 
@@ -365,43 +375,44 @@ enum ReportStatus {
 /// before move-in, and a tenancy nobody confirms should not generate a review
 /// prompt or a rating.
 model Tenancy {
-  id            String        @id @default(uuid())
+  id String @id @default(uuid())
 
-  roomId        String
-  room          Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  landlordId    String
-  landlord      User          @relation("TenanciesAsLandlord", fields: [landlordId], references: [id], onDelete: Cascade)
-  tenantId      String
-  tenant        User          @relation("TenanciesAsTenant", fields: [tenantId], references: [id], onDelete: Cascade)
+  roomId     String
+  room       Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  landlordId String
+  landlord   User   @relation("TenanciesAsLandlord", fields: [landlordId], references: [id], onDelete: Cascade)
+  tenantId   String
+  tenant     User   @relation("TenanciesAsTenant", fields: [tenantId], references: [id], onDelete: Cascade)
 
   /// The application this came from. One tenancy per accepted application.
-  applicationId String        @unique
-  application   Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  applicationId String      @unique
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
-  status        TenancyStatus @default(pending)
+  status TenancyStatus @default(pending)
 
   /// Agreed move-in date. Null until confirmed.
-  startDate     DateTime?
+  startDate DateTime?
   /// Actual move-out. Set when the tenancy is ended by either party.
-  endDate       DateTime?
+  endDate   DateTime?
 
   /// Rent at the time, in ZAR cents. Copied rather than referenced because the
   /// room's rent changes on relist and a review should reflect what was paid.
-  rentCents     Int
+  rentCents Int
 
   /// Either party may end it — this is a record of fact, not a negotiation.
-  endedById     String?
-  endReason     String?
+  endedById String?
+  endReason String?
 
   /// Reviews open when the tenancy ends and close after this. A window stops
   /// a grudge review appearing two years later, and gives the double-blind
   /// reveal a definite deadline.
   reviewsCloseAt DateTime?
 
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  reviews       Review[]
+  reviews Review[]
+  flags   TenancyFlag[]
 
   @@index([landlordId, status])
   @@index([tenantId, status])
@@ -410,10 +421,10 @@ model Tenancy {
 }
 
 enum TenancyStatus {
-  pending    // accepted, not yet confirmed as moved in
-  active     // confirmed, currently living there
-  ended      // completed normally
-  cancelled  // fell through before move-in — never generates reviews
+  pending // accepted, not yet confirmed as moved in
+  active // confirmed, currently living there
+  ended // completed normally
+  cancelled // fell through before move-in — never generates reviews
 }
 
 /// A review written after a tenancy ends.
@@ -434,37 +445,37 @@ enum TenancyStatus {
 ///                      a much smaller defamation exposure under South African
 ///                      law. A tenant can always see their own.
 model Review {
-  id          String       @id @default(uuid())
+  id String @id @default(uuid())
 
-  tenancyId   String
-  tenancy     Tenancy      @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+  tenancyId String
+  tenancy   Tenancy @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
 
-  authorId    String
-  author      User         @relation("ReviewsWritten", fields: [authorId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User    @relation("ReviewsWritten", fields: [authorId], references: [id], onDelete: Cascade)
   /// The person being reviewed. Null for a room review — the subject is the room.
-  subjectId   String?
-  subject     User?        @relation("ReviewsReceived", fields: [subjectId], references: [id], onDelete: SetNull)
+  subjectId String?
+  subject   User?   @relation("ReviewsReceived", fields: [subjectId], references: [id], onDelete: SetNull)
   /// Set for room reviews, so a room carries its history across tenancies.
-  roomId      String?
-  room        Room?        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomId    String?
+  room      Room?   @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
-  type        ReviewType
+  type    ReviewType
   /// 1-5. Averaged into LandlordProfile.rating for landlord reviews only.
-  rating      Int
-  comment     String
+  rating  Int
+  comment String
 
   /// Withheld until both sides have submitted or the window closes.
   publishedAt DateTime?
   /// The subject's reply. One per review, and it does not affect the rating.
-  response       String?
-  respondedAt    DateTime?
+  response    String?
+  respondedAt DateTime?
 
   /// Moderation, for the defamation exposure noted above.
-  isHidden       Boolean   @default(false)
-  hiddenReason   String?
+  isHidden     Boolean @default(false)
+  hiddenReason String?
 
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   /// One review of each type per author per tenancy.
   @@unique([tenancyId, authorId, type])
@@ -474,9 +485,9 @@ model Review {
 }
 
 enum ReviewType {
-  room       // tenant -> the room and house
-  landlord   // tenant -> the landlord's conduct
-  tenant     // landlord -> the tenant
+  room // tenant -> the room and house
+  landlord // tenant -> the landlord's conduct
+  tenant // landlord -> the tenant
 }
 
 /// A room a tenant has saved with the heart button.
@@ -487,11 +498,11 @@ enum ReviewType {
 /// they were deciding on. It also means saves follow the account across
 /// devices, which is what people expect.
 model SavedRoom {
-  id       String   @id @default(uuid())
+  id       String @id @default(uuid())
   tenantId String
-  tenant   User     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   User   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   roomId   String
-  room     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  room     Room   @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   /// Set when the room stops being available, so the tenant can be told once
   /// and the entry can stay visible as "no longer available" rather than
@@ -513,28 +524,28 @@ model SavedRoom {
 /// arriving; and POPIA s.69 requires being able to show that marketing was
 /// consented to and that opt-outs were honoured.
 model EmailLog {
-  id         String       @id @default(uuid())
+  id String @id @default(uuid())
 
   /// Null when sent to an address with no account (e.g. an anonymous reporter).
-  userId     String?
-  user       User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
-  toEmail    String
+  userId  String?
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  toEmail String
 
-  template   String       /// e.g. 'new_application', 'password_reset'
-  category   EmailCategory
-  subject    String
+  template String /// e.g. 'new_application', 'password_reset'
+  category EmailCategory
+  subject  String
 
-  status     EmailStatus  @default(queued)
+  status     EmailStatus @default(queued)
   /// Resend's message id, so a delivery event can be matched back.
-  providerId String?      @unique
+  providerId String?     @unique
   error      String?
 
-  sentAt      DateTime?
-  deliveredAt DateTime?
-  bouncedAt   DateTime?
+  sentAt       DateTime?
+  deliveredAt  DateTime?
+  bouncedAt    DateTime?
   complainedAt DateTime?
 
-  createdAt  DateTime     @default(now())
+  createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
   @@index([toEmail])
@@ -556,7 +567,7 @@ enum EmailStatus {
   bounced
   complained
   failed
-  suppressed   // not attempted: the address is on the suppression list
+  suppressed // not attempted: the address is on the suppression list
 }
 
 /// Addresses that must not be emailed again.
@@ -565,11 +576,11 @@ enum EmailStatus {
 /// pressed "spam". Continuing to send to either is how a sending domain gets
 /// blacklisted, at which point password resets stop arriving for everyone.
 model EmailSuppression {
-  id        String              @id @default(uuid())
-  email     String              @unique
+  id        String            @id @default(uuid())
+  email     String            @unique
   reason    SuppressionReason
   detail    String?
-  createdAt DateTime            @default(now())
+  createdAt DateTime          @default(now())
 
   @@map("email_suppressions")
 }
@@ -587,10 +598,10 @@ enum SuppressionReason {
 /// The ITN webhook is the source of truth, not the browser return: a user who
 /// closes the tab after paying must still get what they paid for.
 model Payment {
-  id          String        @id @default(uuid())
+  id String @id @default(uuid())
 
-  userId      String
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   purpose     PaymentPurpose
   /// What this paid for, e.g. a VerificationRequest id.
@@ -600,7 +611,7 @@ model Payment {
   amountCents Int
   status      PaymentStatus @default(pending)
 
-  provider    String        @default("payfast")
+  provider          String  @default("payfast")
   /// Our reference, sent as m_payment_id and echoed back by the ITN.
   merchantReference String  @unique
   /// PayFast's pf_payment_id, only known once they confirm.
@@ -608,19 +619,19 @@ model Payment {
 
   /// The raw ITN payload, kept for dispute resolution. PayFast does not send
   /// card numbers, so there is nothing sensitive here to avoid storing.
-  itnPayload  Json?
+  itnPayload Json?
 
-  paidAt      DateTime?
-  failedAt    DateTime?
+  paidAt        DateTime?
+  failedAt      DateTime?
   failureReason String?
 
   /// Set when a refund is issued — the pricing page promises one if
   /// verification fails, so this must be recordable.
-  refundedAt  DateTime?
+  refundedAt   DateTime?
   refundReason String?
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId, status])
   @@index([status, createdAt])
@@ -633,28 +644,28 @@ enum PaymentPurpose {
 }
 
 enum PaymentStatus {
-  pending    // created, user sent to PayFast
-  paid       // ITN confirmed and validated
+  pending // created, user sent to PayFast
+  paid // ITN confirmed and validated
   failed
-  cancelled  // user backed out
+  cancelled // user backed out
   refunded
 }
 
 /// A business buying placement on the board.
 model Advertiser {
-  id           String     @id @default(uuid())
+  id           String  @id @default(uuid())
   companyName  String
   contactName  String
   contactEmail String
   contactPhone String?
   /// Free text: agency, invoicing reference, who introduced them.
   notes        String?
-  isActive     Boolean    @default(true)
+  isActive     Boolean @default(true)
 
-  campaigns    AdCampaign[]
+  campaigns AdCampaign[]
 
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("advertisers")
 }
@@ -667,47 +678,47 @@ model Advertiser {
 /// what keeps this outside POPIA s.69 and lets the platform keep saying it
 /// runs no third-party trackers.
 model AdCampaign {
-  id           String       @id @default(uuid())
+  id           String     @id @default(uuid())
   advertiserId String
-  advertiser   Advertiser   @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
+  advertiser   Advertiser @relation(fields: [advertiserId], references: [id], onDelete: Cascade)
 
-  name         String
-  placement    AdPlacement
+  name      String
+  placement AdPlacement
 
   // Creative
-  headline     String
-  body         String?
+  headline  String
+  body      String?
   /// ImageKit path. Optional — text-only ads perform fine in a sidebar.
-  imagePath    String?
-  ctaLabel     String       @default("Learn more")
-  targetUrl    String
+  imagePath String?
+  ctaLabel  String  @default("Learn more")
+  targetUrl String
 
   // Contextual targeting. Null means "any". Most specific wins.
-  province     String?
-  city         String?
+  province   String?
+  city       String?
   /// Suburb slug from Place. Narrower than city, and the reason the taxonomy
   /// exists — "sandton" must not be served across all of Johannesburg.
-  suburbSlug   String?
-  roomType     RoomType?
+  suburbSlug String?
+  roomType   RoomType?
 
-  startsAt     DateTime
-  endsAt       DateTime
+  startsAt         DateTime
+  endsAt           DateTime
   /// Flat monthly rate in ZAR cents. Impressions-based pricing is not credible
   /// until there is volume to report honestly.
   monthlyRateCents Int
 
-  status       AdStatus     @default(draft)
+  status          AdStatus  @default(draft)
   /// Creatives are reviewed before going live: a scam ad on a rental platform
   /// does more damage than the placement is worth.
-  approvedById String?
-  approvedAt   DateTime?
+  approvedById    String?
+  approvedAt      DateTime?
   rejectionReason String?
 
   /// Aggregate counters only. Deliberately not per-user rows — knowing which
   /// tenant saw which ad is information we have no need for, and s.10
   /// minimality says do not collect it.
-  impressions  Int          @default(0)
-  clicks       Int          @default(0)
+  impressions Int @default(0)
+  clicks      Int @default(0)
 
   /// Mastande's own advert, not a sold placement.
   ///
@@ -715,10 +726,10 @@ model AdCampaign {
   /// the site rather than showing nothing. Excluded from revenue reporting,
   /// and served only after every paid campaign has been considered — a house
   /// ad must never displace a placement someone paid for.
-  isHouseAd    Boolean      @default(false)
+  isHouseAd Boolean @default(false)
 
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status, startsAt, endsAt])
   @@index([placement, status])
@@ -731,7 +742,7 @@ model AdCampaign {
 /// this is the front door: without it, an advertiser who lands on the site has
 /// no way to reach us and the inventory never sells.
 model AdEnquiry {
-  id           String    @id @default(uuid())
+  id           String  @id @default(uuid())
   companyName  String
   contactName  String
   contactEmail String
@@ -743,11 +754,11 @@ model AdEnquiry {
   /// Contextual interest, so the reply can quote the right rate.
   province     String?
 
-  status       EnquiryStatus @default(new)
-  adminNotes   String?
+  status     EnquiryStatus @default(new)
+  adminNotes String?
 
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([status, createdAt])
   @@map("ad_enquiries")
@@ -771,24 +782,24 @@ enum EnquiryStatus {
 /// Seeded from a fixed list rather than an API: the set changes rarely, and a
 /// runtime dependency on a geocoder would put ad serving behind a third party.
 model Place {
-  id        String   @id @default(uuid())
+  id String @id @default(uuid())
 
   /// Lowercased, no punctuation — the key everything matches on.
-  slug      String   @unique
-  name      String
-  type      PlaceType
+  slug String    @unique
+  name String
+  type PlaceType
 
   /// Null for a province. A suburb points at its city; a city at its province.
-  parentId  String?
-  parent    Place?   @relation("PlaceHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children  Place[]  @relation("PlaceHierarchy")
+  parentId String?
+  parent   Place?  @relation("PlaceHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Place[] @relation("PlaceHierarchy")
 
   /// Denormalised for querying without recursion — a suburb carries both.
-  city      String?
-  province  String
+  city     String?
+  province String
 
   /// Common alternates: "PE" for Gqeberha, "Joburg" for Johannesburg.
-  aliases   String[] @default([])
+  aliases String[] @default([])
 
   createdAt DateTime @default(now())
 
@@ -809,21 +820,21 @@ model Place {
 /// first question is the one that matters, and the second is the one that turns
 /// a room board into a surveillance platform.
 model UxCounter {
-  id       String   @id @default(uuid())
+  id String @id @default(uuid())
 
   /// Dotted event name, e.g. 'wizard.step2_reached'.
-  event    String
+  event   String
   /// Low-cardinality dimension: 'mobile', 'desktop', or 'all'. Never anything
   /// that could identify a person.
   ///
   /// NOT nullable, deliberately. Postgres treats NULL as distinct from NULL in
   /// a unique index, so a nullable column here would let the same event/day
   /// insert unlimited duplicate rows and the counter would never increment.
-  segment  String   @default("all")
+  segment String   @default("all")
   /// Date only. An exact timestamp plus a rare event is identifying.
-  day      DateTime @db.Date
+  day     DateTime @db.Date
 
-  count    Int      @default(0)
+  count Int @default(0)
 
   @@unique([event, segment, day])
   @@index([event, day])
@@ -837,9 +848,9 @@ enum PlaceType {
 }
 
 enum AdPlacement {
-  board_sidebar   // under the filter panel
-  board_inline    // between room cards in the grid
-  room_detail     // below a listing
+  board_sidebar // under the filter panel
+  board_inline // between room cards in the grid
+  room_detail // below a listing
 }
 
 enum AdStatus {
@@ -858,29 +869,29 @@ enum AdStatus {
 ///   launch — seeded per city for the launch push, handed out by us to early
 ///            landlords. Capped uses, so a code cannot leak and be farmed.
 model ReferralCode {
-  id        String           @id @default(uuid())
-  code      String           @unique
+  id   String @id @default(uuid())
+  code String @unique
 
-  type      ReferralCodeType @default(user)
+  type    ReferralCodeType @default(user)
   /// Null for launch codes — nobody personally earns those.
-  ownerId   String?
-  owner     User?            @relation("ReferralCodesOwned", fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerId String?
+  owner   User?            @relation("ReferralCodesOwned", fields: [ownerId], references: [id], onDelete: Cascade)
 
   /// Launch codes are scoped to where we are pushing, so redemptions can be
   /// attributed to a city rather than a person.
-  city      String?
-  province  String?
+  city     String?
+  province String?
 
   /// Null means unlimited, which is right for a user's own code.
   maxUses   Int?
-  useCount  Int              @default(0)
-  isActive  Boolean          @default(true)
+  useCount  Int       @default(0)
+  isActive  Boolean   @default(true)
   expiresAt DateTime?
 
   referrals Referral[]
 
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([type, isActive])
   @@index([city])
@@ -899,31 +910,31 @@ enum ReferralCodeType {
 /// room, a tenant submits an application. Rewarding signups alone is how a
 /// referral scheme fills up with abandoned accounts.
 model Referral {
-  id          String         @id @default(uuid())
+  id String @id @default(uuid())
 
-  codeId      String
-  code        ReferralCode   @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  codeId String
+  code   ReferralCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
 
   /// Null when the referral came from a launch code.
-  referrerId  String?
-  referrer    User?          @relation("ReferralsMade", fields: [referrerId], references: [id], onDelete: SetNull)
+  referrerId String?
+  referrer   User?   @relation("ReferralsMade", fields: [referrerId], references: [id], onDelete: SetNull)
 
-  refereeId   String         @unique
-  referee     User           @relation("ReferralReceived", fields: [refereeId], references: [id], onDelete: Cascade)
+  refereeId String @unique
+  referee   User   @relation("ReferralReceived", fields: [refereeId], references: [id], onDelete: Cascade)
 
-  status      ReferralStatus @default(pending)
+  status           ReferralStatus @default(pending)
   /// What the referee did to qualify, e.g. 'published_room', 'applied'.
   qualifyingAction String?
-  qualifiedAt DateTime?
+  qualifiedAt      DateTime?
 
   /// What the referrer earned. Kept explicit rather than implied, because the
   /// reward has to be honoured and audited.
-  reward      ReferralReward @default(none)
-  rewardedAt  DateTime?
+  reward       ReferralReward @default(none)
+  rewardedAt   DateTime?
   /// Set when a free-verification reward is spent, so it cannot be reused.
   rewardUsedAt DateTime?
 
-  createdAt   DateTime       @default(now())
+  createdAt DateTime @default(now())
 
   @@index([referrerId, status])
   @@index([status])
@@ -931,14 +942,14 @@ model Referral {
 }
 
 enum ReferralStatus {
-  pending    // signed up, has not done the qualifying action yet
-  qualified  // did it — the referrer has earned the reward
-  rewarded   // reward granted
-  void       // self-referral, duplicate, or abuse
+  pending // signed up, has not done the qualifying action yet
+  qualified // did it — the referrer has earned the reward
+  rewarded // reward granted
+  void // self-referral, duplicate, or abuse
 }
 
 enum ReferralReward {
-  none              // tenants: no monetary reward, and the UI says so
+  none // tenants: no monetary reward, and the UI says so
   free_verification // landlords: covers the R149 identity check
 }
 
@@ -958,9 +969,42 @@ enum AlertFrequency {
 }
 
 enum VerificationType {
-  identity          // SA ID book/card or passport
-  proof_of_address  // utility bill, municipal statement
+  identity // SA ID book/card or passport
+  proof_of_address // utility bill, municipal statement
   proof_of_ownership // title deed, or a mandate to let
+
+  // ── Tenant income proofs (v1.56.0) ──
+  //
+  // Deliberately NOT a credit check. A bureau record requires a credit
+  // history, and most of this market does not have one — the people who most
+  // need to prove they can pay are precisely the ones a bureau cannot see.
+  // Screening on it would exclude them while telling the landlord nothing
+  // about whether rent arrives.
+  //
+  // Each of these is a document a real South African tenant already has.
+
+  /// SASSA grant payment confirmation. A grant is income: it arrives monthly,
+  /// on a known date, at a known amount, and it is more predictable than most
+  /// wages in this market.
+  sassa_grant
+  /// A letter, WhatsApp message or SMS from an employer confirming the job and
+  /// the pay. Informal employment rarely produces a payslip.
+  employer_confirmation
+  /// Banking app screenshots, three months, showing money coming in.
+  bank_statement
+  /// A prior landlord, named and phoned. See the LandlordReference model —
+  /// this one is not a document at all.
+  landlord_reference
+}
+
+/// Who performed a step in a verification's history.
+enum VerificationActor {
+  /// The person being verified — submitting, re-submitting, withdrawing.
+  applicant
+  /// A named admin. `VerificationEvent.actorId` says which.
+  admin
+  /// An automated step: payment confirmed, reference reply received, expiry.
+  system
 }
 
 enum VerificationStatus {
@@ -977,12 +1021,12 @@ enum VerificationStatus {
 /// tenants hear about a room while it is still available — most rooms are let
 /// within days, so a tenant who only checks weekly misses nearly everything.
 model SavedSearch {
-  id        String   @id @default(uuid())
-  tenantId  String
-  tenant    User     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   User   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   /// Shown in the dashboard, e.g. "En-suite in Sandton under R6000"
-  name      String
+  name String
 
   // Filter criteria — all optional; null means "no constraint on this field".
   province          String?
@@ -1004,7 +1048,7 @@ model SavedSearch {
   notifyWhatsapp Boolean        @default(false)
 
   lastNotifiedAt DateTime?
-  matchCount     Int      @default(0)
+  matchCount     Int       @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1022,15 +1066,15 @@ model SavedSearch {
 /// landlord and an admin reviewer, and are deleted once a decision is made —
 /// only the outcome is retained. See docs/VERIFICATION.md.
 model VerificationRequest {
-  id        String             @id @default(uuid())
-  userId    String
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  type      VerificationType
-  status    VerificationStatus @default(pending)
+  type   VerificationType
+  status VerificationStatus @default(pending)
 
   /// Private ImageKit path. Cleared when the request is decided.
-  documentPath String?
+  documentPath      String?
   /// Set when documentPath is cleared, so the deletion itself is auditable.
   documentDeletedAt DateTime?
 
@@ -1042,9 +1086,114 @@ model VerificationRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// Every step this request went through. The reason a badge can show its
+  /// working rather than being a bare boolean — see VerificationEvent.
+  events    VerificationEvent[]
+  /// Set only when type is `landlord_reference`.
+  reference LandlordReference?
+
   @@index([userId])
   @@index([status])
   @@map("verification_requests")
+}
+
+/// One step in a verification's history: what was checked, when, by whom.
+///
+/// Exists because `idVerified = true` is not evidence of anything. A tenant
+/// asked to trust a badge, or a landlord asked to trust a Passport, can be
+/// shown what was actually checked and when — and if a decision is ever
+/// disputed, there is a record of who made it.
+///
+/// POPIA s.10: the trail records that a document was checked, never what the
+/// document said. `detail` is a description ("SASSA confirmation letter, name
+/// matched the account") and must never carry an ID number, a bank balance or
+/// a grant reference. The document itself is still deleted on decision — this
+/// outlives it on purpose, because the outcome is what the badge rests on.
+model VerificationEvent {
+  id        String              @id @default(uuid())
+  requestId String
+  request   VerificationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  actor   VerificationActor
+  /// The admin's user id when actor is `admin`. Null otherwise. Not a relation
+  /// on purpose: an admin account being deleted must not cascade away the
+  /// history of decisions they made.
+  actorId String?
+
+  /// Machine-readable step name, e.g. `submitted`, `payment_received`,
+  /// `document_checked`, `reference_sent`, `approved`, `document_deleted`.
+  step   String
+  /// Human-readable, shown to the subject. Never the personal information.
+  detail String?
+
+  createdAt DateTime @default(now())
+
+  @@index([requestId, createdAt])
+  @@map("verification_events")
+}
+
+enum ReferenceStatus {
+  /// Submitted by the tenant, nobody has contacted the referee yet.
+  awaiting_contact
+  /// A confirmation request went out over WhatsApp, or an admin phoned.
+  contacted
+  /// The referee confirmed the tenancy.
+  confirmed
+  /// The referee disputed it, or declined to confirm.
+  disputed
+  /// Contacted, no response before the token expired. Not a negative signal.
+  unreachable
+}
+
+/// A prior landlord, named by the tenant and asked to confirm.
+///
+/// The one check here that is not a document, and the most useful: in a market
+/// where income is informal, "they paid me on time for eighteen months" is
+/// better evidence than a bank statement.
+///
+/// The referee has no account and never will — asking a previous landlord to
+/// sign up in order to answer one question is how a reference never arrives.
+/// They answer through a one-time link delivered over WhatsApp, or an admin
+/// phones them and records the outcome. Either way the result lands here.
+///
+/// POPIA: the referee's name and number are personal information belonging to
+/// a third party, supplied by the tenant under s.11(1)(a) consent captured at
+/// submission. They are used once, for this purpose, and deleted with the
+/// request. The referee is told who is asking and why in the first message.
+model LandlordReference {
+  id        String              @id @default(uuid())
+  requestId String              @unique
+  request   VerificationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  /// Supplied by the tenant.
+  refereeName         String
+  refereePhone        String
+  /// "Room in Ext 7, Tembisa" — enough for the referee to recognise which
+  /// tenancy is being asked about, without an address we have no need for.
+  propertyDescription String?
+  tenancyStartedAt    DateTime?
+  tenancyEndedAt      DateTime?
+
+  status  ReferenceStatus @default(awaiting_contact)
+  /// 1–5, set by the referee. Null until they answer.
+  rating  Int?
+  /// The referee's own words, sanitised. Optional.
+  comment String?
+
+  /// sha256 of the one-time token in the confirmation link. The token itself
+  /// is never stored, for the same reason the refresh token is not: a leaked
+  /// database must not let anyone answer a reference as the referee.
+  responseTokenHash String?   @unique
+  tokenExpiresAt    DateTime?
+
+  contactedAt DateTime?
+  respondedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@map("landlord_references")
 }
 
 enum MessageChannel {
@@ -1095,16 +1244,16 @@ model LandlordWhatsappConfig {
 /// Session ID, known at creation time) is the idempotency key: the webhook
 /// only ever activates a boost once per session.
 model RoomBoost {
-  id                    String   @id @default(uuid())
-  roomId                String
-  room                  Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  stripeSessionId       String   @unique
-  amountCents           Int
-  durationDays          Int
-  boostedFrom           DateTime?
-  boostedUntil          DateTime?
-  status                String   @default("pending") // pending | active | expired
-  createdAt             DateTime @default(now())
+  id              String    @id @default(uuid())
+  roomId          String
+  room            Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  stripeSessionId String    @unique
+  amountCents     Int
+  durationDays    Int
+  boostedFrom     DateTime?
+  boostedUntil    DateTime?
+  status          String    @default("pending") // pending | active | expired
+  createdAt       DateTime  @default(now())
 
   @@index([roomId])
   @@map("room_boosts")
@@ -1125,18 +1274,18 @@ enum PassportStatus {
 /// — see README §18. Until that lands, these flags require manual/admin
 /// verification and must not be presented to users as automatic.
 model RentersPassport {
-  id                     String         @id @default(uuid())
-  tenantId               String         @unique
-  tenant                 User           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  status                 PassportStatus @default(pending)
-  stripeCustomerId       String?
-  stripeSubscriptionId   String?        @unique
-  idVerified             Boolean        @default(false)
-  incomeVerified         Boolean        @default(false)
-  purchasedAt            DateTime?
-  expiresAt              DateTime?
-  createdAt              DateTime       @default(now())
-  updatedAt              DateTime       @updatedAt
+  id                   String         @id @default(uuid())
+  tenantId             String         @unique
+  tenant               User           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status               PassportStatus @default(pending)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?        @unique
+  idVerified           Boolean        @default(false)
+  incomeVerified       Boolean        @default(false)
+  purchasedAt          DateTime?
+  expiresAt            DateTime?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 
   @@map("renters_passports")
 }
@@ -1147,15 +1296,100 @@ model RentersPassport {
 /// (someone replayed an old value) — AuthService responds by revoking every
 /// token for that user, forcing a full re-login. See README §20.
 model RefreshToken {
-  id            String    @id @default(uuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash     String    @unique
-  expiresAt     DateTime
-  revokedAt     DateTime?
-  replacedById  String?   @unique
-  createdAt     DateTime  @default(now())
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  replacedById String?   @unique
+  createdAt    DateTime  @default(now())
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+/// What went wrong. Phrased from the reporting party's side and kept short:
+/// a long list invites mis-selection, and the detail field carries the rest.
+enum TenancyFlagReason {
+  // Raised by a landlord, about a tenant
+  unpaid_rent
+  property_damage
+  left_without_notice
+  // Raised by a tenant, about a landlord
+  deposit_withheld
+  room_not_as_described
+  unlawful_entry_or_eviction
+  // Either
+  harassment
+  other
+}
+
+enum TenancyFlagStatus {
+  /// Raised, awaiting admin review. Reduces visibility while open.
+  open
+  /// Admin agreed with the flag. Stays counted against the account.
+  upheld
+  /// Admin did not. Stops counting immediately.
+  dismissed
+  /// The person who raised it took it back.
+  withdrawn
+}
+
+/// A problem raised after a tenancy ended.
+///
+/// Reviews already exist, but a review is a public rating and opens only for
+/// 30 days. This is a different thing: a private report to the platform that
+/// someone behaved badly, which an admin acts on. The two must not be
+/// conflated — a landlord who withheld a deposit should not be answerable
+/// only through a star rating.
+///
+/// **Reduced visibility, not suspension.** An open flag lowers a landlord's
+/// rooms on the board and marks the account in the admin queue. It does not
+/// hide listings, close applications or touch anyone's existing tenancy.
+/// A flag is an untested allegation until an admin reads it, and one angry
+/// party must not be able to take another's livelihood off the board by
+/// filling in a form. Suspension already exists, is reversible, and is an
+/// admin decision.
+///
+/// Defamation is the reason this is not public. Publishing "this landlord
+/// withheld my deposit" against a named individual, unreviewed, is the
+/// platform's largest legal exposure in South Africa — the same reasoning
+/// that keeps a landlord's review of a tenant a private reference rather than
+/// a public record.
+model TenancyFlag {
+  id String @id @default(uuid())
+
+  tenancyId String
+  tenancy   Tenancy @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+
+  /// Who raised it.
+  raisedById String
+  raisedBy   User   @relation("FlagsRaised", fields: [raisedById], references: [id], onDelete: Cascade)
+  /// Who it is about — the other party to the same tenancy, derived at
+  /// creation rather than supplied, so nobody can flag a stranger.
+  againstId  String
+  against    User   @relation("FlagsAgainst", fields: [againstId], references: [id], onDelete: Cascade)
+
+  reason TenancyFlagReason
+  /// The reporting party's account, sanitised. Required — a reason code alone
+  /// gives an admin nothing to act on.
+  detail String
+
+  status TenancyFlagStatus @default(open)
+
+  reviewedById String?
+  reviewedAt   DateTime?
+  /// Shown to both parties once reviewed, so a decision is not a silence.
+  reviewNote   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One flag per party per tenancy. A second problem belongs in the same
+  /// report; ten flags from one aggrieved party is not ten signals.
+  @@unique([tenancyId, raisedById])
+  @@index([againstId, status])
+  @@index([status, createdAt])
+  @@map("tenancy_flags")
 }
