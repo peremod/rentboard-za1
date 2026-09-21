@@ -129,6 +129,21 @@ else
   bad "cannot check metadata — /pricing was not prerendered"
 fi
 
+# ── 6b. No unfilled placeholders in anything public ───────────────────────
+# The legal pages shipped with [YOUR COMPANY NAME], [REGISTRATION NUMBER],
+# [REGISTERED ADDRESS] and [FULL NAME] in them for most of this project's
+# life. Nothing failed, because nothing looked: a placeholder is valid HTML
+# and renders perfectly. On a page that names the responsible party and the
+# Information Officer, publishing one is a compliance problem, not a typo.
+step "No unfilled placeholders in prerendered pages"
+PLACEHOLDERS=$(grep -rhoE '\[[A-Z][A-Z ]{2,}\]' "$DIST" --include='*.html' 2>/dev/null | sort -u || true)
+if [ -z "$PLACEHOLDERS" ]; then
+  ok "no [PLACEHOLDER] text in any prerendered page"
+else
+  bad "unfilled placeholders are in the build output: $(echo "$PLACEHOLDERS" | tr '\n' ' ')"
+  note "Fill them in before tagging — these render to real visitors exactly as written"
+fi
+
 # Private routes must be noindex and carry no canonical.
 step "Private routes excluded from the index"
 L="$DIST/auth/login/index.html"
