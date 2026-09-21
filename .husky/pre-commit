@@ -1,0 +1,4 @@
+# Workflow files are checked here, not in CI: a workflow GitHub cannot parse
+# never runs, so a job inside it can never report the problem. See
+# scripts/workflow-lint.mjs.
+node scripts/workflow-lint.mjs

@@ -210,11 +210,10 @@ jobs:
         # That is 352 assertions rather than 269.
         run: ADMIN_TOKEN=$(./scripts/admin-token.sh) ./scripts/smoke-test.sh
         env:
+          API: http://localhost:3000
           RESEND_WEBHOOK_SECRET: whsec_Q2lTbW9rZVRlc3RTZWNyZXRWYWx1ZTEyMzQ1
           ADMIN_EMAIL: ci-admin@rentboard.test
           ADMIN_PASSWORD: CiSmokeAdmin123
-        env:
-          API: http://localhost:3000
 
       - name: API log on failure
         if: failure()
