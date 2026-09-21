@@ -11,6 +11,24 @@ import { defineConfig, devices } from '@playwright/test';
  * immediately visible in a browser.
  *
  * The aim is the paths where being wrong costs a user something, not coverage.
+ *
+ * RUNNING THESE: the suite needs two passes against two different builds, and
+ * there is no single configuration that can run all of it (see the `e2e` job
+ * in .github/workflows/ci.yml, which does exactly this):
+ *
+ *   locale-and-seo.spec.ts  → PRODUCTION build. It asserts rel="canonical",
+ *                             and SeoService only emits that when
+ *                             environment.indexable is true, which is
+ *                             production only. Needs no API; the one test
+ *                             that wants a live room self-skips.
+ *
+ *   everything else         → DEVELOPMENT build, plus a running API. These
+ *                             register users and drive real journeys, and
+ *                             development is the configuration whose apiUrl
+ *                             points at localhost:3000.
+ *
+ * Run one against a build meant for the other and half the suite fails for
+ * reasons that have nothing to do with the change under test.
  */
 export default defineConfig({
   testDir: './e2e',

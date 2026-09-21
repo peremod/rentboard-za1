@@ -40,10 +40,17 @@ test.describe('listing wizard', () => {
 
     const before = await page.locator('.app-card, app-room-card').count();
 
-    // Re-enter the wizard on the same draft and page forward again.
+    // Re-enter the wizard on the same draft.
+    //
+    // A draft deliberately resumes at the photo step rather than step 1 — see
+    // create-room.ts, `step.set(room.status === 'draft' ? 4 : 1)`, because a
+    // missing cover photo is the usual reason a draft was never finished.
+    // This test used to click Next twice here, assuming it reopened at the
+    // start; there is no Next on the photo step, so it timed out waiting for a
+    // button that is correctly absent. Asserting the resume point instead
+    // pins the documented behaviour rather than working around it.
     await page.getByRole('link', { name: /continue|edit/i }).first().click();
-    await page.getByRole('button', { name: /next/i }).click();
-    await page.getByRole('button', { name: /next/i }).click();
+    await expect(page.getByRole('heading', { name: /add photos/i })).toBeVisible();
     await gotoAuthed(page, '/landlord/dashboard');
 
     const after = await page.locator('.app-card, app-room-card').count();
