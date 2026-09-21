@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           # The Render service's own hostname, which is what staging actually
-          # serves from today. This pointed at api-staging.mastande.co.za,
+          # serves from today. This pointed at api-staging.umastande.co.za,
           # which has never resolved — so the check skipped itself on every
           # run and verified nothing. Point it at the custom domain instead
           # once that domain exists and is attached to the service.
@@ -72,6 +72,6 @@ jobs:
 
           echo "$ROBOTS" | grep -q "^Disallow: /$" \
             || { echo "❌ STAGING IS CRAWLABLE. Check APP_ENV — it must be 'staging', not 'production'."; exit 1; }
-          echo "$ROBOTS" | grep -qv "mastande.co.za/sitemap" \
+          echo "$ROBOTS" | grep -qv "umastande.co.za/sitemap" \
             || { echo "❌ staging is advertising production URLs — check SITE_URL"; exit 1; }
           echo "✅ staging is healthy and refuses all crawlers"

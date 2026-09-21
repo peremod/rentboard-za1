@@ -136,8 +136,8 @@ Mastande runs identically across three environments via Angular file-replacement
 | Env | Frontend command | Frontend env file | Backend `NODE_ENV` | Deploys to |
 |---|---|---|---|---|
 | Development | `ng serve` | `environment.ts` | `development` | localhost |
-| Staging | `ng build --configuration staging` | `environment.staging.ts` | `staging` | `staging.mastande.co.za` (Vercel preview/staging) + Render (`render.yaml`, branch `develop`) |
-| Production | `ng build --configuration production` | `environment.prod.ts` | `production` | `mastande.co.za` (Vercel) + **no backend deploy target yet** |
+| Staging | `ng build --configuration staging` | `environment.staging.ts` | `staging` | `staging.umastande.co.za` (Vercel preview/staging) + Render (`render.yaml`, branch `develop`) |
+| Production | `ng build --configuration production` | `environment.prod.ts` | `production` | `umastande.co.za` (Vercel) + **no backend deploy target yet** |
 
 ```bash
 # Staging build
@@ -209,7 +209,7 @@ npm run lighthouse    # against a local production build
 
 # Metadata must be in the SERVED html, not applied after hydration.
 # A crawler that runs no JavaScript sees only this:
-curl -s https://mastande.co.za/pricing | grep -E 'canonical|hreflang|name="robots"'
+curl -s https://umastande.co.za/pricing | grep -E 'canonical|hreflang|name="robots"'
 ```
 
 ## 9. User-flow & link integrity
@@ -415,7 +415,7 @@ ones that are not text.
 | Product name, in prose, UI copy and all six email templates | RentBoard | Mastande |
 | Angular project, and therefore the build output path | `rentboard-frontend` / `dist/rentboard-frontend` | `mastande-frontend` / `dist/mastande-frontend` |
 | npm packages | `rentboard-za`, `rentboard-frontend`, `rentboard-backend` | `mastande-*` |
-| Domain | `rentboard.co.za` | `mastande.co.za` |
+| Domain | `rentboard.co.za` | `mastande.co.za`, changed again to `umastande.co.za` in v1.60.0 once the company was registered as Umastande (Pty) Ltd |
 | Render service | `rentboard-api` | `mastande-api` |
 | Vercel alias | `rentboard-za1.vercel.app` | `mastande.vercel.app` |
 | Test and local identifiers | `rentboard.test`, `rentboard_test` | `mastande.test`, `mastande_test` |
@@ -447,12 +447,12 @@ build succeeds and then nothing can find its output.
 The rename is complete in the code and staging is pointed at hostnames that do
 not exist yet. In order:
 
-1. **Register `mastande.co.za`** and point DNS at Vercel. Until then production
+1. **Register `umastande.co.za`** and point DNS at Vercel. Until then production
    canonical URLs, the sitemap, `safety@`/`privacy@`/`info@` addresses in the
    legal pages, and the CORS allow-list all name a domain that does not
    resolve.
 2. **Verify the new domain in Resend.** Sending is authorised per domain, so
-   every email stops the moment `RESEND_FROM` moves to `@mastande.co.za`
+   every email stops the moment `RESEND_FROM` moves to `@umastande.co.za`
    without it. Move the variable and the domain verification together.
 3. **Rename the Render service and the Vercel project.** Render keys a
    Blueprint service on its name, so syncing `render.yaml` creates
@@ -772,3 +772,34 @@ company: **Umastande (Pty) Ltd, CIPC Reg. No. 2026/757331/07**. The registered
 address, the Information Officer and the Information Regulator registration
 number are still blank, and deliberately so — POPIA s.56 makes the Information
 Officer a named person, not a role.
+
+---
+
+## 26. Domain: mastande.co.za → umastande.co.za (v1.60.0)
+
+The company registered at CIPC as **Umastande (Pty) Ltd**, so the domain
+follows it. The product is still called Mastande — this is the address, not
+the brand, and nothing user-facing says "Umastande" except the legal identity
+in the footer and on the legal pages.
+
+One string, 73 occurrences, 31 files. Every subdomain and every mailbox sits
+in front of the same suffix, so `staging.`, `www.`, `api.`, `api-staging.`
+and `paia@`, `privacy@`, `safety@`, `security@`, `noreply@`, `hello@`,
+`admin@` all moved with it in a single pass.
+
+**What was deliberately not renamed:** `mastande.test` and `mastande_test`,
+the local and CI identifiers. They are named after the product, not the
+domain, and renaming them would churn several hundred fixture strings to no
+end. `dist/mastande-frontend` and the npm package names likewise — see §21 for
+why the dist path is the one that bites.
+
+**Nothing derives the host from a literal.** `allowedHosts` in `server.ts`
+comes from `environment.siteUrl`, the sitemap and `robots.txt` come from
+`SITE_URL`, and the CORS origins come from `backend/src/config/environment.ts`.
+Verified by reading the built production `index.html` (canonical, `og:url` and
+`og:image` all on the new host) rather than trusting the replacement.
+
+**Still provider-side, and nothing in the repo can detect it:** register
+`umastande.co.za`, point it at Vercel, verify it in Resend, and rename the
+Render service and Vercel project. Until then the production domain and the
+staging API host do not resolve.

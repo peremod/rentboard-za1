@@ -58,7 +58,7 @@ Validate at [search.google.com/test/rich-results](https://search.google.com/test
 
 | | Development | Staging | Production |
 |---|---|---|---|
-| `environment.siteUrl` | `http://localhost:4200` | `https://staging.mastande.co.za` | `https://mastande.co.za` |
+| `environment.siteUrl` | `http://localhost:4200` | `https://staging.umastande.co.za` | `https://umastande.co.za` |
 | `environment.indexable` | `false` | `false` | `true` |
 | Meta robots | `noindex, nofollow` | `noindex, nofollow` | `index, follow, max-image-preview:large` |
 | Canonical emitted | no | no | yes |
@@ -184,7 +184,7 @@ curl -s http://localhost:4000/pricing | grep -E 'canonical|og:title|name="descri
 curl -s http://localhost:4000/ | grep -c 'application/ld+json'
 
 # Sitemap entries must all resolve
-curl -s https://mastande.co.za/sitemap.xml \
+curl -s https://umastande.co.za/sitemap.xml \
   | grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g' \
   | xargs -P4 -I{} sh -c 'printf "%s %s\n" "$(curl -s -o /dev/null -w %{http_code} {})" "{}"' \
   | grep -v '^200' || echo "every sitemap URL returns 200"
@@ -193,8 +193,8 @@ curl -s https://mastande.co.za/sitemap.xml \
 npm run audit          # routes, guards, links, i18n parity, env parity
 
 # Lighthouse
-npx lighthouse https://mastande.co.za --preset=desktop --view
-npx lighthouse https://mastande.co.za --form-factor=mobile --throttling-method=simulate --view
+npx lighthouse https://umastande.co.za --preset=desktop --view
+npx lighthouse https://umastande.co.za --form-factor=mobile --throttling-method=simulate --view
 ```
 
 Targets: Performance ≥ 90 mobile, Accessibility 100, Best Practices 100, SEO 100. Run monthly — see `OPERATIONS.md` §5.

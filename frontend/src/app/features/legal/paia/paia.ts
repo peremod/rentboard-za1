@@ -28,12 +28,12 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
           <p><strong>Name:</strong> Umastande (Pty) Ltd</p>
           <p><strong>CIPC Registration Number:</strong> 2026/757331/07</p>
           <p><strong>Physical Address:</strong> [REGISTERED ADDRESS], South Africa</p>
-          <p><strong>Email:</strong> paia&#64;mastande.co.za</p>
+          <p><strong>Email:</strong> paia&#64;umastande.co.za</p>
         </section>
 
         <section>
           <h2>2. Information Officer</h2>
-          <p><strong>Information Officer:</strong> [FULL NAME] · paia&#64;mastande.co.za</p>
+          <p><strong>Information Officer:</strong> [FULL NAME] · paia&#64;umastande.co.za</p>
           <p>Registered with the Information Regulator (South Africa) as required by POPIA.
           Reg. No: <strong>[IR REGISTRATION NUMBER]</strong>.</p>
         </section>
@@ -54,7 +54,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
           <ol>
             <li>Complete <strong>Form C</strong> (available at
               <a href="https://www.justice.gov.za/paia/paia.htm" target="_blank" rel="noopener">justice.gov.za/paia</a>)</li>
-            <li>Submit to <strong>paia&#64;mastande.co.za</strong></li>
+            <li>Submit to <strong>paia&#64;umastande.co.za</strong></li>
             <li>Pay the prescribed request fee of <strong>R140</strong></li>
           </ol>
           <p>We acknowledge requests within <strong>5 business days</strong> and decide within <strong>30 days</strong>.</p>

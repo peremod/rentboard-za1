@@ -12,7 +12,7 @@ launch. Written 28 Aug 2026.
 Do **not** send from a shared or unverified domain. Mail will land in spam and,
 worse, password resets will not arrive.
 
-1. Resend dashboard → **Domains** → add `mastande.co.za`
+1. Resend dashboard → **Domains** → add `umastande.co.za`
 2. Add the DNS records it gives you at your registrar:
    - **SPF** (TXT) — authorises Resend to send as your domain
    - **DKIM** (CNAME ×3) — signs each message so receivers can verify it
@@ -23,7 +23,7 @@ worse, password resets will not arrive.
 
 ```
 RESEND_API_KEY=re_...
-RESEND_FROM=noreply@mastande.co.za
+RESEND_FROM=noreply@umastande.co.za
 RESEND_FROM_NAME=Mastande
 ```
 
@@ -37,7 +37,7 @@ Without this, bounces and complaints are invisible and the suppression list
 stays empty — which is how a sending domain gets blacklisted.
 
 1. Resend dashboard → **Webhooks** → add endpoint
-2. URL: `https://api.mastande.co.za/api/notifications/webhook/resend`
+2. URL: `https://api.umastande.co.za/api/notifications/webhook/resend`
 3. Subscribe to `email.delivered`, `email.bounced`, `email.complained`
 4. Copy the signing secret:
 

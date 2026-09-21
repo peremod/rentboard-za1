@@ -30,7 +30,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
             <li>Always view in person before committing</li>
             <li>Request proof the landlord is authorised to let the property</li>
             <li>Insist on a written lease and confirm the deposit is in an interest-bearing account (Rental Housing Act)</li>
-            <li>Report suspicious listings to safety&#64;mastande.co.za or SAPS on 10111</li>
+            <li>Report suspicious listings to safety&#64;umastande.co.za or SAPS on 10111</li>
           </ul>
         </section>
 
@@ -51,7 +51,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 
         <section>
           <h2>4. Reporting Concerns</h2>
-          <p>Report fraudulent, discriminatory or illegal listings via safety&#64;mastande.co.za. We investigate within 24 hours.</p>
+          <p>Report fraudulent, discriminatory or illegal listings via safety&#64;umastande.co.za. We investigate within 24 hours.</p>
         </section>
       </div>
     </div>

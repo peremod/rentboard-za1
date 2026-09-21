@@ -255,7 +255,7 @@ jobs:
   #   where it is. The one test in that file needing a live room self-skips.
   #
   #   The app-flow and mobile specs drive real journeys, so they need an API
-  #   they can reach — and production points apiUrl at api.mastande.co.za,
+  #   they can reach — and production points apiUrl at api.umastande.co.za,
   #   which is not reachable from CI. The development build points at
   #   localhost, which is where the API below is running.
   #
@@ -344,7 +344,7 @@ jobs:
       - name: Build frontend (production) and serve
         working-directory: frontend
         # Required here, not optional: a production build allows only
-        # mastande.co.za and www.mastande.co.za, so without this every
+        # umastande.co.za and www.umastande.co.za, so without this every
         # Server-mode route answers 400 and the SEO spec below fails on
         # /rooms/:id rather than on anything it is testing.
         env:

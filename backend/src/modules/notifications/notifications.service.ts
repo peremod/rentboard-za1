@@ -140,7 +140,7 @@ export class NotificationsService {
    */
   async sendUrgentReportAlert(d: { reportId: string; reason: string; roomId?: string }) {
     await this.send(
-      'safety@mastande.co.za',
+      'safety@umastande.co.za',
       `URGENT report: ${d.reason.replace(/_/g, ' ')}`,
       `<p>A report was filed that matches a money-loss pattern.</p>
        <p><strong>Reason:</strong> ${d.reason.replace(/_/g, ' ')}<br/>
@@ -301,7 +301,7 @@ export class NotificationsService {
       `<p>Hi ${d.fullName},</p>
        <p>Your password was changed just now.</p>
        <p><strong>If this was not you</strong>, reset your password immediately and contact
-       support&#64;mastande.co.za.</p>`,
+       support&#64;umastande.co.za.</p>`,
       { template: 'password_changed' },
     );
   }
@@ -327,7 +327,7 @@ export class NotificationsService {
        <p>A request was made to move this account to <strong>${d.newEmail}</strong>. It only takes effect
        once that address is confirmed.</p>
        <p><strong>If this was not you</strong>, change your password now and contact
-       support&#64;mastande.co.za — someone may have access to your account.</p>`,
+       support&#64;umastande.co.za — someone may have access to your account.</p>`,
       { template: 'change_alert' },
     );
   }

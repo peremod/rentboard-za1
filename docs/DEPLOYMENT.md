@@ -226,7 +226,7 @@ API_URL=https://<your-render-url>
 Angular bakes environment values at build time, so `environment.staging.ts`
 
 **It currently assumes a custom domain you probably do not have yet** —
-`https://api-staging.mastande.co.za/api`. Either point that subdomain at
+`https://api-staging.umastande.co.za/api`. Either point that subdomain at
 API call from staging fails and the site looks completely broken rather than
 partly broken, which at least makes it easy to spot.
 
