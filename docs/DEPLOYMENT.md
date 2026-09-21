@@ -155,10 +155,23 @@ Set these on the staging environment. `DATABASE_URL` is already there.
 NODE_ENV=production
 PORT=3000
 
+# The environment's own identity. APP_ENV decides which origins are accepted
+# and whether the site is indexable; NODE_ENV alone cannot, because staging
+# runs with NODE_ENV=production. Unset means `development`, which is the safe
+# direction.
+APP_ENV=staging
+
 JWT_SECRET=            # openssl rand -base64 48
 JWT_EXPIRES_IN=15m
+REFRESH_TOKEN_TTL_DAYS=30
 
-FRONTEND_URL=https://staging-mastande.vercel.app
+# SITE_URL is REQUIRED — the API refuses to start without it, on purpose. It
+# is the public origin of the FRONTEND for this environment, and it is what
+# sitemap.xml and robots.txt are built from. It must differ per environment:
+# the old fallback was the production origin, so a misconfigured staging box
+# published production URLs in its own sitemap and looked fine in every log.
+SITE_URL=https://staging.umastande.co.za
+FRONTEND_URL=https://staging.umastande.co.za
 API_URL=https://<your-render-url>
 
 # Google sign-in. The callback must match the URI registered in the Google
@@ -173,6 +186,7 @@ IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/l4on8rrpx
 
 RESEND_API_KEY=
 RESEND_FROM=noreply@yourdomain.co.za
+RESEND_FROM_NAME=Mastande
 RESEND_WEBHOOK_SECRET=
 ADMIN_ALERT_EMAIL=you@yourdomain.co.za
 
@@ -180,7 +194,29 @@ PAYFAST_MERCHANT_ID=
 PAYFAST_MERCHANT_KEY=
 PAYFAST_PASSPHRASE=
 PAYFAST_SANDBOX=true
+
+# WhatsApp Business API. Optional — email notifications never depend on it —
+# but three features are dark without it: rent reminders, previous-landlord
+# reference requests, and listing a room over WhatsApp.
+#
+# WHATSAPP_APP_SECRET is the Meta App Secret (App Dashboard -> Settings ->
+# Basic), and it is what signs every inbound delivery. It is NOT the verify
+# token, which Meta echoes once during the GET handshake and which says
+# nothing about any later POST. With no app secret the webhook refuses every
+# delivery rather than trusting unsigned ones, so the feature is off rather
+# than open — and it fails silently from the outside, which is why it is
+# listed here rather than discovered later.
+WHATSAPP_API_VERSION=v19.0
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_VERIFY_TOKEN=
+WHATSAPP_APP_SECRET=
 ```
+
+Nine variables above were missing from this list until v1.61.0, `SITE_URL`
+among them — and the API refuses to start without that one, so anyone
+following this guide deployed a backend that would not boot. The list is now
+checked against what `backend/src` actually reads.
 
 **Generate real secrets.** Reusing the development `JWT_SECRET` means anyone
 who has seen your local `.env` can mint tokens for staging.
