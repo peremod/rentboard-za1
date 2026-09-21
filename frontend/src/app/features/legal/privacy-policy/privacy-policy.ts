@@ -32,7 +32,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
           <p>Mastande is operated by <strong>Umastande (Pty) Ltd</strong>, CIPC Reg. No. <strong>2026/757331/07</strong>.
           For the purposes of POPIA, we are the <strong>Responsible Party</strong>.</p>
           <p><strong>Information Officer:</strong> Thebeyapelo Modise, Chief Executive Officer · privacy&#64;umastande.co.za</p>
-          <p><strong>Registered address:</strong> 16 Mokgatle Street, Kwa Thema, Gauteng, 1575, South Africa</p>
+          <p><strong>Registered address:</strong> 16 Mokgatle Street, Kwa Thema, Springs, Gauteng, 1575, South Africa</p>
           <p>Registered with the Information Regulator (South Africa) under
           registration number <strong>2026-067370</strong>.</p>
         </section>

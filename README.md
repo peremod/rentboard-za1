@@ -33,6 +33,7 @@ Never put secrets or tenant personal data in Notion.
 
 | Doc | Covers |
 | --- | --- |
+| **`docs/RUNBOOK.md`** | **The commands, in order, for development and staging. Start here.** |
 | `docs/ENVIRONMENTS.md` | The three environments, parity rules, CI pipeline, release process |
 | `docs/OPERATIONS.md` | Mission, North Star, guardrails, milestone ladder, operational cadence |
 | `docs/SEO.md` | Metadata layer, structured data, locale-scoped URLs, hreflang |
