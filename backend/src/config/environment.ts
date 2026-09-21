@@ -106,7 +106,11 @@ export function validateEnvironment(): void {
     if (process.env.PAYFAST_SANDBOX === 'true') {
       errors.push('PAYFAST_SANDBOX is "true" in production. Real payments would go to the sandbox.');
     }
-    for (const key of ['IMAGEKIT_PRIVATE_KEY', 'RESEND_API_KEY', 'ADMIN_ALERT_EMAIL']) {
+    // RESEND_WEBHOOK_SECRET is on this list because the webhook handler fails
+    // closed without it: bounces and complaints would stop being recorded, and
+    // the sending domain's reputation degrades silently. Failing the boot is
+    // the visible version of that.
+    for (const key of ['IMAGEKIT_PRIVATE_KEY', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET', 'ADMIN_ALERT_EMAIL']) {
       if (!process.env[key]) errors.push(`${key} is required in production.`);
     }
   } else {

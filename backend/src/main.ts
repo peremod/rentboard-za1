@@ -16,6 +16,12 @@ async function bootstrap() {
   validateEnvironment();
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    // Keeps the unparsed body alongside the parsed one. Webhook signatures are
+    // computed over the exact bytes sent, so re-serialising the parsed object
+    // and hashing that gives a different digest whenever key order or number
+    // formatting differs — which is most of the time. Needed by the Resend
+    // webhook in notifications.controller.ts.
+    rawBody: true,
   });
 
   /**
