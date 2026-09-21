@@ -186,35 +186,51 @@ Mission and vision in §1–2 are the canonical wording. Any other document that
 
 ## Linting
 
-**There is no linter installed.** Both `package.json` files carried a `lint`
-script — `ng lint` and `eslint --fix` — but neither project has ESLint as a
-dependency, so CI failed on a missing binary rather than on code quality. The
-backend script also ran `--fix`, which would have rewritten files inside CI and
-then built whatever it produced.
+**The backend is linted; the frontend is not yet.**
 
-The scripts now say so rather than failing, and CI runs `npm run typecheck`
-instead: `tsc --noEmit` across both projects. That is a real gate — it is what
-catches the class of error that has actually bitten this project, such as a
-template calling a method that does not exist, or a Prisma field that was never
-on the model.
+Both `package.json` files used to carry a `lint` script — `ng lint` and
+`eslint --fix` — while neither project had ESLint as a dependency, so the
+script failed on a missing binary rather than on code quality, and CI ran
+nothing. The backend script also passed `--fix`, which would have rewritten
+files inside CI and then built whatever came out.
 
-### Adding ESLint properly
+### Backend
 
-Worth doing, and it is its own task rather than something to bolt on while
-unblocking a deploy:
+`backend/eslint.config.mjs` is a flat config built on
+`eslint.configs.recommended` and `tseslint.configs.recommended`, with two rules
+turned down where the default fights the framework rather than finding bugs —
+each with the reason next to it in the file. `npm run lint` runs it, CI runs it
+as a gate, and `npm run lint:fix` is available locally. `--fix` is deliberately
+not what CI runs.
+
+Turning it on was worth it immediately: it found three dead imports and, more
+usefully, a `crypto` import in `notifications.controller.ts` that nothing used
+— which was the Resend webhook's signature verification never having been
+written. The handler checked that a `svix-signature` header was *present* and
+then trusted it, so anyone could have posted a forged `email.bounced` for any
+address and suppressed that person's mail, including their magic links. That is
+now verified (HMAC-SHA256 over `${id}.${timestamp}.${body}`, constant-time
+compare, five-minute replay window), and it fails closed: with no
+`RESEND_WEBHOOK_SECRET` set the endpoint returns 503 rather than acting on an
+unverified event, and production refuses to boot without one.
+
+21 `no-explicit-any` warnings remain. They are warnings on purpose — Prisma's
+generated types surface `any` at the boundary, and making it an error would
+have meant either silencing it everywhere or not adopting the linter at all.
+
+### Frontend — still outstanding
 
 ```bash
 npm --prefix frontend install --save-dev angular-eslint eslint typescript-eslint
 npx --prefix frontend ng add angular-eslint
-
-npm --prefix backend install --save-dev eslint typescript-eslint \
-  eslint-config-prettier eslint-plugin-prettier
 ```
 
-Expect a large number of findings on first run — around 60 components and 22
-controllers have never been linted. Triage them before turning the CI step on,
-or the first green build becomes a red one nobody can fix quickly, and the
-habit of ignoring CI starts there.
+Expect a large number of findings on first run — around 60 components have
+never been linted, and angular-eslint also brings template rules. Triage them
+before turning the CI step on, or the first green build becomes a red one
+nobody can fix quickly, and the habit of ignoring CI starts there. The backend
+config is the model to follow: start from the recommended sets, and write down
+the reason beside anything turned off.
 
 ---
 

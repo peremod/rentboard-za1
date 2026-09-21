@@ -10,7 +10,8 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "echo \"No linter configured. Run npm run typecheck. See docs/OPERATIONS.md.\" && exit 0",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "echo \"No test framework installed and no spec files exist. Run npm run typecheck. See docs/OPERATIONS.md.\" && exit 0",
     "test:e2e": "echo \"No test framework installed and no spec files exist. Run npm run typecheck. See docs/OPERATIONS.md.\" && exit 0",
     "db:generate": "prisma generate",
@@ -49,6 +50,7 @@
     "stripe": "^17.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@nestjs/cli": "^11.0.0",
     "@types/bcrypt": "^5.0.2",
     "@types/compression": "^1.7.5",
@@ -58,8 +60,10 @@
     "@types/passport-google-oauth20": "^2.0.16",
     "@types/passport-jwt": "^4.0.1",
     "@types/sanitize-html": "^2.13.0",
+    "eslint": "^10.11.0",
     "prisma": "^6.0.0",
     "ts-node": "^10.9.2",
-    "typescript": "~5.9.0"
+    "typescript": "~5.9.0",
+    "typescript-eslint": "^8.70.0"
   }
 }
