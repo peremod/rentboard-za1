@@ -9,6 +9,34 @@
 # Keeping it matters more now, not less: with Render deploying out-of-band,
 # nothing in GitHub otherwise reports whether a deploy happened or what
 # configuration it came up with.
+#
+# ── Why this file was rewritten (v1.65.0) ────────────────────────────────
+# It had never once completed. Nineteen runs, every one of them stuck
+# in_progress in the same step until GitHub killed it at the six-hour mark —
+# burning six hours of runner time per push to report nothing. Four faults,
+# each of which alone would have been enough:
+#
+#   1. No timeout anywhere. `curl -sf` with no --max-time waits forever on a
+#      host that accepts a connection and never answers, which is exactly
+#      what a suspended Render service does. One hung curl froze the loop,
+#      and with no job-level timeout-minutes the runner sat there until the
+#      platform's own limit.
+#   2. The "not deployed yet, skip" guard was dead code. It tested DNS, and
+#      *.onrender.com is a wildcard — a service that has never existed
+#      resolves exactly like one that does. Verified:
+#      definitely-not-a-real-service-xyz123.onrender.com resolves. So the
+#      skip branch could never be taken and the job always fell through to
+#      the curl loop.
+#   3. It pointed at mastande-api.onrender.com. The service is called
+#      rentboard-api; the rename has not happened yet. So it was polling a
+#      host that does not serve this API.
+#   4. It asserted nothing about *which build* answered, so even a pass would
+#      not have told you a deploy had happened — only that something was up.
+#
+# What replaces them: an explicit configuration switch instead of a DNS
+# heuristic, bounded timeouts on every network call, a job ceiling, and a
+# version assertion that makes a green run mean "the commit I just pushed is
+# the commit that is serving traffic".
 name: Verify deployment
 
 on:
@@ -25,53 +53,105 @@ jobs:
   verify:
     name: Staging configuration
     runs-on: ubuntu-latest
+    # A ceiling, not an expectation. The work below is bounded to well under
+    # this; the point is that nothing here can ever again occupy a runner for
+    # six hours because one network call did not return.
+    timeout-minutes: 15
     steps:
-      - name: Wait for the Render deploy, then assert its configuration
-        # The API refuses to start on a misconfigured environment, so a healthy
-        # /health already proves SITE_URL, JWT secrets and APP_ENV are present.
-        # This asserts the part a health check cannot: that the deployment is
-        # indexable if and only if it is production.
+      - uses: actions/checkout@v5
+
+      - name: Verify the staging deployment
+        env:
+          # Set this as a repository variable (Settings → Secrets and
+          # variables → Actions → Variables) to the host staging actually
+          # serves from — today `rentboard-api.onrender.com`, and the custom
+          # domain once it is attached.
+          #
+          # Unset is a deliberate "there is nothing to verify yet" rather
+          # than something inferred from DNS, which cannot be inferred: see
+          # fault 2 above. A configuration switch can be read; a wildcard
+          # cannot be interrogated.
+          STAGING_API_HOST: ${{ vars.STAGING_API_HOST }}
         run: |
           set -euo pipefail
-          # The Render service's own hostname, which is what staging actually
-          # serves from today. This pointed at api-staging.umastande.co.za,
-          # which has never resolved — so the check skipped itself on every
-          # run and verified nothing. Point it at the custom domain instead
-          # once that domain exists and is attached to the service.
-          HOST="${STAGING_API_HOST:-mastande-api.onrender.com}"
-          API="https://$HOST"
 
-          # Not resolving means not deployed yet: reported and skipped rather
-          # than failed, because a job that goes red for a reason nobody can
-          # act on trains people to ignore the only signal this repository has
-          # that a backend deploy happened at all. Resolving but misconfigured
-          # is a real failure and still fails.
-          if ! getent hosts "$HOST" >/dev/null 2>&1; then
-            echo "⏭️  $HOST does not resolve — nothing deployed there yet."
-            echo "    This check starts enforcing automatically once it exists."
+          if [ -z "${STAGING_API_HOST:-}" ]; then
+            echo "⏭️  No STAGING_API_HOST repository variable is set."
+            echo
+            echo "    Nothing is being verified. Set it to the staging host"
+            echo "    (Settings → Secrets and variables → Actions → Variables)"
+            echo "    and this check starts enforcing on the next push."
             exit 0
           fi
 
-          # Render starts deploying when the push lands, out of band from this
-          # workflow, so this races it. The free tier also sleeps after ~15
-          # minutes idle and takes 30-60s to wake. Ten minutes covers a cold
-          # build plus a wake; a shorter window would fail on a slow deploy
-          # rather than on a real misconfiguration.
-          for i in $(seq 1 60); do
-            if curl -sf "$API/health" >/dev/null; then break; fi
-            sleep 10
-          done
-          curl -sf "$API/health" >/dev/null || {
-            echo "❌ $HOST resolves, but $API/health never came up within 10 minutes."
-            echo "   Check the Render dashboard — the deploy may have failed or the service may be suspended."
-            exit 1
-          }
+          API="https://$STAGING_API_HOST"
+          echo "Verifying $API"
 
-          ROBOTS=$(curl -sf "$API/robots.txt")
+          # Every call is bounded. --connect-timeout covers a host that never
+          # completes a handshake; --max-time covers one that connects and
+          # then goes quiet. Without both, a sleeping free-tier service hangs
+          # the job rather than failing it.
+          fetch() { curl -sS --connect-timeout 10 --max-time 25 "$@"; }
+
+          # Render's free tier sleeps after ~15 minutes idle and takes 30-60s
+          # to wake, and this races the deploy Render starts when the push
+          # lands. Eight minutes of polling covers a cold build plus a wake.
+          # Each attempt is individually bounded, so a hung request costs one
+          # attempt rather than the job.
+          HEALTH=""
+          for i in $(seq 1 32); do
+            if HEALTH=$(fetch -f "$API/health" 2>/dev/null); then break; fi
+            HEALTH=""
+            sleep 15
+          done
+
+          if [ -z "$HEALTH" ]; then
+            echo "❌ $API/health never answered within 8 minutes."
+            echo "   Either the deploy failed, the service is suspended, or"
+            echo "   STAGING_API_HOST points at a host that does not serve"
+            echo "   this API. Note that any *.onrender.com name resolves"
+            echo "   whether or not a service exists behind it, so a typo"
+            echo "   here looks exactly like an outage."
+            exit 1
+          fi
+
+          echo "$HEALTH"
+
+          # The assertion that makes a pass mean something. Without it a green
+          # run says only "something answered", which is true of a build from
+          # three weeks ago.
+          DEPLOYED=$(echo "$HEALTH" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
+          EXPECTED=$(node -p "require('./backend/package.json').version")
+          if [ "$DEPLOYED" = "$EXPECTED" ]; then
+            echo "✅ serving $DEPLOYED, which is the version in this commit"
+          else
+            echo "❌ staging is serving $DEPLOYED but this commit is $EXPECTED."
+            echo "   The deploy has not landed yet, or it failed and Render is"
+            echo "   still serving the previous build. Check the Render"
+            echo "   dashboard before trusting anything else in this run."
+            exit 1
+          fi
+
+          # The database is the other half of a deploy. Render deploying new
+          # code without `npm run migrate:staging` having been run is the
+          # single most common way this environment breaks, and it surfaces
+          # as a 500 on one endpoint rather than as an unhealthy service —
+          # so /health reporting a live database is worth asserting here.
+          case "$HEALTH" in
+            *'"db":"connected"'*) echo "✅ database is connected" ;;
+            *) echo "❌ the API is up but its database is not reachable."; exit 1 ;;
+          esac
+
+          # The part a health check cannot cover: that the deployment is
+          # indexable if and only if it is production.
+          ROBOTS=$(fetch -f "$API/robots.txt")
           echo "$ROBOTS"
 
           echo "$ROBOTS" | grep -q "^Disallow: /$" \
             || { echo "❌ STAGING IS CRAWLABLE. Check APP_ENV — it must be 'staging', not 'production'."; exit 1; }
-          echo "$ROBOTS" | grep -qv "umastande.co.za/sitemap" \
-            || { echo "❌ staging is advertising production URLs — check SITE_URL"; exit 1; }
-          echo "✅ staging is healthy and refuses all crawlers"
+
+          if echo "$ROBOTS" | grep -q "//umastande.co.za/sitemap"; then
+            echo "❌ staging is advertising production URLs — check SITE_URL"
+            exit 1
+          fi
+          echo "✅ staging is healthy, current, and refuses all crawlers"
