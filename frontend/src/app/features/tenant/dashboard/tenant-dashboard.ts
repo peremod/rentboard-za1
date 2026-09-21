@@ -327,10 +327,10 @@ export class TenantDashboard implements OnInit {
     { label: 'Applications', icon: '📋', route: '/tenant/dashboard', badge: this.activeApplicationCount() },
     { label: 'Messages', icon: '💬', route: '/tenant/dashboard' },
     { label: 'Browse rooms', icon: '🔍', route: '/' },
+    { label: "Renter's Passport", icon: '🪪', route: '/tenant/passport' },
     { label: 'Settings', icon: '⚙️', route: '/account/settings' },
     { label: 'Saved Rooms', icon: '♥', route: '/tenant/dashboard', badge: this.savedRooms.count() },
     { label: 'Alerts', icon: '🔔', route: '/tenant/dashboard', badge: this.alerts.searches().length },
-    ...(BILLING_ENABLED ? [{ label: "Renter's Passport", icon: '🛂', route: '/tenant/passport' }] : []),
   ]);
 
   applications = signal<Application[]>([]);
