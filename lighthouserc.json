@@ -14,7 +14,7 @@
       "numberOfRuns": 3,
       "settings": {
         "//": "Mobile, simulated slow 4G. Desktop scores flatter and would hide exactly the regressions that matter to a South African audience on a phone.",
-        "preset": "perf",
+        "//preset": "There was a \"preset\": \"perf\" here. It sets onlyCategories: ['performance'], so accessibility, best-practices and SEO were never collected — and every assertion below that names them, including canonical, hreflang and is-crawlable, had no data to assert on. Four of the eleven checks in this file were decorative. Removed so the run collects what the assertions ask for.",
         "formFactor": "mobile",
         "throttlingMethod": "simulate",
         "screenEmulation": {

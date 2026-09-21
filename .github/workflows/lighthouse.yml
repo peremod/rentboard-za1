@@ -45,6 +45,11 @@ jobs:
         env:
           # Posts the run as a PR status check with a link to the full report.
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+          # A production build allows only the real domain, so the server it
+          # boots must be told localhost is expected. The audited URLs are all
+          # prerendered and would be served without it, but /rooms/:id would
+          # not, and that is exactly the page to add to this list next.
+          NG_ALLOWED_HOSTS: localhost
 
   production:
     name: Weekly production audit

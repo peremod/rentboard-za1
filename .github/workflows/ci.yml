@@ -39,10 +39,11 @@ jobs:
       - name: Install
         working-directory: frontend
         run: npm ci
-      # No Lint step: neither project has ESLint installed, so `npm run lint`
-      # failed on a missing binary rather than on code quality. Adding ESLint
-      # properly is worth doing and is its own task — see docs/OPERATIONS.md.
-      # The type check below is a real gate and already passes locally.
+      # No Lint step for the frontend: ESLint is not installed here yet. The
+      # backend now has it and its step is a real gate; angular-eslint is a
+      # larger job (template rules, a fresh pile of findings) and is still
+      # outstanding — see docs/OPERATIONS.md. The type check below is a real
+      # gate and already passes locally.
       - name: Typecheck
         # `ng build` typechecks, but only for the production configuration.
         # This catches a type error in code that only the staging or
@@ -85,11 +86,13 @@ jobs:
           grep -q 'name="robots"' "$PRERENDER/pricing/index.html" || { echo "❌ no robots directive in prerendered output"; exit 1; }
           echo "✅ prerender, canonical, hreflang and robots all present"
       - name: Bundle size budget check
-        working-directory: frontend
-        run: |
-          BUNDLE=$(find dist -name "main*.js" -path "*browser*" | xargs cat | gzip -c | wc -c)
-          echo "Main bundle gzipped: ${BUNDLE} bytes"
-          if [ "$BUNDLE" -gt 512000 ]; then echo "❌ Exceeds 500KB budget"; exit 1; fi
+        # This used to measure `main*.js` alone against 500 KB. Under the
+        # esbuild builder main-*.js is a 7 KB bootstrap and the dependencies
+        # live in sibling chunk-*.js files, so the check compared 7 KB against
+        # 500 KB and could never fail. The script reads index.html and sums
+        # every script the browser fetches before the page is interactive —
+        # 138 KB gzipped, not 7.
+        run: node scripts/bundle-budget.mjs
 
       - name: Build (staging)
         working-directory: frontend
@@ -132,8 +135,14 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:test@localhost:5432/rentboard_test
           DIRECT_URL: postgresql://postgres:test@localhost:5432/rentboard_test
-      # Same as the frontend: no ESLint installed. The backend script also ran
-      # eslint --fix, which would have rewritten files inside CI.
+      - name: Lint
+        # ESLint is installed on the backend now (eslint.config.mjs), and the
+        # script no longer passes --fix — CI must report on the code that was
+        # pushed, not quietly rewrite it and build the result. It found three
+        # dead imports and an unused `crypto` import that turned out to be the
+        # Resend webhook's missing signature verification.
+        working-directory: backend
+        run: npm run lint
       - name: Typecheck
         working-directory: backend
         run: npm run typecheck
@@ -188,6 +197,131 @@ jobs:
       - name: API log on failure
         if: failure()
         run: cat /tmp/api.log
+
+  # Browser tests. These existed in e2e/ from early on and nothing ever ran
+  # them; the first execution found two real bugs (prerendered pages not being
+  # served at all, and a 404 page with no h1).
+  #
+  # Two passes, because no single build configuration can run the whole suite:
+  #
+  #   locale-and-seo asserts rel="canonical", which SeoService only emits when
+  #   environment.indexable is true — and production is the only configuration
+  #   where it is. The one test in that file needing a live room self-skips.
+  #
+  #   The app-flow and mobile specs drive real journeys, so they need an API
+  #   they can reach — and production points apiUrl at api.rentboard.co.za,
+  #   which is not reachable from CI. The development build points at
+  #   localhost, which is where the API below is running.
+  #
+  # Running everything against one build would mean either no canonical or no
+  # API, so one half would always fail for a reason unrelated to the change
+  # being tested.
+  e2e:
+    name: E2E — browser journeys
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: rentboard_test
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+        ports: ['5432:5432']
+    env:
+      DATABASE_URL: postgresql://postgres:test@localhost:5432/rentboard_test
+      DIRECT_URL: postgresql://postgres:test@localhost:5432/rentboard_test
+      E2E_BASE_URL: http://localhost:4200
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: Install (root, for Playwright)
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build and start the API
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma generate && npx prisma migrate deploy
+          npm run build
+          node dist/main.js > /tmp/api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:3000/health >/dev/null && break; sleep 2; done
+          curl -sf http://localhost:3000/health || { echo "::error::API never came up"; cat /tmp/api.log; exit 1; }
+        env:
+          JWT_SECRET: test-secret-minimum-32-characters-long-ok
+          JWT_EXPIRES_IN: 15m
+          NODE_ENV: development
+          APP_ENV: development
+          SITE_URL: http://localhost:4200
+          FRONTEND_URL: http://localhost:4200
+          API_URL: http://localhost:3000
+          PORT: '3000'
+
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+
+      # Pass 1 — development build, which points at the API started above.
+      - name: Build frontend (development) and serve
+        working-directory: frontend
+        # NG_ALLOWED_HOSTS: Angular 21 validates the Host header against an
+        # allow-list, which server.ts builds from the environment file's
+        # siteUrl. `localhost` is already in it for a development build; it is
+        # set here too so both passes are configured the same way and pass 2,
+        # below, does not look like an exception.
+        env:
+          NG_ALLOWED_HOSTS: localhost
+        run: |
+          npx ng build --configuration development
+          PORT=4200 node dist/rentboard-frontend/server/server.mjs > /tmp/fe.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:4200/ >/dev/null && break; sleep 2; done
+          curl -sf http://localhost:4200/ >/dev/null || { echo "::error::frontend never came up"; cat /tmp/fe.log; exit 1; }
+
+      - name: E2E — app journeys
+        run: npx playwright test --project=desktop e2e/account-settings.spec.ts e2e/application-lifecycle.spec.ts e2e/listing-wizard.spec.ts
+
+      - name: E2E — mobile board
+        run: npx playwright test --project=mobile
+
+      # Pass 2 — production build, the only one that emits canonical.
+      - name: Build frontend (production) and serve
+        working-directory: frontend
+        # Required here, not optional: a production build allows only
+        # rentboard.co.za and www.rentboard.co.za, so without this every
+        # Server-mode route answers 400 and the SEO spec below fails on
+        # /rooms/:id rather than on anything it is testing.
+        env:
+          NG_ALLOWED_HOSTS: localhost
+        run: |
+          pkill -f "rentboard-frontend/server/server.mjs" || true
+          npm run build:prod
+          PORT=4200 node dist/rentboard-frontend/server/server.mjs > /tmp/fe-prod.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://localhost:4200/ >/dev/null && break; sleep 2; done
+          curl -sf http://localhost:4200/ >/dev/null || { echo "::error::frontend never came up"; cat /tmp/fe-prod.log; exit 1; }
+
+      - name: E2E — locale routing and server-rendered SEO
+        run: npx playwright test --project=desktop e2e/locale-and-seo.spec.ts
+
+      - name: Logs and traces on failure
+        if: failure()
+        run: |
+          echo "── API ──";      tail -50 /tmp/api.log     2>/dev/null || true
+          echo "── frontend ──"; tail -50 /tmp/fe.log      2>/dev/null || true
+          tail -50 /tmp/fe-prod.log 2>/dev/null || true
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
 
   commitlint:
     name: Validate commit messages
