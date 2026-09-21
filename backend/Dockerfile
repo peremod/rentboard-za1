@@ -18,7 +18,23 @@ FROM node:22-alpine AS production
 RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+# --omit=dev, and --ignore-scripts deliberately.
+#
+# This stage installs production dependencies only, and package.json has a
+# `postinstall: prisma generate` for the benefit of a developer's checkout.
+# `prisma` is the CLI and it is a devDependency, so in this stage it does not
+# exist: the script fails with `prisma: not found`, npm exits 127, and the
+# image never builds. That happened — v1.62.0 added the postinstall, the build
+# broke here, and Render went on quietly serving v1.61.0 for five releases
+# while CI stayed green, because nothing in CI built this file.
+#
+# This stage needs no lifecycle scripts at all. The generated Prisma client is
+# copied from the builder on the next line, and bcrypt (the only production
+# dependency with a native component) ships prebuilt binaries — verified by
+# installing it with --ignore-scripts and round-tripping a hash.
+#
+# --only=production is also deprecated; --omit=dev is the current spelling.
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/dist ./dist

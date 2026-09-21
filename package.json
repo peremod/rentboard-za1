@@ -1,6 +1,6 @@
 {
   "name": "mastande-za",
-  "version": "1.66.0",
+  "version": "1.67.0",
   "private": true,
   "description": "Mastande ZA — South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
   "scripts": {

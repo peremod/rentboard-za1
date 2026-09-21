@@ -386,3 +386,80 @@ jobs:
         with: { node-version: '22' }
       - run: npm install
       - run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
+
+  # ── The image Render actually builds ───────────────────────────────────
+  # Nothing in CI built backend/Dockerfile until v1.67.0, and the backend job
+  # above does not stand in for it: that job runs `nest build` against a full
+  # install, which is a different path entirely from a multi-stage image whose
+  # production stage installs production dependencies only.
+  #
+  # The gap had a cost. v1.62.0 added `postinstall: prisma generate` to
+  # backend/package.json — correct for a developer's checkout, fatal in the
+  # production stage, where the prisma CLI is a devDependency and therefore
+  # absent. npm exited 127, the image never built, and Render went on serving
+  # v1.61.0 through five releases. Every CI run over those five releases was
+  # green, because none of them built this file.
+  #
+  # Building it is most of the value; booting it is the rest, since this API
+  # refuses to start on a misconfigured environment by design and that is
+  # worth exercising before Render does.
+  docker:
+    name: Backend image builds and boots
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: mastande_test
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports: ['5432:5432']
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build the production image
+        run: docker build -f backend/Dockerfile -t mastande-api:ci backend
+
+      - name: Boot it and check /health
+        run: |
+          set -euo pipefail
+          docker run -d --name api --network host \
+            -e DATABASE_URL=postgresql://postgres:test@localhost:5432/mastande_test \
+            -e DIRECT_URL=postgresql://postgres:test@localhost:5432/mastande_test \
+            -e JWT_SECRET=ci-secret-minimum-32-characters-long-ok \
+            -e JWT_EXPIRES_IN=15m \
+            -e NODE_ENV=production \
+            -e APP_ENV=staging \
+            -e SITE_URL=http://localhost:4200 \
+            -e FRONTEND_URL=http://localhost:4200 \
+            -e API_URL=http://localhost:3000 \
+            -e PORT=3000 \
+            mastande-api:ci
+
+          for i in $(seq 1 30); do
+            if curl -sf --max-time 5 http://localhost:3000/health >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+
+          HEALTH=$(curl -sf --max-time 10 http://localhost:3000/health) || {
+            echo "::error::the image built but the container never answered /health"
+            docker logs api | tail -40
+            exit 1
+          }
+          echo "$HEALTH"
+
+          # The same assertion the deployment check makes, for the same reason:
+          # an image that answers is not necessarily the image you just built.
+          DEPLOYED=$(echo "$HEALTH" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
+          EXPECTED=$(node -p "require('./backend/package.json').version")
+          [ "$DEPLOYED" = "$EXPECTED" ] || {
+            echo "::error::image reports $DEPLOYED, package.json says $EXPECTED"
+            exit 1
+          }
+          echo "✅ image builds, boots, and reports $DEPLOYED"
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs api || true
