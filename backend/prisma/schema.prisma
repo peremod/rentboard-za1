@@ -100,6 +100,7 @@ model User {
   reportsAgainst      Report[]      @relation("ReportsAgainst")
   flagsRaised         TenancyFlag[] @relation("FlagsRaised")
   flagsAgainst        TenancyFlag[] @relation("FlagsAgainst")
+  properties          Property[]    @relation("PropertiesOwned")
 
   /// Open or upheld post-tenancy flags against this account.
   ///
@@ -132,18 +133,27 @@ model User {
 }
 
 model LandlordProfile {
-  id                   String                  @id @default(uuid())
-  userId               String                  @unique
-  user                 User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                   String    @id @default(uuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   companyName          String?
-  planTier             PlanTier                @default(free)
+  planTier             PlanTier  @default(free)
   planExpiresAt        DateTime?
-  stripeCustomerId     String?                 @unique
-  stripeSubscriptionId String?                 @unique
-  idVerified           Boolean                 @default(false)
-  rating               Float?
-  ratingCount          Int                     @default(0)
-  whatsappConfig       LandlordWhatsappConfig?
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  idVerified           Boolean   @default(false)
+
+  /// Days after the 1st before an unpaid month triggers a reminder.
+  ///
+  /// Per landlord because pay dates here are not uniform — someone whose
+  /// tenants are all on a month-end wage wants a different window from
+  /// someone whose tenants are on SASSA, which pays on a published schedule
+  /// in the first week. A fixed global number would be wrong for most of them.
+  /// 0 disables reminders for that landlord without disabling the tracking.
+  rentGraceDays  Int                     @default(3)
+  rating         Float?
+  ratingCount    Int                     @default(0)
+  whatsappConfig LandlordWhatsappConfig?
 
   @@map("landlord_profiles")
 }
@@ -197,6 +207,11 @@ model Room {
   /// Values come from AMENITIES in the frontend so the two stay in step.
   amenities String[] @default([])
 
+  /// The yard this room belongs to, if the landlord has grouped it.
+  /// Optional: a landlord with one room is not made to create a container.
+  propertyId String?
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
   heroImagePath String?
   imagePaths    String[]
 
@@ -223,6 +238,7 @@ model Room {
   @@index([province, city])
   @@index([rentCents])
   @@index([landlordId])
+  @@index([propertyId])
   @@map("rooms")
 }
 
@@ -411,8 +427,9 @@ model Tenancy {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  reviews Review[]
-  flags   TenancyFlag[]
+  reviews     Review[]
+  flags       TenancyFlag[]
+  rentPeriods RentPeriod[]
 
   @@index([landlordId, status])
   @@index([tenantId, status])
@@ -1392,4 +1409,105 @@ model TenancyFlag {
   @@index([againstId, status])
   @@index([status, createdAt])
   @@map("tenancy_flags")
+}
+
+/// A yard: several rooms at one place, under one landlord.
+///
+/// Most landlords in this market are not letting a single spare room. They
+/// run a yard — four, six, ten rooms behind one house — and the product has
+/// been modelling each of those as an unrelated listing, which is why there
+/// was no way to ask "how many of my rooms are empty" or "who has applied
+/// anywhere on the property". Neither competitor supports this either.
+///
+/// Optional on Room. A landlord with one room should never be made to create
+/// a container for it first, and every room that existed before this has no
+/// property and works exactly as it did.
+///
+/// **No street address, deliberately.** The obvious field to add here is the
+/// address, and POPIA s.10 says collect only what the purpose requires. The
+/// yard view needs to tell one property from another, which a name and a
+/// suburb already do. An exact address would be new location data about where
+/// specific people live, held for nothing that uses it — and a room's public
+/// page has always shown the suburb rather than the street for the tenant's
+/// safety, so holding the street elsewhere would undercut that.
+model Property {
+  id         String @id @default(uuid())
+  landlordId String
+  landlord   User   @relation("PropertiesOwned", fields: [landlordId], references: [id], onDelete: Cascade)
+
+  /// What the landlord calls it — "Ext 7 house", "Main Road back rooms".
+  /// Their own words: they have to recognise it in a list at a glance.
+  name     String
+  suburb   String?
+  city     String
+  province String
+
+  rooms Room[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([landlordId])
+  @@map("properties")
+}
+
+/// Whether one month's rent was paid, as the landlord recorded it.
+enum RentStatus {
+  unpaid
+  paid
+  /// Something came in, but not all of it. Common here, and collapsing it
+  /// into unpaid would make the reminder wrong and the landlord's own record
+  /// useless.
+  partial
+  /// The landlord is not chasing this one. Stops reminders without lying
+  /// about whether money arrived.
+  waived
+}
+
+/// One month of rent on one tenancy, marked by hand.
+///
+/// No payment processing. The landlord is already collecting rent by EFT, in
+/// cash, or over a banking app, and the thing they do not have is a record of
+/// who is behind. A toggle is the whole feature, and inserting Mastande into
+/// the money would change what this product is.
+///
+/// **The platform does not assert that anyone owes anything.** A period is
+/// one party's unverified word. That shapes two things: the reminder is
+/// phrased as "your landlord has marked this unpaid" rather than "you owe",
+/// and `tenantDisputedAt` exists so the other side can say "I paid this" and
+/// have it recorded and visible, instead of arguing over a notification they
+/// cannot answer.
+model RentPeriod {
+  id        String  @id @default(uuid())
+  tenancyId String
+  tenancy   Tenancy @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+
+  /// First day of the month this covers. Normalised to midnight UTC so the
+  /// unique constraint below actually holds — two rows for "September"
+  /// differing by a timezone offset would defeat it entirely.
+  periodStart DateTime
+
+  status      RentStatus @default(unpaid)
+  /// Snapshotted from the tenancy, because rent changes and a record of
+  /// August must keep saying what August cost.
+  amountCents Int
+
+  markedAt   DateTime?
+  markedById String?
+
+  /// The tenant's side. Not a status — a landlord's record stays theirs, and
+  /// the dispute sits beside it rather than overwriting it.
+  tenantDisputedAt DateTime?
+  tenantNote       String?
+
+  /// Set when a reminder goes out, so one is never sent twice for the same
+  /// month. Nulled if the period is later marked unpaid again.
+  reminderSentAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenancyId, periodStart])
+  @@index([status, periodStart])
+  @@map("rent_periods")
 }

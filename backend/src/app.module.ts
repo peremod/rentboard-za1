@@ -17,6 +17,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { AdsModule } from './modules/ads/ads.module';
 import { ReferralsModule } from './modules/referrals/referrals.module';
 import { PlacesModule } from './modules/places/places.module';
+import { PropertiesModule } from './modules/properties/properties.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { TenanciesModule } from './modules/tenancies/tenancies.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
@@ -61,6 +62,7 @@ import { MessagesModule } from './modules/messages/messages.module';
     AdsModule,
     ReferralsModule,
     PlacesModule,
+    PropertiesModule,
     AnalyticsModule,
     TenanciesModule,
     ReviewsModule,
