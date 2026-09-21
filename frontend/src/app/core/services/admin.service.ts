@@ -27,7 +27,13 @@ export interface AdminUser {
 /** A pending request, as the admin queue sees it — includes the document. */
 export interface PendingVerification extends VerificationRequest {
   documentPath?: string | null;
-  user: { id: string; fullName: string; email: string; createdAt: string };
+  user: {
+    id: string; fullName: string; email: string; createdAt: string;
+    role: 'TENANT' | 'LANDLORD' | 'ADMIN';
+    /** Unresolved post-tenancy reports against this account, so a reviewer
+     *  sees them while deciding rather than afterwards. */
+    openFlagCount: number;
+  };
 }
 
 /**

@@ -1,5 +1,8 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, input, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { VerificationService } from '../../../core/services/verification.service';
+import { BadgeBasis } from '../../../core/models/verification.model';
 import { ApplicationsService } from '../../../core/services/applications.service';
 import { Application } from '../../../core/models/application.model';
 import { MessageThread } from '../../../shared/components/message-thread/message-thread';
@@ -17,7 +20,7 @@ import { TenantReferences } from '../../../core/models/review.model';
 @Component({
   selector: 'app-applicants',
   standalone: true,
-  imports: [RouterLink, MessageThread, ReviewList],
+  imports: [DatePipe, RouterLink, MessageThread, ReviewList],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="applicants">
@@ -65,6 +68,7 @@ import { TenantReferences } from '../../../core/models/review.model';
               <div>
                 <strong>{{ app.tenant?.fullName }}</strong>
                 @if (app.tenant?.isVerified) { <span class="pill">✓ Verified</span> }
+                @if (app.tenant?.tenantProfile?.hasPassport) { <span class="pill pill--passport">🛂 Passport</span> }
                 <span class="status status--{{ app.status }}">{{ app.status }}</span>
               </div>
               <span>{{ openId() === app.id ? '▲' : '▼' }}</span>
@@ -72,6 +76,31 @@ import { TenantReferences } from '../../../core/models/review.model';
 
             @if (openId() === app.id) {
               <div class="applicant-card__body">
+                @if (app.tenant?.tenantProfile?.hasPassport) {
+                  <!-- What the badge rests on. Passed checks and their dates,
+                       nothing else: the API deliberately never returns a
+                       rejection or an admin's note, because a landlord reading
+                       "income proof: rejected" would be screening on a private
+                       failure. -->
+                  <div class="passport-basis">
+                    <strong>🛂 Renter's Passport</strong>
+                    @if (basis()[app.tenant!.id]; as checks) {
+                      <ul>
+                        @for (check of checks.checks; track check.type) {
+                          <li>✓ {{ check.label }}<span>{{ check.confirmedAt | date: 'MMM yyyy' }}</span></li>
+                        }
+                      </ul>
+                    } @else {
+                      <button type="button" class="link-btn" (click)="loadBasis(app.tenant!.id)">
+                        See what was checked
+                      </button>
+                    }
+                    <p>
+                      Mastande checked these documents and deleted them. It is not a
+                      credit check — it means a person confirmed the paperwork.
+                    </p>
+                  </div>
+                }
                 @if (app.coverNote) { <p class="cover-note">"{{ app.coverNote }}"</p> }
 
                 <!-- Accepting lets the room and rejects everyone else, so the
@@ -175,6 +204,16 @@ export class Applicants implements OnInit {
   private dialogs = inject(DialogService);
 
   undoing = signal<string | null>(null);
+  private verification = inject(VerificationService);
+  /**
+   * Badge bases, by tenant id, fetched on demand.
+   *
+   * Not loaded with the list on purpose. Pulling every applicant's checks
+   * eagerly would mean requesting personal information about people whose
+   * applications the landlord may never open — the same call already made for
+   * tenant references on this page.
+   */
+  basis = signal<Record<string, BadgeBasis>>({});
   openRefs = signal<string | null>(null);
   refs = signal<TenantReferences | null>(null);
   refsLoading = signal(false);
@@ -311,5 +350,15 @@ export class Applicants implements OnInit {
 
   private patch(id: string, updated: Application) {
     this.applications.update((apps) => apps.map((a) => (a.id === id ? { ...a, ...updated } : a)));
+  }
+
+  loadBasis(tenantId: string) {
+    if (this.basis()[tenantId]) return;
+    this.verification.badgeBasis(tenantId).subscribe({
+      next: (b) => this.basis.update((map) => ({ ...map, [tenantId]: b })),
+      // Silent: a badge whose detail will not load is a missing explanation,
+      // not an error worth interrupting the applicant list for.
+      error: () => {},
+    });
   }
 }

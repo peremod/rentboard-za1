@@ -71,7 +71,8 @@ export class VerificationService {
           // The referee's phone number is the tenant's own submission, so they
           // may see it. The response token hash never leaves the server.
           select: {
-            refereeName: true, refereePhone: true, status: true,
+            refereeName: true, refereePhone: true, propertyDescription: true,
+            tenancyStartedAt: true, tenancyEndedAt: true, status: true,
             rating: true, comment: true, contactedAt: true, respondedAt: true,
           },
         },
