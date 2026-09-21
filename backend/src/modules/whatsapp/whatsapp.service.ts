@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateWhatsappConfigDto } from './dto/update-whatsapp-config.dto';
 import { sanitizeText } from '../../common/utils/sanitize.util';
@@ -20,12 +21,61 @@ export class WhatsappService {
   private readonly phoneNumberId?: string;
   private readonly accessToken?: string;
   private readonly verifyToken?: string;
+  private readonly appSecret?: string;
 
   constructor(private config: ConfigService, private prisma: PrismaService) {
     this.apiVersion = this.config.get<string>('whatsapp.apiVersion') ?? 'v19.0';
     this.phoneNumberId = this.config.get<string>('whatsapp.phoneNumberId');
     this.accessToken = this.config.get<string>('whatsapp.accessToken');
     this.verifyToken = this.config.get<string>('whatsapp.verifyToken');
+    this.appSecret = this.config.get<string>('whatsapp.appSecret');
+  }
+
+  /**
+   * Verifies Meta's X-Hub-Signature-256 over the exact bytes received.
+   *
+   * Until this existed, POST /whatsapp/webhook verified nothing at all. The
+   * GET handshake checks a verify token, but that is a one-time exchange when
+   * the URL is registered — it says nothing about any later delivery. So
+   * anyone who found the URL could post a payload and have it written into a
+   * landlord and tenant's private conversation as though the other party had
+   * sent it. Phase 2 builds listing creation on this same webhook, which
+   * would have meant anyone could create listings too.
+   *
+   * Meta's scheme: `sha256=<hex>` where the hex is HMAC-SHA256 of the raw
+   * request body, keyed with the **App Secret** — App Dashboard, not the
+   * access token and not the verify token.
+   *
+   * Raw bytes, not a re-serialised parse: hashing `JSON.stringify(parsed)`
+   * gives a different digest whenever key order or number formatting differs,
+   * which is most of the time. main.ts already sets `rawBody: true` for the
+   * Resend webhook; this reuses it.
+   */
+  verifySignature(rawBody: Buffer | undefined, header?: string): boolean {
+    if (!this.appSecret) {
+      // Fail closed. The tempting alternative — skip verification when no
+      // secret is configured, so local development is easy — means production
+      // silently accepts forged deliveries the moment the variable is
+      // missing, which is the failure nobody notices.
+      this.logger.error('Inbound WhatsApp webhook but WHATSAPP_APP_SECRET is not set; refusing it');
+      return false;
+    }
+    if (!rawBody || !header) return false;
+
+    const [algorithm, signature] = header.split('=');
+    if (algorithm !== 'sha256' || !signature) return false;
+
+    const expected = crypto.createHmac('sha256', this.appSecret).update(rawBody).digest();
+    let received: Buffer;
+    try {
+      received = Buffer.from(signature, 'hex');
+    } catch {
+      return false;
+    }
+
+    // Length first: timingSafeEqual throws on a mismatch rather than
+    // returning false, and an attacker controls this length.
+    return received.length === expected.length && crypto.timingSafeEqual(received, expected);
   }
 
   /** Landlord opts in / updates their notification number. */

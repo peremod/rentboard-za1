@@ -1,5 +1,7 @@
-import { Controller, Get, Post, Patch, Body, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Query, UseGuards, HttpCode, HttpStatus, Req, Headers, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiExcludeEndpoint } from '@nestjs/swagger';
+import type { RawBodyRequest } from '@nestjs/common';
+import type { Request } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LandlordGuard } from '../../common/guards/landlord.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -39,11 +41,31 @@ export class WhatsappController {
     return this.whatsapp.verifyWebhook(mode, token, challenge);
   }
 
-  /** Meta calls this on every inbound message / delivery-status update — publicly reachable by design. */
+  /**
+   * Meta calls this on every inbound message and delivery-status update.
+   *
+   * Publicly reachable by design, and therefore signed. Until v1.57.0 this
+   * handler verified nothing — anyone who found the URL could post a payload
+   * and have it written into a landlord and tenant's private conversation as
+   * though the other party had sent it. The GET handshake above checks a
+   * verify token, but that is exchanged once when the URL is registered and
+   * proves nothing about any later POST.
+   *
+   * 403 rather than 401: there is no credential to supply. Meta retries on a
+   * 5xx, so a rejection must be a 4xx or a forged delivery becomes a retry
+   * loop.
+   */
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   @ApiExcludeEndpoint()
-  async receiveWebhook(@Body() body: any) {
+  async receiveWebhook(
+    @Req() req: RawBodyRequest<Request>,
+    @Body() body: any,
+    @Headers('x-hub-signature-256') signature?: string,
+  ) {
+    if (!this.whatsapp.verifySignature(req.rawBody, signature)) {
+      throw new ForbiddenException('Invalid signature');
+    }
     await this.whatsapp.handleIncomingWebhook(body);
     return { received: true };
   }
