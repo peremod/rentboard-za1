@@ -57,12 +57,12 @@ import { RouterLink } from '@angular/router';
     .save { font-size: .68rem; color: #3D7040; font-weight: 700; }
     .upgrade__plans { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
     .plan { border: 1.5px solid #DDD5C8; border-radius: 10px; padding: 1.25rem; }
-    .plan--featured { border-color: #C04E28; }
+    .plan--featured { border-color: var(--terra); }
     .plan h2 { font-size: 1rem; margin-bottom: .3rem; }
-    .price { font-size: 1.3rem; font-weight: 700; color: #C04E28; margin-bottom: .8rem; }
+    .price { font-size: 1.3rem; font-weight: 700; color: var(--terra); margin-bottom: .8rem; }
     .plan ul { list-style: none; margin-bottom: 1rem; font-size: .8rem; color: #3A3228; }
     .plan li { margin-bottom: .3rem; }
-    .plan button { width: 100%; padding: .55rem; border-radius: 6px; border: none; background: #C04E28; color: #fff; font-weight: 700; cursor: pointer; }
+    .plan button { width: 100%; padding: .55rem; border-radius: 6px; border: none; background: var(--terra); color: #fff; font-weight: 700; cursor: pointer; }
     .muted { font-size: .78rem; color: #7A6E60; margin-top: 1.5rem; }
     @media (max-width: 520px) { .upgrade__plans { grid-template-columns: 1fr; } }
   `],

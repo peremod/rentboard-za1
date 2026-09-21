@@ -36,7 +36,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 # ── Brand palette — mirrors frontend/src/styles/_variables.scss ──
 INK = (0x1C, 0x16, 0x0E)        # $color-ink, primary text
-TERRACOTTA = (0xC0, 0x4E, 0x28)  # $color-terracotta, primary action
+TERRACOTTA = (0xAD, 0x42, 0x22)  # $color-terracotta, primary action
 SAGE = (0x3D, 0x70, 0x40)        # $color-sage
 CARD = (0xFD, 0xFA, 0xF4)        # $color-card, surface
 BORDER = (0xE0, 0xD5, 0xC4)      # $color-border

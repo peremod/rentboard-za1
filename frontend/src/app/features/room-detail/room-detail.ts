@@ -211,7 +211,7 @@ import { environment } from '@env/environment';
     .lightbox__count { position: absolute; bottom: 1.25rem; left: 50%; transform: translateX(-50%);
                        color: rgba(255,255,255,.75); font-size: .85rem; }
     h1 { font-size: 1.4rem; margin: 1rem 0 .3rem; }
-    .room-detail__price { font-size: 1.15rem; font-weight: 700; color: #C04E28; margin-bottom: .3rem; }
+    .room-detail__price { font-size: 1.15rem; font-weight: 700; color: var(--terra); margin-bottom: .3rem; }
     .room-detail__location { color: #7A6E60; margin-bottom: .8rem; }
     .room-detail__flags { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
     .pill { font-size: .72rem; font-weight: 700; background: #F2EDE3; padding: .2rem .6rem; border-radius: 20px; }
@@ -220,7 +220,7 @@ import { environment } from '@env/environment';
     .room-detail__description { line-height: 1.7; color: #3A3228; margin-bottom: 2rem; white-space: pre-wrap; }
     .room-detail__apply { border-top: 1px solid #DDD5C8; padding-top: 1.5rem; }
     .room-detail__apply textarea { width: 100%; padding: .6rem; border: 1.5px solid #DDD5C8; border-radius: 6px; margin-bottom: .6rem; font-family: inherit; }
-    .room-detail__apply button { padding: .6rem 1.2rem; border-radius: 6px; border: none; background: #C04E28; color: #fff; font-weight: 700; cursor: pointer; }
+    .room-detail__apply button { padding: .6rem 1.2rem; border-radius: 6px; border: none; background: var(--terra); color: #fff; font-weight: 700; cursor: pointer; }
     .room-detail__apply button:disabled { opacity: .5; }
     .error { color: #D63B3B; font-size: .82rem; margin-bottom: .5rem; }
     .muted { color: #7A6E60; }

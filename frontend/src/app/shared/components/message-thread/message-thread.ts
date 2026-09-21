@@ -43,7 +43,7 @@ import { Message } from '../../../core/models/message.model';
     .thread__messages { max-height: 260px; overflow-y: auto; padding: .75rem; display: flex; flex-direction: column; gap: .5rem; background: #FDFAF5; }
     .muted { font-size: .8rem; color: #7A6E60; }
     .thread__message { align-self: flex-start; background: #F2EDE3; padding: .5rem .7rem; border-radius: 10px; max-width: 80%; font-size: .82rem; }
-    .thread__message.mine { align-self: flex-end; background: #C04E28; color: #fff; }
+    .thread__message.mine { align-self: flex-end; background: var(--terra); color: #fff; }
     .thread__channel { display: block; font-size: .6rem; opacity: .7; margin-top: .2rem; }
     .thread__composer { display: flex; border-top: 1px solid #DDD5C8; }
     .thread__composer input { flex: 1; border: none; padding: .6rem .7rem; font-size: .82rem; font-family: inherit; }

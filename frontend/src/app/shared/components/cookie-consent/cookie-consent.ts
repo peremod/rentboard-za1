@@ -61,7 +61,7 @@ const CONSENT_KEY = 'rb_cookie_notice_v2';
     .cookie-notice__body a { color: #D4A853; }
     .cookie-notice__ok {
       width: 100%; padding: .5rem; border-radius: 4px; border: none;
-      background: #C04E28; color: #fff; font-weight: 700; cursor: pointer;
+      background: var(--terra); color: #fff; font-weight: 700; cursor: pointer;
     }
   `],
 })

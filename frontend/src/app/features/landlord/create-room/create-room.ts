@@ -225,7 +225,7 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
     .wizard { max-width: 520px; margin: 2rem auto; padding: 0 1.25rem; font-family: sans-serif; }
     .wizard__steps { display: flex; gap: .5rem; margin-bottom: 2rem; }
     .wizard__step { flex: 1; height: 4px; background: #DDD5C8; border-radius: 4px; }
-    .wizard__step.active, .wizard__step.done { background: #C04E28; }
+    .wizard__step.active, .wizard__step.done { background: var(--terra); }
     h2 { font-size: 1.2rem; margin-bottom: 1rem; }
     /* Scoped away from checkboxes. Angular's emulated encapsulation makes a
        component style beat any global rule, so these two lines overrode the
@@ -245,7 +245,7 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
     .muted { font-size: .78rem; color: #7A6E60; }
     .error { color: #D63B3B; font-size: .82rem; }
     .wizard__actions { display: flex; justify-content: space-between; margin-top: 1.5rem; }
-    button { padding: .6rem 1.2rem; border-radius: 6px; border: none; background: #C04E28; color: #fff; font-weight: 700; cursor: pointer; }
+    button { padding: .6rem 1.2rem; border-radius: 6px; border: none; background: var(--terra); color: #fff; font-weight: 700; cursor: pointer; }
     button:disabled { opacity: .5; cursor: not-allowed; }
   `],
 })

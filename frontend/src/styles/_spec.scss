@@ -18,7 +18,15 @@
   --cream2:#F2EDE3;
   --ink:#1C160E;
   --ink2:#3A3228;
-  --terra:#C04E28;
+  /* Was #C04E28, which is 4.50:1 on --cream — the WCAG AA minimum to two
+     decimal places, so subpixel rendering tipped it to 4.49 and the
+     accessibility audit failed. Terracotta is text in fourteen places
+     (links, .section-eyebrow, .stat-box .val, .app-rent) and a button
+     background in six more, so a token sitting exactly on the line fails
+     unpredictably in one of them. #AD4222 is 5.48:1 on cream and 5.87:1 on
+     white, and raises white-on-terracotta buttons from 4.81:1 to 5.87:1 —
+     better in both directions, and still the same terracotta. */
+  --terra:#AD4222;
   --terra2:#E06038;
   --gold:#C8902A;
   --gold2:#E8AE3A;
@@ -509,16 +517,18 @@ img{display:block;max-width:100%}
   color:var(--cream);margin-bottom:.75rem;cursor:pointer;
 }
 .footer-logo span{color:var(--terra2)}
-.footer-desc{font-size:.83rem;color:rgba(250,247,240,.5);line-height:1.75;margin-bottom:.85rem}
-.footer-popia{font-size:.72rem;color:rgba(250,247,240,.3);line-height:1.6}
+.footer-desc{font-size:.83rem;color:rgba(250,247,240,.62);line-height:1.75;margin-bottom:.85rem}
+/* .3 alpha over --ink is 2.62:1 — barely legible, and it is the line that
+   claims POPIA compliance. .5 is 4.97:1. Same change on .footer-bottom. */
+.footer-popia{font-size:.72rem;color:rgba(250,247,240,.5);line-height:1.6}
 .footer-col h4{
   font-size:.72rem;font-weight:700;text-transform:uppercase;
-  letter-spacing:1.5px;color:rgba(250,247,240,.5);margin-bottom:1rem;
+  letter-spacing:1.5px;color:rgba(250,247,240,.62);margin-bottom:1rem;
 }
 .footer-col ul{list-style:none}
 .footer-col ul li{margin-bottom:.5rem}
 .footer-col ul li a{
-  font-size:.83rem;color:rgba(250,247,240,.5);
+  font-size:.83rem;color:rgba(250,247,240,.62);
   transition:color .15s;cursor:pointer;
 }
 .footer-col ul li a:hover{color:var(--cream);text-decoration:none}
@@ -528,8 +538,13 @@ img{display:block;max-width:100%}
   padding-top:1.5rem;
   display:flex;justify-content:space-between;align-items:flex-start;
   flex-wrap:wrap;gap:1rem;
-  font-size:.75rem;color:rgba(250,247,240,.3);
+  font-size:.75rem;color:rgba(250,247,240,.5);
 }
+/* The global `a{color:var(--terra)}` puts terracotta on --ink down here:
+   3.05:1, and it was 3.73:1 before the token was darkened, so this link has
+   never passed. --terra2 is 5.04:1 on ink and is already the footer's accent
+   (see .footer-logo span). */
+.footer-bottom a{color:var(--terra2)}
 
 /* ═══ SHIMMER ═══ */
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}

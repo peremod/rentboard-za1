@@ -240,7 +240,7 @@ export class NotificationsService {
       `<p>Hi ${d.fullName},</p>
        <p>Tap below to sign in. No password needed.</p>
        <p style="margin:1.5rem 0">
-         <a href="${link}" style="background:#C04E28;color:#fff;padding:.75rem 1.5rem;
+         <a href="${link}" style="background:#AD4222;color:#fff;padding:.75rem 1.5rem;
             border-radius:6px;text-decoration:none;font-weight:700">Sign in to RentBoard</a>
        </p>
        <p style="font-size:.8rem;color:#7A6E60">
@@ -500,11 +500,11 @@ export class NotificationsService {
         .wrap{max-width:560px;margin:0 auto;background:#FDFAF5;border-radius:10px;overflow:hidden;border:1px solid #DDD5C8}
         .header{background:#1A1410;padding:20px 24px}
         .header h2{color:#F5F0E8;margin:0;font-size:22px}
-        .header span{color:#C04E28}
+        .header span{color:#AD4222}
         .body{padding:28px 24px;color:#1A1410}
         h1{font-size:22px;margin:0 0 12px}
         p{font-size:15px;line-height:1.6;margin:0 0 12px}
-        .btn{display:inline-block;background:#C04E28;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:700;margin-top:8px}
+        .btn{display:inline-block;background:#AD4222;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:700;margin-top:8px}
         .btn--green{background:#3D7040}
         .box{background:#fff;border:1px solid #DDD5C8;border-radius:8px;padding:16px;margin:16px 0}
         .quote{font-style:italic;color:#7A6E60;border-left:3px solid #DDD5C8;padding-left:12px;margin:12px 0}

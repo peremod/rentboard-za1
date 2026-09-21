@@ -181,7 +181,7 @@ export class RoomCard {
 
   /** Deterministic avatar colour from the spec palette, keyed on landlord id. */
   avatarColour = computed(() => {
-    const palette = ['#C04E28', '#3D7040', '#C8902A', '#7A6E60'];
+    const palette = ['#AD4222', '#3D7040', '#C8902A', '#7A6E60'];
     const id = this.room().landlordId ?? '';
     let hash = 0;
     for (let i = 0; i < id.length; i++) hash = (hash + id.charCodeAt(i)) % palette.length;

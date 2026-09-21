@@ -40,9 +40,9 @@ import { RouterLink } from '@angular/router';
     .lead { color: #7A6E60; margin-bottom: 1.5rem; }
     .passport__toggle { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1.5rem; }
     .passport__toggle button { padding: .7rem 1rem; border-radius: 8px; border: 1.5px solid #DDD5C8; background: #fff; cursor: pointer; text-align: left; font-size: .85rem; }
-    .passport__toggle button.active { border-color: #C04E28; background: rgba(192,78,40,.05); }
+    .passport__toggle button.active { border-color: var(--terra); background: rgba(192,78,40,.05); }
     .save { color: #3D7040; font-weight: 700; font-size: .7rem; }
-    .cta { width: 100%; padding: .75rem; border-radius: 8px; border: none; background: #C04E28; color: #fff; font-weight: 700; cursor: pointer; margin-bottom: 1rem; }
+    .cta { width: 100%; padding: .75rem; border-radius: 8px; border: none; background: var(--terra); color: #fff; font-weight: 700; cursor: pointer; margin-bottom: 1rem; }
     .muted { font-size: .78rem; color: #7A6E60; }
   `],
 })
