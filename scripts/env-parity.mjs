@@ -21,7 +21,8 @@
  *   3. No two environments share an apiUrl or siteUrl (a copy-paste slip that
  *      points staging at the production database is not hypothetical)
  *   4. Every process.env / config.get key used in the backend appears in
- *      backend/.env.example
+ *      backend/.env.example, and also in docs/DEPLOYMENT.md — a complete
+ *      .env.example does not help anyone provisioning from the guide
  */
 
 import { readFileSync, readdirSync, existsSync } from 'fs';
@@ -143,6 +144,23 @@ if (undocumented.length) {
   fail(`read by the backend but absent from .env.example: ${undocumented.join(', ')}`);
 } else {
   ok(`all ${used.size} backend config keys are documented in .env.example`);
+}
+
+// 4b. And in the deploy guide, which is a different failure from the one
+// above. .env.example was complete while docs/DEPLOYMENT.md was missing nine
+// keys including SITE_URL — and the API refuses to start without that one, so
+// anyone provisioning a new environment from the guide deployed a backend
+// that would not boot. Being in .env.example does not help someone reading
+// the guide; only being in the guide does.
+const DEPLOY_DOC = join(ROOT, 'docs/DEPLOYMENT.md');
+if (existsSync(DEPLOY_DOC)) {
+  const guide = readFileSync(DEPLOY_DOC, 'utf8');
+  const missing = [...used].filter((k) => k !== 'NODE_ENV' && !guide.includes(k));
+  if (missing.length) {
+    fail(`read by the backend but absent from docs/DEPLOYMENT.md: ${missing.join(', ')}`);
+  } else {
+    ok('every backend config key also appears in the deploy guide');
+  }
 }
 
 const unused = [...documented].filter((k) => !used.has(k));
