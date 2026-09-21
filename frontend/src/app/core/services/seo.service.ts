@@ -107,7 +107,7 @@ export class SeoService {
     this.meta.updateTag({ property: 'og:url', content: canonical });
     this.meta.updateTag({ property: 'og:image', content: image });
     this.meta.updateTag({ property: 'og:type', content: input.type ?? 'website' });
-    this.meta.updateTag({ property: 'og:site_name', content: 'RentBoard' });
+    this.meta.updateTag({ property: 'og:site_name', content: 'Mastande' });
     // og:locale mirrors the page's actual language, and og:locale:alternate
     // tells WhatsApp and Facebook the other versions exist.
     const locale = input.locale ?? stripLocalePrefix(input.path ?? this.currentPath()).locale;

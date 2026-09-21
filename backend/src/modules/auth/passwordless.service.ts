@@ -9,7 +9,7 @@ const MAGIC_LINK_TTL_MINUTES = 15;
 /**
  * Passwordless sign-in.
  *
- * This is the answer to how RentBoard actually gets used: intensely for a few
+ * This is the answer to how Mastande actually gets used: intensely for a few
  * weeks while someone finds a room, then not for a year. By the time a tenant
  * comes back to leave a review or find their next place, the password is long
  * gone — and a forgotten password is where people give up rather than reset.

@@ -1,4 +1,4 @@
-# Data, Monetisation & Payments — RentBoard ZA
+# Data, Monetisation & Payments — Mastande ZA
 
 Written 26 Aug 2026. Covers what the platform collects, what may lawfully be
 done with it, and how the business can make money without breaking the promise

@@ -58,7 +58,7 @@ export class ReferralsService {
     return {
       valid: true as const,
       // Launch codes have no owner, so say where it came from instead.
-      invitedBy: found.owner?.fullName ?? (found.city ? `RentBoard ${found.city}` : 'RentBoard'),
+      invitedBy: found.owner?.fullName ?? (found.city ? `Mastande ${found.city}` : 'Mastande'),
     };
   }
 

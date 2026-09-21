@@ -44,7 +44,7 @@ async function bootstrap() {
 
   app.enableCors({
     // Derived from APP_ENV and FRONTEND_URL. The previous hard-coded pair keyed
-    // off NODE_ENV, so Render staging allowed only rentboard.co.za and rejected
+    // off NODE_ENV, so Render staging allowed only mastande.co.za and rejected
     // every request from the staging frontend.
     origin: corsOrigins(),
     credentials: true,
@@ -63,7 +63,7 @@ async function bootstrap() {
 
   if (!isProduction) {
     const config = new DocumentBuilder()
-      .setTitle('RentBoard ZA API')
+      .setTitle('Mastande ZA API')
       .setDescription('Room-letting platform API for South Africa')
       .setVersion('1.1.0')
       .addBearerAuth()
@@ -88,7 +88,7 @@ async function bootstrap() {
   // logs is the fastest way to confirm the distinction is working rather than
   // wondering which one a given behaviour keyed off.
   logger.log(
-    `RentBoard API on port ${port} — APP_ENV=${appEnv()} NODE_ENV=${process.env.NODE_ENV ?? 'unset'}`,
+    `Mastande API on port ${port} — APP_ENV=${appEnv()} NODE_ENV=${process.env.NODE_ENV ?? 'unset'}`,
   );
 }
 

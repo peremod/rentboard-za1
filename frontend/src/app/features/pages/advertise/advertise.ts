@@ -24,7 +24,7 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
           Reach people at the moment they move
         </h1>
         <p class="hero-sub">
-          Everyone on RentBoard is either moving into a room or letting one.
+          Everyone on Mastande is either moving into a room or letting one.
           Few audiences are this predictable about what they need next.
         </p>
       </div>
@@ -205,7 +205,7 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
         </section>
 
         <p class="pricing-note">
-          RentBoard is an intermediary platform, not an estate agent.
+          Mastande is an intermediary platform, not an estate agent.
           <a routerLink="/legal/terms">Terms</a> ·
           <a routerLink="/legal/privacy">Privacy</a>
         </p>

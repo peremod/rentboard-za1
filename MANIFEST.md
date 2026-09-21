@@ -1,9 +1,9 @@
-# RentBoard ZA — Changeset v1.49.0 → v1.51.0
+# Mastande ZA — Changeset v1.49.0 → v1.51.0
 
 Everything produced across this work, in one bundle. **Paths already match your repo**, so extracting over the repo root puts every file where it belongs.
 
 ```bash
-cd /path/to/rentboard-za
+cd /path/to/mastande-za
 unzip -o /path/to/rentboard-changeset-v1.51.0.zip
 # the extracted folder mirrors the repo — move its contents up if needed:
 #   cp -r rentboard-changeset-v1.51.0/. .
@@ -130,4 +130,4 @@ Checked by hand instead: DI chain traced (`UrlSerializer → I18nService → Seo
 | Add `LHCI_GITHUB_APP_TOKEN` secret | For Lighthouse PR status checks |
 | Translate the eight stub language files | `frontend/src/assets/i18n/` — then flip `translated: true` |
 
-Business planning, KPIs, ad campaigns and the strategy documents are in Notion under **RentBoard ZA — Company OS**, not in this bundle. The split is documented in the "Where Things Live" page there and in `README.md`.
+Business planning, KPIs, ad campaigns and the strategy documents are in Notion under **Mastande ZA — Company OS**, not in this bundle. The split is documented in the "Where Things Live" page there and in `README.md`.

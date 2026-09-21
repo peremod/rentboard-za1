@@ -1,8 +1,8 @@
 {
-  "name": "rentboard-za",
-  "version": "1.54.0",
+  "name": "mastande-za",
+  "version": "1.55.0",
   "private": true,
-  "description": "RentBoard ZA — South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
+  "description": "Mastande ZA — South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
   "scripts": {
     "prepare": "husky",
     "frontend": "npm --prefix frontend run start",

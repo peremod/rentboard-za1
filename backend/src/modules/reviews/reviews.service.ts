@@ -170,7 +170,7 @@ export class ReviewsService {
       // Absence of references is not a negative signal, and saying so stops
       // landlords reading "no reviews" as "bad tenant".
       note: reviews.length === 0
-        ? 'No references yet. Most tenants have none — it usually means they have not let through RentBoard before.'
+        ? 'No references yet. Most tenants have none — it usually means they have not let through Mastande before.'
         : null,
     };
   }

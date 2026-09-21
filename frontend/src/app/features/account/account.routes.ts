@@ -5,7 +5,7 @@ export const ACCOUNT_ROUTES: Routes = [
   {
     path: 'settings',
     loadComponent: () => import('./settings/account-settings').then((m) => m.AccountSettings),
-    title: 'Account settings — RentBoard',
+    title: 'Account settings — Mastande',
   },
   { path: '', redirectTo: 'settings', pathMatch: 'full' },
 ];

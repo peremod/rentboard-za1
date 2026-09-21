@@ -65,7 +65,7 @@ export class PaymentsService {
     const fields = this.payfast.buildPaymentFields({
       merchantReference: payment.merchantReference,
       amountCents: payment.amountCents,
-      itemName: 'RentBoard landlord verification',
+      itemName: 'Mastande landlord verification',
       itemDescription: 'One-off identity check. Refunded in full if we cannot verify you.',
       buyerEmail: request.user.email,
       buyerFirstName: request.user.fullName.split(' ')[0],

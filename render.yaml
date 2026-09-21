@@ -25,7 +25,19 @@
 
 services:
   - type: web
-    name: rentboard-api
+    # RENAMED IN THE MASTANDE REBRAND, and this needs a hand at Render.
+    #
+    # Render keys a Blueprint service on its NAME. Syncing this file does not
+    # rename `rentboard-api`; it creates `mastande-api` alongside it, on a new
+    # onrender.com hostname, while the old service keeps running and keeps
+    # serving the old URL. So staging is pointed at a host that does not exist
+    # yet: frontend/src/environments/environment.staging.ts already expects
+    # https://mastande-api.onrender.com.
+    #
+    # To land it: create/sync the new service, copy every sync:false value
+    # across (they are not carried over), confirm /health, then delete the old
+    # one. Until that is done, staging's frontend cannot reach its API.
+    name: mastande-api
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
@@ -67,7 +79,7 @@ services:
       # refuses to start without it, deliberately, because the old fallback
       # was the production origin.
       - key: SITE_URL
-        value: https://staging.rentboard.co.za
+        value: https://staging.mastande.co.za
 
       - key: PORT
         value: 3000

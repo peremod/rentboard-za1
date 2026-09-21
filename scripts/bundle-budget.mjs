@@ -28,7 +28,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const browser = join(root, 'frontend/dist/rentboard-frontend/browser');
+const browser = join(root, 'frontend/dist/mastande-frontend/browser');
 const indexHtml = join(browser, 'index.html');
 
 // Budget in gzipped bytes. The measurement when this was introduced was

@@ -10,8 +10,8 @@ before anything reaches them.
 | | Development | Staging | Production |
 |---|---|---|---|
 | Branch | any feature branch | `develop` | `master` (and `main`) |
-| Frontend | `localhost:4200` | `staging.rentboard.co.za` | `rentboard.co.za` |
-| Backend | `localhost:3000` | `api-staging.rentboard.co.za` | `api.rentboard.co.za` |
+| Frontend | `localhost:4200` | `staging.mastande.co.za` | `mastande.co.za` |
+| Backend | `localhost:3000` | `api-staging.mastande.co.za` | `api.mastande.co.za` |
 | Build | `ng build --configuration development` | `npm run build:staging` | `npm run build:prod` |
 | Env file | `environment.ts` | `environment.staging.ts` | `environment.prod.ts` |
 | `APP_ENV` | `development` | `staging` | `production` |
@@ -75,8 +75,8 @@ Gating deployment behaviour on `NODE_ENV` had two real consequences on the Rende
 `scripts/env-parity.mjs` now fails the build if any deployment behaviour is gated on `NODE_ENV`. Reading it to *log* it is fine — the bootstrap line prints both side by side, which is the fastest way to confirm the distinction is working.
 
 ```
-[Environment] Environment OK — APP_ENV=staging, SITE_URL=https://staging.rentboard.co.za, indexable=false
-[Bootstrap]   RentBoard API on port 3000 — APP_ENV=staging NODE_ENV=production
+[Environment] Environment OK — APP_ENV=staging, SITE_URL=https://staging.mastande.co.za, indexable=false
+[Bootstrap]   Mastande API on port 3000 — APP_ENV=staging NODE_ENV=production
 ```
 
 ---
@@ -201,7 +201,7 @@ npm --prefix frontend run build:staging
 npx --prefix frontend ng build --configuration development
 
 # Serve the production build with SSR, as Lighthouse sees it
-cd frontend && npm run build:prod && node dist/rentboard-frontend/server/server.mjs
+cd frontend && npm run build:prod && node dist/mastande-frontend/server/server.mjs
 
 # All audits
 npm run audit

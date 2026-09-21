@@ -122,10 +122,10 @@ export class NotificationsService {
        <p>A room matching your saved search <strong>${d.searchName}</strong> has just been listed:</p>
        <p style="font-size:1.1rem"><strong>${d.roomTitle}</strong><br/>
           ${d.locationDisplay} · ${rand}/mo</p>
-       <p>Rooms on RentBoard are often taken within days, so it is worth applying early. Applying is free.</p>
+       <p>Rooms on Mastande are often taken within days, so it is worth applying early. Applying is free.</p>
        <p><a href="${this.frontend}/rooms/${d.roomId}">View this room</a></p>
        <p style="font-size:.8rem;color:#7A6E60">
-         You are receiving this because you saved a search on RentBoard.
+         You are receiving this because you saved a search on Mastande.
          <a href="${this.frontend}/tenant/dashboard">Manage or turn off your alerts</a>.
        </p>`,
       { template: 'new_match', category: 'marketing' },
@@ -140,7 +140,7 @@ export class NotificationsService {
    */
   async sendUrgentReportAlert(d: { reportId: string; reason: string; roomId?: string }) {
     await this.send(
-      'safety@rentboard.co.za',
+      'safety@mastande.co.za',
       `URGENT report: ${d.reason.replace(/_/g, ' ')}`,
       `<p>A report was filed that matches a money-loss pattern.</p>
        <p><strong>Reason:</strong> ${d.reason.replace(/_/g, ' ')}<br/>
@@ -184,7 +184,7 @@ export class NotificationsService {
 
     await this.send(
       to,
-      `Your RentBoard advertising — ${d.periodLabel}`,
+      `Your Mastande advertising — ${d.periodLabel}`,
       `<p>Hi ${d.companyName},</p>
        <p>Here's how your advertising performed in ${d.periodLabel}.</p>
        <table style="border-collapse:collapse;width:100%;font-size:.85rem">
@@ -200,7 +200,7 @@ export class NotificationsService {
          <tbody>${rows}</tbody>
        </table>
        <p style="font-size:.8rem;color:#7A6E60;margin-top:1.25rem">
-         These are aggregate counts. RentBoard does not track individual visitors,
+         These are aggregate counts. Mastande does not track individual visitors,
          so we cannot tell you who saw your ad — and neither can anyone else.
        </p>
        <p>Reply to this email if you want to change targeting, pause, or extend.</p>`,
@@ -216,7 +216,7 @@ export class NotificationsService {
     await this.send(
       to,
       `Advertising enquiry — ${d.companyName}`,
-      `<p><strong>${d.companyName}</strong> wants to advertise on RentBoard.</p>
+      `<p><strong>${d.companyName}</strong> wants to advertise on Mastande.</p>
        <p>
          Contact: ${d.contactName} &lt;${d.contactEmail}&gt;<br/>
          ${d.industry ? `Industry: ${d.industry}<br/>` : ''}
@@ -236,12 +236,12 @@ export class NotificationsService {
     const link = `${this.frontend}/auth/magic?token=${encodeURIComponent(d.token)}`;
     await this.send(
       to,
-      'Your RentBoard sign-in link',
+      'Your Mastande sign-in link',
       `<p>Hi ${d.fullName},</p>
        <p>Tap below to sign in. No password needed.</p>
        <p style="margin:1.5rem 0">
          <a href="${link}" style="background:#AD4222;color:#fff;padding:.75rem 1.5rem;
-            border-radius:6px;text-decoration:none;font-weight:700">Sign in to RentBoard</a>
+            border-radius:6px;text-decoration:none;font-weight:700">Sign in to Mastande</a>
        </p>
        <p style="font-size:.8rem;color:#7A6E60">
          This link works once and expires in ${d.ttlMinutes} minutes. If you did not
@@ -257,9 +257,9 @@ export class NotificationsService {
     const url = `${this.frontend}/auth/register?role=${d.role.toLowerCase()}`;
     await this.send(
       to,
-      'No RentBoard account for this address',
+      'No Mastande account for this address',
       `<p>Someone asked for a sign-in link for this address, but there is no
-          RentBoard account attached to it.</p>
+          Mastande account attached to it.</p>
        <p>If that was you, you can create one — it takes a minute and is free.</p>
        <p><a href="${url}">Create an account</a></p>
        <p style="font-size:.8rem;color:#7A6E60">If it was not you, ignore this email.</p>`,
@@ -271,7 +271,7 @@ export class NotificationsService {
     const link = `${this.frontend}/auth/reset-password?token=${encodeURIComponent(d.token)}`;
     await this.send(
       to,
-      'Reset your RentBoard password',
+      'Reset your Mastande password',
       `<p>Hi ${d.fullName},</p>
        <p>Use the link below to set a new password. It works once and expires in ${d.ttlMinutes} minutes.</p>
        <p><a href="${link}">Set a new password</a></p>
@@ -284,7 +284,7 @@ export class NotificationsService {
   async sendGoogleOnlyAccountEmail(to: string, d: { fullName: string }) {
     await this.send(
       to,
-      'About your RentBoard sign-in',
+      'About your Mastande sign-in',
       `<p>Hi ${d.fullName},</p>
        <p>Someone asked to reset the password for this address, but your account signs in with Google,
        so there is no password to reset.</p>
@@ -297,11 +297,11 @@ export class NotificationsService {
   async sendPasswordChangedEmail(to: string, d: { fullName: string }) {
     await this.send(
       to,
-      'Your RentBoard password was changed',
+      'Your Mastande password was changed',
       `<p>Hi ${d.fullName},</p>
        <p>Your password was changed just now.</p>
        <p><strong>If this was not you</strong>, reset your password immediately and contact
-       support&#64;rentboard.co.za.</p>`,
+       support&#64;mastande.co.za.</p>`,
       { template: 'password_changed' },
     );
   }
@@ -310,9 +310,9 @@ export class NotificationsService {
     const link = `${this.frontend}/auth/confirm-email?token=${encodeURIComponent(d.token)}`;
     await this.send(
       to,
-      'Confirm your new RentBoard email address',
+      'Confirm your new Mastande email address',
       `<p>Hi ${d.fullName},</p>
-       <p>Confirm this address to finish moving your RentBoard account to it. The link expires in an hour.</p>
+       <p>Confirm this address to finish moving your Mastande account to it. The link expires in an hour.</p>
        <p><a href="${link}">Confirm this address</a></p>`,
       { template: 'change_confirmation' },
     );
@@ -322,12 +322,12 @@ export class NotificationsService {
   async sendEmailChangeAlert(to: string, d: { fullName: string; newEmail: string }) {
     await this.send(
       to,
-      'Someone asked to change your RentBoard email',
+      'Someone asked to change your Mastande email',
       `<p>Hi ${d.fullName},</p>
        <p>A request was made to move this account to <strong>${d.newEmail}</strong>. It only takes effect
        once that address is confirmed.</p>
        <p><strong>If this was not you</strong>, change your password now and contact
-       support&#64;rentboard.co.za — someone may have access to your account.</p>`,
+       support&#64;mastande.co.za — someone may have access to your account.</p>`,
       { template: 'change_alert' },
     );
   }
@@ -437,8 +437,8 @@ export class NotificationsService {
        <p>The landlord has let <strong>${d.roomTitle}</strong>, so your application has been closed.
        It wasn't a reflection on you — the room simply went to someone who applied around the same time.</p>
        <p>There are other rooms on the board, and applying is always free.</p>
-       <p><a href="${this.frontend}">Browse rooms on RentBoard</a></p>
-       <p>— The RentBoard team</p>`,
+       <p><a href="${this.frontend}">Browse rooms on Mastande</a></p>
+       <p>— The Mastande team</p>`,
       { template: 'room_unavailable' },
     );
   }
@@ -514,7 +514,7 @@ export class NotificationsService {
       <body><div style="padding:32px 16px"><div class="wrap">
         <div class="header"><h2>Rent<span>Board</span></h2></div>
         <div class="body">${content}</div>
-        <div class="footer">© ${new Date().getFullYear()} RentBoard — direct from landlords, no agent fees.</div>
+        <div class="footer">© ${new Date().getFullYear()} Mastande — direct from landlords, no agent fees.</div>
       </div></div></body></html>`;
   }
 
@@ -600,9 +600,9 @@ export class NotificationsService {
     return `${html}
       <hr style="border:none;border-top:1px solid #E0D5C4;margin:1.5rem 0"/>
       <p style="font-size:.75rem;color:#7A6E60;line-height:1.6">
-        Sent to ${recipient} because you asked RentBoard to alert you about rooms.
+        Sent to ${recipient} because you asked Mastande to alert you about rooms.
         <a href="${link}">Manage or stop these emails</a>.<br/>
-        RentBoard, South Africa.
+        Mastande, South Africa.
       </p>`;
   }
 }

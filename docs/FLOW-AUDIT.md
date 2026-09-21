@@ -1,4 +1,4 @@
-# Flow & State Audit — RentBoard ZA
+# Flow & State Audit — Mastande ZA
 
 Written 26 Aug 2026, against v1.7.0. The question this answers is "have we
 thought of every flow?", and the honest answer at the time of writing was
@@ -256,7 +256,7 @@ and a pattern across several is the actual signal.
 Previously:
 
 ### 5.3 ~~Reporting fraudulent listings~~ — ~~not built~~
-The disclaimer tells tenants to email `safety@rentboard.co.za`, so the promise
+The disclaimer tells tenants to email `safety@mastande.co.za`, so the promise
 is kept, but there is no in-app report button, no `Report` model and no admin
 queue. Given the disclaimer explicitly warns about agents posing as landlords
 and deposit scams, an in-app path with an audit trail is the more serious gap

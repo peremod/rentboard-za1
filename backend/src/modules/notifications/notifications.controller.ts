@@ -102,7 +102,7 @@ export class NotificationsController {
   @Get('my-emails')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Emails RentBoard has sent you — POPIA s.23 access right' })
+  @ApiOperation({ summary: 'Emails Mastande has sent you — POPIA s.23 access right' })
   myEmails(@CurrentUser() user: { id: string }) {
     return this.prisma.emailLog.findMany({
       where: { userId: user.id },

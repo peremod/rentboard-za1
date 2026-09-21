@@ -145,7 +145,7 @@ import { environment } from '@env/environment';
           } @else {
             <app-review-list
               [reviews]="roomReviews()"
-              emptyMessage="No reviews yet. This room has not been let through RentBoard before, which is not a bad sign — most listings start here."/>
+              emptyMessage="No reviews yet. This room has not been let through Mastande before, which is not a bad sign — most listings start here."/>
           }
         </section>
 
@@ -309,8 +309,8 @@ export class RoomDetail implements OnInit {
         // A room that has been let or removed must not stay indexed under a
         // 200 with the site's default copy — that is a soft 404.
         this.seo.apply({
-          title: 'Room no longer available — RentBoard',
-          description: 'This room is no longer listed. Browse other rooms to rent across South Africa on RentBoard.',
+          title: 'Room no longer available — Mastande',
+          description: 'This room is no longer listed. Browse other rooms to rent across South Africa on Mastande.',
           noIndex: true,
         });
         this.seo.setJsonLd('room', null);
@@ -331,7 +331,7 @@ export class RoomDetail implements OnInit {
    */
   private applySeo(r: Room) {
     const rand = Math.round(r.rentCents / 100).toLocaleString('en-ZA');
-    const title = `${r.title} — ${r.locationDisplay} · R${rand}/month | RentBoard`;
+    const title = `${r.title} — ${r.locationDisplay} · R${rand}/month | Mastande`;
 
     const description = [
       `${this.roomTypeLabel(r.roomType)} to rent in ${r.locationDisplay}, ${r.province} at R${rand} per month`,

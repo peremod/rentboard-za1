@@ -107,7 +107,7 @@ export class ApplicationsService {
     if (room.landlord.landlordProfile) {
       await this.whatsapp.notifyLandlord(
         room.landlord.landlordProfile.id,
-        `📬 New RentBoard application: ${tenant.fullName} applied for "${room.title}". Reply on the app to respond.`,
+        `📬 New Mastande application: ${tenant.fullName} applied for "${room.title}". Reply on the app to respond.`,
       );
     }
 

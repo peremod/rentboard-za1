@@ -1,4 +1,4 @@
-# RentBoard ZA — Pre-Launch Checklist
+# Mastande ZA — Pre-Launch Checklist
 
 ## Launch readiness summary (v1.6.0)
 
@@ -19,7 +19,7 @@ defects surfaced that this checklist did not list:
   shared device one account saw another's saved rooms
 - Applications had no letting cycle, and a unique constraint that locked a
   tenant out of a room permanently after one application
-- Placeholder ImageKit URLs (`rentboard-dev`) that 404'd every image
+- Placeholder ImageKit URLs (`mastande-dev`) that 404'd every image
 - The visual spec was never wired up: 15 of 132 class names matched, so the
   design in `RentBoard-ZA-Visual-Preview.html` had never actually applied
 
@@ -49,8 +49,9 @@ software.** The distinction matters: it is the reason the above went unnoticed.
 
 | Category | What's left | Blocking launch? |
 |---|---|---|
+| **Rebrand (v1.55.0)** | `mastande.co.za` must be registered and pointed at Vercel; the domain verified in Resend; the Render service and Vercel project renamed. The code rename is done — these three are provider-side and nothing in the repo can detect them | Yes — staging's API host and the production domain do not resolve until they are done |
 | **Legal filing** | PAIA manual must be filed with the SAHRC (Form 2, no fee) | Yes — legal requirement |
-| **Legal content** | `[PLACEHOLDER]` company name, CIPC number, address, Information Officer name/reg. number in the legal pages | Yes — have an attorney review while you're at it |
+| **Legal content** | `[PLACEHOLDER]` company name, CIPC number, address, Information Officer name/reg. number in the legal pages. Still rendering live in the footer as `© 2026 [YOUR COMPANY NAME] (Pty) Ltd · CIPC Reg No. [NUMBER]`. The rebrand does not change these — the registered entity is whatever CIPC says, not the trading name | Yes — have an attorney review while you're at it |
 | **GitHub settings** | Branch protection rules to actually enforce the squash-merge policy `CONTRIBUTING.md` describes | Recommended, not launch-blocking |
 | **Stripe Dashboard** | ~~Create the 7 real Products/Prices; get the webhook signing secret~~ Not needed right now — billing is deliberately paused (see "Temporarily disabled" below), free tier only | No — paused by request |
 | **Third-party credentials** | ImageKit, Resend, WhatsApp Business API, Google OAuth | Partial — photo upload and email need theirs; WhatsApp and Google login are optional |

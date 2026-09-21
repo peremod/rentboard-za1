@@ -9,7 +9,7 @@ import { Message } from '../../../core/models/message.model';
  * (per application) and the landlord applicant manager (per applicant).
  * Tenant→landlord messages also go out over WhatsApp if the landlord has
  * opted in (see backend MessagesService) — that's invisible here, this
- * component only ever renders/sends the in-app (`rentboard`) record.
+ * component only ever renders/sends the in-app (`mastande`) record.
  */
 @Component({
   selector: 'app-message-thread',

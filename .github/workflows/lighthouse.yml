@@ -65,9 +65,9 @@ jobs:
         run: |
           npm install -g @lhci/cli@0.14.x
           lhci collect \
-            --url=https://rentboard.co.za/ \
-            --url=https://rentboard.co.za/pricing \
-            --url=https://rentboard.co.za/how-it-works \
+            --url=https://mastande.co.za/ \
+            --url=https://mastande.co.za/pricing \
+            --url=https://mastande.co.za/how-it-works \
             --numberOfRuns=3
           lhci assert --preset=lighthouse:recommended || true
           lhci upload --target=temporary-public-storage
@@ -77,7 +77,7 @@ jobs:
         # ourselves. Cheap to check, invisible if we do not.
         run: |
           set -o pipefail
-          BAD=$(curl -sf https://rentboard.co.za/sitemap.xml \
+          BAD=$(curl -sf https://mastande.co.za/sitemap.xml \
             | grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g' \
             | xargs -P 8 -I {} sh -c 'code=$(curl -s -o /dev/null -w "%{http_code}" "{}"); [ "$code" = "200" ] || echo "$code {}"')
           if [ -n "$BAD" ]; then

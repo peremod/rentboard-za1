@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════════════
-# RentBoard ZA — end-to-end API smoke test
+# Mastande ZA — end-to-end API smoke test
 #
 # Exercises the full MVP flow against a locally running backend and reports
 # exactly which step fails. Run this BEFORE clicking through the UI: it is
@@ -20,8 +20,8 @@ set -uo pipefail
 
 API="${API:-http://localhost:3000}"
 STAMP=$(date +%s)
-LANDLORD_EMAIL="landlord+${STAMP}@rentboard.test"
-TENANT_EMAIL="tenant+${STAMP}@rentboard.test"
+LANDLORD_EMAIL="landlord+${STAMP}@mastande.test"
+TENANT_EMAIL="tenant+${STAMP}@mastande.test"
 PASSWORD="TestPass123"
 
 PASS=0; FAIL=0; SKIP=0
@@ -59,7 +59,7 @@ req() {
 
 command -v jq >/dev/null || { red "jq is required: sudo apt install -y jq"; exit 1; }
 
-echo "RentBoard ZA smoke test → $API"
+echo "Mastande ZA smoke test → $API"
 
 # ── 1. Infrastructure ──────────────────────────────────────────────────────
 # ── A note on $BODY ─────────────────────────────────────────────────────
@@ -167,7 +167,7 @@ req POST /api/auth/register \
 check "duplicate email rejected" 409 "$STATUS" "$BODY"
 
 req POST /api/auth/register \
-  "{\"email\":\"weak@rentboard.test\",\"password\":\"weak\",\"fullName\":\"Weak\",\"role\":\"TENANT\"}"
+  "{\"email\":\"weak@mastande.test\",\"password\":\"weak\",\"fullName\":\"Weak\",\"role\":\"TENANT\"}"
 check "weak password rejected" 400 "$STATUS" "$BODY"
 
 req GET /api/auth/me "" "$LTOKEN"
@@ -314,7 +314,7 @@ fi
 # The sharpest question on a platform handling ID numbers and income data:
 # can one tenant reach a DIFFERENT tenant's application or message thread?
 head_ "7. Cross-tenant isolation (IDOR)"
-INTRUDER_EMAIL="intruder+${STAMP}@rentboard.test"
+INTRUDER_EMAIL="intruder+${STAMP}@mastande.test"
 req POST /api/auth/register \
   "{\"email\":\"$INTRUDER_EMAIL\",\"password\":\"$PASSWORD\",\"fullName\":\"Second Tenant\",\"role\":\"TENANT\"}"
 check "register second tenant" 201 "$STATUS" "$BODY"
@@ -731,7 +731,7 @@ req POST /api/auth/forgot-password "{\"email\":\"$LANDLORD_EMAIL\"}"
 check "forgot-password for a real account" 200 "$STATUS" "$BODY"
 REAL_MSG=$(echo "$BODY" | jq -r '.message')
 
-req POST /api/auth/forgot-password '{"email":"definitely-not-registered@rentboard.test"}'
+req POST /api/auth/forgot-password '{"email":"definitely-not-registered@mastande.test"}'
 check "forgot-password for an unknown account" 200 "$STATUS" "$BODY"
 FAKE_MSG=$(echo "$BODY" | jq -r '.message')
 
@@ -990,7 +990,7 @@ if [[ -n "${TEN_ID:-}" ]]; then
 
     # The real restriction: a different landlord, with no application from this
     # person, must not be able to look them up.
-    OTHER_LL="landlord2+${STAMP}@rentboard.test"
+    OTHER_LL="landlord2+${STAMP}@mastande.test"
     req POST /api/auth/register \
       "{\"email\":\"$OTHER_LL\",\"password\":\"$PASSWORD\",\"fullName\":\"Second Landlord\",\"role\":\"LANDLORD\"}"
     OTHER_LTOKEN=$(echo "$BODY" | jq -r '.accessToken // empty')
@@ -1034,7 +1034,7 @@ check "rejects a one-character name" 400 "$STATUS" "$BODY"
 
 # Email and password must not be changeable through the profile endpoint —
 # both require the current password and email needs confirmation.
-req PATCH /api/users/me "{\"email\":\"hijack+${STAMP}@rentboard.test\"}" "$LTOKEN"
+req PATCH /api/users/me "{\"email\":\"hijack+${STAMP}@mastande.test\"}" "$LTOKEN"
 check "cannot change email via the profile endpoint" 400 "$STATUS" "$BODY"
 
 req PATCH /api/users/me '{"role":"ADMIN"}' "$TTOKEN"
@@ -1290,7 +1290,7 @@ fi
 
 if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req POST /api/ads/advertisers \
-    "{\"companyName\":\"Smoke Fibre Co\",\"contactName\":\"Test Buyer\",\"contactEmail\":\"ads+${STAMP}@rentboard.test\"}" "$ADMIN_TOKEN"
+    "{\"companyName\":\"Smoke Fibre Co\",\"contactName\":\"Test Buyer\",\"contactEmail\":\"ads+${STAMP}@mastande.test\"}" "$ADMIN_TOKEN"
   check "admin creates an advertiser" 201 "$STATUS" "$BODY"
   ADV_ID=$(echo "$BODY" | jq -r '.id // empty')
 
@@ -1442,7 +1442,7 @@ fi
 # -- 27. Advertising enquiries ---------------------------------------------
 head_ "27. Advertising enquiries"
 req POST /api/ads/enquiries \
-  "{\"companyName\":\"Smoke Fibre\",\"contactName\":\"Test Buyer\",\"contactEmail\":\"ads+${STAMP}@rentboard.test\",\"industry\":\"Fibre\",\"province\":\"Gauteng\",\"message\":\"We would like the Gauteng sidebar placement from next month.\"}"
+  "{\"companyName\":\"Smoke Fibre\",\"contactName\":\"Test Buyer\",\"contactEmail\":\"ads+${STAMP}@mastande.test\",\"industry\":\"Fibre\",\"province\":\"Gauteng\",\"message\":\"We would like the Gauteng sidebar placement from next month.\"}"
 check "anyone can send an advertising enquiry" 201 "$STATUS" "$BODY"
 
 req POST /api/ads/enquiries \
@@ -1450,7 +1450,7 @@ req POST /api/ads/enquiries \
 check "rejects a malformed enquiry" 400 "$STATUS" "$BODY"
 
 req POST /api/ads/enquiries \
-  "{\"companyName\":\"Valid Co\",\"contactName\":\"Valid Name\",\"contactEmail\":\"ok+${STAMP}@rentboard.test\",\"message\":\"short\"}"
+  "{\"companyName\":\"Valid Co\",\"contactName\":\"Valid Name\",\"contactEmail\":\"ok+${STAMP}@mastande.test\",\"message\":\"short\"}"
 check "rejects a message that is too short" 400 "$STATUS" "$BODY"
 
 req GET /api/ads/enquiries "" "$LTOKEN"
@@ -1573,7 +1573,7 @@ if [[ -n "$REF_CODE" ]]; then
   fi
 
   # Referred signup, then qualification via a real action.
-  REFEREE="referred+${STAMP}@rentboard.test"
+  REFEREE="referred+${STAMP}@mastande.test"
   req POST /api/auth/register \
     "{\"email\":\"$REFEREE\",\"password\":\"$PASSWORD\",\"fullName\":\"Referred Tenant\",\"role\":\"TENANT\",\"referralCode\":\"$REF_CODE\"}"
   check "signup with a referral code" 201 "$STATUS" "$BODY"
@@ -1879,7 +1879,7 @@ fi
 # assertion that matters is that they never outrank a paid campaign.
 head_ "35. House ads"
 req GET "/api/ads?placement=board_sidebar&limit=3"
-HOUSE_SERVED=$(echo "$BODY" | jq -r '[.[]? | select(.advertiser == "RentBoard")] | length')
+HOUSE_SERVED=$(echo "$BODY" | jq -r '[.[]? | select(.advertiser == "Mastande")] | length')
 TOTAL_SERVED=$(echo "$BODY" | jq -r 'length')
 
 if [[ "$TOTAL_SERVED" -gt 0 ]]; then
@@ -1887,8 +1887,8 @@ if [[ "$TOTAL_SERVED" -gt 0 ]]; then
 
   # With paid demo campaigns seeded, a house ad must not come first.
   FIRST=$(echo "$BODY" | jq -r '.[0].advertiser')
-  PAID_AVAILABLE=$(echo "$BODY" | jq -r '[.[]? | select(.advertiser != "RentBoard")] | length')
-  if [[ "$PAID_AVAILABLE" -gt 0 && "$FIRST" == "RentBoard" ]]; then
+  PAID_AVAILABLE=$(echo "$BODY" | jq -r '[.[]? | select(.advertiser != "Mastande")] | length')
+  if [[ "$PAID_AVAILABLE" -gt 0 && "$FIRST" == "Mastande" ]]; then
     red "  FAIL  a house ad outranked a paid campaign"; FAIL=$((FAIL+1))
   else
     green "  PASS  house ads do not displace paid campaigns"; PASS=$((PASS+1))
@@ -1919,7 +1919,7 @@ req POST /api/auth/magic-link "{\"email\":\"$LANDLORD_EMAIL\"}"
 check "magic link for a real account" 200 "$STATUS" "$BODY"
 REAL_MAGIC=$(echo "$BODY" | jq -r '.message')
 
-req POST /api/auth/magic-link '{"email":"nobody-here@rentboard.test"}'
+req POST /api/auth/magic-link '{"email":"nobody-here@mastande.test"}'
 check "magic link for an unknown account" 200 "$STATUS" "$BODY"
 FAKE_MAGIC=$(echo "$BODY" | jq -r '.message')
 

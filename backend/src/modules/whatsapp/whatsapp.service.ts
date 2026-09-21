@@ -6,7 +6,7 @@ import { sanitizeText } from '../../common/utils/sanitize.util';
 
 /**
  * WhatsApp Business API bridge (Meta Cloud API).
- * Landlords opt in with a phone number; RentBoard notifies them there when a
+ * Landlords opt in with a phone number; Mastande notifies them there when a
  * tenant applies or messages, and their replies flow back into the
  * application's in-app conversation thread via the webhook.
  *
@@ -74,7 +74,7 @@ export class WhatsappService {
       to: phone.replace('+', ''),
       type: 'text',
       text: {
-        body: `${code} is your RentBoard sign-in code. It expires in ${ttlMinutes} minutes.\n\n` +
+        body: `${code} is your Mastande sign-in code. It expires in ${ttlMinutes} minutes.\n\n` +
               `If you did not ask to sign in, ignore this message and do not share the code.`,
       },
     };

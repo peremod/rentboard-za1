@@ -15,7 +15,7 @@ import { RouterLink } from '@angular/router';
   template: `
     <section class="section" style="background:var(--ink);padding-bottom:3rem">
       <div class="section-inner">
-        <div class="section-eyebrow" style="color:var(--terra2)">How RentBoard works</div>
+        <div class="section-eyebrow" style="color:var(--terra2)">How Mastande works</div>
         <h1 class="section-title" style="color:var(--cream)">
           Simple for landlords.<br/>Simple for tenants.
         </h1>
@@ -57,7 +57,7 @@ import { RouterLink } from '@angular/router';
             <div class="hiw-num">04</div><div class="hiw-icon">💬</div>
             <div class="hiw-title">Talk directly</div>
             <div class="hiw-desc">
-              Message the landlord on RentBoard, arrange a viewing, and agree a
+              Message the landlord on Mastande, arrange a viewing, and agree a
               move-in date between you.
             </div>
           </div>
@@ -66,7 +66,7 @@ import { RouterLink } from '@angular/router';
         <aside class="hiw-safety">
           <h2>Before you pay anything</h2>
           <p>
-            RentBoard does not verify that a room exists or that a landlord may let it.
+            Mastande does not verify that a room exists or that a landlord may let it.
             Protect yourself:
           </p>
           <ul>

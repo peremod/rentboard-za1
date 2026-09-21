@@ -1,6 +1,6 @@
 # Technical SEO
 
-How RentBoard's metadata layer works, what each environment does differently, and how to verify a change before it ships.
+How Mastande's metadata layer works, what each environment does differently, and how to verify a change before it ships.
 
 Introduced in `v1.49.0`. Before it, all 41 routes served the homepage `<title>` and description, with no canonical, Open Graph, or structured data anywhere in the codebase.
 
@@ -22,8 +22,8 @@ Three layers, applied in order. Each overwrites the previous one.
 {
   path: 'pricing',
   loadComponent: () => import('./pricing/pricing').then((m) => m.Pricing),
-  title: 'Pricing — Free for Landlords | RentBoard',
-  data: { seo: { description: 'RentBoard pricing in Rand. Tenants apply free, always…' } },
+  title: 'Pricing — Free for Landlords | Mastande',
+  data: { seo: { description: 'Mastande pricing in Rand. Tenants apply free, always…' } },
 },
 ```
 
@@ -58,7 +58,7 @@ Validate at [search.google.com/test/rich-results](https://search.google.com/test
 
 | | Development | Staging | Production |
 |---|---|---|---|
-| `environment.siteUrl` | `http://localhost:4200` | `https://staging.rentboard.co.za` | `https://rentboard.co.za` |
+| `environment.siteUrl` | `http://localhost:4200` | `https://staging.mastande.co.za` | `https://mastande.co.za` |
 | `environment.indexable` | `false` | `false` | `true` |
 | Meta robots | `noindex, nofollow` | `noindex, nofollow` | `index, follow, max-image-preview:large` |
 | Canonical emitted | no | no | yes |
@@ -177,14 +177,14 @@ unprefixed URL, which a crawler never sees.
 
 ```bash
 # Build and serve production locally
-cd frontend && npm run build:prod && node dist/rentboard-frontend/server/server.mjs
+cd frontend && npm run build:prod && node dist/mastande-frontend/server/server.mjs
 
 # Metadata is in the served HTML, not painted in after hydration
 curl -s http://localhost:4000/pricing | grep -E 'canonical|og:title|name="description"|name="robots"'
 curl -s http://localhost:4000/ | grep -c 'application/ld+json'
 
 # Sitemap entries must all resolve
-curl -s https://rentboard.co.za/sitemap.xml \
+curl -s https://mastande.co.za/sitemap.xml \
   | grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g' \
   | xargs -P4 -I{} sh -c 'printf "%s %s\n" "$(curl -s -o /dev/null -w %{http_code} {})" "{}"' \
   | grep -v '^200' || echo "every sitemap URL returns 200"
@@ -193,8 +193,8 @@ curl -s https://rentboard.co.za/sitemap.xml \
 npm run audit          # routes, guards, links, i18n parity, env parity
 
 # Lighthouse
-npx lighthouse https://rentboard.co.za --preset=desktop --view
-npx lighthouse https://rentboard.co.za --form-factor=mobile --throttling-method=simulate --view
+npx lighthouse https://mastande.co.za --preset=desktop --view
+npx lighthouse https://mastande.co.za --form-factor=mobile --throttling-method=simulate --view
 ```
 
 Targets: Performance ≥ 90 mobile, Accessibility 100, Best Practices 100, SEO 100. Run monthly — see `OPERATIONS.md` §5.

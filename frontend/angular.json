@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "rentboard-frontend": {
+    "mastande-frontend": {
       "projectType": "application",
       "root": "",
       "sourceRoot": "src",
@@ -12,7 +12,7 @@
         "build": {
           "builder": "@angular/build:application",
           "options": {
-            "outputPath": "dist/rentboard-frontend",
+            "outputPath": "dist/mastande-frontend",
             "index": "src/index.html",
             "browser": "src/main.ts",
             "server": "src/main.server.ts",
@@ -77,13 +77,13 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "rentboard-frontend:build:production"
+              "buildTarget": "mastande-frontend:build:production"
             },
             "staging": {
-              "buildTarget": "rentboard-frontend:build:staging"
+              "buildTarget": "mastande-frontend:build:staging"
             },
             "development": {
-              "buildTarget": "rentboard-frontend:build:development"
+              "buildTarget": "mastande-frontend:build:development"
             }
           },
           "defaultConfiguration": "development"
@@ -92,7 +92,7 @@
           "builder": "@angular/build:unit-test",
           "options": {
             "tsConfig": "tsconfig.spec.json",
-            "buildTarget": "rentboard-frontend:build:development",
+            "buildTarget": "mastande-frontend:build:development",
             "runner": "vitest"
           }
         }

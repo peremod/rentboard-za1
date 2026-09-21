@@ -63,7 +63,7 @@ import { RouterLink } from '@angular/router';
       <div class="footer-bottom">
         <div>
           &copy; {{ year }} [YOUR COMPANY NAME] (Pty) Ltd · CIPC Reg No. [NUMBER]<br/>
-          RentBoard is an intermediary platform — not an estate agent (PPRA).
+          Mastande is an intermediary platform — not an estate agent (PPRA).
           Not registered under the Property Practitioners Act 22 of 2019.
         </div>
         <div style="text-align:right;line-height:1.8">
