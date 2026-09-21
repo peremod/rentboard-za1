@@ -126,7 +126,7 @@ async function seedHouseAds() {
       id: HOUSE_ADVERTISER_ID,
       companyName: 'Mastande',
       contactName: 'Mastande',
-      contactEmail: 'hello@mastande.co.za',
+      contactEmail: 'hello@umastande.co.za',
       notes: 'House ads. Not a paying advertiser — do not invoice.',
     },
   });

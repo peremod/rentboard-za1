@@ -23,7 +23,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
           <p class="legal-intro">
             Mastande is committed to protecting your personal information in accordance with the
             <strong>Protection of Personal Information Act 4 of 2013 (POPIA)</strong>. This policy explains how we
-            collect, process, store and share your personal information when you use mastande.co.za.
+            collect, process, store and share your personal information when you use umastande.co.za.
           </p>
         </header>
 
@@ -31,7 +31,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
           <h2>1. Who We Are (Responsible Party)</h2>
           <p>Mastande is operated by <strong>Umastande (Pty) Ltd</strong>, CIPC Reg. No. <strong>2026/757331/07</strong>.
           For the purposes of POPIA, we are the <strong>Responsible Party</strong>.</p>
-          <p><strong>Information Officer:</strong> [NAME] · privacy&#64;mastande.co.za</p>
+          <p><strong>Information Officer:</strong> [NAME] · privacy&#64;umastande.co.za</p>
         </section>
 
         <section>
@@ -70,7 +70,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
             <li><strong>Withdraw consent:</strong> at any time, without affecting prior processing</li>
             <li><strong>Delete:</strong> request deletion of your account and associated data</li>
           </ul>
-          <p>Email <strong>privacy&#64;mastande.co.za</strong> — we respond within <strong>30 days</strong> (POPIA requirement).</p>
+          <p>Email <strong>privacy&#64;umastande.co.za</strong> — we respond within <strong>30 days</strong> (POPIA requirement).</p>
         </section>
 
         <section>

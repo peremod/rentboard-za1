@@ -1,10 +1,10 @@
-/** Production — `ng build --configuration production`, deployed to mastande.co.za */
+/** Production — `ng build --configuration production`, deployed to umastande.co.za */
 export const environment = {
   production: true,
   envName: 'production',
-  apiUrl: 'https://api.mastande.co.za/api',
+  apiUrl: 'https://api.umastande.co.za/api',
   /** Origin used to build canonical and Open Graph URLs. No trailing slash. */
-  siteUrl: 'https://mastande.co.za',
+  siteUrl: 'https://umastande.co.za',
   /** The only deployment search engines are allowed to index. */
   indexable: true,
   // Must match IMAGEKIT_URL_ENDPOINT in the backend .env — uploads store paths

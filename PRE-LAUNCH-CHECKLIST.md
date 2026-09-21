@@ -49,7 +49,7 @@ software.** The distinction matters: it is the reason the above went unnoticed.
 
 | Category | What's left | Blocking launch? |
 |---|---|---|
-| **Rebrand (v1.55.0)** | `mastande.co.za` must be registered and pointed at Vercel; the domain verified in Resend; the Render service and Vercel project renamed. The code rename is done — these three are provider-side and nothing in the repo can detect them | Yes — staging's API host and the production domain do not resolve until they are done |
+| **Rebrand (v1.55.0, domain changed v1.60.0)** | `umastande.co.za` must be registered and pointed at Vercel; the domain verified in Resend; the Render service and Vercel project renamed. The code rename is done — these three are provider-side and nothing in the repo can detect them | Yes — staging's API host and the production domain do not resolve until they are done |
 | **Legal filing** | PAIA manual must be filed with the SAHRC (Form 2, no fee) | Yes — legal requirement |
 | **Legal content** | `[PLACEHOLDER]` company name, CIPC number, address, Information Officer name/reg. number in the legal pages. Still rendering live in the footer as `© 2026 [YOUR COMPANY NAME] (Pty) Ltd · CIPC Reg No. [NUMBER]`. The rebrand does not change these — the registered entity is whatever CIPC says, not the trading name | Yes — have an attorney review while you're at it |
 | **GitHub settings** | Branch protection rules to actually enforce the squash-merge policy `CONTRIBUTING.md` describes | Recommended, not launch-blocking |

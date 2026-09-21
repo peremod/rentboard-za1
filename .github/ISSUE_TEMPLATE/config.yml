@@ -2,11 +2,11 @@
 blank_issues_enabled: false
 contact_links:
   - name: Report an unsafe or fraudulent listing
-    url: mailto:safety@mastande.co.za
+    url: mailto:safety@umastande.co.za
     about: Do not open a public issue. Fraud reports are acknowledged within 4 business hours and must not be visible to the person being reported.
   - name: Business planning, marketing, KPIs, ad campaigns
     url: https://app.notion.com/p/3d5ecc2c392e81baa57cc88178604c2a
     about: Anything with an owner, a status and a due date lives in Notion, not here. See "Where Things Live".
   - name: Security vulnerability
-    url: mailto:security@mastande.co.za
+    url: mailto:security@umastande.co.za
     about: Please disclose privately. A public issue is a public exploit.

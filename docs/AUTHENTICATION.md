@@ -64,7 +64,7 @@ the visitor nothing.
 ```
 http://localhost:3000/api/auth/google/callback
 https://<staging-api-host>/api/auth/google/callback
-https://api.mastande.co.za/api/auth/google/callback
+https://api.umastande.co.za/api/auth/google/callback
 ```
 
 The path is not configurable by accident: it is the `@Get('google/callback')`

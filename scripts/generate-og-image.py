@@ -109,7 +109,7 @@ def main() -> None:
     )
 
     # ── Domain, bottom right ──
-    domain = "mastande.co.za"
+    domain = "umastande.co.za"
     f = font(MEDIUM, 28)
     d.text(
         (W - MARGIN - d.textlength(domain, font=f), H - MARGIN - 44),

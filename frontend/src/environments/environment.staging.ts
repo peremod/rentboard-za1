@@ -1,5 +1,5 @@
 /**
- * Staging — `ng build --configuration staging`, deployed to staging.mastande.co.za
+ * Staging — `ng build --configuration staging`, deployed to staging.umastande.co.za
  *
  * Both hostnames below moved in the Mastande rebrand and BOTH need the
  * provider changed before staging works again:

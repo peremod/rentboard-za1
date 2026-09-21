@@ -32,7 +32,7 @@ PAYFAST_MERCHANT_ID=
 PAYFAST_MERCHANT_KEY=
 PAYFAST_PASSPHRASE=          # optional on PayFast, but see the warning below
 PAYFAST_SANDBOX=true
-API_URL=https://api.mastande.co.za
+API_URL=https://api.umastande.co.za
 ```
 
 **The passphrase is the most common cause of a working integration suddenly

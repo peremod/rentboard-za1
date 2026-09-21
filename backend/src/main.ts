@@ -44,7 +44,7 @@ async function bootstrap() {
 
   app.enableCors({
     // Derived from APP_ENV and FRONTEND_URL. The previous hard-coded pair keyed
-    // off NODE_ENV, so Render staging allowed only mastande.co.za and rejected
+    // off NODE_ENV, so Render staging allowed only umastande.co.za and rejected
     // every request from the staging frontend.
     origin: corsOrigins(),
     credentials: true,
