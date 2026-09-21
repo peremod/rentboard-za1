@@ -92,6 +92,68 @@ waiting on a decision for a room whose rent went up R800.
 
 ---
 
+## 2b. Verification state machine (v1.56.0)
+
+```
+                    (landlord identity only)
+   submitted ──► pending_payment ──► pending ──► approved
+       │              (R149)            │   └──► rejected
+       └──────────────────────────────► ┘
+                (everything else, free)
+```
+
+| Transition | Trigger | Status |
+|---|---|---|
+| → pending_payment | landlord submits identity | ✅ verified — the only paid check |
+| → pending | anyone submits anything else | ✅ verified — including every tenant proof |
+| pending → approved | admin | ✅ verified — document deleted, trail written |
+| pending → rejected | admin, reason required | ✅ verified — document deleted either way |
+
+Every transition appends a `VerificationEvent` in the same transaction, so a
+step cannot exist for a change that rolled back, nor a change land untraced.
+
+**The Passport rule:** identity AND one income proof. Recomputed from the
+approved requests on every decision rather than incremented, so a rejection or
+an expiry cannot leave a Passport standing on a check that no longer holds.
+
+### Reference sub-machine
+
+```
+   awaiting_contact ──► contacted ──┬──► confirmed
+     (tenant named      (WhatsApp   ├──► disputed
+      a referee)         sent)      └──► unreachable (14-day expiry)
+```
+
+`unreachable` is not `disputed` and must never be displayed as one. A busy
+previous landlord who did not reply has told us nothing about the tenant, and
+both the tenant's page and the admin queue say so in words.
+
+## 2c. Post-tenancy flag state machine (v1.56.0)
+
+```
+   open ──┬──► upheld      (stays counted against the account)
+          ├──► dismissed   (counter decremented immediately)
+          └──► withdrawn   (by the person who raised it, while open)
+```
+
+Only from a tenancy in `ended`. One flag per party per tenancy. `againstId` is
+derived from the tenancy, never supplied, so nobody can flag a stranger.
+
+### Gaps
+
+**F1 — no admin review screen.** The endpoints and the queue exist and are
+admin-guarded; there is no dedicated page yet. Flags are reviewable through
+the API but not through the UI, so in practice they will sit `open` — and an
+open flag costs someone visibility. This is the one piece of the flag feature
+that is not finished, and it should be built before flags are offered to
+users.
+
+**F2 — neither party is notified.** Raising a flag emails nobody, and a
+decision reaches nobody. `reviewNote` exists and is stored to be shown to both
+parties, but nothing shows it yet.
+
+---
+
 ## 3. Cross-actor flows
 
 | Flow | Status |
@@ -106,6 +168,9 @@ waiting on a decision for a room whose rent went up R800.
 | New matching room → tenant alerted | ✅ instant on publish and relist; ✅ daily digest at 07:00 SAST (v1.8.1). A digest with no matches is not sent — a daily "nothing today" is how people learn to ignore, then unsubscribe |
 | Saved room is let → tenant told | ❌ **gap X1** — still open. The dashboard drops rooms that 404, but nobody is told the room they saved has gone |
 | Landlord verified → badge appears | ✅ end to end (v1.8.1): landlord submits at /landlord/verification, admin reviews at /admin/verifications, approval sets idVerified and the badge appears |
+| Tenant verified → Passport badge appears to landlords | ✅ end to end (v1.56.0): tenant submits at /tenant/passport, admin reviews in the same queue, identity + one income proof sets `hasPassport`, and the badge shows on the applicant card with its basis one tap away |
+| Previous landlord asked for a reference → answers | ✅ end to end (v1.56.0): admin sends from the queue, referee answers at /reference/:token with no account, outcome lands on the audit trail. An unanswered request expires to `unreachable`, which is explicitly not a negative signal |
+| Post-tenancy problem → reduced visibility | ✅ (v1.56.0): either party flags after the tenancy ends, `openFlagCount` increments, the board ranks that landlord's rooms last. Dismissal restores it immediately. ⚠️ No dedicated admin review screen yet — the queue is at `GET /tenancies/flags/open` |
 
 **X1 — saved rooms go stale silently.** The dashboard drops rooms that 404,
 but a tenant is never told the room they saved has gone. This is the same

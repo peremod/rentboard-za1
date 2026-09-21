@@ -462,3 +462,90 @@ not exist yet. In order:
 
 Nothing in the repository can detect any of the three. `PRE-LAUNCH-CHECKLIST.md`
 carries them as open rows.
+
+## 22. Verification for an informal economy (v1.56.0)
+
+**Schema changed — run a migration:**
+```bash
+cd backend
+npx prisma migrate deploy
+npx prisma generate
+```
+Purely additive: four enum values, one defaulted column, three tables.
+
+### Why not a credit check
+
+The obvious design is a KYC provider and a bureau lookup. It is the wrong
+answer here. A bureau record needs a credit history, and most people looking
+for a room in South Africa do not have one — so screening on it would exclude
+exactly the people this product exists for, while telling a landlord nothing
+about whether rent actually arrives.
+
+What they do have is a SASSA confirmation letter, a WhatsApp from an employer,
+three months of banking-app screenshots, or a previous landlord who will
+vouch for them. Those are the checks.
+
+| Check | Who | What it proves |
+|---|---|---|
+| Identity | Both | Who they are. The only paid one, R149, and only for a landlord |
+| Proof of address, proof of ownership | Landlord | They may let the room |
+| SASSA grant confirmation | Tenant | Income — monthly, on a known date, for a known amount |
+| Employer confirmation | Tenant | Income, where there is no payslip |
+| Three months of bank activity | Tenant | Income, from the app they already use |
+| Previous landlord reference | Tenant | That rent arrived. The strongest signal here |
+
+### The Renter's Passport is free
+
+Identity plus any one income proof. Free, deliberately: "free to apply,
+always" is the whole position against the incumbents, and charging the side of
+this market with the least money to prove they can afford a room would be the
+fastest way to lose it. Revenue stays where
+[`docs/DATA-AND-MONETISATION.md`](./docs/DATA-AND-MONETISATION.md) §4 puts it —
+the landlord's R149 check, boosts, and board advertising. The R89/month
+subscription page this replaces has been deleted.
+
+### A badge that can show its working
+
+`idVerified = true` is not evidence of anything. Every submission, payment
+wait, decision and deletion now writes a `VerificationEvent` in the same
+transaction as the change. A tenant sees their own trail; a landlord looking
+at an applicant sees `GET /verification/badge/:userId`, which returns passed
+checks and their dates and nothing else — never a document, never a rejection,
+never an admin's note. A landlord reading "income proof: rejected" would be
+screening on a private failure, which is neither the purpose nor defensible
+under PEPUDA.
+
+The document is still deleted the moment a decision is made. The trail
+outlives it on purpose: the outcome is what the badge rests on.
+
+### References, for people with no account
+
+A previous landlord asked to register in order to answer one question is a
+reference that never arrives. They get one WhatsApp with a one-time link and
+answer two questions at `/reference/:token` — 32 random bytes, stored only as
+a sha256 hash, single use, fourteen days. Not sent automatically on
+submission: it messages a real person who did not ask for it, so an admin
+looks first.
+
+An unanswered request expires to `unreachable`, **not** `disputed`. A busy
+previous landlord has told us nothing about the tenant, and both the tenant's
+page and the admin queue say so in those words.
+
+### Post-tenancy flags reduce visibility, they do not remove
+
+Either party can report a problem once a tenancy has **ended**. An open flag
+increments `User.openFlagCount`, which the board's ordering reads: that
+landlord's rooms rank last — ahead of `isFeatured`, so a boost cannot buy the
+top spot back while a deposit complaint is open. Listings stay up,
+applications stay open, live tenancies are untouched. A flag is an untested
+allegation until an admin reads it, and one angry party must not be able to
+take another's livelihood off the board by filling in a form.
+
+Not public, for the same reason a landlord's review of a tenant is a private
+reference: publishing an unreviewed allegation against a named individual is
+this platform's largest defamation exposure in South Africa.
+
+**Still outstanding:** there is no admin review screen for flags yet
+(`GET /tenancies/flags/open` is the queue), and neither party is notified when
+one is raised or decided. Both are recorded as gaps F1 and F2 in
+[`docs/FLOW-AUDIT.md`](./docs/FLOW-AUDIT.md).

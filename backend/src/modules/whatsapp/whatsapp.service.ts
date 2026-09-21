@@ -95,6 +95,48 @@ export class WhatsappService {
     }
   }
 
+  /**
+   * Sends a plain text message to any number, from the platform's own line.
+   *
+   * Used for the reference request in verification: the person receiving it
+   * has no account and never will, so there is no config to look up and
+   * notifyLandlord cannot be reused.
+   *
+   * Returns false rather than throwing when WhatsApp is unconfigured or the
+   * send fails. A reference that cannot be delivered is not an error the
+   * tenant should see — it falls back to an admin phoning the referee, which
+   * is the documented path anyway — but the caller needs to know it did not
+   * go, so it can say "we could not reach them" rather than "sent".
+   */
+  async sendToNumber(phone: string, message: string): Promise<boolean> {
+    if (!this.phoneNumberId || !this.accessToken) {
+      this.logger.warn(`[WhatsApp not configured] message for ${phone}: ${message.slice(0, 120)}`);
+      return false;
+    }
+
+    const url = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: phone.replace('+', ''),
+        type: 'text',
+        text: { body: message },
+      }),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text();
+      this.logger.error(`WhatsApp send failed (${res.status}): ${detail.slice(0, 300)}`);
+      return false;
+    }
+    return true;
+  }
+
   async notifyLandlord(landlordProfileId: string, message: string): Promise<string | null> {
     const config = await this.getConfig(landlordProfileId);
     if (!config?.waEnabled) return null;

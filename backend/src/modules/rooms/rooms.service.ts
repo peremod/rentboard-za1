@@ -70,6 +70,18 @@ export class RoomsService {
     };
 
     const orderBy: any[] = [
+      // Reduced visibility for an account with an unresolved post-tenancy
+      // report against it (TenancyFlagsService). Ordering, not filtering: a
+      // flag is an untested allegation until an admin reads it, so the rooms
+      // stay on the board, stay applicable for, and stay findable by a direct
+      // link — they simply stop being the first thing a tenant sees. A
+      // dismissed flag decrements the count and the ranking returns on the
+      // next query.
+      //
+      // Ahead of isFeatured on purpose: a boost is bought, and letting money
+      // buy back the top spot while a deposit complaint is open is exactly
+      // the trade this platform should not make.
+      { landlord: { openFlagCount: 'asc' } },
       { isFeatured: 'desc' },
       ...(sortBy === 'price_asc' ? [{ rentCents: 'asc' }] : []),
       ...(sortBy === 'price_desc' ? [{ rentCents: 'desc' }] : []),

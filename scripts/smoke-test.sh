@@ -567,13 +567,28 @@ if [[ -n "$SEARCH_ID" ]]; then
   check "delete a saved search" 200 "$STATUS" "$BODY"
 fi
 
-# -- 13. Landlord verification ---------------------------------------------
-head_ "13. Landlord verification"
+# -- 13. Verification, both sides ------------------------------------------
+# This section used to assert "tenant CANNOT access verification (403)",
+# which was true and is now wrong: LandlordGuard sat on these routes, so a
+# tenant could not be verified at all and the Renter's Passport had no way to
+# exist. The guard was removed in v1.56.0.
+#
+# The isolation that matters was never the route — it is that a tenant cannot
+# submit a landlord's document and cannot read the admin queue. Both are
+# asserted below, and both are stricter than the guard was: the guard never
+# checked that a landlord was submitting a landlord's document.
+head_ "13. Verification, both sides"
 req GET /api/verification/mine "" "$LTOKEN"
 check "landlord verification list" 200 "$STATUS" "$BODY"
 
 req GET /api/verification/mine "" "$TTOKEN"
-check "tenant CANNOT access verification" 403 "$STATUS" "$BODY"
+check "tenant CAN list their own verifications" 200 "$STATUS" "$BODY"
+
+req GET /api/verification/pending "" "$TTOKEN"
+check "tenant CANNOT read the admin review queue" 403 "$STATUS" "$BODY"
+
+req POST /api/verification '{"type":"sassa_grant","documentPath":"private/verification/wrong-side.jpg"}' "$LTOKEN"
+check "landlord CANNOT submit a tenant income proof" 400 "$STATUS" "$BODY"
 
 req POST /api/verification '{"type":"identity","documentPath":"private/verification/smoke-test.jpg"}' "$LTOKEN"
 check "submit an identity document" 201 "$STATUS" "$BODY"
@@ -2244,6 +2259,122 @@ fi
 req GET "/api/rooms?availableNow=true&province=Gauteng"
 check "combines with a province filter" 200 "$STATUS" "$BODY"
 
+
+# -- 42. Renter's Passport — informal-economy verification ------------------
+# The checks that replace a credit check. The assertions that matter are the
+# negative ones: that a tenant cannot submit a landlord's document, that
+# nothing a tenant submits carries a fee, and that a Passport needs BOTH
+# halves — an income proof alone must not earn one.
+head_ "42. Renter's Passport (informal verification)"
+
+req GET /api/verification/types "" "$TTOKEN"
+check "verification types are offered per role" 200 "$STATUS" "$BODY"
+if echo "$BODY" | jq -e 'map(.type)|sort == ["bank_statement","employer_confirmation","identity","landlord_reference","sassa_grant"]' >/dev/null 2>&1; then
+  green "  PASS  tenant is offered identity plus the four income proofs"; PASS=$((PASS+1))
+else
+  red "  FAIL  wrong tenant type list: $(echo "$BODY" | jq -c 'map(.type)')"; FAIL=$((FAIL+1))
+fi
+if echo "$BODY" | jq -e 'all(.requiresPayment == false)' >/dev/null 2>&1; then
+  green "  PASS  nothing a tenant submits carries a fee"; PASS=$((PASS+1))
+else
+  red "  FAIL  a tenant verification type wants payment — free to apply is broken"; FAIL=$((FAIL+1))
+fi
+
+req POST /api/verification '{"type":"proof_of_ownership","documentPath":"private/verification/x.jpg"}' "$TTOKEN"
+check "a tenant cannot submit a landlord's document" 400 "$STATUS" "$BODY"
+req POST /api/verification '{"type":"sassa_grant"}' "$TTOKEN"
+check "a document type without a document is refused" 400 "$STATUS" "$BODY"
+req POST /api/verification '{"type":"landlord_reference"}' "$TTOKEN"
+check "a reference without a referee is refused" 400 "$STATUS" "$BODY"
+
+req POST /api/verification '{"type":"sassa_grant","documentPath":"private/verification/smoke-sassa.jpg"}' "$TTOKEN"
+check "SASSA confirmation submitted" 201 "$STATUS" "$BODY"
+SASSA_ID=$(echo "$BODY" | jq -r '.id // empty')
+if [[ "$(echo "$BODY" | jq -r '.status')" == "pending" ]]; then
+  green "  PASS  goes straight to the review queue, no payment step"; PASS=$((PASS+1))
+else
+  red "  FAIL  tenant proof is waiting for payment"; FAIL=$((FAIL+1))
+fi
+
+req POST /api/verification '{"type":"identity","documentPath":"private/verification/smoke-id.jpg"}' "$TTOKEN"
+check "tenant identity submitted" 201 "$STATUS" "$BODY"
+ID_ID=$(echo "$BODY" | jq -r '.id // empty')
+
+# The audit trail — what makes a badge more than a boolean.
+req GET "/api/verification/mine/$SASSA_ID/history" "" "$TTOKEN"
+if echo "$BODY" | jq -e '.[0].step == "submitted" and .[0].actor == "applicant"' >/dev/null 2>&1; then
+  green "  PASS  audit trail opens with the applicant's own submission"; PASS=$((PASS+1))
+else
+  red "  FAIL  no submitted event on the trail: $BODY"; FAIL=$((FAIL+1))
+fi
+
+if [[ -n "$ADMIN_TOKEN" ]]; then
+  req PATCH "/api/verification/$SASSA_ID/review" '{"status":"approved"}' "$ADMIN_TOKEN"
+  check "admin approves the income proof" 200 "$STATUS" "$BODY"
+  if echo "$BODY" | jq -e '.documentPath == null and .documentDeletedAt != null' >/dev/null 2>&1; then
+    green "  PASS  document deleted on decision, deletion timestamped (POPIA s.26)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  document survived the decision"; FAIL=$((FAIL+1))
+  fi
+
+  req GET "/api/verification/badge/$TENANT_ID" "" "$TTOKEN"
+  if echo "$BODY" | jq -e '.hasPassport == false' >/dev/null 2>&1; then
+    green "  PASS  income proof alone does not earn a Passport"; PASS=$((PASS+1))
+  else
+    red "  FAIL  Passport granted on income alone"; FAIL=$((FAIL+1))
+  fi
+
+  req PATCH "/api/verification/$ID_ID/review" '{"status":"approved"}' "$ADMIN_TOKEN"
+  check "admin approves the identity check" 200 "$STATUS" "$BODY"
+
+  req GET "/api/verification/badge/$TENANT_ID" "" "$TTOKEN"
+  if echo "$BODY" | jq -e '.hasPassport == true and (.checks|length) == 2' >/dev/null 2>&1; then
+    green "  PASS  identity + income earns the Passport, and the badge lists its basis"; PASS=$((PASS+1))
+  else
+    red "  FAIL  Passport not granted: $BODY"; FAIL=$((FAIL+1))
+  fi
+
+  req GET "/api/verification/mine/$SASSA_ID/history" "" "$TTOKEN"
+  if echo "$BODY" | jq -e 'map(.step)|(index("approved") != null and index("document_deleted") != null)' >/dev/null 2>&1; then
+    green "  PASS  the decision and the deletion are both on the trail"; PASS=$((PASS+1))
+  else
+    red "  FAIL  trail is missing the decision or the deletion"; FAIL=$((FAIL+1))
+  fi
+else
+  grey "  SKIP  Passport review steps — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
+fi
+
+# -- 43. Post-tenancy dispute flags ----------------------------------------
+# Reduced visibility, never removal. The assertion that matters is the last
+# one: a flagged landlord's room is still on the board.
+head_ "43. Post-tenancy flags"
+
+req POST "/api/tenancies/$(uuidgen 2>/dev/null || echo 00000000-0000-0000-0000-000000000000)/flag" \
+  '{"reason":"deposit_withheld","detail":"A complaint about a tenancy that does not exist at all."}' "$TTOKEN"
+if [[ "$STATUS" == "404" || "$STATUS" == "400" ]]; then
+  green "  PASS  cannot flag a tenancy that does not exist ($STATUS)"; PASS=$((PASS+1))
+else
+  red "  FAIL  flagging an unknown tenancy returned $STATUS"; FAIL=$((FAIL+1))
+fi
+
+req GET /api/tenancies/flags/mine "" "$TTOKEN"
+check "a tenant can list the reports they have raised" 200 "$STATUS" "$BODY"
+
+req GET /api/tenancies/flags/open "" "$TTOKEN"
+check "a non-admin cannot read the flag queue" 403 "$STATUS" "$BODY"
+
+if [[ -n "$ADMIN_TOKEN" ]]; then
+  req GET /api/tenancies/flags/open "" "$ADMIN_TOKEN"
+  check "admin can read the flag queue" 200 "$STATUS" "$BODY"
+  req PATCH /api/tenancies/flags/recount "" "$ADMIN_TOKEN"
+  if echo "$BODY" | jq -e '.corrected == 0' >/dev/null 2>&1; then
+    green "  PASS  openFlagCount has not drifted from the flags themselves"; PASS=$((PASS+1))
+  else
+    red "  FAIL  visibility counter drifted: $BODY"; FAIL=$((FAIL+1))
+  fi
+else
+  grey "  SKIP  flag queue checks — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
+fi
 
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'

@@ -75,6 +75,24 @@ const CONTENT_ROUTES: Routes = [
     loadChildren: () => import('./features/legal/legal.routes').then((m) => m.LEGAL_ROUTES),
   },
   {
+    /**
+     * A previous landlord answering a reference request.
+     *
+     * Top level and unguarded on purpose: the person following this link has
+     * no account and will not make one. The one-time token in the URL is the
+     * whole authentication.
+     *
+     * noIndex because the URL contains that token — a crawler following it
+     * from a forwarded WhatsApp would spend someone's reference, and an
+     * indexed page would put it in a search result.
+     */
+    path: 'reference/:token',
+    data: { seo: { noIndex: true } },
+    loadComponent: () =>
+      import('./features/reference-respond/reference-respond').then((m) => m.ReferenceRespond),
+    title: 'Reference request — Mastande',
+  },
+  {
     path: 'tenant',
     data: { seo: { noIndex: true } },
     canActivate: [authGuard, tenantGuard],
@@ -172,6 +190,7 @@ export const serverRoutes: ServerRoute[] = [
 
   // ── Private areas, both trees ──
   { path: 'auth/**', renderMode: RenderMode.Client },
+  { path: 'reference/**', renderMode: RenderMode.Client },
   { path: 'tenant/**', renderMode: RenderMode.Client },
   { path: 'landlord/**', renderMode: RenderMode.Client },
   { path: 'admin/**', renderMode: RenderMode.Client },

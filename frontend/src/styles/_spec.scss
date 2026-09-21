@@ -546,6 +546,88 @@ img{display:block;max-width:100%}
    (see .footer-logo span). */
 .footer-bottom a{color:var(--terra2)}
 
+/* ═══ RENTER'S PASSPORT ═══ */
+/* Global rather than component styles, deliberately: Angular's emulated
+   encapsulation makes component styles more specific than the global sheet,
+   which is exactly how the responsive layer was silently overridden once
+   before (see PRE-LAUNCH-CHECKLIST #9). Breakpoints live in _responsive.scss. */
+.passport-steps{display:flex;gap:.75rem;margin:1.25rem 0}
+.passport-step{
+  flex:1;display:flex;gap:.65rem;align-items:flex-start;
+  padding:.85rem;border:1.5px solid var(--border);border-radius:var(--r4);background:var(--white);
+}
+.passport-step.done{border-color:var(--sage);background:rgba(61,112,64,.05)}
+.passport-step__mark{
+  flex-shrink:0;width:26px;height:26px;border-radius:50%;
+  display:grid;place-items:center;font-size:.8rem;font-weight:700;
+  background:var(--cream2);color:var(--ink);
+}
+.passport-step.done .passport-step__mark{background:var(--sage);color:#fff}
+.passport-step strong{display:block;font-size:.88rem;margin-bottom:.15rem}
+.passport-step p{font-size:.78rem;color:var(--ink2);margin:0}
+
+.passport-popia{
+  font-size:.8rem;color:var(--ink2);line-height:1.65;
+  background:var(--cream2);border-radius:var(--r4);padding:.85rem;margin-bottom:1.25rem;
+}
+
+.passport-card{
+  border:1.5px solid var(--border);border-radius:var(--r4);
+  padding:1rem;margin-bottom:.85rem;background:var(--white);
+}
+.passport-card__head{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin-bottom:.4rem}
+.passport-card__guidance{font-size:.82rem;color:var(--ink2);line-height:1.6;margin:0 0 .75rem}
+.passport-card__note{font-size:.82rem;color:var(--ink2);margin:0 0 .5rem}
+
+.passport-pill{
+  font-size:.7rem;font-weight:700;padding:.2rem .55rem;border-radius:999px;white-space:nowrap;
+  background:var(--cream2);color:var(--ink2);
+}
+.passport-pill--approved{background:rgba(61,112,64,.12);color:#2F5632}
+.passport-pill--pending{background:rgba(200,144,42,.14);color:#7A5714}
+.passport-pill--rejected{background:rgba(173,66,34,.1);color:var(--terra)}
+
+.passport-upload{
+  display:block;text-align:center;padding:.75rem;cursor:pointer;
+  border:1.5px dashed var(--border);border-radius:var(--r4);
+  font-size:.85rem;font-weight:700;color:var(--terra);
+}
+.passport-upload:hover{border-color:var(--terra);background:rgba(173,66,34,.04)}
+
+.passport-ref label{display:block;font-size:.82rem;margin-bottom:.6rem}
+.passport-ref input{
+  display:block;width:100%;margin-top:.25rem;padding:.55rem;
+  border:1.5px solid var(--border);border-radius:var(--r4);font:inherit;
+}
+.passport-trail summary{font-size:.8rem;color:var(--terra);cursor:pointer}
+.passport-trail ul{list-style:none;margin:.6rem 0 0;padding:0}
+.passport-trail li{font-size:.78rem;color:var(--ink2);line-height:1.6;padding:.25rem 0}
+.passport-trail time{display:block;font-family:var(--font-mono);font-size:.7rem;color:var(--ink2);opacity:.75}
+
+.pill--passport{background:rgba(61,112,64,.12);color:#2F5632}
+.passport-basis{
+  border:1.5px solid rgba(61,112,64,.25);background:rgba(61,112,64,.05);
+  border-radius:var(--r4);padding:.85rem;margin-bottom:.85rem;
+}
+.passport-basis strong{display:block;font-size:.85rem;margin-bottom:.5rem}
+.passport-basis ul{list-style:none;margin:0 0 .5rem;padding:0}
+.passport-basis li{
+  display:flex;justify-content:space-between;gap:.75rem;
+  font-size:.82rem;color:var(--ink2);padding:.15rem 0;
+}
+.passport-basis li span{font-family:var(--font-mono);font-size:.72rem;opacity:.8}
+.passport-basis p{font-size:.76rem;color:var(--ink2);line-height:1.6;margin:0}
+.link-btn{
+  background:none;border:none;padding:0;font:inherit;font-size:.82rem;
+  color:var(--terra);text-decoration:underline;cursor:pointer;
+}
+
+.admin-reference{
+  border-left:3px solid var(--gold);background:var(--cream2);
+  border-radius:var(--r4);padding:.7rem .85rem;margin:.5rem 0;
+}
+.admin-reference strong{display:block;font-size:.85rem;margin-bottom:.25rem}
+
 /* ═══ SHIMMER ═══ */
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .shimmer{

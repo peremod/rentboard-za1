@@ -8,6 +8,12 @@ export interface ApplicationTenant {
   email: string;
   avatarPath?: string | null;
   isVerified: boolean;
+  /**
+   * The Renter's Passport flag, for the badge on the applicant card. What the
+   * badge rests on is fetched separately when a landlord opens the applicant
+   * — see VerificationService.badgeBasis.
+   */
+  tenantProfile?: { hasPassport: boolean; passportExpiresAt: string | null } | null;
 }
 
 export interface Application {

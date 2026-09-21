@@ -177,7 +177,20 @@ export class ApplicationsService {
     const room = await this.assertRoomOwner(roomId, landlordId);
     return this.prisma.application.findMany({
       where: { roomId, cycle: room.relistCount, archivedAt: null },
-      include: { tenant: { select: { id: true, fullName: true, email: true, avatarPath: true, isVerified: true } } },
+      include: {
+        tenant: {
+          select: {
+            id: true, fullName: true, email: true, avatarPath: true, isVerified: true,
+            // Whether this applicant holds a Renter's Passport — the flag only,
+            // so the card can show the badge. What the badge rests on is
+            // fetched separately, per applicant, when the landlord opens one:
+            // pulling every applicant's checks here would mean requesting
+            // personal information about people whose applications may never
+            // be opened.
+            tenantProfile: { select: { hasPassport: true, passportExpiresAt: true } },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

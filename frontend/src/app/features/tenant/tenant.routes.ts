@@ -1,5 +1,4 @@
 import { Routes } from '@angular/router';
-import { billingEnabledGuard } from '../../core/guards/billing-enabled.guard';
 
 /** Tenant portal — guarded by [authGuard, tenantGuard] at the parent route in app.routes.ts. */
 export const TENANT_ROUTES: Routes = [
@@ -9,9 +8,12 @@ export const TENANT_ROUTES: Routes = [
     title: 'Your Dashboard — Mastande',
   },
   {
+    // No billingEnabledGuard any more. The Passport used to sell an R89/month
+    // subscription, so it was gated behind the billing flag and unreachable.
+    // It is now a free verification flow, and gating a free thing behind a
+    // billing switch is how it stays invisible.
     path: 'passport',
-    canActivate: [billingEnabledGuard],
-    loadComponent: () => import('./passport/passport').then((m) => m.Passport),
+    loadComponent: () => import('./passport-verify/passport-verify').then((m) => m.PassportVerify),
     title: "Renter's Passport — Mastande",
   },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
