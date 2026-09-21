@@ -283,6 +283,30 @@ rotate and one fewer thing to get wrong.
 CI still runs on every push — audits, type check, tests and build — but it does
 not deploy.
 
+### One repository variable, though
+
+`Verify deployment` checks that staging is healthy, is serving the commit that
+was just pushed, has a reachable database and refuses crawlers. It needs to be
+told where staging is:
+
+**Settings → Secrets and variables → Actions → Variables → New variable**
+
+| Name | Value |
+|---|---|
+| `STAGING_API_HOST` | the staging host, e.g. `rentboard-api.onrender.com` — hostname only, no scheme, no trailing slash |
+
+A variable, not a secret: it is a public hostname and it is more useful in the
+logs than masked out.
+
+**Leaving it unset means the check skips rather than fails**, and says so in
+its output. That is deliberate — a red check nobody can act on trains people
+to ignore the only signal this repository has that a deploy happened. It used
+to try to infer this from DNS and could not: every `*.onrender.com` name
+resolves whether or not a service exists behind it, so the inference was dead
+code and the check ran against a host that served nothing.
+
+Point it at the custom domain once that is attached to the service.
+
 ## 6. Migrate and seed
 
 The backend workflow runs `prisma migrate deploy` automatically. **Not
