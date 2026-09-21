@@ -40,9 +40,9 @@ email, staging cannot be tested properly.
 If the repo is still only local:
 
 ```bash
-cd ~/Downloads/rentboard-za1
+cd ~/Downloads/mastande-za1
 git remote -v                      # check whether a remote already exists
-git remote add origin git@github.com:YOURNAME/rentboard-za.git
+git remote add origin git@github.com:YOURNAME/mastande-za.git
 git push -u origin master
 git push --tags
 ```
@@ -158,7 +158,7 @@ PORT=3000
 JWT_SECRET=            # openssl rand -base64 48
 JWT_EXPIRES_IN=15m
 
-FRONTEND_URL=https://staging-rentboard.vercel.app
+FRONTEND_URL=https://staging-mastande.vercel.app
 API_URL=https://<your-render-url>
 
 # Google sign-in. The callback must match the URI registered in the Google
@@ -215,7 +215,7 @@ this moves to a paid instance.
 2. **Root Directory**: `frontend`
 3. **Framework Preset**: Angular
 4. **Build Command**: `npm run build`
-5. **Output Directory**: `dist/rentboard-frontend/browser`
+5. **Output Directory**: `dist/mastande-frontend/browser`
 
 ### Environment variable
 
@@ -226,7 +226,7 @@ API_URL=https://<your-render-url>
 Angular bakes environment values at build time, so `environment.staging.ts`
 
 **It currently assumes a custom domain you probably do not have yet** —
-`https://api-staging.rentboard.co.za/api`. Either point that subdomain at
+`https://api-staging.mastande.co.za/api`. Either point that subdomain at
 API call from staging fails and the site looks completely broken rather than
 partly broken, which at least makes it easy to spot.
 
@@ -295,7 +295,7 @@ silently dropping your own mail.
 
 ```bash
 API=https://<your-render-url> \
-FRONTEND_URL=https://staging-rentboard.vercel.app \
+FRONTEND_URL=https://staging-mastande.vercel.app \
 ./scripts/smoke-test.sh
 ```
 

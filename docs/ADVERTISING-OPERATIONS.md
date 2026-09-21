@@ -149,7 +149,7 @@ not a pattern, and a gap under 8 points is noise either way.
 **It needs a national campaign to compare against.** Without one there is no
 baseline, and the table says so rather than showing a misleading zero. If every
 campaign you sell is targeted, run one nationwide placement — even a house ad
-for RentBoard itself — so the comparison has a denominator.
+for Mastande itself — so the comparison has a denominator.
 
 To change a rate, edit `backend/src/modules/ads/ad-rates.ts`. The admin form,
 the Advertise page and this table all read from it.

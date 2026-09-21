@@ -15,7 +15,7 @@ const CONSENT_KEY = 'rb_cookie_notice_v2';
 /**
  * Cookie notice.
  *
- * Not a consent banner, because there is nothing to consent to. RentBoard sets
+ * Not a consent banner, because there is nothing to consent to. Mastande sets
  * one cookie — the httpOnly refresh token — which is strictly necessary and
  * therefore exempt under both POPIA s.11 and the ECT Act.
  *
@@ -36,7 +36,7 @@ const CONSENT_KEY = 'rb_cookie_notice_v2';
       <div class="cookie-notice" role="region" aria-label="Cookie notice">
         <h3 class="cookie-notice__title">🍪 One cookie</h3>
         <p class="cookie-notice__body">
-          RentBoard sets a single cookie, to keep you signed in. No analytics
+          Mastande sets a single cookie, to keep you signed in. No analytics
           cookies, no advertising cookies, no third-party trackers — not
           switched off, never added.
           <a routerLink="/legal/cookies">How we handle this</a>

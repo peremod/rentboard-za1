@@ -82,8 +82,8 @@ def main() -> None:
     y = 112
 
     # ── Wordmark ──
-    d.text((x, y), "RentBoard", font=font(BOLD, 64), fill=INK)
-    wordmark_w = d.textlength("RentBoard", font=font(BOLD, 64))
+    d.text((x, y), "Mastande", font=font(BOLD, 64), fill=INK)
+    wordmark_w = d.textlength("Mastande", font=font(BOLD, 64))
     d.text((x + wordmark_w + 14, y + 26), "ZA", font=font(BOLD, 30), fill=TERRACOTTA)
 
     y += 116
@@ -109,7 +109,7 @@ def main() -> None:
     )
 
     # ── Domain, bottom right ──
-    domain = "rentboard.co.za"
+    domain = "mastande.co.za"
     f = font(MEDIUM, 28)
     d.text(
         (W - MARGIN - d.textlength(domain, font=f), H - MARGIN - 44),

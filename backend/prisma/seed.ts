@@ -34,7 +34,7 @@ function assertStrongPassword(password: string) {
 async function main() {
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.ADMIN_PASSWORD;
-  const fullName = process.env.ADMIN_NAME?.trim() || 'RentBoard Admin';
+  const fullName = process.env.ADMIN_NAME?.trim() || 'Mastande Admin';
 
   if (!email || !password) {
     console.error(`
@@ -104,7 +104,7 @@ Optional: ADMIN_NAME="Your Name"
 }
 
 /**
- * RentBoard's own adverts.
+ * Mastande's own adverts.
  *
  * Two jobs. An empty slot is wasted space, so unsold inventory promotes the
  * site instead of showing nothing. And a permanently running nationwide
@@ -124,9 +124,9 @@ async function seedHouseAds() {
     update: {},
     create: {
       id: HOUSE_ADVERTISER_ID,
-      companyName: 'RentBoard',
-      contactName: 'RentBoard',
-      contactEmail: 'hello@rentboard.co.za',
+      companyName: 'Mastande',
+      contactName: 'Mastande',
+      contactEmail: 'hello@mastande.co.za',
       notes: 'House ads. Not a paying advertiser — do not invoice.',
     },
   });
@@ -139,7 +139,7 @@ async function seedHouseAds() {
       id: '00000000-0000-0000-0000-0000000000b1',
       name: '[HOUSE] How it works — sidebar',
       placement: 'board_sidebar' as const,
-      headline: 'New to RentBoard?',
+      headline: 'New to Mastande?',
       body: 'No agents, no application fees. See how renting direct from landlords works.',
       ctaLabel: 'How it works',
       targetUrl: '/how-it-works',
@@ -510,7 +510,7 @@ async function seedDemoAds() {
  * nobody configured.
  */
 async function seedDemoRooms() {
-  const landlordEmail = 'demo-landlord@rentboard.test';
+  const landlordEmail = 'demo-landlord@mastande.test';
 
   const landlord = await prisma.user.upsert({
     where: { email: landlordEmail },

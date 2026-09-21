@@ -1,8 +1,8 @@
 {
-  "name": "rentboard-backend",
-  "version": "1.54.0",
+  "name": "mastande-backend",
+  "version": "1.55.0",
   "private": true,
-  "description": "RentBoard ZA API — NestJS 11 + Prisma 6 + PostgreSQL",
+  "description": "Mastande ZA API — NestJS 11 + Prisma 6 + PostgreSQL",
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\"",

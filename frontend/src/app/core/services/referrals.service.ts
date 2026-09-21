@@ -38,11 +38,11 @@ export class ReferralsService {
 
     switch (kind) {
       case 'landlord_to_landlord':
-        return `I've been letting my rooms on RentBoard — it's free to list and there's no agent taking a cut. Use my code ${code} when you sign up: ${link}`;
+        return `I've been letting my rooms on Mastande — it's free to list and there's no agent taking a cut. Use my code ${code} when you sign up: ${link}`;
       case 'landlord_to_tenant':
-        return `I list my rooms on RentBoard. It's free to apply and you deal with the landlord directly, no application fees. Sign up with ${code}: ${link}`;
+        return `I list my rooms on Mastande. It's free to apply and you deal with the landlord directly, no application fees. Sign up with ${code}: ${link}`;
       case 'tenant_to_tenant':
-        return `Looking for a room? RentBoard is free to apply and the listings come straight from landlords, not agents. Use ${code}: ${link}`;
+        return `Looking for a room? Mastande is free to apply and the listings come straight from landlords, not agents. Use ${code}: ${link}`;
     }
   }
 

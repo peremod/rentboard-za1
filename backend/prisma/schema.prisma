@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// RentBoard ZA — Prisma Schema
+// Mastande ZA — Prisma Schema
 // PostgreSQL via Supabase.
 //
 // Design decisions:
@@ -709,7 +709,7 @@ model AdCampaign {
   impressions  Int          @default(0)
   clicks       Int          @default(0)
 
-  /// RentBoard's own advert, not a sold placement.
+  /// Mastande's own advert, not a sold placement.
   ///
   /// Fills a slot no paying advertiser matched, so empty inventory promotes
   /// the site rather than showing nothing. Excluded from revenue reporting,
@@ -1048,7 +1048,10 @@ model VerificationRequest {
 }
 
 enum MessageChannel {
-  rentboard
+  /// Sent through the site itself. Named for the channel rather than the
+  /// brand: this value was `rentboard`, so renaming the product meant a
+  /// database migration. It will not need one again.
+  in_app
   whatsapp
 }
 
@@ -1060,7 +1063,7 @@ model Message {
   application   Application    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   senderId      String
   sender        User           @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  channel       MessageChannel @default(rentboard)
+  channel       MessageChannel @default(in_app)
   body          String
   waMessageId   String?        @unique
   waStatus      String?

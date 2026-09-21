@@ -1,4 +1,4 @@
-# Contributing to RentBoard ZA
+# Contributing to Mastande ZA
 
 Git/GitHub workflow for the Angular 21 + NestJS 11 monorepo. Applies to `frontend/` and `backend/`.
 
@@ -93,7 +93,7 @@ git commit -m "chore(release): bump version to 1.1.0"
 
 git checkout main
 git merge --no-ff release/v1.1.0
-git tag -a v1.1.0 -m "RentBoard ZA v1.1.0 — room detail + apply flow"
+git tag -a v1.1.0 -m "Mastande ZA v1.1.0 — room detail + apply flow"
 git push origin main --tags
 
 git checkout develop
@@ -123,8 +123,8 @@ CI (`.github/workflows/ci.yml`) re-runs all of this — fix locally first to avo
 | Git ref | Environment | Frontend | Backend |
 |---|---|---|---|
 | any branch | Preview | Vercel preview URL (auto per-PR) | — |
-| `develop` | Staging | `staging.rentboard.co.za` (Vercel) | Render, via `render.yaml` |
-| `main` | Production | `rentboard.co.za` (Vercel) | **none yet** — see below |
+| `develop` | Staging | `staging.mastande.co.za` (Vercel) | Render, via `render.yaml` |
+| `main` | Production | `mastande.co.za` (Vercel) | **none yet** — see below |
 
 Neither half deploys from GitHub Actions. Railway was dropped and Render now
 deploys `develop` on push straight from the repo; Vercel's Git integration does

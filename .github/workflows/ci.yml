@@ -71,7 +71,7 @@ jobs:
         working-directory: frontend
         run: |
           set -e
-          PRERENDER=dist/rentboard-frontend/browser
+          PRERENDER=dist/mastande-frontend/browser
           for page in index.html pricing/index.html how-it-works/index.html advertise/index.html; do
             test -f "$PRERENDER/$page" || { echo "❌ $page was not prerendered"; exit 1; }
           done
@@ -115,7 +115,7 @@ jobs:
         image: postgres:15
         env:
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: rentboard_test
+          POSTGRES_DB: mastande_test
         options: >-
           --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
         ports: ['5432:5432']
@@ -138,9 +138,9 @@ jobs:
           npx prisma generate && npx prisma migrate deploy
           npx ts-node prisma/seed.ts
         env:
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/rentboard_test
-          DIRECT_URL: postgresql://postgres:test@localhost:5432/rentboard_test
-          ADMIN_EMAIL: ci-admin@rentboard.test
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_test
+          DIRECT_URL: postgresql://postgres:test@localhost:5432/mastande_test
+          ADMIN_EMAIL: ci-admin@mastande.test
           ADMIN_PASSWORD: CiSmokeAdmin123
           SEED_DEMO_ADS: 'true'
           SEED_DEMO_ROOMS: 'true'
@@ -160,7 +160,7 @@ jobs:
         working-directory: backend
         run: npm test
         env:
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/rentboard_test
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_test
           JWT_SECRET: test-secret-minimum-32-characters-long-ok
           NODE_ENV: test
       - name: Build
@@ -188,8 +188,8 @@ jobs:
           done
           curl -sf http://localhost:3000/health || { echo "::error::API never came up"; cat /tmp/api.log; exit 1; }
         env:
-          DATABASE_URL: postgresql://postgres:test@localhost:5432/rentboard_test
-          DIRECT_URL: postgresql://postgres:test@localhost:5432/rentboard_test
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_test
+          DIRECT_URL: postgresql://postgres:test@localhost:5432/mastande_test
           JWT_SECRET: test-secret-minimum-32-characters-long-ok
           JWT_EXPIRES_IN: 15m
           NODE_ENV: development
@@ -212,7 +212,7 @@ jobs:
         env:
           API: http://localhost:3000
           RESEND_WEBHOOK_SECRET: whsec_Q2lTbW9rZVRlc3RTZWNyZXRWYWx1ZTEyMzQ1
-          ADMIN_EMAIL: ci-admin@rentboard.test
+          ADMIN_EMAIL: ci-admin@mastande.test
           ADMIN_PASSWORD: CiSmokeAdmin123
 
       - name: API log on failure
@@ -230,7 +230,7 @@ jobs:
   #   where it is. The one test in that file needing a live room self-skips.
   #
   #   The app-flow and mobile specs drive real journeys, so they need an API
-  #   they can reach — and production points apiUrl at api.rentboard.co.za,
+  #   they can reach — and production points apiUrl at api.mastande.co.za,
   #   which is not reachable from CI. The development build points at
   #   localhost, which is where the API below is running.
   #
@@ -245,13 +245,13 @@ jobs:
         image: postgres:15
         env:
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: rentboard_test
+          POSTGRES_DB: mastande_test
         options: >-
           --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
         ports: ['5432:5432']
     env:
-      DATABASE_URL: postgresql://postgres:test@localhost:5432/rentboard_test
-      DIRECT_URL: postgresql://postgres:test@localhost:5432/rentboard_test
+      DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_test
+      DIRECT_URL: postgresql://postgres:test@localhost:5432/mastande_test
       E2E_BASE_URL: http://localhost:4200
     steps:
       - uses: actions/checkout@v5
@@ -286,7 +286,7 @@ jobs:
           FRONTEND_URL: http://localhost:4200
           API_URL: http://localhost:3000
           PORT: '3000'
-          ADMIN_EMAIL: ci-admin@rentboard.test
+          ADMIN_EMAIL: ci-admin@mastande.test
           ADMIN_PASSWORD: CiSmokeAdmin123
 
       - name: Install frontend
@@ -305,7 +305,7 @@ jobs:
           NG_ALLOWED_HOSTS: localhost
         run: |
           npx ng build --configuration development
-          PORT=4200 node dist/rentboard-frontend/server/server.mjs > /tmp/fe.log 2>&1 &
+          PORT=4200 node dist/mastande-frontend/server/server.mjs > /tmp/fe.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:4200/ >/dev/null && break; sleep 2; done
           curl -sf http://localhost:4200/ >/dev/null || { echo "::error::frontend never came up"; cat /tmp/fe.log; exit 1; }
 
@@ -319,15 +319,15 @@ jobs:
       - name: Build frontend (production) and serve
         working-directory: frontend
         # Required here, not optional: a production build allows only
-        # rentboard.co.za and www.rentboard.co.za, so without this every
+        # mastande.co.za and www.mastande.co.za, so without this every
         # Server-mode route answers 400 and the SEO spec below fails on
         # /rooms/:id rather than on anything it is testing.
         env:
           NG_ALLOWED_HOSTS: localhost
         run: |
-          pkill -f "rentboard-frontend/server/server.mjs" || true
+          pkill -f "mastande-frontend/server/server.mjs" || true
           npm run build:prod
-          PORT=4200 node dist/rentboard-frontend/server/server.mjs > /tmp/fe-prod.log 2>&1 &
+          PORT=4200 node dist/mastande-frontend/server/server.mjs > /tmp/fe-prod.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:4200/ >/dev/null && break; sleep 2; done
           curl -sf http://localhost:4200/ >/dev/null || { echo "::error::frontend never came up"; cat /tmp/fe-prod.log; exit 1; }
 

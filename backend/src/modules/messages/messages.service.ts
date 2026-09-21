@@ -50,7 +50,7 @@ export class MessagesService {
     const body = sanitizeText(dto.body);
 
     const message = await this.prisma.message.create({
-      data: { applicationId, senderId, body, channel: 'rentboard' },
+      data: { applicationId, senderId, body, channel: 'in_app' },
     });
 
     const sender = await this.prisma.user.findUniqueOrThrow({ where: { id: senderId } });

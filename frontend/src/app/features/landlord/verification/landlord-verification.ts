@@ -62,7 +62,7 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
         <div class="dash-section-title">What happens to your document</div>
         <ul class="verify-facts">
           <li>Uploaded privately — it is never shown on your listings or to tenants</li>
-          <li>Seen only by a RentBoard reviewer</li>
+          <li>Seen only by a Mastande reviewer</li>
           <li><strong>Deleted as soon as it is reviewed</strong>, approved or not. We keep the outcome, not the document</li>
           <li>Verification means a person checked your document. It is not a credit or criminal check</li>
           <li><strong>R149 once off</strong> for the identity check — not a subscription.

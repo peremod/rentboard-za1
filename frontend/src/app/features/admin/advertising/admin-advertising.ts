@@ -28,7 +28,7 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
 
           @if (!r.hasBaseline) {
             <p class="muted">
-              No measurements yet. RentBoard's own house ads run nationwide and
+              No measurements yet. Mastande's own house ads run nationwide and
               generate this baseline automatically, so figures appear once the
               board has traffic.
             </p>

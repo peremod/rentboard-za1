@@ -1,4 +1,4 @@
-# RentBoard ZA — Operations Runbook
+# Mastande ZA — Operations Runbook
 
 **Version 2.0 · September 2026**
 Replaces `OPERATIONS.md` v1.0. Adds mission/vision, North Star metric, milestone ladder, and a calendar-aligned cadence.
@@ -7,7 +7,7 @@ Replaces `OPERATIONS.md` v1.0. Adds mission/vision, North Star metric, milestone
 
 ## 1. Mission
 
-> **RentBoard ZA gives South African landlords and tenants a direct line to each other.** Landlords post rooms in minutes; tenants apply for free, always. No estate agent in the middle, no application fees, all prices in Rand, and every step built to South African law.
+> **Mastande ZA gives South African landlords and tenants a direct line to each other.** Landlords post rooms in minutes; tenants apply for free, always. No estate agent in the middle, no application fees, all prices in Rand, and every step built to South African law.
 
 **Why this wording:**
 
@@ -40,7 +40,7 @@ Replaces `OPERATIONS.md` v1.0. Adds mission/vision, North Star metric, milestone
 **Vision proof points (what "true" looks like):**
 - Top-3 organic result for *"rooms to rent \<SA city\>"* in all 9 provinces.
 - >50% of sessions arrive direct or organic, not paid.
-- A landlord's default sentence becomes "put it on RentBoard."
+- A landlord's default sentence becomes "put it on Mastande."
 
 ---
 

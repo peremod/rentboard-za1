@@ -25,7 +25,7 @@ step() { echo; echo "── $1 ────────────────�
 
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
-DIST="$ROOT/frontend/dist/rentboard-frontend/browser"
+DIST="$ROOT/frontend/dist/mastande-frontend/browser"
 
 # ── 1. Dependencies ───────────────────────────────────────────────────────
 step "Installing"

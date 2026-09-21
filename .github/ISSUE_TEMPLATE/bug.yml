@@ -32,8 +32,8 @@ body:
       label: Environment
       description: The three environments differ by build configuration, so this narrows it immediately.
       options:
-        - Production (rentboard.co.za)
-        - Staging (staging.rentboard.co.za)
+        - Production (mastande.co.za)
+        - Staging (staging.mastande.co.za)
         - Local development
     validations:
       required: true
@@ -43,7 +43,7 @@ body:
     attributes:
       label: URL
       description: The exact page, including any locale prefix (/af/, /zu/).
-      placeholder: https://rentboard.co.za/rooms/abc123
+      placeholder: https://mastande.co.za/rooms/abc123
     validations:
       required: true
 

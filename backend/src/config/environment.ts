@@ -36,8 +36,8 @@ export function isProductionDeployment(): boolean {
  *
  * Derived from FRONTEND_URL rather than hard-coded, because the previous
  * hard-coded list keyed off NODE_ENV — which meant Render staging, running
- * with NODE_ENV=production, allowed only rentboard.co.za and rejected every
- * request from staging.rentboard.co.za. The staging frontend could not talk
+ * with NODE_ENV=production, allowed only mastande.co.za and rejected every
+ * request from staging.mastande.co.za. The staging frontend could not talk
  * to the staging API at all.
  */
 export function corsOrigins(): string[] {
@@ -45,12 +45,12 @@ export function corsOrigins(): string[] {
 
   switch (appEnv()) {
     case 'production': {
-      const origins = ['https://rentboard.co.za', 'https://www.rentboard.co.za'];
+      const origins = ['https://mastande.co.za', 'https://www.mastande.co.za'];
       if (frontend && !origins.includes(frontend)) origins.push(frontend);
       return origins;
     }
     case 'staging':
-      return frontend ? [frontend] : ['https://staging.rentboard.co.za'];
+      return frontend ? [frontend] : ['https://staging.mastande.co.za'];
     default:
       return ['http://localhost:4200'];
   }
@@ -95,7 +95,7 @@ export function validateEnvironment(): void {
   }
 
   // ── Cross-environment contamination ──
-  if (env !== 'production' && siteUrl?.includes('rentboard.co.za') && !siteUrl.includes('staging')) {
+  if (env !== 'production' && siteUrl?.includes('mastande.co.za') && !siteUrl.includes('staging')) {
     errors.push(
       `SITE_URL is "${siteUrl}" but APP_ENV is "${env}". A non-production deployment publishing production URLs will be treated by search engines as a duplicate of the real site.`,
     );

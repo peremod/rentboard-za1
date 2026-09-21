@@ -1,6 +1,6 @@
 {
   "buildCommand": "npm run build:prod",
-  "outputDirectory": "dist/rentboard-frontend/browser",
+  "outputDirectory": "dist/mastande-frontend/browser",
   "framework": "angular",
   "redirects": [
     {
@@ -58,7 +58,7 @@
       "has": [
         {
           "type": "host",
-          "value": "staging.rentboard.co.za"
+          "value": "staging.mastande.co.za"
         }
       ],
       "headers": [

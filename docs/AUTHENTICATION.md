@@ -1,6 +1,6 @@
 # Authentication — what exists and what is worth adding
 
-Written 3 Sep 2026, prompted by a good observation: RentBoard is used intensely
+Written 3 Sep 2026, prompted by a good observation: Mastande is used intensely
 for a few weeks and then not for a year. By the time someone returns to leave a
 review or find their next room, the password is gone — and a forgotten password
 is where people give up rather than reset.
@@ -64,7 +64,7 @@ the visitor nothing.
 ```
 http://localhost:3000/api/auth/google/callback
 https://<staging-api-host>/api/auth/google/callback
-https://api.rentboard.co.za/api/auth/google/callback
+https://api.mastande.co.za/api/auth/google/callback
 ```
 
 The path is not configurable by accident: it is the `@Get('google/callback')`

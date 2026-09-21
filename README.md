@@ -1,10 +1,10 @@
-# RentBoard ZA
+# Mastande ZA
 
 > **Rooms to rent, direct from landlords. Free to apply, always.**
 
 ## Mission
 
-> **RentBoard ZA gives South African landlords and tenants a direct line to each other.** Landlords post rooms in minutes; tenants apply for free, always. No estate agent in the middle, no application fees, all prices in Rand, and every step built to South African law.
+> **Mastande ZA gives South African landlords and tenants a direct line to each other.** Landlords post rooms in minutes; tenants apply for free, always. No estate agent in the middle, no application fees, all prices in Rand, and every step built to South African law.
 
 ## Vision
 
@@ -14,7 +14,7 @@
 
 This wording is canonical. It is quoted, not paraphrased, from the Company OS page in Notion — a paraphrase becomes a second version, and within a quarter nobody knows which is real.
 
-**Stack:** Angular 21 (zoneless, SSR, signals) · NestJS 11 · Prisma 6 + PostgreSQL (Supabase) · ImageKit · Stripe · Resend · WhatsApp Business API.
+**Stack:** Angular 21 (zoneless, SSR, signals) · NestJS 11 · Prisma 6 + PostgreSQL (Supabase) · ImageKit · PayFast · Resend · WhatsApp Business API.
 
 **Status:** feature-complete, pre-launch. Currently working milestone **M1 — Legally live** (Information Officer registration, PAIA manual, production smoke test). See `docs/OPERATIONS.md` §4 for the M0–M6 ladder; each milestone maps to a git tag so progress is auditable from this repo alone.
 
@@ -73,8 +73,8 @@ nvm install 22 && nvm use 22
 ## 2. Clone & install
 
 ```bash
-git clone https://github.com/YOUR_ORG/rentboard-za.git
-cd rentboard-za
+git clone https://github.com/YOUR_ORG/mastande-za.git
+cd mastande-za
 npm run install:all        # root (husky) + frontend + backend
 ```
 
@@ -84,7 +84,7 @@ npm run install:all        # root (husky) + frontend + backend
 docker compose up -d postgres
 cp backend/.env.example backend/.env
 # edit backend/.env — for local dev, DATABASE_URL and DIRECT_URL can both point at:
-# postgresql://rentboard:rentboard_dev@localhost:5432/rentboard_dev
+# postgresql://mastande:mastande_dev@localhost:5432/mastande_dev
 
 cd backend
 npm run db:generate
@@ -131,13 +131,13 @@ cd frontend && npm start
 
 ## 5. Environments
 
-RentBoard runs identically across three environments via Angular file-replacement configs and NestJS `NODE_ENV`/`.env` files. **Never** point `staging` or `production` at the same Supabase project as `development`.
+Mastande runs identically across three environments via Angular file-replacement configs and NestJS `NODE_ENV`/`.env` files. **Never** point `staging` or `production` at the same Supabase project as `development`.
 
 | Env | Frontend command | Frontend env file | Backend `NODE_ENV` | Deploys to |
 |---|---|---|---|---|
 | Development | `ng serve` | `environment.ts` | `development` | localhost |
-| Staging | `ng build --configuration staging` | `environment.staging.ts` | `staging` | `staging.rentboard.co.za` (Vercel preview/staging) + Render (`render.yaml`, branch `develop`) |
-| Production | `ng build --configuration production` | `environment.prod.ts` | `production` | `rentboard.co.za` (Vercel) + **no backend deploy target yet** |
+| Staging | `ng build --configuration staging` | `environment.staging.ts` | `staging` | `staging.mastande.co.za` (Vercel preview/staging) + Render (`render.yaml`, branch `develop`) |
+| Production | `ng build --configuration production` | `environment.prod.ts` | `production` | `mastande.co.za` (Vercel) + **no backend deploy target yet** |
 
 ```bash
 # Staging build
@@ -154,8 +154,8 @@ Backend environment selection is via the `.env` file present in the deploy targe
 
 ```bash
 cd backend
-docker build -t rentboard-api .
-docker run -p 3000:3000 --env-file .env rentboard-api
+docker build -t mastande-api .
+docker run -p 3000:3000 --env-file .env mastande-api
 ```
 
 ## 7. Git workflow, commits, releases
@@ -182,7 +182,7 @@ git checkout -b release/v0.2.0 develop
 # bump version in frontend/package.json and backend/package.json
 git commit -m "chore(release): bump version to 0.2.0"
 git checkout main && git merge --no-ff release/v0.2.0
-git tag -a v0.2.0 -m "RentBoard ZA v0.2.0 — notice board + filters"
+git tag -a v0.2.0 -m "Mastande ZA v0.2.0 — notice board + filters"
 git push origin main --tags
 git checkout develop && git merge --no-ff release/v0.2.0 && git push origin develop
 ```
@@ -209,7 +209,7 @@ npm run lighthouse    # against a local production build
 
 # Metadata must be in the SERVED html, not applied after hydration.
 # A crawler that runs no JavaScript sees only this:
-curl -s https://rentboard.co.za/pricing | grep -E 'canonical|hreflang|name="robots"'
+curl -s https://mastande.co.za/pricing | grep -E 'canonical|hreflang|name="robots"'
 ```
 
 ## 9. User-flow & link integrity
@@ -231,7 +231,7 @@ Each pass below has a full reference implementation already written in the proje
 |---|---|---|
 | 0.1.0 ✅ | Repo scaffold, health check, Prisma foundation, CI, Docker | *v0.1.0 commit* |
 | 0.2.0 ✅ | Auth (JWT + Google OAuth), guards, interceptors, working login/register/callback + guarded dashboards | `RentBoard-Fresh-Part3-Auth-Guards-Services.html` — *v0.2.0 commit* |
-| 0.3.0 ✅ | Legal pages (POPIA/PAIA), cookie consent, Rooms API (backend) + RoomsService (frontend), SCSS legal styles, ZarCentsPipe | `RentBoard-Fresh-Part4-Legal-API-Styles.html`, `RentBoard-ZA-*` legal artifacts — *v0.3.0 commit* |
+| 0.3.0 ✅ | Legal pages (POPIA/PAIA), cookie consent, Rooms API (backend) + RoomsService (frontend), SCSS legal styles, ZarCentsPipe | `RentBoard-Fresh-Part4-Legal-API-Styles.html`, `Mastande-ZA-*` legal artifacts — *v0.3.0 commit* |
 | 0.4.0 ✅ | Navbar/footer, home notice board (search+filters+infinite scroll), RoomCard (NgOptimizedImage), room-detail placeholder, Vercel+Railway deploy workflows | `RentBoard-Fresh-Part5-UI-CICD.html` — *v0.4.0 commit* |
 | 0.5.0 ✅ | NotificationsService (6 Resend email templates), WhatsApp bridge (Meta Cloud API), minimal Applications module (apply + notify, tests the chain end-to-end) | `RentBoard-Fresh-Part6-Services-README.html` — *v0.5.0 commit* |
 | 0.6.0 ✅ | Create-room wizard (4 steps), ImageKit direct-upload, full room detail + apply UI, real landlord/tenant dashboards | `RentBoard-Sprint2-Code.html` — *v0.6.0 commit* |
@@ -249,7 +249,7 @@ Operational cadence (on-call, weekly/monthly checks, incident escalation) is doc
 ## 11. Project structure
 
 ```
-rentboard-za/
+mastande-za/
 ├── frontend/            Angular 21 — SSR, zoneless, signals
 │   └── src/app/
 │       ├── core/        AuthService (signals), guards, interceptors, User model
@@ -402,3 +402,63 @@ npx prisma migrate dev --name refresh-tokens
 **Known, stated simplification (not silently cut):** concurrent 401s each trigger their own refresh call rather than sharing one in-flight refresh request. Harmless — rotation is safe to call more than once in quick succession — but not maximally efficient. A shared-refresh-lock is a reasonable follow-up, documented in `errorInterceptor`'s own docblock, not implemented here to keep the change reviewable.
 
 **Test it:** log in, wait 15+ minutes (or temporarily set `JWT_EXPIRES_IN=10s` to test faster), then do anything that hits the API — it should silently refresh and succeed, with no visible interruption. Log out, then try presenting the old refresh cookie again (e.g. via `curl` with a saved cookie) — it should be rejected, and a fresh login should still work normally (only that one token's family was revoked, not the account).
+
+## 21. Rebrand: RentBoard → Mastande (v1.55.0)
+
+The product name changed. 84 files, and the parts worth knowing about are the
+ones that are not text.
+
+**What was renamed**
+
+| Kind | From | To |
+|---|---|---|
+| Product name, in prose, UI copy and all six email templates | RentBoard | Mastande |
+| Angular project, and therefore the build output path | `rentboard-frontend` / `dist/rentboard-frontend` | `mastande-frontend` / `dist/mastande-frontend` |
+| npm packages | `rentboard-za`, `rentboard-frontend`, `rentboard-backend` | `mastande-*` |
+| Domain | `rentboard.co.za` | `mastande.co.za` |
+| Render service | `rentboard-api` | `mastande-api` |
+| Vercel alias | `rentboard-za1.vercel.app` | `mastande.vercel.app` |
+| Test and local identifiers | `rentboard.test`, `rentboard_test` | `mastande.test`, `mastande_test` |
+
+The dist path is the one that bites: `angular.json`, `vercel.json`,
+`lighthouserc.json`, `scripts/bundle-budget.mjs`, `scripts/verify-build.sh` and
+four places in `ci.yml` all name it, and they have to move together or the
+build succeeds and then nothing can find its output.
+
+**What was deliberately NOT renamed**
+
+- **The `MessageChannel` database enum value** was `rentboard`, and it is now
+  `in_app` rather than `mastande` — the value describes how a message arrived,
+  not who operates the platform, so naming it after the brand is what dragged
+  the schema into a rebrand in the first place. It will not need renaming
+  again. This is a real migration
+  (`20260921120000_rename_message_channel_to_in_app`), not a text edit:
+  `0_init` is a record of what already ran and is never edited.
+- **Historical source documents** — `RentBoard-ZA-Visual-Preview.html`,
+  the `RentBoard-Sprint*-Code.html` dumps, `rentboard-changeset-v1.51.0.zip`.
+  These name files that existed at a point in time. Renaming a reference to a
+  file that was never called Mastande turns a correct citation into a dangling
+  one.
+- **The GitHub repository**, `peremod/rentboard-za1`. Renaming it is a
+  provider-side action, and every clone's remote breaks until it is done.
+
+**This does not work until three things happen outside the repo**
+
+The rename is complete in the code and staging is pointed at hostnames that do
+not exist yet. In order:
+
+1. **Register `mastande.co.za`** and point DNS at Vercel. Until then production
+   canonical URLs, the sitemap, `safety@`/`privacy@`/`info@` addresses in the
+   legal pages, and the CORS allow-list all name a domain that does not
+   resolve.
+2. **Verify the new domain in Resend.** Sending is authorised per domain, so
+   every email stops the moment `RESEND_FROM` moves to `@mastande.co.za`
+   without it. Move the variable and the domain verification together.
+3. **Rename the Render service and the Vercel project.** Render keys a
+   Blueprint service on its name, so syncing `render.yaml` creates
+   `mastande-api` next to `rentboard-api` rather than renaming it — copy every
+   `sync:false` value across, confirm `/health`, then delete the old one.
+   `verify-deployment.yml` is what will catch it if this is missed.
+
+Nothing in the repository can detect any of the three. `PRE-LAUNCH-CHECKLIST.md`
+carries them as open rows.

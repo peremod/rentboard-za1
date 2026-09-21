@@ -31,7 +31,7 @@ const CONTENT_ROUTES: Routes = [
   {
     path: '',
     loadComponent: () => import('./features/home/home').then((m) => m.Home),
-    title: 'RentBoard — Rooms to Rent in South Africa, No Agent Fees',
+    title: 'Mastande — Rooms to Rent in South Africa, No Agent Fees',
     data: {
       seo: {
         description:
@@ -59,7 +59,7 @@ const CONTENT_ROUTES: Routes = [
     loadComponent: () => import('./features/room-detail/room-detail').then((m) => m.RoomDetail),
     // Title, description, canonical and JSON-LD are set by the component once
     // the room has loaded — they depend on data unknown at build time.
-    title: 'Room to rent — RentBoard',
+    title: 'Room to rent — Mastande',
   },
   {
     path: 'auth',
@@ -101,7 +101,7 @@ const CONTENT_ROUTES: Routes = [
   {
     path: '**',
     loadComponent: () => import('./shared/components/error-page/error-page').then((m) => m.ErrorPage),
-    title: 'Page not found — RentBoard',
+    title: 'Page not found — Mastande',
     // A 404 must never be indexed, and must never claim a canonical of its own.
     data: { seo: { noIndex: true } },
   },

@@ -124,7 +124,7 @@ test.describe('SEO metadata is server-rendered', () => {
     await expect(page).toHaveURL(/\/rooms\//);
 
     const title = await page.title();
-    expect(title).not.toBe('RentBoard — Rooms to Rent in South Africa, No Agent Fees');
+    expect(title).not.toBe('Mastande — Rooms to Rent in South Africa, No Agent Fees');
     expect(title).toMatch(/R[\d\s,]+\/month/);
 
     // Product schema drives the rich result.

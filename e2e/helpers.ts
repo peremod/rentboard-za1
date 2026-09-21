@@ -2,7 +2,7 @@ import { Page, expect } from '@playwright/test';
 
 /** Unique per run, so tests can be run repeatedly against the same database. */
 export function uniqueEmail(prefix: string) {
-  return `${prefix}+${Date.now()}${Math.floor(Math.random() * 1000)}@rentboard.test`;
+  return `${prefix}+${Date.now()}${Math.floor(Math.random() * 1000)}@mastande.test`;
 }
 
 export const PASSWORD = 'SmokeTest123';

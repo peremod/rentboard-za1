@@ -11,14 +11,14 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
           <h1>Platform Disclaimer</h1>
           <p class="legal-meta">Last updated: 28 July 2026 · Republic of South Africa</p>
           <div class="disclaimer-banner">
-            ⚠️ RentBoard is an online intermediary under <strong>ECTA 25 of 2002</strong>. We are
+            ⚠️ Mastande is an online intermediary under <strong>ECTA 25 of 2002</strong>. We are
             <strong>NOT</strong> a PPRA-registered estate agent, and are not party to any tenancy agreement.
           </div>
         </header>
 
         <section>
           <h2>1. Not an Estate Agent</h2>
-          <p>RentBoard is not registered with the <strong>Property Practitioners Regulatory Authority (PPRA)</strong>
+          <p>Mastande is not registered with the <strong>Property Practitioners Regulatory Authority (PPRA)</strong>
           under the Property Practitioners Act 22 of 2019. We earn no commission on any tenancy.</p>
         </section>
 
@@ -30,7 +30,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
             <li>Always view in person before committing</li>
             <li>Request proof the landlord is authorised to let the property</li>
             <li>Insist on a written lease and confirm the deposit is in an interest-bearing account (Rental Housing Act)</li>
-            <li>Report suspicious listings to safety&#64;rentboard.co.za or SAPS on 10111</li>
+            <li>Report suspicious listings to safety&#64;mastande.co.za or SAPS on 10111</li>
           </ul>
         </section>
 
@@ -51,7 +51,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 
         <section>
           <h2>4. Reporting Concerns</h2>
-          <p>Report fraudulent, discriminatory or illegal listings via safety&#64;rentboard.co.za. We investigate within 24 hours.</p>
+          <p>Report fraudulent, discriminatory or illegal listings via safety&#64;mastande.co.za. We investigate within 24 hours.</p>
         </section>
       </div>
     </div>

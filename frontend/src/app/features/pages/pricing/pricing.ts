@@ -24,7 +24,7 @@ import { AuthService } from '../../../core/services/auth.service';
         <div class="section-eyebrow">Pricing</div>
         <h1 class="section-title">Free to list. Free to apply.<br/>One optional fee.</h1>
         <p class="section-sub">
-          RentBoard makes no commission on any tenancy. We are not an estate agent,
+          Mastande makes no commission on any tenancy. We are not an estate agent,
           so there is nothing to take a cut of.
         </p>
 
@@ -107,7 +107,7 @@ import { AuthService } from '../../../core/services/auth.service';
           <div class="faq-item">
             <h3>What does the badge actually mean?</h3>
             <p>
-              That someone at RentBoard looked at your identity document and matched it
+              That someone at Mastande looked at your identity document and matched it
               to your account. It is not a credit check, not a criminal record check,
               and not a guarantee about the room. Tenants should still view in person
               before paying anything.

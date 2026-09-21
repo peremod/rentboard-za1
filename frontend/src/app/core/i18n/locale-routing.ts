@@ -58,7 +58,7 @@ export function provideLocaleRouting(): EnvironmentProviders {
 /**
  * One-time, browser-only courtesy redirect.
  *
- * A returning visitor who chose isiZulu and then types 'rentboard.co.za'
+ * A returning visitor who chose isiZulu and then types 'mastande.co.za'
  * should land on '/zu'. This runs only on the client, only on an unprefixed
  * URL, and only when a stored preference exists — so it can never affect what
  * a crawler sees, and can never fight the canonical.

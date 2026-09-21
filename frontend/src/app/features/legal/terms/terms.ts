@@ -13,7 +13,7 @@ import { RouterLink } from '@angular/router';
           <h1>Terms &amp; Conditions</h1>
           <p class="legal-meta">Last updated: 28 July 2026 · Republic of South Africa · ECTA 25 of 2002</p>
           <p class="legal-intro">
-            By using RentBoard you accept these terms under <strong>ECTA Section 11</strong>. RentBoard is an online
+            By using Mastande you accept these terms under <strong>ECTA Section 11</strong>. Mastande is an online
             intermediary — <strong>not an estate agent</strong> registered with the PPRA.
           </p>
         </header>

@@ -4,7 +4,7 @@ import { environment } from '@env/environment';
 
 /**
  * All checkout flows redirect the full page to Stripe Checkout — no card
- * fields are ever rendered by RentBoard itself, so there is no PCI scope
+ * fields are ever rendered by Mastande itself, so there is no PCI scope
  * on our side beyond redirecting.
  */
 @Injectable({ providedIn: 'root' })

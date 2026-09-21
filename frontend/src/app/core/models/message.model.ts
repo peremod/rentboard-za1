@@ -1,4 +1,4 @@
-export type MessageChannel = 'rentboard' | 'whatsapp';
+export type MessageChannel = 'in_app' | 'whatsapp';
 
 export interface Message {
   id: string;

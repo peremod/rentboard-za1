@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Every feature has to earn its place. The mission is the test: *RentBoard gives South African landlords and tenants a direct line to each other — free to apply, no agent, built to South African law.* A feature that does not serve that is a feature that makes the product harder to explain.
+        Every feature has to earn its place. The mission is the test: *Mastande gives South African landlords and tenants a direct line to each other — free to apply, no agent, built to South African law.* A feature that does not serve that is a feature that makes the product harder to explain.
 
   - type: textarea
     id: problem

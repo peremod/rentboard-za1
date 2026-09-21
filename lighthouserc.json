@@ -2,7 +2,7 @@
   "//": "Lighthouse CI budgets. Run by .github/workflows/lighthouse.yml against a locally-served production build, so a regression is caught in the PR rather than at the monthly audit in OPERATIONS.md §5.",
   "ci": {
     "collect": {
-      "startServerCommand": "node dist/rentboard-frontend/server/server.mjs",
+      "startServerCommand": "node dist/mastande-frontend/server/server.mjs",
       "startServerReadyPattern": "Node Express server listening",
       "startServerReadyTimeout": 60000,
       "url": [
