@@ -1,6 +1,6 @@
 {
   "name": "mastande-backend",
-  "version": "1.62.0",
+  "version": "1.63.0",
   "private": true,
   "description": "Mastande ZA API — NestJS 11 + Prisma 6 + PostgreSQL",
   "scripts": {
