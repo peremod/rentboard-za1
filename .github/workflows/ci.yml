@@ -129,12 +129,22 @@ jobs:
       - name: Install
         working-directory: backend
         run: npm ci
-      - name: Prisma generate + migrate
+      - name: Prisma generate + migrate + seed
         working-directory: backend
-        run: npx prisma generate && npx prisma migrate deploy
+        # Seeding is what makes the smoke test's skipped sections run: without
+        # the place taxonomy and the demo campaigns, four of its checks skip
+        # themselves and verify nothing.
+        run: |
+          npx prisma generate && npx prisma migrate deploy
+          npx ts-node prisma/seed.ts
         env:
           DATABASE_URL: postgresql://postgres:test@localhost:5432/rentboard_test
           DIRECT_URL: postgresql://postgres:test@localhost:5432/rentboard_test
+          ADMIN_EMAIL: ci-admin@rentboard.test
+          ADMIN_PASSWORD: CiSmokeAdmin123
+          SEED_DEMO_ADS: 'true'
+          SEED_DEMO_ROOMS: 'true'
+          SEED_LAUNCH_CODES: 'true'
       - name: Lint
         # ESLint is installed on the backend now (eslint.config.mjs), and the
         # script no longer passes --fix — CI must report on the code that was
@@ -188,9 +198,21 @@ jobs:
           FRONTEND_URL: http://localhost:4200
           API_URL: http://localhost:3000
           PORT: '3000'
+          # Not a secret — a fixed test value, so the smoke test can sign a
+          # webhook and assert that verification accepts a good signature and
+          # refuses a forged or replayed one. Without it those checks skip.
+          RESEND_WEBHOOK_SECRET: whsec_Q2lTbW9rZVRlc3RTZWNyZXRWYWx1ZTEyMzQ1
 
       - name: API smoke test
-        run: ./scripts/smoke-test.sh
+        # With an admin token the suite runs its admin-only sections instead of
+        # skipping them — the moderation queue, ad management and the KPI
+        # endpoints, including the negative checks that a non-admin is refused.
+        # That is 352 assertions rather than 269.
+        run: ADMIN_TOKEN=$(./scripts/admin-token.sh) ./scripts/smoke-test.sh
+        env:
+          RESEND_WEBHOOK_SECRET: whsec_Q2lTbW9rZVRlc3RTZWNyZXRWYWx1ZTEyMzQ1
+          ADMIN_EMAIL: ci-admin@rentboard.test
+          ADMIN_PASSWORD: CiSmokeAdmin123
         env:
           API: http://localhost:3000
 
@@ -248,6 +270,10 @@ jobs:
         run: |
           npm ci
           npx prisma generate && npx prisma migrate deploy
+          # The board must not be empty: application-lifecycle.spec.ts applies
+          # for the first room on it. Nothing seeded rooms before, so the first
+          # run of this job failed on `app-room-card a` not existing.
+          SEED_DEMO_ROOMS=true npx ts-node prisma/seed.ts
           npm run build
           node dist/main.js > /tmp/api.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:3000/health >/dev/null && break; sleep 2; done
@@ -261,6 +287,8 @@ jobs:
           FRONTEND_URL: http://localhost:4200
           API_URL: http://localhost:3000
           PORT: '3000'
+          ADMIN_EMAIL: ci-admin@rentboard.test
+          ADMIN_PASSWORD: CiSmokeAdmin123
 
       - name: Install frontend
         working-directory: frontend
