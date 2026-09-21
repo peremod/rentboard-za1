@@ -27,13 +27,18 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
           <h2>1. Contact Details of the Private Body</h2>
           <p><strong>Name:</strong> Umastande (Pty) Ltd</p>
           <p><strong>CIPC Registration Number:</strong> 2026/757331/07</p>
-          <p><strong>Physical Address:</strong> [REGISTERED ADDRESS], South Africa</p>
+          <p><strong>Physical Address:</strong> 16 Mokgatle Street, Kwa Thema, Gauteng, 1575, South Africa</p>
+          <p><strong>Postal Address:</strong> 16 Mokgatle Street, Kwa Thema, Gauteng, 1575, South Africa</p>
           <p><strong>Email:</strong> paia&#64;umastande.co.za</p>
         </section>
 
         <section>
           <h2>2. Information Officer</h2>
-          <p><strong>Information Officer:</strong> [FULL NAME] · paia&#64;umastande.co.za</p>
+          <p><strong>Information Officer:</strong> Thebeyapelo Modise, Chief Executive Officer</p>
+          <p><strong>Contact:</strong> paia&#64;umastande.co.za · 16 Mokgatle Street, Kwa Thema, Gauteng, 1575, South Africa</p>
+          <p>In terms of section 1 of PAIA read with section 56 of POPIA, the
+          Information Officer of a private body is the head of that body. No
+          Deputy Information Officer has been designated.</p>
           <p>Registered with the Information Regulator (South Africa) as required by POPIA.
           Registration No: <strong>2026-067370</strong>.</p>
         </section>

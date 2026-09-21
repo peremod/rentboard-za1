@@ -3,9 +3,9 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 /**
  * Privacy Policy — POPIA (Protection of Personal Information Act 4 of 2013) compliant.
  *
- * The responsible party is named here as registered at CIPC. The Information
- * Officer is still a placeholder: POPIA s.56 makes that a named person, not a
- * role, and it is not something to invent — fill it in before launch.
+ * The responsible party is named here as registered at CIPC, and the
+ * Information Officer by name as POPIA s.56 requires — it is a person, not a
+ * role, and for a private body it is the head of that body by default.
  *
  * This is a legal document. Have a South African attorney review it, not just
  * the fields that were blank.
@@ -31,7 +31,10 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
           <h2>1. Who We Are (Responsible Party)</h2>
           <p>Mastande is operated by <strong>Umastande (Pty) Ltd</strong>, CIPC Reg. No. <strong>2026/757331/07</strong>.
           For the purposes of POPIA, we are the <strong>Responsible Party</strong>.</p>
-          <p><strong>Information Officer:</strong> [NAME] · privacy&#64;umastande.co.za</p>
+          <p><strong>Information Officer:</strong> Thebeyapelo Modise, Chief Executive Officer · privacy&#64;umastande.co.za</p>
+          <p><strong>Registered address:</strong> 16 Mokgatle Street, Kwa Thema, Gauteng, 1575, South Africa</p>
+          <p>Registered with the Information Regulator (South Africa) under
+          registration number <strong>2026-067370</strong>.</p>
         </section>
 
         <section>
