@@ -80,7 +80,7 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
 
       <app-review-prompt/>
 
-      <section class="dash-section">
+      <section class="dash-section" id="active-listings">
         <div class="dash-section-title">Active listings</div>
 
         @if (loading()) {
@@ -271,9 +271,22 @@ export class LandlordDashboard implements OnInit {
    */
   readonly navItems = computed<PortalNavItem[]>(() => [
     { label: 'Dashboard', icon: '📊', route: '/landlord/dashboard', exact: true },
-    { label: 'My Rooms', icon: '🏠', route: '/landlord/dashboard' },
-    { label: 'Applicants', icon: '👥', route: '/landlord/dashboard', badge: this.totalApplicants() },
-    { label: 'Messages', icon: '💬', route: '/landlord/dashboard' },
+    // These two are sections of the dashboard, not pages. Without the
+    // fragment they navigated to the dashboard root, which from the dashboard
+    // is indistinguishable from a click that did nothing.
+    { label: 'My Rooms', icon: '🏠', route: '/landlord/dashboard', fragment: 'active-listings' },
+    // Applicants are listed per room, and the room cards under Active
+    // listings are where you open them. The badge is the number that matters;
+    // this takes you to where you act on it.
+    {
+      label: 'Applicants', icon: '👥', route: '/landlord/dashboard',
+      fragment: 'active-listings', badge: this.totalApplicants(),
+    },
+    // No messages screen exists. Threads live inside an application, reached
+    // from that application. Listing this as though it were a destination was
+    // the nav making a promise the app does not keep — `disabled` renders it
+    // greyed with a "Soon" chip, which is the truth.
+    { label: 'Messages', icon: '💬', route: '/landlord/dashboard', disabled: true },
     { label: 'My property', icon: '🏘️', route: '/landlord/yard' },
     { label: 'Verification', icon: '🪪', route: '/landlord/verification' },
     { label: 'Settings', icon: '⚙️', route: '/account/settings' },

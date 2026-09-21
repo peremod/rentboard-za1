@@ -10,6 +10,16 @@ export interface PortalNavItem {
   badge?: number;
   /** Match the route exactly rather than by prefix (used for dashboard roots). */
   exact?: boolean;
+  /**
+   * Anchor on the destination page.
+   *
+   * Several of these items name a section of the dashboard rather than a page
+   * of their own. Without a fragment they navigate to the dashboard root,
+   * which — when you are already on the dashboard — looks exactly like a
+   * click that did nothing. `anchorScrolling` is enabled in app.config.ts, so
+   * a fragment here actually moves the page.
+   */
+  fragment?: string;
   /** Listed for parity with the design, but the feature does not exist yet. */
   disabled?: boolean;
 }
@@ -44,7 +54,8 @@ export interface PortalNavItem {
               <span class="portal-nav-soon">Soon</span>
             </span>
           } @else {
-            <a class="portal-nav-link" [routerLink]="item.route" routerLinkActive="active"
+            <a class="portal-nav-link" [routerLink]="item.route" [fragment]="item.fragment"
+               routerLinkActive="active"
                [routerLinkActiveOptions]="{ exact: !!item.exact }">
               <span class="portal-nav-icon" aria-hidden="true">{{ item.icon }}</span>
               {{ item.label }}
