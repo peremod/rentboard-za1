@@ -1,4 +1,9 @@
-import { AngularNodeAppEngine, isMainModule, writeResponseToNodeResponse } from '@angular/ssr/node';
+import {
+  AngularNodeAppEngine,
+  createNodeRequestHandler,
+  isMainModule,
+  writeResponseToNodeResponse,
+} from '@angular/ssr/node';
 import express from 'express';
 import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -177,4 +182,19 @@ if (isMainModule(import.meta.url)) {
   );
 }
 
-export default app;
+/**
+ * Wrapped, not bare.
+ *
+ * `ng serve` looks for the metadata `createNodeRequestHandler` attaches, and
+ * without it prints "the 'reqHandler' export in 'server.ts' is either
+ * undefined or does not provide a recognized request handler" and quietly
+ * falls back to its own SSR middleware. That warning is easy to read as
+ * cosmetic and is not: it means everything in this file — the prerendered
+ * page map, the Cache-Control downgrade on .html, and the allowedHosts check
+ * that exists to stop SSRF through the Host header — is bypassed in
+ * development. Nobody was exercising the real server until production.
+ *
+ * The call returns the same handler it is given, so `node server.mjs` and the
+ * isMainModule listen block above are unaffected.
+ */
+export default createNodeRequestHandler(app);

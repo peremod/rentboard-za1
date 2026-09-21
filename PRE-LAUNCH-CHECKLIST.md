@@ -106,9 +106,10 @@ Legal counts as much as code here: several of these are compliance-critical, not
 | Item | Where | Action needed |
 |---|---|---|
 | ~~`[YOUR COMPANY NAME]`, CIPC registration number~~ | `Footer`, `PrivacyPolicy`, `Paia` | ✅ **Filled in v1.59.0** — Umastande (Pty) Ltd, CIPC Reg. No. 2026/757331/07. Rendered as registered but in conventional mixed case rather than the register's all-caps |
+| ~~Information Regulator registration number~~ | `Paia` | ✅ **Filled in v1.62.0** — 2026-067370 |
 | Registered address, Information Officer name | `Paia`, `PrivacyPolicy` | ⬜ Still blank, and deliberately not invented. POPIA s.56 makes the Information Officer a named person, not a role — by default the head of the private body, who must then register with the Information Regulator. Have a South African attorney review the legal pages generally, not just these fields |
 | **PAIA manual must be filed with the SAHRC** | — | Form 2, paia@sahrc.org.za, no fee — this is a legal filing obligation, not a code task |
-| Information Regulator registration number | `Paia` component | Register with the Information Regulator (South Africa) per POPIA, get the number, add it |
+| ~~Information Regulator registration number~~ | `Paia` component | ✅ **Done** — registered, number 2026-067370 is on the PAIA page |
 
 ## Stripe — every placeholder from §18
 
