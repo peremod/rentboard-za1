@@ -3,7 +3,6 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { LandlordGuard } from '../../common/guards/landlord.guard';
 
 /**
  * ImageKit client-side upload authentication.
@@ -17,8 +16,19 @@ import { LandlordGuard } from '../../common/guards/landlord.guard';
 export class UploadsController {
   constructor(private config: ConfigService) {}
 
+  /**
+   * LandlordGuard used to sit here, from when photos on a listing were the
+   * only thing anyone uploaded. A tenant now uploads verification documents
+   * for the Renter's Passport — a SASSA letter, bank screenshots — and could
+   * not get a token at all, so the Passport had no way to work.
+   *
+   * Signed in is the right bar. The token is short-lived and grants an upload,
+   * not a read: ImageKit files under private paths are not publicly
+   * addressable, and which path a document lands on is decided by the
+   * verification service, not by the uploader.
+   */
   @Get('imagekit-auth')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   getImageKitAuth() {
     const privateKey = this.config.get<string>('imagekit.privateKey');
