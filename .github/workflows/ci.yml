@@ -148,6 +148,47 @@ jobs:
         working-directory: backend
         run: npm run build
 
+      # The real backend gate. There are no unit tests — `npm test` is an
+      # honest stub — but scripts/smoke-test.sh has existed all along and
+      # nothing ever ran it. It drives the whole MVP against a live API:
+      # auth, refresh-token rotation, the room and application lifecycle,
+      # messaging, phone verification, and four IDOR checks that a second
+      # tenant cannot read, post into, accept or list another tenant's
+      # application. 270 assertions.
+      #
+      # Cross-tenant isolation is the one class of bug here that is both
+      # silent and serious, and this is the only thing in the repository
+      # that checks it.
+      - name: Start API
+        working-directory: backend
+        run: |
+          node dist/main.js > /tmp/api.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:3000/health >/dev/null && break
+            sleep 2
+          done
+          curl -sf http://localhost:3000/health || { echo "::error::API never came up"; cat /tmp/api.log; exit 1; }
+        env:
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/rentboard_test
+          DIRECT_URL: postgresql://postgres:test@localhost:5432/rentboard_test
+          JWT_SECRET: test-secret-minimum-32-characters-long-ok
+          JWT_EXPIRES_IN: 15m
+          NODE_ENV: development
+          APP_ENV: development
+          SITE_URL: http://localhost:4200
+          FRONTEND_URL: http://localhost:4200
+          API_URL: http://localhost:3000
+          PORT: '3000'
+
+      - name: API smoke test
+        run: ./scripts/smoke-test.sh
+        env:
+          API: http://localhost:3000
+
+      - name: API log on failure
+        if: failure()
+        run: cat /tmp/api.log
+
   commitlint:
     name: Validate commit messages
     runs-on: ubuntu-latest

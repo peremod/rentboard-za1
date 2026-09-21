@@ -33,24 +33,22 @@ jobs:
         # indexable if and only if it is production.
         run: |
           set -euo pipefail
-          HOST="api-staging.rentboard.co.za"
+          # The Render service's own hostname, which is what staging actually
+          # serves from today. This pointed at api-staging.rentboard.co.za,
+          # which has never resolved — so the check skipped itself on every
+          # run and verified nothing. Point it at the custom domain instead
+          # once that domain exists and is attached to the service.
+          HOST="${STAGING_API_HOST:-rentboard-api.onrender.com}"
           API="https://$HOST"
 
-          # Staging does not exist yet — as of writing, rentboard.co.za and
-          # every subdomain of it fail to resolve. Until the Render service and
-          # its DNS are stood up there is nothing to assert against, and a job
-          # that goes red on every push for a reason nobody can act on is worse
-          # than no job: it trains people to ignore the one signal this
-          # repository has that a backend deploy happened at all.
-          #
-          # So: not resolving means not deployed yet, and that is reported and
-          # skipped. Resolving but misconfigured is a real failure and still
-          # fails. The check arms itself the moment staging is real, with no
-          # edit needed here.
+          # Not resolving means not deployed yet: reported and skipped rather
+          # than failed, because a job that goes red for a reason nobody can
+          # act on trains people to ignore the only signal this repository has
+          # that a backend deploy happened at all. Resolving but misconfigured
+          # is a real failure and still fails.
           if ! getent hosts "$HOST" >/dev/null 2>&1; then
-            echo "⏭️  $HOST does not resolve — staging has not been stood up yet."
-            echo "    Nothing to verify. This check starts enforcing automatically"
-            echo "    once the Render service and its DNS exist."
+            echo "⏭️  $HOST does not resolve — nothing deployed there yet."
+            echo "    This check starts enforcing automatically once it exists."
             exit 0
           fi
 

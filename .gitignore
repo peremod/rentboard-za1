@@ -49,3 +49,10 @@ backend/prisma/migrations/dev/
 # Misc
 *.tsbuildinfo
 .eslintcache
+
+# Editor backups. nano writes <file>.save on an interrupted write, and one of
+# those was staged alongside a real edit — exactly the sort of thing that ends
+# up committed at 1am.
+*.save
+*.orig
+*.rej
