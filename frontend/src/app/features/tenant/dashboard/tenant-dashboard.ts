@@ -45,7 +45,7 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
 
       <app-review-prompt/>
 
-      <section class="dash-section">
+      <section class="dash-section" id="your-applications">
         <div class="dash-section-title">Your applications</div>
         <p class="muted">Live — you're waiting on the landlord.</p>
 
@@ -169,7 +169,7 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
 
       <app-referral-panel/>
 
-      <section class="dash-section">
+      <section class="dash-section" id="room-alerts">
         <div class="dash-section-title">
           Room alerts
           @if (alerts.searches().length > 0) {
@@ -215,7 +215,7 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
         }
       </section>
 
-      <section class="dash-section">
+      <section class="dash-section" id="saved-rooms">
         <div class="dash-section-title">
           Saved rooms
           @if (savedRooms.count() > 0) { <span class="dash-count">({{ savedRooms.count() }})</span> }
@@ -324,13 +324,25 @@ export class TenantDashboard implements OnInit {
    */
   readonly navItems = computed<PortalNavItem[]>(() => [
     { label: 'Dashboard', icon: '🏠', route: '/tenant/dashboard', exact: true },
-    { label: 'Applications', icon: '📋', route: '/tenant/dashboard', badge: this.activeApplicationCount() },
-    { label: 'Messages', icon: '💬', route: '/tenant/dashboard' },
+    // Sections of this page, so they carry fragments — see the landlord
+    // dashboard for why a bare route here looks like a dead click.
+    {
+      label: 'Applications', icon: '📋', route: '/tenant/dashboard',
+      fragment: 'your-applications', badge: this.activeApplicationCount(),
+    },
+    // No messages screen exists; threads live inside an application.
+    { label: 'Messages', icon: '💬', route: '/tenant/dashboard', disabled: true },
     { label: 'Browse rooms', icon: '🔍', route: '/' },
     { label: "Renter's Passport", icon: '🪪', route: '/tenant/passport' },
     { label: 'Settings', icon: '⚙️', route: '/account/settings' },
-    { label: 'Saved Rooms', icon: '♥', route: '/tenant/dashboard', badge: this.savedRooms.count() },
-    { label: 'Alerts', icon: '🔔', route: '/tenant/dashboard', badge: this.alerts.searches().length },
+    {
+      label: 'Saved Rooms', icon: '♥', route: '/tenant/dashboard',
+      fragment: 'saved-rooms', badge: this.savedRooms.count(),
+    },
+    {
+      label: 'Alerts', icon: '🔔', route: '/tenant/dashboard',
+      fragment: 'room-alerts', badge: this.alerts.searches().length,
+    },
   ]);
 
   applications = signal<Application[]>([]);
