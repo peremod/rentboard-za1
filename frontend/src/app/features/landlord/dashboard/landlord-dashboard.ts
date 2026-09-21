@@ -274,6 +274,7 @@ export class LandlordDashboard implements OnInit {
     { label: 'My Rooms', icon: '🏠', route: '/landlord/dashboard' },
     { label: 'Applicants', icon: '👥', route: '/landlord/dashboard', badge: this.totalApplicants() },
     { label: 'Messages', icon: '💬', route: '/landlord/dashboard' },
+    { label: 'My property', icon: '🏘️', route: '/landlord/yard' },
     { label: 'Verification', icon: '🪪', route: '/landlord/verification' },
     { label: 'Settings', icon: '⚙️', route: '/account/settings' },
     ...(BILLING_ENABLED
