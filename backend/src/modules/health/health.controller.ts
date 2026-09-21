@@ -1,5 +1,32 @@
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { PrismaService } from '../../prisma/prisma.service';
+
+/**
+ * Read once at startup, from package.json rather than a hand-maintained
+ * constant.
+ *
+ * `npm_package_version` is only set when the process is started by an npm
+ * script, and production runs `node dist/main` (see backend/Dockerfile), so
+ * it is never set where it matters. The old fallback was a literal that a
+ * comment asked people to keep in sync by hand — it said 1.0.0 while the
+ * repository was on v1.54.0, so /health reported a version four dozen
+ * releases stale, which is worth knowing during an incident and misleading
+ * at exactly the wrong moment.
+ *
+ * `__dirname` is dist/modules/health at runtime, and the Dockerfile copies
+ * package.json to /app alongside dist/, so this path resolves in the image
+ * and locally. If it ever does not, an unknown version is better than a
+ * confident wrong one — and better than a health check that throws.
+ */
+const VERSION: string = (() => {
+  try {
+    return JSON.parse(readFileSync(join(__dirname, '../../../package.json'), 'utf8')).version;
+  } catch {
+    return 'unknown';
+  }
+})();
 
 /**
  * GET /health — used by Render's healthCheckPath (see render.yaml), the
@@ -17,11 +44,7 @@ export class HealthController {
     return {
       status: dbOk ? 'ok' : 'degraded',
       db: dbOk ? 'connected' : 'unavailable',
-      // NOTE: npm_package_version is only set by `npm run` scripts — Docker's
-      // `node dist/main` (see backend/Dockerfile) never sets it, so this
-      // fallback is what actually shows in production. Keep it in sync with
-      // package.json manually until this reads package.json directly instead.
-      version: process.env.npm_package_version ?? '1.0.0',
+      version: VERSION,
       uptime: Math.floor(process.uptime()),
       ts: new Date().toISOString(),
     };

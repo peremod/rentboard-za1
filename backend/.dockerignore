@@ -1,0 +1,35 @@
+# Docker does NOT read .gitignore, so everything below would otherwise be
+# copied into the image by `COPY . .` — including two things that actively
+# break the build.
+#
+# node_modules: `COPY . .` runs AFTER `npm ci`, so a host node_modules would
+# overwrite the one just installed for the image. Prisma ships
+# platform-specific query engines, so building on macOS or a different libc
+# and copying those in produces a container that installs cleanly and then
+# cannot reach the database.
+#
+# tsconfig.tsbuildinfo: TypeScript reads it, concludes nothing changed, and
+# emits nothing — while nest's deleteOutDir has already removed dist/. The
+# image then builds "successfully" with an empty dist and the container exits
+# with MODULE_NOT_FOUND. (incremental is now off in tsconfig.json, which fixes
+# the cause; this keeps a stale file from a previous checkout out regardless.)
+node_modules
+dist
+*.tsbuildinfo
+
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+npm-debug.log*
+*.log
+coverage
+test-results
+
+# Editor backups
+*.save
+*.orig
+*.rej
+*.swp

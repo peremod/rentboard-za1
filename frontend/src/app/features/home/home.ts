@@ -164,10 +164,6 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
             {{ 'filters.couples_welcome' | translate }}
           </label>
           <label class="filter-check">
-            <input type="checkbox" [(ngModel)]="studentsWelcome" (ngModelChange)="onFilterChange()"/>
-            Students welcome
-          </label>
-          <label class="filter-check">
             <input type="checkbox" [(ngModel)]="dssAccepted" (ngModelChange)="onFilterChange()"/>
             {{ 'filters.dss_accepted' | translate }}
           </label>
@@ -411,12 +407,18 @@ export class Home implements OnInit, OnDestroy {
   dssAccepted = false;
   guarantorAccepted = false;
   petsAllowed = false;
-  /**
-   * UI-only for now: there is no students flag on the Room model or the
-   * filters DTO, and the API runs forbidNonWhitelisted, so sending it would
-   * 400. Shown because the design lists it; wire it up when the field exists.
+  /*
+   * There is deliberately no `studentsWelcome` here. The design lists the
+   * filter, but there is no students flag on the Room model or the filters
+   * DTO, so it could never narrow anything — and because it was counted in
+   * activeFilterCount() the UI told people a filter was active while the
+   * board stayed exactly the same. Offering a control that does nothing is
+   * worse than not offering it, which is the same call this project already
+   * made for untranslated locales and the paused pricing links.
+   *
+   * To build it properly: a boolean on Room, the landlord wizard, the filters
+   * DTO, the query, then the checkbox back here with a translated label.
    */
-  studentsWelcome = false;
   maxRentCents = '';
   housemates = '';
   sortBy: 'newest' | 'price_asc' | 'price_desc' | 'featured' = 'newest';
@@ -586,7 +588,7 @@ export class Home implements OnInit, OnDestroy {
   activeFilterCount(): number {
     return [
       this.province, this.roomType, this.maxRentCents, this.housemates,
-      this.billsIncluded, this.availableNow, this.couplesAllowed, this.studentsWelcome,
+      this.billsIncluded, this.availableNow, this.couplesAllowed,
       this.dssAccepted, this.guarantorAccepted, this.petsAllowed,
     ].filter(Boolean).length;
   }
@@ -600,7 +602,6 @@ export class Home implements OnInit, OnDestroy {
     this.billsIncluded = false;
     this.availableNow = false;
     this.couplesAllowed = false;
-    this.studentsWelcome = false;
     this.dssAccepted = false;
     this.guarantorAccepted = false;
     this.petsAllowed = false;

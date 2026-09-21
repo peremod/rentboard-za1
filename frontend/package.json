@@ -1,6 +1,6 @@
 {
   "name": "rentboard-frontend",
-  "version": "1.2.5",
+  "version": "1.54.0",
   "private": true,
   "scripts": {
     "start": "ng serve",
