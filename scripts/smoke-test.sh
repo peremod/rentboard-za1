@@ -2376,6 +2376,46 @@ else
   grey "  SKIP  flag queue checks — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
 fi
 
+# -- 44. WhatsApp webhook signature -----------------------------------------
+# This handler verified nothing until v1.57.0: anyone who found the URL could
+# post a payload and have it written into a landlord and tenant's private
+# conversation as though the other party had sent it. The assertion that
+# matters is that an unsigned delivery is refused — 200 here is the bug.
+head_ "44. WhatsApp webhook signature"
+
+WA_BODY='{"entry":[{"changes":[{"value":{"messages":[{"id":"wamid.smoke","text":{"body":"hi"}}]}}]}]}'
+WA_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/whatsapp/webhook" \
+  -H 'Content-Type: application/json' -d "$WA_BODY" 2>/dev/null)
+if [[ "$WA_STATUS" == "403" ]]; then
+  green "  PASS  unsigned WhatsApp webhook is refused  (403)"; PASS=$((PASS+1))
+else
+  red "  FAIL  unsigned WhatsApp webhook returned $WA_STATUS; 403 expected, never 200"; FAIL=$((FAIL+1))
+fi
+
+if [[ -n "${WHATSAPP_APP_SECRET:-}" ]]; then
+  WA_SIG="sha256=$(printf '%s' "$WA_BODY" \
+    | openssl dgst -sha256 -hmac "$WHATSAPP_APP_SECRET" -hex | awk '{print $NF}')"
+  WA_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/whatsapp/webhook" \
+    -H 'Content-Type: application/json' -H "x-hub-signature-256: $WA_SIG" -d "$WA_BODY" 2>/dev/null)
+  if [[ "$WA_STATUS" == "200" ]]; then
+    green "  PASS  a correctly signed delivery is accepted  (200)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  signed WhatsApp webhook returned $WA_STATUS, expected 200"; FAIL=$((FAIL+1))
+  fi
+
+  # Signed for a different body — the tamper that matters.
+  WA_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/whatsapp/webhook" \
+    -H 'Content-Type: application/json' -H "x-hub-signature-256: $WA_SIG" \
+    -d "${WA_BODY/hi/forged}" 2>/dev/null)
+  if [[ "$WA_STATUS" == "403" ]]; then
+    green "  PASS  a tampered body is refused despite a real signature  (403)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  tampered WhatsApp body returned $WA_STATUS, expected 403"; FAIL=$((FAIL+1))
+  fi
+else
+  grey "  SKIP  signed-delivery checks — set WHATSAPP_APP_SECRET to the API's own to include them"; SKIP=$((SKIP+1))
+fi
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"

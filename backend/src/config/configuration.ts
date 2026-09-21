@@ -59,5 +59,13 @@ export default () => ({
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
     accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
     verifyToken: process.env.WHATSAPP_VERIFY_TOKEN,
+    /**
+     * Meta App Secret — signs every inbound webhook delivery.
+     *
+     * Not the same thing as WHATSAPP_VERIFY_TOKEN, which is a string you
+     * choose and which Meta echoes back once, during the GET handshake, and
+     * never again. The verify token proves nothing about any subsequent POST.
+     */
+    appSecret: process.env.WHATSAPP_APP_SECRET?.trim(),
   },
 });

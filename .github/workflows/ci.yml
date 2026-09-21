@@ -202,6 +202,10 @@ jobs:
           # webhook and assert that verification accepts a good signature and
           # refuses a forged or replayed one. Without it those checks skip.
           RESEND_WEBHOOK_SECRET: whsec_Q2lTbW9rZVRlc3RTZWNyZXRWYWx1ZTEyMzQ1
+          # Also not a secret — a fixed test value, so the smoke test can sign
+          # a WhatsApp delivery and prove verification accepts a real signature
+          # and refuses a tampered body. Without it those two checks skip.
+          WHATSAPP_APP_SECRET: ci-whatsapp-app-secret-0123456789
 
       - name: API smoke test
         # With an admin token the suite runs its admin-only sections instead of
@@ -212,6 +216,7 @@ jobs:
         env:
           API: http://localhost:3000
           RESEND_WEBHOOK_SECRET: whsec_Q2lTbW9rZVRlc3RTZWNyZXRWYWx1ZTEyMzQ1
+          WHATSAPP_APP_SECRET: ci-whatsapp-app-secret-0123456789
           ADMIN_EMAIL: ci-admin@mastande.test
           ADMIN_PASSWORD: CiSmokeAdmin123
 

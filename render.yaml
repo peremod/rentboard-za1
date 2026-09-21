@@ -126,6 +126,26 @@ services:
       - key: ADMIN_ALERT_EMAIL
         sync: false
 
+      # WhatsApp Business API (Meta). Never declared here before, so staging
+      # had no way to be given them through the Blueprint at all — WhatsApp
+      # was optional when the only thing it did was notify. Phase 2 puts
+      # listing creation and rent reminders on it, so it is no longer.
+      #
+      # WHATSAPP_APP_SECRET is the one that is easy to miss: it is separate
+      # from the verify token and it is what signs every inbound webhook. The
+      # webhook refuses every delivery without it, by design, so inbound
+      # replies simply stop arriving rather than being silently trusted.
+      - key: WHATSAPP_API_VERSION
+        value: v19.0
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+
       - key: PAYFAST_MERCHANT_ID
         sync: false
       - key: PAYFAST_MERCHANT_KEY
