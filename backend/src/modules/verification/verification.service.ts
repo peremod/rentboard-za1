@@ -4,9 +4,19 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
 import { ReviewVerificationDto } from './dto/review-verification.dto';
 import { VERIFICATION_RULES, typesFor, requiresPayment, maySubmit } from './verification.rules';
+import { VERIFICATION_FEE_CENTS } from '../payments/payments.constants';
 
 /** A Tenant Passport lasts a year before the proofs need refreshing. */
 const PASSPORT_VALID_MONTHS = 12;
+
+/**
+ * The landlord verification fee in whole rands, for the wording on the trail.
+ *
+ * Derived from the cents figure PaymentsService charges rather than typed
+ * again: a trail that tells someone they were charged R149 while the gateway
+ * took something else is worse than no trail at all.
+ */
+const VERIFICATION_FEE_RANDS = VERIFICATION_FEE_CENTS / 100;
 
 /**
  * Verification, both sides of the market.
@@ -58,6 +68,49 @@ export class VerificationService {
     return tx.verificationEvent.create({
       data: { requestId, actor, actorId, step, detail },
     });
+  }
+
+  /**
+   * The fee has been confirmed by the gateway: queue the check for review and
+   * say so on the trail.
+   *
+   * Lives here rather than in PaymentsService because the trail is what makes
+   * a badge mean something — Phase 1's whole premise — and a payment that
+   * moves a request into the review queue without appearing on its own
+   * history leaves a gap exactly where someone would look to ask "why was
+   * this approved?". Takes the caller's transaction so the payment, the
+   * status change and the event land together or not at all.
+   *
+   * Returns false when the request was not waiting on payment, which is the
+   * ordinary shape of a gateway retry rather than an error.
+   */
+  async confirmPaid(
+    tx: Prisma.TransactionClient,
+    requestId: string,
+    merchantReference: string,
+  ): Promise<boolean> {
+    const moved = await tx.verificationRequest.updateMany({
+      where: { id: requestId, status: 'pending_payment' },
+      data: { status: 'pending' },
+    });
+    if (moved.count === 0) return false;
+
+    await this.recordEvent(
+      tx, requestId, 'system', 'paid',
+      `R${(VERIFICATION_FEE_RANDS).toFixed(0)} verification fee received (${merchantReference}). Now in the review queue.`,
+    );
+    return true;
+  }
+
+  /**
+   * A refund has actually been issued. Recorded on the trail so the person
+   * can see the promise was kept without having to ask.
+   */
+  recordRefunded(tx: Prisma.TransactionClient, requestId: string, reason: string) {
+    return this.recordEvent(
+      tx, requestId, 'admin', 'refunded',
+      `Verification fee refunded: ${reason}`,
+    );
   }
 
   /** The subject's own requests, with their history. Documents are withheld. */
@@ -239,6 +292,35 @@ export class VerificationService {
           tx, id, 'system', 'document_deleted',
           'The uploaded document was deleted. Only this outcome is kept — POPIA s.26.',
         );
+      }
+
+      // The pricing page promises a refund if we cannot verify someone. A
+      // promise that depends on an admin remembering is not a promise, so
+      // the obligation is recorded the moment the rejection is, and the
+      // refunds-due queue is what an admin works from.
+      //
+      // Written straight to the payment row rather than through
+      // PaymentsService: PaymentsModule already imports this one for
+      // confirmPaid, and importing it back would close a cycle to save
+      // nothing. Scoped to `paid` so a failed or already-refunded attempt is
+      // not resurrected.
+      if (dto.status === 'rejected') {
+        const owed = await tx.payment.updateMany({
+          where: {
+            referenceId: id,
+            purpose: 'landlord_verification',
+            status: 'paid',
+            refundedAt: null,
+            refundDueAt: null,
+          },
+          data: { refundDueAt: new Date() },
+        });
+        if (owed.count > 0) {
+          await this.recordEvent(
+            tx, id, 'system', 'refund_due',
+            `We could not verify this, so the R${VERIFICATION_FEE_RANDS.toFixed(0)} fee is being refunded in full.`,
+          );
+        }
       }
 
       if (dto.status === 'approved') {

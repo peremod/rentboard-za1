@@ -717,6 +717,12 @@ img{display:block;max-width:100%}
 .wa-draft__note{font-size:.78rem;color:var(--ink2);line-height:1.6;margin:0 0 .7rem}
 .wa-draft button{min-height:40px;padding-inline:1.1rem}
 
+.verify-refund{
+  margin-top:.4rem;padding:.5rem .7rem;border-radius:var(--r4);
+  background:rgba(61,112,64,.07);border:1px solid rgba(61,112,64,.22);
+  color:var(--ink);font-size:.78rem;line-height:1.6;
+}
+
 /* ═══ SHIMMER ═══ */
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .shimmer{

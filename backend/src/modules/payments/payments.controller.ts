@@ -62,6 +62,18 @@ export class PaymentsController {
     return this.paymentsService.listMine(user.id);
   }
 
+  @Get('refunds-due')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Fees owed back and not yet returned',
+    description:
+      'Rejecting a paid verification sets the obligation automatically. Work this list in the PayFast dashboard, then record each one with PATCH /payments/:id/refund.',
+  })
+  refundsDue() {
+    return this.paymentsService.refundsDue();
+  }
+
   @Patch(':id/refund')
   @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()

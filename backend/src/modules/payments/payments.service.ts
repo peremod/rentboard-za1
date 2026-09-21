@@ -2,10 +2,11 @@ import { Injectable, Logger, BadRequestException, NotFoundException } from '@nes
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { VERIFICATION_FEE_CENTS } from './payments.constants';
 import { PayfastService } from './payfast.service';
+import { VerificationService } from '../verification/verification.service';
 
-/** The once-off landlord verification fee, in ZAR cents. Matches the pricing page. */
-export const VERIFICATION_FEE_CENTS = 14900;
+export { VERIFICATION_FEE_CENTS } from './payments.constants';
 
 @Injectable()
 export class PaymentsService {
@@ -15,6 +16,7 @@ export class PaymentsService {
     private prisma: PrismaService,
     private payfast: PayfastService,
     private config: ConfigService,
+    private verification: VerificationService,
   ) {}
 
   /**
@@ -132,8 +134,8 @@ export class PaymentsService {
 
     // Paid. Move the verification into the review queue in the same
     // transaction, so a request can never be paid but not queued.
-    await this.prisma.$transaction([
-      this.prisma.payment.update({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
         where: { id: payment.id },
         data: {
           status: 'paid',
@@ -141,16 +143,13 @@ export class PaymentsService {
           providerReference: payload.pf_payment_id ?? null,
           itnPayload: payload,
         },
-      }),
-      ...(payment.referenceId
-        ? [
-            this.prisma.verificationRequest.updateMany({
-              where: { id: payment.referenceId, status: 'pending_payment' },
-              data: { status: 'pending' },
-            }),
-          ]
-        : []),
-    ]);
+      });
+      if (payment.referenceId) {
+        // VerificationService owns the status change AND the trail entry, so
+        // the money arriving is visible to the person it was charged to.
+        await this.verification.confirmPaid(tx, payment.referenceId, merchantReference);
+      }
+    });
 
     this.logger.log(`Payment ${merchantReference} confirmed; verification queued for review`);
   }
@@ -167,6 +166,27 @@ export class PaymentsService {
   }
 
   /**
+   * Every fee we owe back and have not yet returned.
+   *
+   * This is the queue that makes "refunded in full if we cannot verify you"
+   * real. Rejecting a paid check sets `refundDueAt`; PayFast refunds are
+   * issued from their dashboard, so an admin works this list, moves the money
+   * there, and records it here. Oldest first, because the person who has been
+   * waiting longest is the one to pay back next.
+   */
+  refundsDue() {
+    return this.prisma.payment.findMany({
+      where: { status: 'paid', refundDueAt: { not: null }, refundedAt: null },
+      select: {
+        id: true, amountCents: true, merchantReference: true,
+        providerReference: true, refundDueAt: true, paidAt: true, referenceId: true,
+        user: { select: { id: true, fullName: true, email: true } },
+      },
+      orderBy: { refundDueAt: 'asc' },
+    });
+  }
+
+  /**
    * Record a refund. PayFast refunds are issued from their dashboard rather
    * than by API, so this records the outcome — it does not move money.
    */
@@ -175,9 +195,17 @@ export class PaymentsService {
     if (!payment) throw new NotFoundException('Payment not found');
     if (payment.status !== 'paid') throw new BadRequestException('Only a paid payment can be refunded');
 
-    const updated = await this.prisma.payment.update({
-      where: { id: paymentId },
-      data: { status: 'refunded', refundedAt: new Date(), refundReason: reason },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.payment.update({
+        where: { id: paymentId },
+        data: { status: 'refunded', refundedAt: new Date(), refundReason: reason },
+      });
+      // Close the loop on the trail the person can actually read. A refund
+      // that only exists in the PayFast dashboard is invisible to them.
+      if (payment.purpose === 'landlord_verification' && payment.referenceId) {
+        await this.verification.recordRefunded(tx, payment.referenceId, reason);
+      }
+      return result;
     });
 
     this.logger.warn(`Refund recorded for ${payment.merchantReference} by admin ${adminId}: ${reason}`);

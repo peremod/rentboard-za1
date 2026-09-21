@@ -18,15 +18,15 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
             Promotion of Access to Information Act 2 of 2000 (PAIA) · Section 51 Manual · Version 1.0 · 2026
           </p>
           <p class="legal-intro">
-            In terms of Section 51 of PAIA, <strong>[YOUR COMPANY NAME] (Pty) Ltd</strong> hereby publishes its
+            In terms of Section 51 of PAIA, <strong>Umastande (Pty) Ltd</strong> hereby publishes its
             PAIA Manual. This manual must be filed with the South African Human Rights Commission (SAHRC).
           </p>
         </header>
 
         <section>
           <h2>1. Contact Details of the Private Body</h2>
-          <p><strong>Name:</strong> [YOUR COMPANY NAME] (Pty) Ltd</p>
-          <p><strong>CIPC Registration Number:</strong> [REGISTRATION NUMBER]</p>
+          <p><strong>Name:</strong> Umastande (Pty) Ltd</p>
+          <p><strong>CIPC Registration Number:</strong> 2026/757331/07</p>
           <p><strong>Physical Address:</strong> [REGISTERED ADDRESS], South Africa</p>
           <p><strong>Email:</strong> paia&#64;mastande.co.za</p>
         </section>

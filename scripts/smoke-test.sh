@@ -2523,6 +2523,61 @@ else
   grey "  SKIP  inbound bot message — set WHATSAPP_APP_SECRET to include it"; SKIP=$((SKIP+1))
 fi
 
+# -- 48. The refund promise -------------------------------------------------
+# The pricing page says "if we cannot verify you, you are refunded in full".
+# Until v1.59.0 nothing in the code kept that — an admin had to remember.
+#
+# What is asserted here is what HTTP can reach. Reaching a *paid* check needs a
+# valid PayFast ITN, and validating one needs PayFast to confirm it
+# server-to-server, so the full paid → rejected → refunded path lives in
+# scripts/refund-drive.mjs, which seeds that one row directly. Everything below
+# runs on every suite.
+head_ "48. The refund promise"
+
+req GET /api/payments/refunds-due "" "$LTOKEN"
+check "a landlord cannot read the refunds queue" 403 "$STATUS" "$BODY"
+
+req GET /api/payments/refunds-due "" "$TTOKEN"
+check "nor can a tenant" 403 "$STATUS" "$BODY"
+
+req GET /api/payments/refunds-due
+check "nor can a stranger" 401 "$STATUS"
+
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  req GET /api/payments/refunds-due "" "$ADMIN_TOKEN"
+  check "admin can read it" 200 "$STATUS" "$BODY"
+
+  # Nothing in the queue may be settled already. A refund that shows up after
+  # the money went back is how someone gets paid twice.
+  SETTLED=$(echo "$BODY" | jq -r '[.[]? | select(.refundDueAt == null)] | length')
+  if [[ "$SETTLED" == "0" ]]; then
+    green "  PASS  every row in the queue is actually owed"; PASS=$((PASS+1))
+  else
+    red "  FAIL  $SETTLED rows with no refundDueAt"; FAIL=$((FAIL+1))
+  fi
+
+  # A tenant's checks are free, so rejecting one must never owe anybody money.
+  # This is the guard on "free to apply, always" from the money side.
+  req POST /api/verification '{"type":"sassa_grant","documentPath":"private/verification/refund-guard.jpg"}' "$TTOKEN"
+  FREE_VR=$(echo "$BODY" | jq -r '.id // empty')
+  if [[ -n "$FREE_VR" ]]; then
+    req PATCH "/api/verification/$FREE_VR/review" '{"status":"rejected","reviewNote":"Not legible — testing that a free check owes nothing."}' "$ADMIN_TOKEN"
+    check "a free check can be rejected" 200 "$STATUS" "$BODY"
+
+    req GET "/api/verification/mine/$FREE_VR/history" "" "$TTOKEN"
+    OWED=$(echo "$BODY" | jq -r '[.[]? | select(.step == "refund_due")] | length')
+    if [[ "$OWED" == "0" ]]; then
+      green "  PASS  rejecting a free check owes nobody a refund"; PASS=$((PASS+1))
+    else
+      red "  FAIL  a free check created a refund obligation"; FAIL=$((FAIL+1))
+    fi
+  else
+    grey "  SKIP  tenant already has a SASSA check from an earlier section"; SKIP=$((SKIP+1))
+  fi
+else
+  grey "  SKIP  refunds queue contents — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
+fi
+
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"
