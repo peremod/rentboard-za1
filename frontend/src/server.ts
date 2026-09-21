@@ -183,18 +183,29 @@ if (isMainModule(import.meta.url)) {
 }
 
 /**
- * Wrapped, not bare.
+ * Named `reqHandler`, and that name is not decorative.
  *
- * `ng serve` looks for the metadata `createNodeRequestHandler` attaches, and
- * without it prints "the 'reqHandler' export in 'server.ts' is either
- * undefined or does not provide a recognized request handler" and quietly
- * falls back to its own SSR middleware. That warning is easy to read as
- * cosmetic and is not: it means everything in this file — the prerendered
- * page map, the Cache-Control downgrade on .html, and the allowedHosts check
- * that exists to stop SSRF through the Host header — is bypassed in
- * development. Nobody was exercising the real server until production.
+ * `@angular/build`'s SSR middleware does
+ * `const { reqHandler } = await server.ssrLoadModule('./server.mjs')` and then
+ * checks it for the `__ng_node_request_handler__` marker that
+ * `createNodeRequestHandler` attaches. A default export — even a correctly
+ * wrapped one — is never read, so it cannot satisfy that destructure.
  *
- * The call returns the same handler it is given, so `node server.mjs` and the
- * isMainModule listen block above are unaffected.
+ * v1.62.0 got this wrong: it wrapped the default export and I confirmed the
+ * warning was gone by reading `ng serve`'s log at startup. The warning is
+ * emitted on the first REQUEST, not at boot, so the log was clean because
+ * nothing had asked the server for a page yet.
+ *
+ * What the warning means, when it appears: everything in this file is
+ * bypassed in development — the prerendered page map, the Cache-Control
+ * downgrade on .html, and the allowedHosts check that exists to stop SSRF
+ * through the Host header. Angular serves the app with its own middleware
+ * instead, which is why the site still works and nothing looks wrong.
+ *
+ * The default export stays for anything that imports this module directly.
+ * `node server.mjs` is unaffected either way: it runs the isMainModule listen
+ * block above and never touches either export.
  */
-export default createNodeRequestHandler(app);
+export const reqHandler = createNodeRequestHandler(app);
+
+export default app;
