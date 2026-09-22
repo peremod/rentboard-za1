@@ -260,8 +260,8 @@ const seoFileCache = new Map<string, { body: string; type: string; at: number }>
  * carries; staging and development disallow, matching their meta tag and the
  * X-Robots-Tag header set in vercel.json.
  */
-function fallbackRobots(): string {
-  if (!environment.indexable) {
+function fallbackRobots(indexable: boolean): string {
+  if (!indexable) {
     return ['User-agent: *', 'Disallow: /', ''].join('\n');
   }
   return [
@@ -281,8 +281,51 @@ function fallbackRobots(): string {
   ].join('\n');
 }
 
+/**
+ * Is this request arriving at the site itself, or at some other hostname the
+ * deployment happens to answer on?
+ *
+ * A deployment URL, a branch alias, a preview — they all serve the production
+ * build, so `environment.indexable` says "yes, index me" on every one of them.
+ * That is right for the site and wrong for its copies: robots.txt on
+ * rentboard-za1.vercel.app was answering `Allow: /` while the site it is a
+ * copy of does not exist yet. The `x-robots-tag` header stopped anything being
+ * indexed, so nothing was exposed — but a robots.txt that invites crawlers to
+ * a staging copy is an instruction we do not mean, and the static deployment
+ * it replaced got this right.
+ */
+function isCanonicalHost(req: express.Request): boolean {
+  const requested = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+  if (!requested) return false;
+
+  try {
+    const canonical = new URL(environment.siteUrl).hostname.toLowerCase();
+    const bare = canonical.startsWith('www.') ? canonical.slice(4) : canonical;
+    return requested === bare || requested === `www.${bare}`;
+  } catch {
+    return false;
+  }
+}
+
 app.get(['/robots.txt', '/sitemap.xml'], async (req, res) => {
   const path = req.path;
+
+  // Anything that is not the site itself gets the same answer, without asking
+  // the API: do not crawl this. No sitemap either — a copy of the site must
+  // not advertise the real one's URLs as its own.
+  if (!isCanonicalHost(req)) {
+    if (path === '/robots.txt') {
+      res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.send(['User-agent: *', 'Disallow: /', ''].join('\n'));
+      return;
+    }
+    res.status(404).type('text/plain').send('No sitemap for this hostname.');
+    return;
+  }
   const cached = seoFileCache.get(path);
   if (cached && Date.now() - cached.at < SEO_FILE_TTL_MS) {
     res.setHeader('Content-Type', cached.type);
@@ -308,7 +351,7 @@ app.get(['/robots.txt', '/sitemap.xml'], async (req, res) => {
     console.error(`[seo] ${path} could not be fetched from ${origin}:`, err);
     if (path === '/robots.txt') {
       res.setHeader('Content-Type', 'text/plain');
-      res.status(200).send(fallbackRobots());
+      res.status(200).send(fallbackRobots(environment.indexable));
     } else {
       // Never a 200 with the wrong body: a sitemap that answers 503 is
       // retried, and one that answers 200 with an error page is believed.

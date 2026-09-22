@@ -290,17 +290,31 @@ else
       curl -sf -o /dev/null --max-time 2 http://localhost:4112/ && break
       sleep 0.5
     done
-    PROD_ROBOTS=$(curl -s --max-time 25 http://localhost:4112/robots.txt)
+    # As the site itself. The API is unreachable from here, so this is the
+    # fallback path — on the build that faces Googlebot.
+    PROD_ROBOTS=$(curl -s --max-time 25 -H "Host: umastande.co.za" http://localhost:4112/robots.txt)
     if echo "$PROD_ROBOTS" | grep -qiE '^[[:space:]]*Disallow:[[:space:]]*/[[:space:]]*$'; then
-      bad "the PRODUCTION build serves 'Disallow: /' when the API is unreachable"
+      bad "the PRODUCTION build serves 'Disallow: /' to its own domain when the API is unreachable"
       note "That is an instruction Google obeys. A missing robots.txt means crawl"
       note "freely; a Disallow: / means deindex. See fallbackRobots() in server.ts."
     else
-      ok "the production build stays crawlable when the API cannot be reached"
+      ok "the production build stays crawlable on its own domain when the API is down"
     fi
     echo "$PROD_ROBOTS" | grep -qi 'Sitemap:' \
       && ok "and still points at its sitemap" \
       || bad "the production robots.txt has no Sitemap line"
+
+    # And as one of its copies. Every deployment URL, branch alias and preview
+    # serves this same production build, so `indexable` says yes on all of
+    # them — which had rentboard-za1.vercel.app answering Allow: / for a site
+    # that does not exist yet. A copy must not invite crawlers.
+    COPY_ROBOTS=$(curl -s --max-time 25 -H "Host: some-preview.vercel.app" http://localhost:4112/robots.txt)
+    echo "$COPY_ROBOTS" | grep -qiE '^[[:space:]]*Disallow:[[:space:]]*/[[:space:]]*$' \
+      && ok "and tells every other hostname not to crawl it" \
+      || bad "a non-canonical hostname is invited to crawl: $(echo "$COPY_ROBOTS" | head -2 | tr '\n' ' ')"
+    [ "$(curl -s -o /dev/null --max-time 25 -H "Host: some-preview.vercel.app" -w '%{http_code}' http://localhost:4112/sitemap.xml)" = "404" ] \
+      && ok "and serves no sitemap there" \
+      || bad "a non-canonical hostname serves a sitemap of the real site's URLs"
 
     # The production build points at the production API, which does not
     # resolve from any machine that is not production — so this server IS the
