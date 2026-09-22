@@ -340,6 +340,21 @@ jobs:
       - name: E2E — mobile board
         run: npx playwright test --project=mobile
 
+      # Two drives that read the rendered page rather than the repo. They run
+      # here because this job already has everything they need: a migrated
+      # database with seeded rooms, an admin, the API on :3000 and a
+      # development build served on :4200. Both skip with a message rather
+      # than failing if a server is missing, so a change to this job cannot
+      # turn them into silent passes.
+      - name: Accessibility — heading order and accessible names, 7 pages
+        run: node scripts/a11y-drive.mjs
+
+      - name: The three phases, driven in a browser
+        env:
+          ADMIN_EMAIL: ci-admin@mastande.test
+          ADMIN_PASSWORD: CiSmokeAdmin123
+        run: node scripts/phase-drive.mjs
+
       # Pass 2 — production build, the only one that emits canonical.
       - name: Build frontend (production) and serve
         working-directory: frontend

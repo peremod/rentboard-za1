@@ -61,7 +61,22 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version: '22' }
 
+      # The domain is registered separately from this repo, and until it
+      # resolves this job failed every Monday on a DNS error — four minutes of
+      # runner time to report something nobody could act on, which is how a
+      # red check becomes background noise. It says why it stopped instead.
+      - name: Is the site live yet?
+        id: live
+        run: |
+          if curl -sfI --connect-timeout 10 --max-time 20 https://umastande.co.za/ >/dev/null 2>&1; then
+            echo "live=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "live=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::https://umastande.co.za does not answer yet — skipping the production audit. This is expected until the domain is registered and pointed at Vercel."
+          fi
+
       - name: Audit production
+        if: steps.live.outputs.live == 'true'
         run: |
           npm install -g @lhci/cli@0.14.x
           lhci collect \
@@ -73,6 +88,7 @@ jobs:
           lhci upload --target=temporary-public-storage
 
       - name: Verify sitemap URLs all resolve
+        if: steps.live.outputs.live == 'true'
         # A sitemap entry that 404s is a soft-404 signal we are submitting
         # ourselves. Cheap to check, invisible if we do not.
         run: |
