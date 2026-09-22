@@ -481,6 +481,29 @@ else
     && ok "and answers 404 for an unknown URL" \
     || bad "the artefact answers $(func_status /nonsense) for an unknown URL"
 
+  # Behind a proxy — which is every deployment there is.
+  #
+  # Angular 21 trusts x-forwarded-host and x-forwarded-proto and NOTHING else
+  # by default: any other x-forwarded-* header sets deoptToCSR, and the engine
+  # silently returns the 4.8 KB client shell under a 200 instead of rendering.
+  # Every reverse proxy sends x-forwarded-for. On the deployment that meant
+  # every room page, every 404 and every 503 was an unrendered shell, while
+  # the prerendered pages looked perfect because they never reach the engine.
+  #
+  # So ask the way a proxy asks. Without TRUSTED_PROXY_HEADERS in server.ts
+  # this answers 200 with the shell; with it, the rendered 404.
+  PROXIED=$(curl -s -o /tmp/proxied.html --max-time 25 -w '%{http_code}' \
+    -H "Host: verify.local" -H "x-forwarded-for: 203.0.113.7" \
+    -H "x-forwarded-proto: https" -H "x-forwarded-host: verify.local" \
+    "http://localhost:4114/nonsense")
+  if [ "$PROXIED" = "404" ] && grep -q 'ng-server-context="ssr"' /tmp/proxied.html; then
+    ok "and still server-renders when a proxy adds x-forwarded-for"
+  else
+    bad "behind a proxy the artefact answers $PROXIED and does not server-render"
+    note "Angular deoptimises to CSR on any untrusted x-forwarded-* header."
+    note "Check TRUSTED_PROXY_HEADERS in frontend/src/server.ts."
+  fi
+
   kill "$FUNC_PID" 2>/dev/null || true
   wait "$FUNC_PID" 2>/dev/null || true
   rm -rf "$OUT"

@@ -88,7 +88,42 @@ function allowedHosts(): string[] {
 }
 
 const serverAllowedHosts = allowedHosts();
-const angularApp = new AngularNodeAppEngine({ allowedHosts: serverAllowedHosts });
+
+/**
+ * Proxy headers this server will accept without giving up on rendering.
+ *
+ * Angular 21 trusts exactly two by default — `x-forwarded-host` and
+ * `x-forwarded-proto` — and any OTHER `x-forwarded-*` header sets
+ * `deoptToCSR`: the engine stops server-rendering and returns the 4.8 KB
+ * client shell instead, with nothing but a `console.warn` to say so. See
+ * `sanitizeRequestHeaders` in @angular/ssr's _validation-chunk.
+ *
+ * Every reverse proxy in existence sends `x-forwarded-for`. Vercel does,
+ * nginx does, Cloudflare does, Render does. So on the deployment, every route
+ * the engine had to render — room pages, the 404, anything not prerendered —
+ * came back as an unrendered shell under HTTP 200, while the prerendered
+ * pages looked perfect because they are served from disk above and never
+ * reach the engine. It took a header-by-header bisect running inside the
+ * function to find it, because the symptom is a page that renders correctly
+ * when you ask the engine directly.
+ *
+ * `x-forwarded-prefix` is deliberately NOT trusted. It is the one of these
+ * that changes behaviour rather than describing the client: @angular/ssr
+ * prepends it to redirect Locations, so trusting a spoofable value would let
+ * a request steer its own redirect target. Nothing we deploy behind sets it,
+ * and if something starts to, the check in verify-build.sh will say so.
+ */
+const TRUSTED_PROXY_HEADERS = [
+  'x-forwarded-host',
+  'x-forwarded-proto',
+  'x-forwarded-for',
+  'x-forwarded-port',
+] as const;
+
+const angularApp = new AngularNodeAppEngine({
+  allowedHosts: serverAllowedHosts,
+  trustProxyHeaders: TRUSTED_PROXY_HEADERS,
+});
 
 /**
  * Every prerendered page, by the URL path it answers.
@@ -281,92 +316,6 @@ app.get(['/robots.txt', '/sitemap.xml'], async (req, res) => {
       res.type('text/plain').send('Sitemap temporarily unavailable.');
     }
   }
-});
-
-/**
- * TEMPORARY — remove before this branch merges.
- *
- * Every route the Angular engine has to render answers 200 with the 4.8 KB
- * client shell on Vercel, while the same build renders them locally. This
- * reports what the function actually sees, because three theories about it
- * have already been wrong.
- */
-app.get('/__diag', async (req, res) => {
-  const probePath = typeof req.query['probe'] === 'string' ? req.query['probe'] : '/definitely-not-a-route';
-
-  /** Ask the engine for a path, with whichever headers we choose to pass. */
-  const probe = async (headers: Record<string, string>) => {
-    try {
-      const response = await angularApp.handle(
-        new Request(`https://${req.headers.host}${probePath}`, { headers }) as never,
-      );
-      if (!response) return null;
-      const body = await (response as Response).text();
-      return {
-        status: (response as Response).status,
-        bytes: body.length,
-        // The rendered page carries the marker and is ~17 KB; the client
-        // shell is ~4.8 KB and carries nothing. That is the whole question.
-        rendered: /mastande-status/.test(body),
-        serverContext: /ng-server-context="([^"]*)"/.exec(body)?.[1] ?? null,
-        title: /<title>([^<]*)</.exec(body)?.[1] ?? null,
-      };
-    } catch (err) {
-      return { threw: err instanceof Error ? `${err.name}: ${err.message}` : String(err) };
-    }
-  };
-
-  // Minimal, and then with exactly what arrived. If these differ, a header
-  // decides whether the page renders — and the diff names which one.
-  const received = Object.fromEntries(
-    Object.entries(req.headers)
-      .filter(([, v]) => typeof v === 'string')
-      .map(([k, v]) => [k, String(v)]),
-  );
-  const host = String(req.headers.host ?? '');
-
-  const minimal = await probe({ host });
-  const asReceived = await probe(received);
-
-  // One header is the difference, so find it: add each one to the minimal set
-  // on its own and see which stops the page rendering. 34 renders is a couple
-  // of seconds, and it names the culprit instead of narrowing the suspects.
-  const breaks: string[] = [];
-  if (minimal && 'rendered' in minimal && minimal.rendered && asReceived && 'rendered' in asReceived && !asReceived.rendered) {
-    for (const [key, value] of Object.entries(received)) {
-      if (key === 'host') continue;
-      const result = await probe({ host, [key]: value });
-      if (result && 'rendered' in result && !result.rendered) breaks.push(`${key}: ${value.slice(0, 60)}`);
-    }
-  }
-
-  const engine = { probePath, minimal, asReceived, breaks, incomingHeaders: Object.keys(req.headers).sort() };
-
-  res.json({
-    request: {
-      url: req.url,
-      originalUrl: req.originalUrl,
-      path: req.path,
-      host: req.headers.host,
-      forwardedHost: req.headers['x-forwarded-host'],
-      forwardedProto: req.headers['x-forwarded-proto'],
-    },
-    allowedHosts: serverAllowedHosts,
-    env: {
-      VERCEL: process.env['VERCEL'] ?? null,
-      VERCEL_URL: process.env['VERCEL_URL'] ?? null,
-      VERCEL_BRANCH_URL: process.env['VERCEL_BRANCH_URL'] ?? null,
-      VERCEL_PROJECT_PRODUCTION_URL: process.env['VERCEL_PROJECT_PRODUCTION_URL'] ?? null,
-      NG_ALLOWED_HOSTS: process.env['NG_ALLOWED_HOSTS'] ?? null,
-      NODE_VERSION: process.version,
-      cwd: process.cwd(),
-    },
-    build: {
-      browserDistFolder,
-      prerenderedPages: prerenderedPages.size,
-    },
-    engineProbe: engine,
-  });
 });
 
 app.use(
