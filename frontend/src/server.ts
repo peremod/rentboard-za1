@@ -318,15 +318,29 @@ app.get('/__diag', async (req, res) => {
 
   // Minimal, and then with exactly what arrived. If these differ, a header
   // decides whether the page renders — and the diff names which one.
-  const minimal = await probe({ host: String(req.headers.host ?? '') });
-  const asReceived = await probe(
-    Object.fromEntries(
-      Object.entries(req.headers)
-        .filter(([, v]) => typeof v === 'string')
-        .map(([k, v]) => [k, String(v)]),
-    ),
+  const received = Object.fromEntries(
+    Object.entries(req.headers)
+      .filter(([, v]) => typeof v === 'string')
+      .map(([k, v]) => [k, String(v)]),
   );
-  const engine = { probePath, minimal, asReceived, incomingHeaders: Object.keys(req.headers).sort() };
+  const host = String(req.headers.host ?? '');
+
+  const minimal = await probe({ host });
+  const asReceived = await probe(received);
+
+  // One header is the difference, so find it: add each one to the minimal set
+  // on its own and see which stops the page rendering. 34 renders is a couple
+  // of seconds, and it names the culprit instead of narrowing the suspects.
+  const breaks: string[] = [];
+  if (minimal && 'rendered' in minimal && minimal.rendered && asReceived && 'rendered' in asReceived && !asReceived.rendered) {
+    for (const [key, value] of Object.entries(received)) {
+      if (key === 'host') continue;
+      const result = await probe({ host, [key]: value });
+      if (result && 'rendered' in result && !result.rendered) breaks.push(`${key}: ${value.slice(0, 60)}`);
+    }
+  }
+
+  const engine = { probePath, minimal, asReceived, breaks, incomingHeaders: Object.keys(req.headers).sort() };
 
   res.json({
     request: {
