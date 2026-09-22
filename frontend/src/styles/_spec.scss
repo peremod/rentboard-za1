@@ -330,7 +330,15 @@ img{display:block;max-width:100%}
 }
 .hiw-num{
   font-family:var(--font-mono);font-size:2.5rem;font-weight:500;
-  color:rgba(192,78,40,.15);position:absolute;top:1rem;right:1.25rem;
+  /* --terra at 72%. Was rgba(192,78,40,.15) — 1.22:1 on --card, which is not
+     a faint watermark, it is an invisible one: nobody could read the step
+     numbers, and the accessibility audit failed 1.4.3 on all eight of them
+     (four tenant steps, four landlord). 72% is 3.32:1 on --card and 3.23:1
+     on --cream, clearing the 3:1 large-text threshold with enough margin
+     that subpixel rendering cannot tip it back under. The rgb is --terra's
+     own #AD4222; the literal is spelled out rather than color-mix()'d so the
+     contrast does not depend on a browser supporting that function. */
+  color:rgba(173,66,34,.72);position:absolute;top:1rem;right:1.25rem;
 }
 .hiw-icon{font-size:2rem;margin-bottom:1rem}
 .hiw-title{font-size:1rem;font-weight:700;color:var(--ink);margin-bottom:.4rem}
@@ -521,7 +529,7 @@ img{display:block;max-width:100%}
 /* .3 alpha over --ink is 2.62:1 — barely legible, and it is the line that
    claims POPIA compliance. .5 is 4.97:1. Same change on .footer-bottom. */
 .footer-popia{font-size:.72rem;color:rgba(250,247,240,.5);line-height:1.6}
-.footer-col h4{
+.footer-col h2{
   font-size:.72rem;font-weight:700;text-transform:uppercase;
   letter-spacing:1.5px;color:rgba(250,247,240,.62);margin-bottom:1rem;
 }
@@ -747,7 +755,10 @@ img{display:block;max-width:100%}
 .divider{height:1px;background:var(--border);margin:2rem 0}
 .empty-state{
   text-align:center;padding:4rem 1rem;
-  h3{font-size:1.1rem;font-weight:700;color:var(--ink);margin-bottom:.5rem}
+  /* h2 and h3 both: the board's empty state is an h2 because nothing above
+     it in the results column is visible on a phone, while the portal empty
+     states sit under a section h2 and so are h3s. Same look either way. */
+  h2,h3{font-size:1.1rem;font-weight:700;color:var(--ink);margin-bottom:.5rem}
   p{font-size:.88rem;color:var(--slate);margin-bottom:1.25rem}
 }
 .province-badge{

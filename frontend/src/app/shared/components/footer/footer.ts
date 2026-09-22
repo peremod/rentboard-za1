@@ -22,7 +22,7 @@ import { RouterLink } from '@angular/router';
         </div>
 
         <div class="footer-col">
-          <h4>For Landlords</h4>
+          <h2>For Landlords</h2>
           <ul>
             <li><a routerLink="/auth/register">Post a room free</a></li>
                         <li><a routerLink="/how-it-works">How it works</a></li>
@@ -32,7 +32,7 @@ import { RouterLink } from '@angular/router';
         </div>
 
         <div class="footer-col">
-          <h4>For Tenants</h4>
+          <h2>For Tenants</h2>
           <ul>
             <li><a routerLink="/">Browse rooms</a></li>
             <li><a routerLink="/tenant/dashboard">My applications</a></li>
@@ -41,7 +41,7 @@ import { RouterLink } from '@angular/router';
         </div>
 
         <div class="footer-col">
-          <h4>Business</h4>
+          <h2>Business</h2>
           <ul>
             <li><a routerLink="/advertise">Advertise with us</a></li>
             <li><a routerLink="/pricing">Pricing</a></li>
@@ -49,7 +49,7 @@ import { RouterLink } from '@angular/router';
         </div>
 
         <div class="footer-col">
-          <h4>Legal</h4>
+          <h2>Legal</h2>
           <ul>
             <li><a routerLink="/legal/privacy">Privacy Policy (POPIA)</a></li>
             <li><a routerLink="/legal/terms">Terms &amp; Conditions</a></li>

@@ -4,6 +4,7 @@ import {
   isMainModule,
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
+import compression from 'compression';
 import express from 'express';
 import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
@@ -130,6 +131,26 @@ const prerenderedPages = collectPrerenderedPages();
  * So: no directory indexes, no redirects, and any .html that does get served
  * from here is revalidated rather than pinned.
  */
+
+/**
+ * gzip, before anything else can write a response.
+ *
+ * Vercel compresses at its edge, so production was never shipping uncompressed
+ * bytes — but the Lighthouse job serves this file directly, which meant
+ * `uses-text-compression` flagged 382–386 KiB on every run and the whole
+ * performance budget was being measured against a page no visitor receives. A
+ * budget that only fails in the harness teaches people to ignore it.
+ *
+ * It also stops this being Vercel-shaped: anywhere else this server runs — a
+ * container, a VM, Render — now compresses without depending on an edge that
+ * happens to do it for us.
+ *
+ * First in the chain on purpose. compression() decides by sniffing the
+ * Content-Type and length of what the handlers below write, so it has to be
+ * installed before they run.
+ */
+app.use(compression());
+
 app.use(
   express.static(browserDistFolder, {
     maxAge: '1y',

@@ -345,7 +345,10 @@
   ul { padding-left: 1.2rem; }
   li { font-size: .88rem; line-height: 1.75; margin-bottom: .5rem; color: var(--ink2); }
 }
-.hiw-safety-note { font-size: .82rem !important; color: var(--slate) !important; margin-top: 1rem; }
+/* --ink2, matching the p and li above it in this same panel. --slate is
+   4.34:1 on the panel's gold-tinted background, and this note is .82rem, so
+   it needed 4.5:1 and missed. --ink2 is 11:1 there. */
+.hiw-safety-note { font-size: .82rem !important; color: var(--ink2) !important; margin-top: 1rem; }
 
 .pricing-faq {
   margin-top: 3.5rem;
