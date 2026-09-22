@@ -176,7 +176,35 @@
 
   // Portal
   .portal-wrap { grid-template-columns: 1fr; min-height: auto; }
-  .portal-nav { display: none; }
+
+  // The sidebar becomes a horizontal strip, it does not disappear.
+  //
+  // This was `display: none` with nothing replacing it, and the top
+  // hamburger carries only public links plus a Dashboard button — so on a
+  // phone every portal screen except the dashboard was unreachable: Rent,
+  // the Renter's Passport, My property, Verification, Settings. On a product
+  // built for people on cheap phones that is most of the app.
+  //
+  // A scrolling row rather than a drawer: no new toggle, no new state, and
+  // the items stay visible instead of being hidden behind a second tap.
+  .portal-nav {
+    display: flex;
+    overflow-x: auto;
+    gap: .25rem;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--border);
+    -webkit-overflow-scrolling: touch;
+  }
+  .portal-user { display: none; }          // the avatar block is not navigation
+  .portal-nav-link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-height: 44px;                       // WCAG 2.5.8, and it is a phone
+    padding: .5rem .8rem;
+    border-radius: var(--r4);
+  }
+  .portal-nav-cta { flex: 0 0 auto; padding: .25rem .5rem; margin-top: 0; align-self: center; }
+  .portal-nav-cta .btn { width: auto; white-space: nowrap; }
   .portal-main { padding: 1.25rem 1rem; }
   .stat-row { grid-template-columns: repeat(2, 1fr); }
 

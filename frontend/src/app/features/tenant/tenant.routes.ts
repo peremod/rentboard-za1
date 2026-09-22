@@ -16,5 +16,13 @@ export const TENANT_ROUTES: Routes = [
     loadComponent: () => import('./passport-verify/passport-verify').then((m) => m.PassportVerify),
     title: "Renter's Passport — Mastande",
   },
+  {
+    // Gap Y3. The overdue-rent reminder tells a tenant to "say so on
+    // Mastande" if they have paid; until this screen there was nowhere to
+    // say it, and the dispute existed only in the API.
+    path: 'rent',
+    loadComponent: () => import('./rent/rent').then((m) => m.TenantRent),
+    title: 'Rent — Mastande',
+  },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];

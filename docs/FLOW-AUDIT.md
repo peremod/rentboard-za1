@@ -186,11 +186,19 @@ number gets nothing, and the period is marked handled so the nightly job does
 not rescan it. The landlord still sees it unpaid, but the tenant is never
 told. Email is the obvious second channel and is not wired.
 
-**Y3 — the tenant has no screen for rent.** They can dispute through the API
-and the reminder tells them to "say so on Mastande", but there is no page on
-the tenant dashboard that shows their rent record or offers the dispute
-button. That makes the reminder's own instruction currently unfollowable in
-the UI, and it should be built before rent tracking is offered to landlords.
+**~~Y3 — the tenant has no screen for rent.~~ Closed in v1.71.0.**
+`/tenant/rent` shows every month the landlord has recorded, attributed to
+them, with the platform's own position stated plainly — Mastande has not
+checked any of it. Disagreeing is one tap and the note is optional, because
+being able to say "I paid" matters more than being able to say why. The
+answer is stored beside the landlord's record rather than replacing it, and
+it stops further reminders for that month.
+
+Driven end to end at 360px: landlord marks a month unpaid, tenant clicks
+through from the nav, disputes it with a note, and the API is then checked
+directly — the dispute and note persisted, the landlord's `unpaid` was NOT
+overwritten, and `reminderSentAt` was set so the nightly job will not chase
+them again.
 
 ---
 
