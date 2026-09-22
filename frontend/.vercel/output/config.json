@@ -1,0 +1,50 @@
+{
+  "version": 3,
+  "routes": [
+    {
+      "src": "^/(.*)\\.(js|css|woff2|woff|ttf|svg|png|jpg|jpeg|webp|avif|ico|map)$",
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/(.*)$",
+      "headers": {
+        "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+        "x-content-type-options": "nosniff",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-frame-options": "SAMEORIGIN",
+        "permissions-policy": "camera=(), microphone=(), geolocation=(self), interest-cohort=()"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/(.*)$",
+      "has": [
+        {
+          "type": "host",
+          "value": "(staging\\.umastande\\.co\\.za|rentboard-za1\\.vercel\\.app|.*\\.vercel\\.app)"
+        }
+      ],
+      "headers": {
+        "x-robots-tag": "noindex, nofollow"
+      },
+      "continue": true
+    },
+    {
+      "src": "^/rooms$",
+      "status": 308,
+      "headers": {
+        "location": "/"
+      }
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "^/.*$",
+      "dest": "/ssr"
+    }
+  ]
+}

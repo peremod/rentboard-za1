@@ -283,6 +283,68 @@ app.get(['/robots.txt', '/sitemap.xml'], async (req, res) => {
   }
 });
 
+/**
+ * TEMPORARY — remove before this branch merges.
+ *
+ * Every route the Angular engine has to render answers 200 with the 4.8 KB
+ * client shell on Vercel, while the same build renders them locally. This
+ * reports what the function actually sees, because three theories about it
+ * have already been wrong.
+ */
+app.get('/__diag', async (req, res) => {
+  let engine: unknown;
+  try {
+    const probe = await angularApp.handle(
+      new Request(`https://${req.headers.host}/definitely-not-a-route`, {
+        headers: { host: String(req.headers.host ?? '') },
+      }) as never,
+    );
+    if (probe) {
+      const body = await (probe as Response).text();
+      engine = {
+        status: (probe as Response).status,
+        type: (probe as Response).headers.get('content-type'),
+        bytes: body.length,
+        // The rendered not-found page carries the marker and is ~17 KB; the
+        // client shell is ~4.8 KB and carries nothing. That difference is the
+        // whole question.
+        rendered: /mastande-status/.test(body),
+        title: /<title>([^<]*)</.exec(body)?.[1] ?? null,
+      };
+    } else {
+      engine = null;
+    }
+  } catch (err) {
+    engine = { threw: err instanceof Error ? `${err.name}: ${err.message}` : String(err) };
+  }
+
+  res.json({
+    request: {
+      url: req.url,
+      originalUrl: req.originalUrl,
+      path: req.path,
+      host: req.headers.host,
+      forwardedHost: req.headers['x-forwarded-host'],
+      forwardedProto: req.headers['x-forwarded-proto'],
+    },
+    allowedHosts: serverAllowedHosts,
+    env: {
+      VERCEL: process.env['VERCEL'] ?? null,
+      VERCEL_URL: process.env['VERCEL_URL'] ?? null,
+      VERCEL_BRANCH_URL: process.env['VERCEL_BRANCH_URL'] ?? null,
+      VERCEL_PROJECT_PRODUCTION_URL: process.env['VERCEL_PROJECT_PRODUCTION_URL'] ?? null,
+      NG_ALLOWED_HOSTS: process.env['NG_ALLOWED_HOSTS'] ?? null,
+      NODE_VERSION: process.version,
+      cwd: process.cwd(),
+    },
+    build: {
+      browserDistFolder,
+      prerenderedPages: prerenderedPages.size,
+    },
+    engineProbe: engine,
+  });
+});
+
 app.use(
   express.static(browserDistFolder, {
     maxAge: '1y',

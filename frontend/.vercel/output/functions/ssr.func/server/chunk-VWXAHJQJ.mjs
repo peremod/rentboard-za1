@@ -1,0 +1,2 @@
+import './polyfills.server.mjs';
+import{a}from"./chunk-GA7VNUCZ.mjs";var o={thumb:"tr=w-120,h-80,c-maintain_ratio,q-70,f-auto",card:"tr=w-600,h-400,c-maintain_ratio,q-80,f-auto",detail:"tr=w-1200,h-800,c-maintain_ratio,q-90,f-auto",avatar:"tr=w-80,h-80,c-force,fo-face,q-80,f-auto",ad:"tr=w-600,h-400,c-force,q-80,f-auto"};function e(t,r="card"){return t?`${a.imagekitUrl}/${t}?${o[r]}`:"/assets/images/room-placeholder.svg"}export{e as a};

@@ -1,0 +1,1 @@
+import"./chunk-AY4LCFTV.js";var e=[{path:"settings",loadComponent:()=>import("./chunk-7VVNGMPB.js").then(t=>t.AccountSettings),title:"Account settings \u2014 Mastande"},{path:"",redirectTo:"settings",pathMatch:"full"}];export{e as ACCOUNT_ROUTES};
