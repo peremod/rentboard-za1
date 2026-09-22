@@ -25,6 +25,14 @@ client is older than the schema.
 
 ### Apply any new migrations
 
+**Do this before you read a failing smoke run as a broken product.** A database
+behind on migrations makes `scripts/smoke-test.sh` report 110 failures that all
+say `401 Authentication required`, which looks exactly like a broken auth
+system. The real cause is one missing column: registration 500s, so every
+authenticated check after it has no session to use. One migrate takes the same
+run to 405 passed, 0 failed.
+
+
 ```bash
 cd backend
 npx prisma migrate deploy
@@ -98,6 +106,22 @@ BASE_URL=http://localhost:4000 node ../scripts/a11y-drive.mjs
 Seven public pages in a real browser; exits non-zero on a skipped heading
 level or a control with no accessible name. Against `ng serve` instead, drop
 the `BASE_URL` — it defaults to `http://localhost:4200`.
+
+And if the change touched anything in the three phases — verification, yards,
+rent, the fee or the refund — drive those too. This one needs the API and the
+site both running, and an admin to see the admin screens:
+
+```bash
+ADMIN_EMAIL=you@example.co.za ADMIN_PASSWORD='...' node scripts/phase-drive.mjs
+```
+
+It registers a landlord and a tenant, lets a room, marks a month unpaid, and
+then reads the screens: the fee and the refund promise where the money is
+taken, the Passport's free checks, who is letting a room and whether they are
+verified, a yard created through the form, reminders switched off by setting
+the window to 0, the tenant answering the unpaid month, and the portal nav
+compared across four screens per role. 49 checks. It skips with a message
+rather than failing if either server is down.
 
 ---
 

@@ -181,6 +181,18 @@ screen can pull rooms in; the listing wizard and the room edit screen do not
 offer a property picker, so a new room always lands ungrouped and has to be
 grouped afterwards from the other screen.
 
+**~~Y4 — a landlord could not set or switch off their own reminder window.~~
+Closed in v1.73.0.** `PATCH /properties/rent/settings` had existed since rent
+tracking shipped, `PropertiesService.setGraceDays()` had existed in the
+frontend for just as long, and **no screen called either** — so the per-
+landlord grace period, the whole reason the field is per landlord rather than
+a constant, could not be changed by the landlord it belongs to, and reminders
+could not be turned off by the person whose tenants receive them. The yard
+screen now carries the control, the dashboard response carries the current
+value (it was never read back either, and a control you cannot see the current
+value of is not a control), and 0 is stated on the screen as "off". Found by
+driving the yard as a landlord and looking for it, not by reading the router.
+
 **Y2 — rent reminders are WhatsApp only.** A tenant with no verified mobile
 number gets nothing, and the period is marked handled so the nightly job does
 not rescan it. The landlord still sees it unpaid, but the tenant is never

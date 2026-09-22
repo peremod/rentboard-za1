@@ -8,4 +8,8 @@ export const ADMIN_NAV: PortalNavItem[] = [
   { label: 'Advertising', icon: '📢', route: '/admin/advertising' },
   { label: 'Referrals', icon: '🎟️', route: '/admin/referrals' },
   { label: 'Usage', icon: '📈', route: '/admin/analytics' },
+  // An admin had no way to reach their own settings from any admin screen:
+  // the shell has no user menu, and /account/settings was only ever linked
+  // from the landlord and tenant sidebars.
+  { label: 'Settings', icon: '⚙️', route: '/account/settings' },
 ];

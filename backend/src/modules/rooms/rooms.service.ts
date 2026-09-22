@@ -23,6 +23,25 @@ const MAX_PHOTOS_PER_ROOM = 20;
 /** Landlord can undo a mark-as-let within this window. */
 const UNDO_LET_WINDOW_MINUTES = 30;
 
+/**
+ * The only landlord fields any public room response carries: a name, an
+ * avatar, the rating tenants gave them and whether their identity was
+ * checked. No email, no phone, no document — POPIA s.10, and the same
+ * selection for the board and the detail page so the two cannot drift.
+ */
+const PUBLIC_LANDLORD = {
+  include: {
+    landlord: {
+      select: {
+        id: true,
+        fullName: true,
+        avatarPath: true,
+        landlordProfile: { select: { rating: true, ratingCount: true, idVerified: true } },
+      },
+    },
+  },
+} as const;
+
 @Injectable()
 export class RoomsService {
   private readonly logger = new Logger(RoomsService.name);
@@ -97,16 +116,7 @@ export class RoomsService {
         take: limit,
         // The room card shows the landlord's name, avatar and rating, so the
         // relation is loaded here rather than fetched per card by the client.
-      include: {
-        landlord: {
-          select: {
-            id: true,
-            fullName: true,
-            avatarPath: true,
-            landlordProfile: { select: { rating: true, ratingCount: true, idVerified: true } },
-          },
-        },
-      },
+        ...PUBLIC_LANDLORD,
       }),
       this.prisma.room.count({ where }),
     ]);
@@ -120,7 +130,12 @@ export class RoomsService {
    *                  the number they use to judge how it is performing.
    */
   async findOne(id: string, viewerId?: string) {
-    const room = await this.prisma.room.findUnique({ where: { id } });
+    // With the landlord, same fields as the list. Without it, the detail page
+    // could not show whether the person letting the room had been verified —
+    // the one place a tenant decides whether to trust a stranger with their
+    // deposit — and the aggregateRating in that page's JSON-LD was silently
+    // dropped on every room, because the data it reads was never sent.
+    const room = await this.prisma.room.findUnique({ where: { id }, ...PUBLIC_LANDLORD });
     if (!room) throw new NotFoundException(`Room ${id} not found`);
 
     const isOwner = viewerId === room.landlordId;

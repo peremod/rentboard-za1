@@ -58,6 +58,8 @@ export interface YardDashboard {
   /** Rooms not in a yard. Never hidden — see PropertiesService.dashboard. */
   ungrouped: YardGroup | null;
   totals: { rooms: number; vacant: number; waitingApplicants: number };
+  /** Days after the 1st before an unpaid month triggers a reminder. 0 is off. */
+  rentGraceDays: number;
 }
 
 /**

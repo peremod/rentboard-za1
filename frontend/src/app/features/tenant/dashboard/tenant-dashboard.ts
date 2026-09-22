@@ -17,6 +17,7 @@ import { SavedSearch } from '../../../core/models/alerts.model';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { Room } from '../../../core/models/room.model';
 import { RoomCard } from '../../../shared/components/room-card/room-card';
+import { tenantNav } from '../tenant-nav';
 
 @Component({
   selector: 'app-tenant-dashboard',
@@ -322,29 +323,13 @@ export class TenantDashboard implements OnInit {
    * track live counts. Applications and Messages resolve to this dashboard,
    * which is where both live today.
    */
-  readonly navItems = computed<PortalNavItem[]>(() => [
-    { label: 'Dashboard', icon: '🏠', route: '/tenant/dashboard', exact: true },
-    // Sections of this page, so they carry fragments — see the landlord
-    // dashboard for why a bare route here looks like a dead click.
-    {
-      label: 'Applications', icon: '📋', route: '/tenant/dashboard',
-      fragment: 'your-applications', badge: this.activeApplicationCount(),
-    },
-    // No messages screen exists; threads live inside an application.
-    { label: 'Messages', icon: '💬', route: '/tenant/dashboard', disabled: true },
-    { label: 'Browse rooms', icon: '🔍', route: '/' },
-    { label: 'Rent', icon: '🧾', route: '/tenant/rent' },
-    { label: "Renter's Passport", icon: '🪪', route: '/tenant/passport' },
-    { label: 'Settings', icon: '⚙️', route: '/account/settings' },
-    {
-      label: 'Saved Rooms', icon: '♥', route: '/tenant/dashboard',
-      fragment: 'saved-rooms', badge: this.savedRooms.count(),
-    },
-    {
-      label: 'Alerts', icon: '🔔', route: '/tenant/dashboard',
-      fragment: 'room-alerts', badge: this.alerts.searches().length,
-    },
-  ]);
+  readonly navItems = computed<PortalNavItem[]>(() =>
+    tenantNav({
+      applications: this.activeApplicationCount(),
+      saved: this.savedRooms.count(),
+      alerts: this.alerts.searches().length,
+    }),
+  );
 
   applications = signal<Application[]>([]);
   loading = signal(true);

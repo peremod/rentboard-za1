@@ -73,6 +73,33 @@ The backend reads `SITE_URL` and `NODE_ENV` from config. **Set `SITE_URL` on eve
 
 ## 5. robots.txt and sitemap.xml
 
+**Both are served by the backend, and both have to be reachable at the SITE's
+own origin.** A crawler reads `robots.txt` from the origin it is crawling and
+nowhere else, so `https://api.umastande.co.za/robots.txt` governs the API and
+says nothing whatsoever about `https://umastande.co.za`. Until v1.73.0 the site
+origin had neither file: both paths fell through to the router's catch-all and
+answered **200 with the "Page not found" page**. Every `Disallow` in that file
+was inert, and the sitemap URL submitted to Search Console was a 200 with an
+HTML body. Lighthouse had been reporting it for weeks — its `robots-txt` audit
+returned "58 errors found", each one a line of our 404 page that it could not
+parse as a robots directive, and SEO scored 0.92 on every audited URL because
+of it.
+
+Two places carry the fix, because two different servers answer that URL:
+
+| Where | What serves it |
+|---|---|
+| `frontend/src/server.ts` | Proxies `/robots.txt` and `/sitemap.xml` to the API the build was compiled against, cached five minutes. This is what development, `node server.mjs` and the Lighthouse job use. |
+| `frontend/vercel.json` | The same two paths as edge rewrites, because the production deployment is static and `server.ts` does not run there. Host-conditional, so staging proxies the staging API. |
+
+If the API cannot be reached, robots.txt falls back to `Disallow: /` (the
+direction that cannot cause damage that has to be undone) and the sitemap
+answers 503 rather than 200 with an error page.
+
+`scripts/verify-build.sh` asserts the content type of both against a running
+server, so a regression fails before a release is tagged.
+
+
 Both served by `backend/src/modules/seo/seo.controller.ts` at the domain root, outside the `/api` prefix.
 
 The sitemap is generated from live data: every `active` room, plus a fixed list of public pages. Let, draft and paused rooms are excluded so a crawler never lands on a dead listing.

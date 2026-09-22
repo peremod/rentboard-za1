@@ -2,6 +2,9 @@ import { ChangeDetectionStrategy, Component, inject, signal, effect } from '@ang
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
+import { ADMIN_NAV } from '../../admin/admin-nav';
+import { landlordNav } from '../../landlord/landlord-nav';
+import { tenantNav } from '../../tenant/tenant-nav';
 
 /**
  * Account settings, shared by landlords and tenants — the needs are identical,
@@ -166,23 +169,13 @@ export class AccountSettings {
    * used to get the tenant sidebar, offering a dashboard they have no profile
    * for — the same confusion as the two dashboards in the navbar.
    */
+  /**
+   * The signed-in role's own navigation, not a fourth abbreviated copy of it.
+   * This page used to list three items for a landlord and three for a tenant,
+   * so opening your settings dropped most of your portal out of the sidebar.
+   */
   navItems = (): PortalNavItem[] =>
-    this.auth.isAdmin()
-      ? [
-          { label: 'Admin', icon: '🛠', route: '/admin/dashboard', exact: true },
-          { label: 'Settings', icon: '⚙️', route: '/account/settings' },
-        ]
-    : this.auth.isLandlord()
-      ? [
-          { label: 'Dashboard', icon: '📊', route: '/landlord/dashboard', exact: true },
-          { label: 'Verification', icon: '🪪', route: '/landlord/verification' },
-          { label: 'Settings', icon: '⚙️', route: '/account/settings' },
-        ]
-      : [
-          { label: 'Dashboard', icon: '📋', route: '/tenant/dashboard', exact: true },
-          { label: 'Browse rooms', icon: '🔍', route: '/' },
-          { label: 'Settings', icon: '⚙️', route: '/account/settings' },
-        ];
+    this.auth.isAdmin() ? ADMIN_NAV : this.auth.isLandlord() ? landlordNav() : tenantNav();
 
   marketingOn = signal(true);
 

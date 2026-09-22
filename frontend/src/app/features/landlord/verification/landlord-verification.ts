@@ -7,6 +7,7 @@ import { PaymentsService } from '../../../core/services/payments.service';
 import { ActivatedRoute } from '@angular/router';
 import { VerificationType, VerificationRequest } from '../../../core/models/verification.model';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
+import { landlordNav } from '../landlord-nav';
 
 /**
  * Landlord-facing verification.
@@ -146,10 +147,7 @@ export class LandlordVerification implements OnInit {
   private payments = inject(PaymentsService);
   private route = inject(ActivatedRoute);
 
-  readonly navItems: PortalNavItem[] = [
-    { label: 'Dashboard', icon: '📊', route: '/landlord/dashboard', exact: true },
-    { label: 'Verification', icon: '🪪', route: '/landlord/verification' },
-  ];
+  readonly navItems: PortalNavItem[] = landlordNav();
 
   readonly types: { value: VerificationType; label: string; hint: string; icon: string }[] = [
     {

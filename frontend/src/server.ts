@@ -151,6 +151,74 @@ const prerenderedPages = collectPrerenderedPages();
  */
 app.use(compression());
 
+/**
+ * robots.txt and sitemap.xml, from the API that generates them.
+ *
+ * Both are served by the backend (seo.controller.ts) — on the API host. A
+ * crawler reads robots.txt from the origin it is crawling and nowhere else, so
+ * `https://api.<site>/robots.txt` governs the API and says nothing about the
+ * site. At the site's own origin both paths fell through to the catch-all and
+ * answered **200 with the "Page not found" HTML page**: no robots.txt at all
+ * (so every Disallow in it was inert), and a sitemap URL that would have been
+ * submitted to Search Console as a 200-with-HTML soft 404. Lighthouse found
+ * it — its robots-txt audit reported 58 "syntax not understood" errors,
+ * because it was parsing our 404 page line by line.
+ *
+ * Proxied rather than copied so there stays one generator: the sitemap has to
+ * be built from live rooms, and robots.txt differs per deployment (staging
+ * disallows everything). The production deployment is static, so vercel.json
+ * carries the same two rewrites at the edge — see the comment there. This
+ * route is what makes development, `node server.mjs` and the Lighthouse job
+ * behave the way the deployed site does.
+ *
+ * Cached for five minutes in memory: a crawler asking for robots.txt must not
+ * put a request on the API every time, and the content changes on deploy.
+ */
+const SEO_FILE_TTL_MS = 5 * 60 * 1000;
+const seoFileCache = new Map<string, { body: string; type: string; at: number }>();
+
+app.get(['/robots.txt', '/sitemap.xml'], async (req, res) => {
+  const path = req.path;
+  const cached = seoFileCache.get(path);
+  if (cached && Date.now() - cached.at < SEO_FILE_TTL_MS) {
+    res.setHeader('Content-Type', cached.type);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(cached.body);
+    return;
+  }
+
+  // environment.apiUrl ends in /api; these two live above it, next to /health.
+  const origin = environment.apiUrl.replace(/\/api\/?$/, '');
+
+  try {
+    const upstream = await fetch(origin + path, { signal: AbortSignal.timeout(5000) });
+    if (!upstream.ok) throw new Error(`upstream ${upstream.status}`);
+    const body = await upstream.text();
+    const type = upstream.headers.get('content-type')
+      ?? (path === '/robots.txt' ? 'text/plain' : 'application/xml');
+    seoFileCache.set(path, { body, type, at: Date.now() });
+    res.setHeader('Content-Type', type);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(body);
+  } catch (err) {
+    console.error(`[seo] ${path} could not be fetched from ${origin}:`, err);
+    if (path === '/robots.txt') {
+      // The safe direction when we cannot tell a crawler what is allowed is
+      // the one that cannot cause damage we have to undo later. A deployment
+      // that is not meant to be indexed would be indexed by an Allow served
+      // by mistake; a production deployment losing a crawl for a few minutes
+      // costs nothing by comparison.
+      res.setHeader('Content-Type', 'text/plain');
+      res.status(200).send(['User-agent: *', 'Disallow: /', ''].join('\n'));
+    } else {
+      // Never a 200 with the wrong body: a sitemap that answers 503 is
+      // retried, and one that answers 200 with an error page is believed.
+      res.status(503).setHeader('Retry-After', '120');
+      res.type('text/plain').send('Sitemap temporarily unavailable.');
+    }
+  }
+});
+
 app.use(
   express.static(browserDistFolder, {
     maxAge: '1y',
@@ -183,12 +251,56 @@ app.use((req, res, next) => {
   });
 });
 
+/**
+ * The marker a "not found" page renders about itself.
+ *
+ * Angular 21 takes a response status from the matched SERVER route, and a
+ * component cannot set one. That is fine for '/a/b/c', which reaches the
+ * catch-all — but a ':lang' server route matches any single segment, because
+ * server route matching happens before localeMatchGuard can rule the segment
+ * out. So '/foo' matched ':lang', '/xx/pricing' matched ':lang/pricing', and
+ * both rendered the not-found page under 200. Enumerating the ten locales in
+ * serverRoutes instead is rejected by the build, since the client tree
+ * declares them under a ':lang' parameter.
+ *
+ * So the page that IS the 404 says so, and this turns that into the status:
+ * error-page.ts and room-detail.ts render <meta name="mastande-status"
+ * content="404"> and nothing else does. One string, checked in one place,
+ * rather than a second copy of the route table living out here and drifting
+ * from the first.
+ */
+const NOT_FOUND_MARKER =
+  /<meta[^>]*name=["']mastande-status["'][^>]*content=["']404["']/i;
+
 // No path pattern — this already matches every request that reaches it,
 // and Express 5's path-to-regexp no longer accepts '/**' as a route pattern.
 app.use((req, res, next) => {
   angularApp
     .handle(req)
-    .then((response) => (response ? writeResponseToNodeResponse(response, res) : next()))
+    .then(async (response) => {
+      if (!response) return next();
+
+      const type = response.headers.get('content-type') ?? '';
+      if (!type.includes('text/html') || response.status !== 200) {
+        return writeResponseToNodeResponse(response, res);
+      }
+
+      const html = await response.text();
+      // A regex, not an exact string: emulated view encapsulation puts an
+      // _ngcontent attribute inside the tag, so the literal never matched —
+      // the marker was in the HTML and the status stayed 200 until this was
+      // measured on the rendered page rather than assumed from the template.
+      const notFound = NOT_FOUND_MARKER.test(html);
+
+      res.status(notFound ? 404 : response.status);
+      response.headers.forEach((value, key) => {
+        // Length changes with nothing else, but it is the one header that
+        // becomes a lie if the body is re-sent from a string.
+        if (key.toLowerCase() !== 'content-length') res.setHeader(key, value);
+      });
+      res.send(html);
+      return undefined;
+    })
     .catch(next);
 });
 

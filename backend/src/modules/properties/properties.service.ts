@@ -98,7 +98,7 @@ export class PropertiesService {
    * see the other two, or the dashboard quietly lies about what they own.
    */
   async dashboard(landlordId: string) {
-    const [properties, rooms] = await Promise.all([
+    const [properties, rooms, profile] = await Promise.all([
       this.prisma.property.findMany({
         where: { landlordId },
         orderBy: { name: 'asc' },
@@ -132,6 +132,14 @@ export class PropertiesService {
           },
         },
       }),
+      // The reminder window. PATCH /properties/rent/settings could set it
+      // from the day rent tracking shipped, but nothing ever read it back, so
+      // no screen could show a landlord what their own setting was — and a
+      // control you cannot read the current value of is not a control.
+      this.prisma.landlordProfile.findUnique({
+        where: { userId: landlordId },
+        select: { rentGraceDays: true },
+      }),
     ]);
 
     // Only current-cycle applications count as waiting. `archivedAt: null`
@@ -162,6 +170,10 @@ export class PropertiesService {
         vacant: rooms.filter((r) => r.status === 'active').length,
         waitingApplicants: rooms.reduce((n, r) => n + r.applications.length, 0),
       },
+      // Days after the 1st before an unpaid month triggers a reminder; 0 is
+      // off. Defaulted here to the schema's own default so a landlord with no
+      // profile row still sees the number that is actually being applied.
+      rentGraceDays: profile?.rentGraceDays ?? 3,
     };
   }
 

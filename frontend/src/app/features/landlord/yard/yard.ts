@@ -7,6 +7,7 @@ import { RentPeriod, RentStatus, YardGroup } from '../../../core/models/property
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { DialogService } from '../../../core/services/dialog.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
+import { landlordNav } from '../landlord-nav';
 
 /**
  * The yard dashboard.
@@ -98,6 +99,52 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
             </button>
           }
         </div>
+
+        <!--
+          The reminder window, where rent already is.
+
+          PATCH /properties/rent/settings has existed since rent tracking
+          shipped and nothing in the UI ever called it: the grace period is
+          per landlord precisely because a month-end wage and a SASSA payment
+          date want different windows, and a landlord could neither set it nor
+          turn reminders off. The API was there, the service method was there,
+          and no screen used either.
+        -->
+        <section class="dash-section rent-reminders">
+          <div class="dash-section-title">Rent reminders</div>
+          <p class="muted">
+            When a month is marked unpaid, we message the tenant once — after
+            this many days from the 1st. Set it to 0 to send nothing at all;
+            you can still record what was paid and what was not.
+          </p>
+          <div class="yard-new__row">
+            <label for="grace-days">
+              Days after the 1st
+              <input id="grace-days" type="number" min="0" max="28" [(ngModel)]="graceDays"
+                     name="graceDays"/>
+            </label>
+            <button type="button" class="btn btn-primary" [disabled]="savingGrace()"
+                    (click)="saveGraceDays()">
+              {{ savingGrace() ? 'Saving…' : 'Save' }}
+            </button>
+          </div>
+          @if (graceSaved()) {
+            <p class="muted" role="status">
+              @if (graceDays === 0) {
+                Reminders are off. Nothing is sent to your tenants.
+              } @else {
+                Saved — a reminder goes out {{ graceDays }}
+                {{ graceDays === 1 ? 'day' : 'days' }} after the 1st.
+              }
+            </p>
+          }
+          @if (graceError()) { <p class="field-error" role="alert">{{ graceError() }}</p> }
+          <p class="muted">
+            Reminders go to verified numbers only. A number typed into a
+            profile has not been checked, and "your rent is unpaid" sent to
+            whoever holds that number is not a message we will send.
+          </p>
+        </section>
       }
 
       <ng-template #yardTpl let-group>
@@ -183,12 +230,7 @@ export class Yard implements OnInit {
   private properties = inject(PropertiesService);
   private dialogs = inject(DialogService);
 
-  protected readonly navItems: PortalNavItem[] = [
-    { label: 'Dashboard', icon: '📊', route: '/landlord/dashboard', exact: true },
-    { label: 'Property', icon: '🏘️', route: '/landlord/yard' },
-    { label: 'Verification', icon: '🪪', route: '/landlord/verification' },
-    { label: 'Settings', icon: '⚙️', route: '/account/settings' },
-  ];
+  protected readonly navItems: PortalNavItem[] = landlordNav();
 
   protected readonly dash = this.properties.dashboard;
   protected readonly loading = signal(true);
@@ -203,6 +245,12 @@ export class Yard implements OnInit {
   protected newCity = '';
   protected newProvince = '';
 
+  /** Mirrors the saved value, so the box shows what is actually being applied. */
+  protected graceDays = 3;
+  protected readonly savingGrace = signal(false);
+  protected readonly graceSaved = signal(false);
+  protected readonly graceError = signal<string | null>(null);
+
   ngOnInit() {
     this.reload();
   }
@@ -210,10 +258,34 @@ export class Yard implements OnInit {
   private reload() {
     this.loading.set(true);
     this.properties.loadDashboard().subscribe({
-      next: () => this.loading.set(false),
+      next: (d) => {
+        this.loading.set(false);
+        this.graceDays = d.rentGraceDays;
+      },
       error: (err) => {
         this.loading.set(false);
         this.error.set(err?.error?.message ?? 'Could not load your property.');
+      },
+    });
+  }
+
+  protected saveGraceDays() {
+    const days = Number(this.graceDays);
+    if (!Number.isInteger(days) || days < 0 || days > 28) {
+      this.graceError.set('Pick a whole number of days between 0 and 28.');
+      return;
+    }
+    this.graceError.set(null);
+    this.graceSaved.set(false);
+    this.savingGrace.set(true);
+    this.properties.setGraceDays(days).subscribe({
+      next: () => {
+        this.savingGrace.set(false);
+        this.graceSaved.set(true);
+      },
+      error: (err) => {
+        this.savingGrace.set(false);
+        this.graceError.set(err?.error?.message ?? 'Could not save that.');
       },
     });
   }
