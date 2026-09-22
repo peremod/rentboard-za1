@@ -318,10 +318,19 @@ else
     kill "$PROD_PID" 2>/dev/null || true
     wait "$PROD_PID" 2>/dev/null || true
   fi
-  case "$(type_of /sitemap.xml)" in
-    *xml*) ok "/sitemap.xml is served as XML" ;;
-    *) bad "/sitemap.xml is $(type_of /sitemap.xml), not XML" ;;
-  esac
+  # Only with an API to proxy. The sitemap is built from live rooms, so with
+  # nothing to ask, answering 503 as text/plain is the correct behaviour — and
+  # asserting XML regardless failed on every machine without a local API,
+  # including this one once the sandbox reaped Postgres mid-run. The room
+  # checks below already skip for the same reason; this one did not.
+  if curl -sf -o /dev/null --max-time 5 "${API_URL:-http://localhost:3000}/health"; then
+    case "$(type_of /sitemap.xml)" in
+      *xml*) ok "/sitemap.xml is served as XML" ;;
+      *) bad "/sitemap.xml is $(type_of /sitemap.xml), not XML" ;;
+    esac
+  else
+    note "SKIP /sitemap.xml — no API on ${API_URL:-http://localhost:3000} to build it from"
+  fi
 
   # Room pages only mean anything with an API to read from. Skipped, loudly,
   # rather than quietly passing when there is nothing to check.
