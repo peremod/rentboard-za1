@@ -56,4 +56,4 @@ export default `<!DOCTYPE html><html lang="en-ZA" data-beasties-container><head>
 <link rel="modulepreload" href="chunk-RXBXIOPQ.js">
 
 
-<script id="ng-state" type="application/json">{"__nghData__":[{"t":{"3":"t0"},"c":{"3":[]}},{"t":{"24":"t1","25":"t2"},"c":{"24":[],"25":[{"i":"t2","r":2}]}},{"t":{"77":"t21","78":"t22"},"c":{"77":[],"78":[{"i":"t22","r":1}]}},{},{"t":{"0":"t19"},"c":{"0":[]}},{"t":{"0":"t20"},"c":{"0":[]}},{"c":{"2":[{"i":"c3605908550","r":1}]}}]}</script></body></html>`;
+<script id="ng-state" type="application/json">{"__nghData__":[{"t":{"3":"t0"},"c":{"3":[]}},{"t":{"24":"t1","25":"t2"},"c":{"24":[],"25":[{"i":"t2","r":2}]}},{"t":{"77":"t5","78":"t6"},"c":{"77":[],"78":[{"i":"t6","r":1}]}},{},{"t":{"0":"t3"},"c":{"0":[]}},{"t":{"0":"t4"},"c":{"0":[]}},{"c":{"2":[{"i":"c3605908550","r":1}]}}]}</script></body></html>`;

@@ -292,31 +292,41 @@ app.get(['/robots.txt', '/sitemap.xml'], async (req, res) => {
  * have already been wrong.
  */
 app.get('/__diag', async (req, res) => {
-  let engine: unknown;
-  try {
-    const probe = await angularApp.handle(
-      new Request(`https://${req.headers.host}/definitely-not-a-route`, {
-        headers: { host: String(req.headers.host ?? '') },
-      }) as never,
-    );
-    if (probe) {
-      const body = await (probe as Response).text();
-      engine = {
-        status: (probe as Response).status,
-        type: (probe as Response).headers.get('content-type'),
+  const probePath = typeof req.query['probe'] === 'string' ? req.query['probe'] : '/definitely-not-a-route';
+
+  /** Ask the engine for a path, with whichever headers we choose to pass. */
+  const probe = async (headers: Record<string, string>) => {
+    try {
+      const response = await angularApp.handle(
+        new Request(`https://${req.headers.host}${probePath}`, { headers }) as never,
+      );
+      if (!response) return null;
+      const body = await (response as Response).text();
+      return {
+        status: (response as Response).status,
         bytes: body.length,
-        // The rendered not-found page carries the marker and is ~17 KB; the
-        // client shell is ~4.8 KB and carries nothing. That difference is the
-        // whole question.
+        // The rendered page carries the marker and is ~17 KB; the client
+        // shell is ~4.8 KB and carries nothing. That is the whole question.
         rendered: /mastande-status/.test(body),
+        serverContext: /ng-server-context="([^"]*)"/.exec(body)?.[1] ?? null,
         title: /<title>([^<]*)</.exec(body)?.[1] ?? null,
       };
-    } else {
-      engine = null;
+    } catch (err) {
+      return { threw: err instanceof Error ? `${err.name}: ${err.message}` : String(err) };
     }
-  } catch (err) {
-    engine = { threw: err instanceof Error ? `${err.name}: ${err.message}` : String(err) };
-  }
+  };
+
+  // Minimal, and then with exactly what arrived. If these differ, a header
+  // decides whether the page renders — and the diff names which one.
+  const minimal = await probe({ host: String(req.headers.host ?? '') });
+  const asReceived = await probe(
+    Object.fromEntries(
+      Object.entries(req.headers)
+        .filter(([, v]) => typeof v === 'string')
+        .map(([k, v]) => [k, String(v)]),
+    ),
+  );
+  const engine = { probePath, minimal, asReceived, incomingHeaders: Object.keys(req.headers).sort() };
 
   res.json({
     request: {
