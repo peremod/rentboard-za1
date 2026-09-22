@@ -6,6 +6,7 @@ import { RentService, RentPeriod } from '../../../core/services/rent.service';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { Tenancy } from '../../../core/models/tenancy.model';
+import { tenantNav } from '../tenant-nav';
 
 /**
  * The tenant's side of rent tracking.
@@ -144,13 +145,7 @@ export class TenantRent implements OnInit {
   private tenancies_ = inject(TenanciesService);
   private rent = inject(RentService);
 
-  readonly navItems: PortalNavItem[] = [
-    { label: 'Dashboard', icon: '🏠', route: '/tenant/dashboard', exact: true },
-    { label: 'Rent', icon: '🧾', route: '/tenant/rent' },
-    { label: "Renter's Passport", icon: '🪪', route: '/tenant/passport' },
-    { label: 'Browse rooms', icon: '🔍', route: '/' },
-    { label: 'Settings', icon: '⚙️', route: '/account/settings' },
-  ];
+  readonly navItems: PortalNavItem[] = tenantNav();
 
   tenancies = signal<Tenancy[]>([]);
   loading = signal(true);

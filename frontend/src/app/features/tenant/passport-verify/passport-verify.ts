@@ -5,6 +5,7 @@ import { VerificationService } from '../../../core/services/verification.service
 import { UploadsService } from '../../../core/services/uploads.service';
 import { VerificationType } from '../../../core/models/verification.model';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
+import { tenantNav } from '../tenant-nav';
 
 /**
  * Renter's Passport — the tenant side of verification.
@@ -159,10 +160,7 @@ export class PassportVerify implements OnInit {
   protected readonly verification = inject(VerificationService);
   private uploads = inject(UploadsService);
 
-  protected readonly navItems: PortalNavItem[] = [
-    { label: 'Dashboard', icon: '🏠', route: '/tenant/dashboard', exact: true },
-    { label: "Renter's Passport", icon: '🛂', route: '/tenant/passport' },
-  ];
+  protected readonly navItems: PortalNavItem[] = tenantNav();
 
   protected readonly uploading = signal<VerificationType | null>(null);
   protected readonly submitting = signal(false);

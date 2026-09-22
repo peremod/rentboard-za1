@@ -373,6 +373,11 @@
 // Verified landlord badge. The spec predates verification existing, so it has
 // no rule for this; sage keeps it distinct from Featured (gold) and New.
 .badge-verified { background: var(--sage); color: #fff; }
+/* Sand rather than red: an unverified landlord is the normal case today, not a
+   warning about that person. Global rather than in room-detail's own styles —
+   component styles are MORE specific under emulated encapsulation, which is
+   what silently overrode the whole responsive layer in v0.9.3. */
+.badge-unverified { background: var(--cream2); color: var(--ink2); border: 1px solid var(--border); }
 
 // ═══════════════════════════════════════════════════════════════════════
 // FILTER PANEL & AD POLISH

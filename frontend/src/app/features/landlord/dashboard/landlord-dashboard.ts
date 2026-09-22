@@ -8,6 +8,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { Room } from '../../../core/models/room.model';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
+import { landlordNav } from '../landlord-nav';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
 import { ReferralPanel } from '../../../shared/components/referral-panel/referral-panel';
@@ -264,36 +265,10 @@ export class LandlordDashboard implements OnInit {
 
   billingEnabled = BILLING_ENABLED;
 
-  /**
-   * Computed so the Applicants badge tracks the live total. My Rooms,
-   * Applicants and Messages all resolve to this dashboard, which is where
-   * each of those views currently lives.
-   */
-  readonly navItems = computed<PortalNavItem[]>(() => [
-    { label: 'Dashboard', icon: '📊', route: '/landlord/dashboard', exact: true },
-    // These two are sections of the dashboard, not pages. Without the
-    // fragment they navigated to the dashboard root, which from the dashboard
-    // is indistinguishable from a click that did nothing.
-    { label: 'My Rooms', icon: '🏠', route: '/landlord/dashboard', fragment: 'active-listings' },
-    // Applicants are listed per room, and the room cards under Active
-    // listings are where you open them. The badge is the number that matters;
-    // this takes you to where you act on it.
-    {
-      label: 'Applicants', icon: '👥', route: '/landlord/dashboard',
-      fragment: 'active-listings', badge: this.totalApplicants(),
-    },
-    // No messages screen exists. Threads live inside an application, reached
-    // from that application. Listing this as though it were a destination was
-    // the nav making a promise the app does not keep — `disabled` renders it
-    // greyed with a "Soon" chip, which is the truth.
-    { label: 'Messages', icon: '💬', route: '/landlord/dashboard', disabled: true },
-    { label: 'My property', icon: '🏘️', route: '/landlord/yard' },
-    { label: 'Verification', icon: '🪪', route: '/landlord/verification' },
-    { label: 'Settings', icon: '⚙️', route: '/account/settings' },
-    ...(BILLING_ENABLED
-      ? [{ label: 'Billing', icon: '💳', route: '/landlord/upgrade' }]
-      : []),
-  ]);
+  /** Computed so the Applicants badge tracks the live total. */
+  readonly navItems = computed<PortalNavItem[]>(() =>
+    landlordNav({ applicants: this.totalApplicants() }),
+  );
 
   rooms = signal<Room[]>([]);
   loading = signal(true);

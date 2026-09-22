@@ -187,6 +187,117 @@ if [ -f "$ROOT/backend/dist/main.js" ]; then
   fi
 fi
 
+# ── 9. What the SERVER actually answers, per URL ──────────────────────────
+#
+# Every check above reads files on disk. These boot the server and ask it,
+# because the three defects this section exists for were all invisible on
+# disk and all found by asking:
+#
+#   · /robots.txt and /sitemap.xml answered 200 with the "Page not found"
+#     HTML page. There is no robots.txt at the site's origin — the backend
+#     serves one, on the API's origin, where no crawler of the site will ever
+#     read it. Lighthouse reported 58 "syntax not understood" errors, having
+#     parsed our 404 page as robots directives.
+#   · Every unknown URL answered 200. A soft 404 keeps the URL in the index,
+#     competing with real pages.
+#   · /rooms/:id is server-rendered per request so a crawler sees the room,
+#     and it rendered "Loading…" with the site's default title, because the
+#     auth interceptor dropped every request during SSR — public reads
+#     included.
+#
+# Run against a DEVELOPMENT build, on purpose. Angular bakes the API URL in at
+# build time, and the production artefact left on disk by step 4 points at
+# api.umastande.co.za — so on any machine that is not production, a room page
+# renders its "no longer available" branch and the sitemap proxy has nothing
+# to proxy. The first version of this section ran against that build and
+# reported a page that could not have worked as working, which is the exact
+# mistake the rest of this file exists to stop.
+step "What the server answers"
+VERIFY_DIST="$ROOT/frontend/dist/verify-dev"
+rm -rf "$VERIFY_DIST"
+if ! (cd frontend && npx ng build --configuration development --output-path dist/verify-dev \
+        >/tmp/build-verify-dev.log 2>&1); then
+  bad "could not build the development bundle these checks need"
+  tail -15 /tmp/build-verify-dev.log
+fi
+SERVER_JS="$VERIFY_DIST/server/server.mjs"
+if [ ! -f "$SERVER_JS" ]; then
+  bad "no SSR server at $SERVER_JS — cannot check what the site answers"
+else
+  PORT=4111 NG_ALLOWED_HOSTS=localhost node "$SERVER_JS" >/tmp/verify-ssr.log 2>&1 &
+  SSR_PID=$!
+  # Wait for the port rather than sleeping a guess.
+  for _ in $(seq 1 40); do
+    curl -sf -o /dev/null --max-time 2 http://localhost:4111/ && break
+    sleep 0.5
+  done
+
+  status_of() { curl -s -o /tmp/verify-body.html -w '%{http_code}' --max-time 20 "http://localhost:4111$1"; }
+  type_of()   { curl -s -o /dev/null -w '%{content_type}' --max-time 20 "http://localhost:4111$1"; }
+
+  [ "$(status_of /)" = "200" ] && ok "/ answers 200" || bad "/ does not answer 200"
+
+  # A 404 must BE a 404.
+  if [ "$(status_of /this-page-does-not-exist)" = "404" ]; then
+    ok "an unknown URL answers 404"
+  else
+    bad "an unknown URL does not answer 404 — soft 404"
+    note "Check the '**' serverRoute status and NOT_FOUND_MARKER in src/server.ts"
+  fi
+  # Single segment: this is the one a ':lang' server route silently claimed.
+  if [ "$(status_of /nonsense)" = "404" ]; then
+    ok "a single-segment unknown URL answers 404"
+  else
+    bad "/nonsense answers $(status_of /nonsense) — ':lang' is matching it"
+    note "server.ts maps the error page's own marker to a status; check both"
+  fi
+
+  case "$(type_of /robots.txt)" in
+    text/plain*) ok "/robots.txt is served as text/plain" ;;
+    *) bad "/robots.txt is $(type_of /robots.txt), not text/plain"
+       note "The site's own origin must serve it — see the proxy in src/server.ts" ;;
+  esac
+  case "$(type_of /sitemap.xml)" in
+    *xml*) ok "/sitemap.xml is served as XML" ;;
+    *) bad "/sitemap.xml is $(type_of /sitemap.xml), not XML" ;;
+  esac
+
+  # Room pages only mean anything with an API to read from. Skipped, loudly,
+  # rather than quietly passing when there is nothing to check.
+  if curl -sf -o /dev/null --max-time 5 "${API_URL:-http://localhost:3000}/health"; then
+    ROOM_ID=$(curl -sf --max-time 10 "${API_URL:-http://localhost:3000}/api/rooms?limit=1" \
+      | sed -n 's/.*"data":\[{"id":"\([^"]*\)".*/\1/p')
+    if [ -n "$ROOM_ID" ]; then
+      status_of "/rooms/$ROOM_ID" >/dev/null
+      if grep -q 'Loading…' /tmp/verify-body.html; then
+        bad "a room page server-renders 'Loading…' — the room is not in the HTML"
+        note "SSR is not awaiting the room request; see SSR_PUBLIC_PREFIXES in auth.interceptor.ts"
+      else
+        ok "a room page server-renders the room itself"
+      fi
+      grep -q '"@type":"Product"' /tmp/verify-body.html \
+        && ok "and its JSON-LD is in the served HTML" \
+        || bad "a room page has no Product JSON-LD in the served HTML"
+      grep -q '"@type":"AggregateRating"\|"seller"\|"offers"' /tmp/verify-body.html \
+        && ok "with the offer in it, not just the page title" \
+        || note "no offer in the JSON-LD — check applySeo in room-detail.ts"
+    else
+      note "SKIP room page checks — the API returned no rooms"
+    fi
+    if [ "$(status_of /rooms/99999999-9999-4999-8999-999999999999)" = "404" ]; then
+      ok "a room that does not exist answers 404"
+    else
+      bad "a missing room answers 200 — soft 404 on the site's main URL shape"
+    fi
+  else
+    note "SKIP room page checks — no API on ${API_URL:-http://localhost:3000}"
+  fi
+
+  kill "$SSR_PID" 2>/dev/null || true
+  wait "$SSR_PID" 2>/dev/null || true
+  rm -rf "$VERIFY_DIST"
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────
 echo
 echo "════════════════════════════════════════════════════════"

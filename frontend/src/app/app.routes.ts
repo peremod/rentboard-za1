@@ -186,7 +186,15 @@ export const serverRoutes: ServerRoute[] = [
   // builder's fallback logic hands the bare '**' entry's own prerender pass
   // eachLocale as its getPrerenderParams — eachLocale supplies 'lang', not
   // the '**' segment a plain catch-all needs, so that pass fails outright.
-  { path: ':lang/**', renderMode: RenderMode.Server },
+  { path: ':lang/**', renderMode: RenderMode.Server, status: 404 },
+
+  // The two redirect routes, named explicitly. Without an entry of their own
+  // they fall under the catch-alls below, and a catch-all that answers 404
+  // cannot describe a redirect — the build says so outright: "The '404'
+  // status code is not a valid redirect response code". 301 is also the right
+  // answer for /rooms, which is a permanent move to the board.
+  { path: 'rooms', renderMode: RenderMode.Server, status: 301 },
+  { path: ':lang/rooms', renderMode: RenderMode.Server, status: 301 },
 
   // ── Private areas, both trees ──
   { path: 'auth/**', renderMode: RenderMode.Client },
@@ -196,10 +204,36 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'admin/**', renderMode: RenderMode.Client },
   { path: 'account/**', renderMode: RenderMode.Client },
   { path: ':lang/auth/**', renderMode: RenderMode.Client },
+  // Mirrors 'reference/**'. Without it a reference link arriving with a
+  // language prefix fell through to ':lang/**', which now answers 404.
+  { path: ':lang/reference/**', renderMode: RenderMode.Client },
   { path: ':lang/tenant/**', renderMode: RenderMode.Client },
   { path: ':lang/landlord/**', renderMode: RenderMode.Client },
   { path: ':lang/admin/**', renderMode: RenderMode.Client },
   { path: ':lang/account/**', renderMode: RenderMode.Client },
 
-  { path: '**', renderMode: RenderMode.Prerender },
+  /**
+   * Not found, with the status to match.
+   *
+   * This was Prerender, so an unknown URL answered **HTTP 200** with the
+   * "Page not found" page — a soft 404, which is worse than a real one: the
+   * URL stays in the index, competes with real pages, and the crawl keeps
+   * coming back to it. It is also how /robots.txt and /sitemap.xml came to
+   * answer 200 with an HTML page, which Lighthouse found by parsing our 404
+   * page as robots directives and reporting 58 syntax errors.
+   *
+   * Server rather than Prerender because `status` does not exist on a
+   * prerendered route, and cannot: a file on disk has no status of its own.
+   *
+   * This entry is not the whole fix. A ':lang' server route matches ANY single
+   * segment — server route matching happens before anything runs, so
+   * localeMatchGuard never gets a say — which means '/foo' matches ':lang' and
+   * '/xx/pricing' matches ':lang/pricing' and neither reaches this catch-all.
+   * Enumerating the ten locales here instead is rejected by the build
+   * ("the 'zu/rooms/*' server route does not match any routes defined in the
+   * Angular routing configuration"), because the client tree declares them
+   * under a ':lang' parameter. So the status for those is set in server.ts,
+   * from a marker the error page itself renders — see NOT_FOUND_MARKER there.
+   */
+  { path: '**', renderMode: RenderMode.Server, status: 404 },
 ];

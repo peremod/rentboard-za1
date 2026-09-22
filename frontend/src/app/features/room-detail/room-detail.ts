@@ -95,6 +95,51 @@ import { environment } from '@env/environment';
         <h2>About this room</h2>
         <p class="room-detail__description">{{ r.description }}</p>
 
+        <!--
+          Who is letting this room, and what has actually been checked about
+          them. This page had nothing about the landlord at all: the board's
+          room card showed a "✓ Verified" badge and the page a tenant reads
+          before sending their details showed no badge, no name and no rating.
+          Phase 1's whole premise is that a badge should have a visible basis,
+          and the basis was missing from the one screen where the decision is
+          made. (The detail endpoint did not even send the landlord — see
+          PUBLIC_LANDLORD in rooms.service.ts.)
+
+          The unverified case says so plainly rather than staying silent.
+          Silence reads as "fine" and most listings here will be unverified
+          for a while yet; a tenant deciding whether to go and view a room
+          alone deserves to know which it is.
+        -->
+        @if (r.landlord; as landlord) {
+          <section class="detail__section landlord-trust">
+            <h2>Who is letting it</h2>
+            <p class="landlord-trust__name">{{ landlord.fullName }}</p>
+
+            @if (landlord.landlordProfile?.idVerified) {
+              <p class="landlord-trust__state landlord-trust__state--ok">
+                <span class="badge badge-verified">✓ Verified</span>
+                A Mastande reviewer checked their identity document against this
+                account. It is not a credit or criminal check.
+              </p>
+            } @else {
+              <p class="landlord-trust__state landlord-trust__state--none">
+                <span class="badge badge-unverified">Identity not verified</span>
+                Nobody has checked who this is. Never pay a deposit before
+                viewing the room and signing a lease.
+              </p>
+            }
+
+            @if (landlord.landlordProfile?.ratingCount) {
+              <p class="landlord-trust__rating">
+                ★ {{ landlord.landlordProfile!.rating }} from
+                {{ landlord.landlordProfile!.ratingCount }}
+                {{ landlord.landlordProfile!.ratingCount === 1 ? 'review' : 'reviews' }}
+                by previous tenants
+              </p>
+            }
+          </section>
+        }
+
         <div class="room-detail__apply">
           @if (!auth.isAuthenticated()) {
             <!-- A button, not a sentence with a link in it. This is the
@@ -170,6 +215,11 @@ import { environment } from '@env/environment';
           <app-report-dialog [roomId]="r.id" (close)="reportOpen.set(false)"/>
         }
       } @else if (notFound()) {
+        <!-- Same marker as the error page: a room id that does not exist was
+             answering 200 with "Room not found", which is a soft 404 on the
+             one URL shape the whole site depends on being indexed properly.
+             server.ts reads it and sets the status. -->
+        <meta name="mastande-status" content="404"/>
         <p>Room not found. <a routerLink="/">Back to all rooms</a></p>
       } @else {
         <p>Loading…</p>
@@ -178,6 +228,10 @@ import { environment } from '@env/environment';
   `,
   styles: [`
     .room-detail { max-width: 640px; margin: 0 auto; padding: 1.5rem 1.25rem; font-family: sans-serif; }
+    .landlord-trust__name { font-weight: 700; margin-bottom: .35rem; }
+    .landlord-trust__state { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;
+                             font-size: .88rem; color: var(--ink2); line-height: 1.6; }
+    .landlord-trust__rating { font-size: .85rem; color: var(--slate); margin-top: .5rem; }
     /* Hero plus a 2x2 of thumbnails. Collapses to hero-only on narrow
        screens, where four small images are unreadable anyway. */
     .gallery { display: grid; grid-template-columns: 2fr 1fr; gap: .5rem; margin-bottom: 1rem; }

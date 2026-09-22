@@ -71,6 +71,54 @@
   ],
   "rewrites": [
     {
+      "source": "/robots.txt",
+      "has": [
+        {
+          "type": "host",
+          "value": "staging.umastande.co.za"
+        }
+      ],
+      "destination": "https://mastande-api.onrender.com/robots.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "has": [
+        {
+          "type": "host",
+          "value": "staging.umastande.co.za"
+        }
+      ],
+      "destination": "https://mastande-api.onrender.com/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "has": [
+        {
+          "type": "host",
+          "value": "mastande.vercel.app"
+        }
+      ],
+      "destination": "https://mastande-api.onrender.com/robots.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "has": [
+        {
+          "type": "host",
+          "value": "mastande.vercel.app"
+        }
+      ],
+      "destination": "https://mastande-api.onrender.com/sitemap.xml"
+    },
+    {
+      "source": "/robots.txt",
+      "destination": "https://api.umastande.co.za/robots.txt"
+    },
+    {
+      "source": "/sitemap.xml",
+      "destination": "https://api.umastande.co.za/sitemap.xml"
+    },
+    {
       "source": "/((?!assets/|_next/|.*\\..*).*)",
       "destination": "/index.html"
     }
