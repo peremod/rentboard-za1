@@ -333,6 +333,7 @@ export class TenantDashboard implements OnInit {
     // No messages screen exists; threads live inside an application.
     { label: 'Messages', icon: '💬', route: '/tenant/dashboard', disabled: true },
     { label: 'Browse rooms', icon: '🔍', route: '/' },
+    { label: 'Rent', icon: '🧾', route: '/tenant/rent' },
     { label: "Renter's Passport", icon: '🪪', route: '/tenant/passport' },
     { label: 'Settings', icon: '⚙️', route: '/account/settings' },
     {

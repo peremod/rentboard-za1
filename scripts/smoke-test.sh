@@ -2475,6 +2475,27 @@ check "a tenant cannot set a landlord's reminder settings" 403 "$STATUS" "$BODY"
 req GET "/api/properties/rent/00000000-0000-4000-8000-000000000000" "" "$LTOKEN"
 check "rent history for a tenancy that does not exist" 404 "$STATUS" "$BODY"
 
+# The tenant's side (v1.71.0). The reminder tells them to "say so on
+# Mastande", so the path that lets them has to keep working.
+req PATCH "/api/properties/rent/period/00000000-0000-4000-8000-000000000000/dispute" '{"note":"Paid on the 3rd."}' "$TTOKEN"
+check "disputing a month that does not exist" 404 "$STATUS" "$BODY"
+
+req PATCH "/api/properties/rent/period/00000000-0000-4000-8000-000000000000/dispute" '{"note":"x"}'
+check "disputing requires auth" 401 "$STATUS"
+
+# Marking is the landlord's act; answering is the tenant's. Neither may do
+# the other's, and a tenant marking their own rent paid would make the whole
+# record worthless.
+if [[ -n "$TEN_ID" ]]; then
+  req PATCH "/api/properties/rent/$TEN_ID/mark" '{"periodStart":"2026-09-01T00:00:00.000Z","status":"paid"}' "$TTOKEN"
+  check "a tenant cannot mark their own rent paid" 403 "$STATUS" "$BODY"
+
+  req GET "/api/properties/rent/$TEN_ID" "" "$TTOKEN"
+  check "a tenant can read their own rent record" 200 "$STATUS" "$BODY"
+else
+  grey "  SKIP  tenant rent record — no tenancy was created earlier"; SKIP=$((SKIP+1))
+fi
+
 if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req POST /api/properties/rent/run-reminders "" "$ADMIN_TOKEN"
   check "the overdue-rent reminder pass runs" 200 "$STATUS" "$BODY"

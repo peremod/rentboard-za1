@@ -723,6 +723,19 @@ img{display:block;max-width:100%}
   color:var(--ink);font-size:.78rem;line-height:1.6;
 }
 
+.rent-answer{
+  margin-top:.5rem;padding:.6rem .75rem;border-radius:var(--r4);
+  background:var(--cream2);border:1px solid var(--border);
+  font-size:.8rem;color:var(--ink2);line-height:1.6;
+}
+.rent-answer label{display:block;margin-bottom:.35rem;font-weight:600;color:var(--ink)}
+.rent-answer input{
+  width:100%;min-height:40px;padding:.4rem .6rem;margin-bottom:.5rem;
+  border:1.5px solid var(--border);border-radius:var(--r4);
+  background:var(--white);color:var(--ink);font-size:.85rem;font-family:inherit;
+}
+.rent-answer .btn{min-height:40px}
+
 /* ═══ SHIMMER ═══ */
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .shimmer{
