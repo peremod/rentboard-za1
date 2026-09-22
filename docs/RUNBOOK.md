@@ -88,6 +88,25 @@ npm run verify            # builds all three configurations, 27 assertions
 
 ---
 
+## Tags
+
+Release tags are created on whichever machine cut the release, so yours may be
+missing some. Do not hand-write a push list: `git push origin v1.a v1.b v1.c`
+aborts the **whole** push if any one ref does not resolve locally, so a single
+missing tag silently blocks every other tag with it.
+
+```bash
+./scripts/sync-tags.sh           # show what is missing
+./scripts/sync-tags.sh --push    # create and push it
+```
+
+It reads the versions out of the history rather than taking a list: every
+release commit on `develop`'s first-parent line bumps `package.json`, so the
+version and its commit are both already recorded. It pushes one ref at a time,
+so a failure on one tag cannot take the others down.
+
+---
+
 ## Staging
 
 Staging is disposable and has its own database. Running the smoke suite against
