@@ -250,8 +250,47 @@ this moves to a paid instance.
 1. **Add New → Project** → import the repo
 2. **Root Directory**: `frontend`
 3. **Framework Preset**: Angular
-4. **Build Command**: `npm run build`
-5. **Output Directory**: `dist/mastande-frontend/browser`
+4. **Build Command**: `npm run build:prod` (set in `vercel.json`)
+5. **Output Directory**: **leave blank.** Do not set it.
+
+### Why the Output Directory must stay empty
+
+This section used to say `dist/mastande-frontend/browser`, and that one line
+was the whole reason production served a static site.
+
+Angular's build produces two things: `browser/`, the client bundle and the
+prerendered pages, and `server/server.mjs`, the SSR server. Naming the browser
+folder tells Vercel to publish those files **and nothing else**, so the server
+was built on every deploy and thrown away. What that cost, measured on the
+live deployment at v1.73.1:
+
+| URL | Answered |
+|---|---|
+| `/`, `/pricing`, `/legal/terms`, `/advertise` | 200 — the 19 prerendered pages |
+| `/auth/login` | **404** |
+| `/tenant/dashboard` | **404** |
+| `/rooms/<any id>` | **404** |
+
+Every room link ever shared on WhatsApp was dead, and so was the login page.
+The second fault made it certain: `vercel.json` carried an SPA fallback
+rewriting unmatched paths to `/index.html`, and `"cleanUrls": true` strips
+`.html`, so `/index.html` is itself a 308 — the fallback resolved to nothing.
+
+With the setting cleared and both the override and the fallback gone from
+`vercel.json`, the Angular preset deploys `server.mjs` as a function, which
+answers every route: prerendered pages from disk, `/rooms/:id` rendered per
+request, unknown URLs with a real 404.
+
+`scripts/verify-build.sh` asserts both faults now — nothing in this repo had
+ever read `vercel.json`.
+
+### Preview deployments
+
+A **production** build allows only `umastande.co.za` and `www.` as Host
+headers (see `allowedHosts` in `frontend/src/server.ts`), so a preview
+deployment on a generated `*.vercel.app` hostname is rejected and falls back
+to client rendering. If you want previews to server-render, set
+`NG_ALLOWED_HOSTS=*.vercel.app` in Vercel's **Preview** environment only.
 
 ### Environment variable
 
