@@ -1,2 +1,0 @@
-import './polyfills.server.mjs';
-var e=[{label:"Overview",icon:"\u{1F4CA}",route:"/admin/dashboard",exact:!0},{label:"Verifications",icon:"\u{1F4C4}",route:"/admin/verifications"},{label:"Reports",icon:"\u{1F6A9}",route:"/admin/reports"},{label:"Advertising",icon:"\u{1F4E2}",route:"/admin/advertising"},{label:"Referrals",icon:"\u{1F39F}\uFE0F",route:"/admin/referrals"},{label:"Usage",icon:"\u{1F4C8}",route:"/admin/analytics"},{label:"Settings",icon:"\u2699\uFE0F",route:"/account/settings"}];export{e as a};

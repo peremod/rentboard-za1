@@ -1,2 +1,0 @@
-import './polyfills.server.mjs';
-import{Na as n}from"./chunk-5JEC7CSM.mjs";var a=(()=>{class t{constructor(){this.formatter=new Intl.NumberFormat("en-ZA",{style:"currency",currency:"ZAR",maximumFractionDigits:0})}transform(r,e){if(r==null)return"";let i=this.formatter.format(r/100);return e==="monthly"?`${i}/mo`:i}static{this.\u0275fac=function(e){return new(e||t)}}static{this.\u0275pipe=n({name:"zarCents",type:t,pure:!0})}}return t})();export{a};
