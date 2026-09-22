@@ -1,5 +1,6 @@
 {
   "buildCommand": "npm run build:prod",
+  "outputDirectory": "dist/mastande-frontend/browser",
   "framework": "angular",
   "redirects": [
     {
