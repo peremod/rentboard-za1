@@ -59,3 +59,8 @@ backend/prisma/migrations/dev/
 
 # Lighthouse CI run output — reports, not source.
 .lighthouseci/
+
+# Vercel build output — assembled by frontend/tools/vercel-build.mjs on every
+# build, and committed by accident in 8790cd7 when a `git add -A` swept it in.
+# Nothing here is source: 380 generated files, 6 MB, rewritten each time.
+.vercel/

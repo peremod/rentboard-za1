@@ -249,62 +249,57 @@ this moves to a paid instance.
 
 1. **Add New → Project** → import the repo
 2. **Root Directory**: `frontend`
-3. **Framework Preset**: Angular
-4. **Build Command**: `npm run build:prod` (set in `vercel.json`)
-5. **Output Directory**: `dist/mastande-frontend/browser` (set in `vercel.json`)
+3. **Framework Preset**: Other (`vercel.json` sets `"framework": null`)
+4. **Build Command**: from `vercel.json` — `npm run build:prod && node tools/vercel-build.mjs`
+5. **Output Directory**: leave blank. `vercel.json` sets no `outputDirectory`,
+   and adding one would override everything below.
 
-### This is a static deployment, and that is a known limitation
+### The deployment is described, not inferred
 
-Angular builds two things: `browser/`, the client bundle and the prerendered
-pages, and `server/server.mjs`, the SSR server. Naming the browser folder
-publishes those files and nothing else, so the server is built on every deploy
-and thrown away. Room pages are therefore client-rendered in production and
-unknown URLs cannot carry a status — see row 24 of `PRE-LAUNCH-CHECKLIST.md`.
+`frontend/tools/vercel-build.mjs` assembles Vercel's Build Output API v3:
 
-**Do not "fix" this by deleting the setting.** v1.74.0 did exactly that, on
-the assumption that Vercel would then default to the browser folder. It does
-not: the Angular preset reads `outputPath` from `angular.json`, which is
-`dist/mastande-frontend`, and publishes that — so `index.html` ends up at
-`/browser/index.html` and **every URL on the site 404s, `/` included**. That
-was live until it was reverted. The replacement is a `.vercel/output` build
-(Vercel Build Output API) that routes explicitly instead of relying on what a
-framework preset infers.
+```
+frontend/.vercel/output/
+  config.json              assets from the filesystem, every page → the function
+  static/                  the browser bundle (hashed assets)
+  functions/ssr.func/      server.mjs + browser/ + an entry Vercel imports
+```
 
-### What a static deployment still has to get right
+**Why not just point Vercel at the build?** Because neither value of that
+setting is correct, and both were tried in production on 22 September 2026:
 
-Both of these were wrong on the live site. `scripts/verify-build.sh` asserts
-them now, because nothing in this repo had ever read `vercel.json`.
-
-**1. The SPA fallback must point at `/`, not `/index.html`.** `cleanUrls`
-strips `.html`, so `/index.html` is itself a 308 and a rewrite to it resolves
-to nothing. That is what this cost, measured on the live deployment:
-
-| URL | Before | After |
+| Setting | What Vercel served | Result |
 |---|---|---|
-| `/`, `/pricing`, `/legal/terms`, `/advertise` | 200 | 200 |
-| `/auth/login` | **404** | 200 |
-| `/tenant/dashboard` | **404** | 200 |
-| `/rooms/<any id>` | **404** | 200, client-rendered |
+| `outputDirectory: dist/mastande-frontend/browser` | the client bundle only | Static. `server.mjs` built and discarded every deploy, so room pages were client-rendered and unknown URLs could not carry a status. Its SPA fallback pointed at `/index.html`, which `cleanUrls` makes unreachable, so `/auth/login`, the portals and **every room link answered 404**. |
+| *(unset)* | `dist/mastande-frontend` | The Angular preset reads `outputPath` from `angular.json`. `index.html` is one directory further down, so **every URL on the site 404'd**, `/` included. |
 
-Every room link ever shared on WhatsApp was dead, and so was the login page,
-for as long as that rewrite has existed.
+The Angular preset does not understand the `browser/` + `server/` split that
+Angular 17+ emits. The Build Output API does not have to: it names what to
+publish and how to route it.
 
-**2. robots.txt, sitemap.xml and X-Robots-Tag.** A static deployment has no
-server to answer the first two, so they are edge rewrites to the API that
-generates them — without one they 404, and a 404 robots.txt means *crawl
-everything*. And because the production build sets `index, follow` in its meta
-robots, any host serving that build which is not the real domain must carry an
-`X-Robots-Tag: noindex` header, or the preview competes with production for
-every keyword the day it launches. Both `staging.umastande.co.za` and
-`rentboard-za1.vercel.app` carry it.
+Every page goes to the function, including the prerendered ones — `server.ts`
+serves those from disk itself, with the right `Cache-Control`. That is
+deliberate: development, `node server.mjs` and production then run the same
+code path, which is what makes the SSR behaviour in `src/server.ts` worth
+testing locally at all.
 
-### Preview deployments
+`scripts/verify-build.sh` assembles the artefact, checks its shape and its
+routes, **boots the function entry and asks it for three URLs**. A deployment
+that cannot serve its own board fails the build before it reaches you.
 
-A **production** build allows only `umastande.co.za` and `www.` as Host
-headers (see `allowedHosts` in `frontend/src/server.ts`), so a preview
-deployment on a generated `*.vercel.app` hostname is rejected and falls back
-to client rendering. If you want previews to server-render, set
-`NG_ALLOWED_HOSTS=*.vercel.app` in Vercel's **Preview** environment only.
+### Hostnames
+
+`server.ts` allows the domain in its environment file, plus whatever Vercel
+says this deployment answers on: `VERCEL_URL`, `VERCEL_BRANCH_URL` and
+`VERCEL_PROJECT_PRODUCTION_URL`. Nothing to configure.
+
+This matters more than it sounds. Angular 21 answers **400** to a request
+whose `Host` it does not recognise — measured, not assumed: on a preview
+hostname a production build returned `400` with a 67-byte body for
+`/auth/login` while the prerendered pages kept working, because those are
+served before the engine sees them. A site that is half 400 and half fine is
+worse than one that is plainly broken. `NG_ALLOWED_HOSTS` still adds hosts by
+hand for anything the platform does not name, such as a custom staging domain.
 
 ### Environment variable
 
