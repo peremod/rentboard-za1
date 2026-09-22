@@ -257,6 +257,53 @@ else
     *) bad "/robots.txt is $(type_of /robots.txt), not text/plain"
        note "The site's own origin must serve it — see the proxy in src/server.ts" ;;
   esac
+
+  # A robots.txt that parses is not the same as a robots.txt that says the
+  # right thing, and the difference is not cosmetic. The first version of the
+  # unreachable-API fallback answered 'Disallow: /' — valid, served correctly,
+  # content-type perfect, and an instruction to Google to drop every page.
+  # Lighthouse caught it (is-crawlable 0, SEO 0.92 → 0.66). The content-type
+  # check above did not, because a type is not a meaning.
+  #
+  # The invariant is that robots.txt agrees with the deployment's own
+  # indexability, so BOTH directions are asserted, each against the build it
+  # belongs to. This is a development build, talking to a development API.
+  ROBOTS=$(curl -s --max-time 20 http://localhost:4111/robots.txt)
+  echo "$ROBOTS" | grep -qi 'user-agent' \
+    && ok "/robots.txt is a robots.txt, not a page that happens to be text" \
+    || bad "/robots.txt has no User-agent line"
+  if echo "$ROBOTS" | grep -qiE '^[[:space:]]*Disallow:[[:space:]]*/[[:space:]]*$'; then
+    ok "and a non-indexable build disallows the whole site, as it should"
+  else
+    bad "a development build's robots.txt does NOT disallow the site"
+    note "Development and staging must never be crawlable — check APP_ENV on the API"
+    note "and fallbackRobots() in frontend/src/server.ts"
+  fi
+
+  # And the production artefact from step 4, whose API is unreachable from
+  # here — so this is precisely the fallback path, on the build that faces
+  # Googlebot. The direction that matters: it must not tell anyone to go away.
+  if [ -f "$DIST/../server/server.mjs" ]; then
+    PORT=4112 NG_ALLOWED_HOSTS=localhost node "$DIST/../server/server.mjs" >/tmp/verify-ssr-prod.log 2>&1 &
+    PROD_PID=$!
+    for _ in $(seq 1 40); do
+      curl -sf -o /dev/null --max-time 2 http://localhost:4112/ && break
+      sleep 0.5
+    done
+    PROD_ROBOTS=$(curl -s --max-time 25 http://localhost:4112/robots.txt)
+    if echo "$PROD_ROBOTS" | grep -qiE '^[[:space:]]*Disallow:[[:space:]]*/[[:space:]]*$'; then
+      bad "the PRODUCTION build serves 'Disallow: /' when the API is unreachable"
+      note "That is an instruction Google obeys. A missing robots.txt means crawl"
+      note "freely; a Disallow: / means deindex. See fallbackRobots() in server.ts."
+    else
+      ok "the production build stays crawlable when the API cannot be reached"
+    fi
+    echo "$PROD_ROBOTS" | grep -qi 'Sitemap:' \
+      && ok "and still points at its sitemap" \
+      || bad "the production robots.txt has no Sitemap line"
+    kill "$PROD_PID" 2>/dev/null || true
+    wait "$PROD_PID" 2>/dev/null || true
+  fi
   case "$(type_of /sitemap.xml)" in
     *xml*) ok "/sitemap.xml is served as XML" ;;
     *) bad "/sitemap.xml is $(type_of /sitemap.xml), not XML" ;;

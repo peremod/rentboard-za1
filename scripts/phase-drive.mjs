@@ -168,7 +168,17 @@ async function signIn(email, password, width = 412) {
   await page.fill('input[type="email"]', email);
   await page.fill('input[type="password"]', password);
   await page.click('button[type="submit"]');
-  await page.waitForTimeout(2500);
+  // Wait for the navigation, not for a guess at how long it takes. A fixed
+  // 2.5s passes on this machine and is a coin toss on a CI runner, and a
+  // check that fails one run in five gets ignored like any other alarm that
+  // cries wolf.
+  try {
+    await page.waitForURL((url) => !url.pathname.startsWith('/auth/login'), { timeout: 20000 });
+  } catch {
+    const shown = ((await page.locator('body').textContent()) ?? '').replace(/\s+/g, ' ').slice(0, 200);
+    bad(`sign in as ${email}`, `still on ${new URL(page.url()).pathname} — ${shown}`);
+  }
+  await page.waitForTimeout(800);
   return page;
 }
 

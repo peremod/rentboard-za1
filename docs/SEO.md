@@ -92,9 +92,21 @@ Two places carry the fix, because two different servers answer that URL:
 | `frontend/src/server.ts` | Proxies `/robots.txt` and `/sitemap.xml` to the API the build was compiled against, cached five minutes. This is what development, `node server.mjs` and the Lighthouse job use. |
 | `frontend/vercel.json` | The same two paths as edge rewrites, because the production deployment is static and `server.ts` does not run there. Host-conditional, so staging proxies the staging API. |
 
-If the API cannot be reached, robots.txt falls back to `Disallow: /` (the
-direction that cannot cause damage that has to be undone) and the sitemap
-answers 503 rather than 200 with an error page.
+If the API cannot be reached, the fallback answers from the build's own
+`environment.indexable`: a production build stays crawlable (Allow, with the
+private areas excluded and the Sitemap line intact), staging and development
+disallow everything. The sitemap answers 503, which is retried, rather than
+200 with an error page, which is believed.
+
+**Not `Disallow: /` on failure.** That was the first version of this fallback,
+on the reasoning that refusing a crawl is the cautious direction. It is the
+opposite: a missing robots.txt means "crawl freely", while a robots.txt saying
+`Disallow: /` is an instruction Google obeys, and obeying it on a live site
+removes pages from the index. It also made the score it was meant to fix
+worse — Lighthouse read the fallback, correctly concluded every page was
+blocked, and SEO went 0.92 → 0.66 with `is-crawlable` at 0.
+`scripts/verify-build.sh` now asserts both directions against the build each
+one belongs to, because a content-type check passed the broken version.
 
 `scripts/verify-build.sh` asserts the content type of both against a running
 server, so a regression fails before a release is tagged.

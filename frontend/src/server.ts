@@ -177,6 +177,47 @@ app.use(compression());
 const SEO_FILE_TTL_MS = 5 * 60 * 1000;
 const seoFileCache = new Map<string, { body: string; type: string; at: number }>();
 
+/**
+ * What to serve when the API cannot be reached.
+ *
+ * It answers from `environment.indexable` — the deployment's own statement
+ * about whether it should be in an index — rather than picking a direction.
+ *
+ * The first version of this served `Disallow: /` on any failure, reasoning
+ * that refusing a crawl is the safe direction. It is the opposite. A missing
+ * robots.txt means "crawl freely"; a robots.txt that says Disallow: / is an
+ * instruction Google obeys, and obeying it on a live site removes pages from
+ * the index. It also broke the thing it was meant to fix: Lighthouse read the
+ * fallback, correctly concluded every page was blocked, and SEO went from
+ * 0.92 to 0.66 with `is-crawlable` at 0 — worse than the missing file had
+ * been, and found only because the CI run was read afterwards.
+ *
+ * So the fallback states the truth this bundle already knows. Production
+ * allows, with the same private-area exclusions the API's own robots.txt
+ * carries; staging and development disallow, matching their meta tag and the
+ * X-Robots-Tag header set in vercel.json.
+ */
+function fallbackRobots(): string {
+  if (!environment.indexable) {
+    return ['User-agent: *', 'Disallow: /', ''].join('\n');
+  }
+  return [
+    'User-agent: *',
+    'Allow: /',
+    '',
+    '# Private and authenticated areas — no SEO value, and must not be crawled.',
+    'Disallow: /auth/',
+    'Disallow: /tenant/',
+    'Disallow: /landlord/',
+    'Disallow: /account/',
+    'Disallow: /admin/',
+    'Disallow: /api/',
+    '',
+    `Sitemap: ${environment.siteUrl.replace(/\/$/, '')}/sitemap.xml`,
+    '',
+  ].join('\n');
+}
+
 app.get(['/robots.txt', '/sitemap.xml'], async (req, res) => {
   const path = req.path;
   const cached = seoFileCache.get(path);
@@ -203,13 +244,8 @@ app.get(['/robots.txt', '/sitemap.xml'], async (req, res) => {
   } catch (err) {
     console.error(`[seo] ${path} could not be fetched from ${origin}:`, err);
     if (path === '/robots.txt') {
-      // The safe direction when we cannot tell a crawler what is allowed is
-      // the one that cannot cause damage we have to undo later. A deployment
-      // that is not meant to be indexed would be indexed by an Allow served
-      // by mistake; a production deployment losing a crawl for a few minutes
-      // costs nothing by comparison.
       res.setHeader('Content-Type', 'text/plain');
-      res.status(200).send(['User-agent: *', 'Disallow: /', ''].join('\n'));
+      res.status(200).send(fallbackRobots());
     } else {
       // Never a 200 with the wrong body: a sitemap that answers 503 is
       // retried, and one that answers 200 with an error page is believed.
