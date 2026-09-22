@@ -54,6 +54,31 @@ function allowedHosts(): string[] {
     hosts.add('*.vercel.app');
   }
 
+  /**
+   * The hostnames the platform says this deployment answers on.
+   *
+   * Vercel sets these at runtime: VERCEL_URL is the deployment's own
+   * hostname, VERCEL_BRANCH_URL the branch alias, and
+   * VERCEL_PROJECT_PRODUCTION_URL the project's production domain. They are
+   * bare hostnames, no scheme.
+   *
+   * Without them a production build deployed anywhere other than the domain
+   * in its environment file answers **400** to every route the Angular engine
+   * handles — measured, not assumed: /auth/login returned 400 with a 67-byte
+   * body on a preview host, while the prerendered pages kept working because
+   * the middleware above serves those from disk before the engine sees them.
+   * A site that is half 400 and half fine is worse than one that is plainly
+   * broken, and it would have been the state of every preview deployment.
+   *
+   * This is deliberately not a `*.vercel.app` wildcard. The platform names
+   * the exact hostnames it is serving; a wildcard would also accept a
+   * deployment belonging to somebody else.
+   */
+  for (const key of ['VERCEL_URL', 'VERCEL_BRANCH_URL', 'VERCEL_PROJECT_PRODUCTION_URL']) {
+    const host = process.env[key]?.trim();
+    if (host) hosts.add(host);
+  }
+
   for (const extra of (process.env['NG_ALLOWED_HOSTS'] ?? '').split(',')) {
     const trimmed = extra.trim();
     if (trimmed) hosts.add(trimmed);
@@ -87,7 +112,10 @@ function collectPrerenderedPages(): Map<string, string> {
       } else if (entry.name === 'index.html') {
         const segments = relative(browserDistFolder, dir).split(sep).filter(Boolean);
         const route = `/${segments.join('/')}`;
-        pages.set(route === '/' ? '/' : route, full);
+        // Relative to browserDistFolder, not absolute — see the sendFile
+        // call below for why that distinction decides whether the page is
+        // served at all.
+        pages.set(route === '/' ? '/' : route, relative(browserDistFolder, full));
       }
     }
   };
@@ -282,7 +310,20 @@ app.use((req, res, next) => {
   if (!file) return next();
 
   res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(file, (err) => {
+  // Root-scoped, and that is not a style preference.
+  //
+  // `res.sendFile(absolutePath)` refuses any path containing a dot-prefixed
+  // segment: send's `dotfiles` option defaults to 'ignore' and it inspects
+  // the WHOLE path, so a deployment that happens to live under a directory
+  // like `.vercel/output/functions/ssr.func` makes every prerendered page
+  // answer 404 — with an Express error page, on the pages that matter most.
+  // That is not hypothetical; it is what the Build Output API bundle did the
+  // first time it was booted.
+  //
+  // With `root`, send only checks the part below it, and it also confines
+  // what can be served to the build folder, which is the right constraint for
+  // a path that comes from a map rather than from the request.
+  res.sendFile(file, { root: browserDistFolder }, (err) => {
     if (err) next(err);
   });
 });

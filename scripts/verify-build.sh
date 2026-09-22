@@ -368,100 +368,80 @@ else
   rm -rf "$VERIFY_DIST"
 fi
 
-# ── 10. The deploy config, which nothing has ever looked at ───────────────
+# ── 10. The deploy artefact, which nothing had ever looked at ─────────────
 #
-# Every check in this file until now tested the build. None tested how the
-# build gets served, and that is where the site actually broke: on the live
-# deployment, /auth/login, /tenant/dashboard and every /rooms/:id answered 404
-# while the 19 prerendered pages answered 200. Room links shared on WhatsApp
-# were dead and nothing in this repo could have told us.
+# Every other check in this file tests the build. None tested how the build
+# gets served, and that is where the site actually broke — twice in one day:
 #
-# Two faults, both visible in frontend/vercel.json alone:
-#   · "outputDirectory" named the browser folder, so Vercel published those
-#     files and nothing else — the server bundle Angular also builds was never
-#     deployed, which is what made the whole SSR layer inert in production.
-#   · the SPA fallback rewrote unmatched paths to "/index.html", a path that
-#     "cleanUrls": true makes unreachable: Vercel strips .html, so /index.html
-#     is a 308 and the rewrite resolved to nothing.
-step "Deploy config"
+#   · `outputDirectory: .../browser` published the client bundle and threw
+#     server.mjs away, so production was static: room pages client-rendered,
+#     unknown URLs unable to carry a status. Its SPA fallback rewrote to
+#     /index.html, which cleanUrls makes unreachable, so every deep link —
+#     /auth/login, the portals, every room link — answered 404.
+#   · removing outputDirectory did not fix it. Vercel read outputPath from
+#     angular.json, published dist/mastande-frontend, and the WHOLE site
+#     404'd because index.html is one directory further down.
+#
+# So the deployment is described explicitly now, by tools/vercel-build.mjs,
+# and this step checks the artefact that script produces rather than the
+# settings that produce it.
+step "Deploy artefact"
+VERCEL_BUILD="$ROOT/frontend/tools/vercel-build.mjs"
 VERCEL_JSON="$ROOT/frontend/vercel.json"
-if [ ! -f "$VERCEL_JSON" ]; then
-  note "SKIP — no frontend/vercel.json"
+if [ ! -f "$VERCEL_BUILD" ]; then
+  note "SKIP — no frontend/tools/vercel-build.mjs"
+elif [ ! -d "$DIST" ]; then
+  bad "no production build to assemble a deploy artefact from"
 else
+  if (cd frontend && node tools/vercel-build.mjs >/tmp/vercel-build.log 2>&1); then
+    ok "the deploy artefact assembles"
+  else
+    bad "tools/vercel-build.mjs failed"
+    tail -5 /tmp/vercel-build.log
+  fi
+
+  OUT="$ROOT/frontend/.vercel/output"
+  FUNC="$OUT/functions/ssr.func"
   node -e '
     const fs = require("fs");
-    const cfg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-    const fail = (m) => { console.log("FAIL " + m); };
-    const pass = (m) => { console.log("PASS " + m); };
-    // Neither passed nor failed: a state we have chosen and are tracking.
-    const note_ = (m) => { console.log("NOTE " + m); };
+    const out = process.argv[1], func = process.argv[2], vjson = process.argv[3];
+    const fail = (m) => console.log("FAIL " + m);
+    const pass = (m) => console.log("PASS " + m);
 
-    // A destination ending in .html cannot be reached when cleanUrls is on.
-    const rewrites = cfg.rewrites ?? [];
-    const htmlDest = rewrites.filter((r) => /\.html$/.test(r.destination ?? ""));
-    if (cfg.cleanUrls && htmlDest.length) {
-      fail(`cleanUrls is on and ${htmlDest.length} rewrite(s) point at a .html path: ` +
-           htmlDest.map((r) => r.destination).join(", "));
-    } else {
-      pass("no rewrite points at a path cleanUrls makes unreachable");
+    for (const [label, path] of [
+      ["the static bundle", out + "/static/index.html"],
+      ["the function entry", func + "/index.mjs"],
+      ["its runtime config", func + "/.vc-config.json"],
+      ["the server bundle", func + "/server/server.mjs"],
+      ["the browser bundle it reads", func + "/browser/index.html"],
+    ]) {
+      fs.existsSync(path) ? pass(`${label} is in the artefact`) : fail(`${label} is MISSING from the artefact`);
     }
 
-    // Publishing only the browser folder discards the server bundle, so the
-    // deployment is static: room pages are client-rendered and unknown URLs
-    // cannot carry a status. That is where this project is TODAY, on purpose
-    // and under protest (row 24), because removing the setting without a
-    // replacement took the whole site to 404 — Vercel read outputPath from
-    // angular.json and published dist/mastande-frontend, whose index.html is
-    // one directory further down.
-    //
-    // So the verdict depends on whether the replacement exists yet: once
-    // tools/vercel-build.mjs is in the repo, the deployment is meant to be
-    // serving .vercel/output and this setting would silently disable it.
-    const hasServerBuild = fs.existsSync(process.argv[2]);
-    if ((cfg.outputDirectory ?? "").includes("browser")) {
-      hasServerBuild
-        ? fail("outputDirectory publishes only the browser bundle — it overrides the .vercel/output build")
-        : note_("static deploy: outputDirectory publishes the browser bundle, so there is no SSR in production (row 24)");
-    } else {
-      pass("the deploy does not publish the browser bundle alone");
-    }
+    const cfg = JSON.parse(fs.readFileSync(out + "/config.json", "utf8"));
+    const routes = cfg.routes ?? [];
+    routes.some((r) => r.handle === "filesystem")
+      ? pass("assets are served from the filesystem")
+      : fail("no filesystem handler — every asset would hit the function");
+    routes.some((r) => r.dest === "/ssr" && /^\^\/\.\*\$?$/.test(r.src ?? ""))
+      ? pass("every other path reaches the server")
+      : fail("no catch-all to the function — unmatched paths would 404");
+    routes.some((r) => (r.headers ?? {})["x-robots-tag"] && (r.has ?? []).some((h) => h.type === "host"))
+      ? pass("hosts that are not production are told not to index")
+      : fail("no host-scoped x-robots-tag — a preview would compete with the real domain");
+    routes.some((r) => /\.html$/.test(r.dest ?? ""))
+      ? fail("a route points at a .html path, which cleanUrls-style handling makes unreachable")
+      : pass("no route points at a .html path");
 
-    // robots.txt and sitemap.xml, and which answer is right depends on what
-    // kind of deployment this is:
-    //
-    //   static  — nothing else can answer them, so an edge rewrite is the
-    //             only way to have a robots.txt at all. Without one they 404,
-    //             and a 404 robots.txt means crawl everything.
-    //   server  — src/server.ts answers both, with a cache and a fallback
-    //             derived from the build indexability. An edge rewrite would
-    //             bypass both, so it must NOT be there.
-    //
-    // NB: no apostrophes in this script. It is inside single quotes in bash,
-    // and one apostrophe ends the string early — which is exactly how the
-    // first version of this block failed with a syntax error.
-    const isStatic = Boolean(cfg.outputDirectory);
-    const intercepted = rewrites.filter((r) => ["/robots.txt", "/sitemap.xml"].includes(r.source));
-    if (isStatic) {
-      intercepted.length
-        ? pass("robots.txt and sitemap.xml are answered at the edge, as a static deploy needs")
-        : fail("a static deploy with no rewrite for robots.txt — it will 404, which means crawl everything");
-    } else {
-      intercepted.length
-        ? fail(`${intercepted.length} edge rewrite(s) intercept robots.txt or sitemap.xml, bypassing the cache and fallback in server.ts`)
-        : pass("nothing at the edge intercepts robots.txt or sitemap.xml");
-    }
-
-    // A deployment that is not production must not invite crawlers. The
-    // production BUILD sets meta robots index,follow, so a preview host with
-    // no X-Robots-Tag is fully crawlable and will compete with the real
-    // domain for every keyword the day it launches.
-    const noindexHosts = (cfg.headers ?? [])
-      .filter((h) => (h.headers ?? []).some((x) => /x-robots-tag/i.test(x.key ?? "")))
-      .flatMap((h) => (h.has ?? []).map((c) => c.value));
-    noindexHosts.length
-      ? pass(`non-production hosts carry X-Robots-Tag: ${noindexHosts.join(", ")}`)
-      : fail("no host carries an X-Robots-Tag noindex — preview deployments are crawlable");
-  ' "$VERCEL_JSON" "$ROOT/frontend/tools/vercel-build.mjs" > /tmp/vercel-check.txt
+    // vercel.json must not quietly re-enable framework inference.
+    const v = JSON.parse(fs.readFileSync(vjson, "utf8"));
+    v.outputDirectory
+      ? fail(`vercel.json sets outputDirectory (${v.outputDirectory}) — it overrides the artefact above`)
+      : pass("vercel.json does not override the artefact");
+    /vercel-build/.test(v.buildCommand ?? "")
+      ? pass("the build command assembles the artefact")
+      : fail("the build command does not run tools/vercel-build.mjs — the artefact would never be built");
+  ' "$OUT" "$FUNC" "$VERCEL_JSON" > /tmp/vercel-check.txt
   # Read from a file, not a pipe: `node ... | while read` runs the loop in a
   # subshell, so every ok/bad in it would increment a copy of PASS and FAIL
   # and the summary would report neither. A gate that cannot fail again.
@@ -472,6 +452,38 @@ else
       *)    bad "$rest" ;;
     esac
   done < /tmp/vercel-check.txt
+
+  # And boot it. The entry is what Vercel's Node launcher imports, so if this
+  # cannot serve the site, neither can the deployment. VERCEL_URL stands in
+  # for the hostname the platform provides — without a hostname it recognises,
+  # a production build answers 400 to everything the engine renders.
+  VERCEL_URL=verify.local node -e '
+    const http = require("http");
+    import(process.argv[1]).then((m) => {
+      if (typeof m.default !== "function") { console.error("entry default export is not a handler"); process.exit(1); }
+      http.createServer(m.default).listen(4114);
+    });
+  ' "$FUNC/index.mjs" >/tmp/verify-func.log 2>&1 &
+  FUNC_PID=$!
+  for _ in $(seq 1 40); do
+    curl -sf -o /dev/null --max-time 2 -H "Host: verify.local" http://localhost:4114/ && break
+    sleep 0.5
+  done
+  func_status() { curl -s -o /dev/null --max-time 25 -w '%{http_code}' -H "Host: verify.local" "http://localhost:4114$1"; }
+
+  [ "$(func_status /)" = "200" ] \
+    && ok "the artefact serves the board" \
+    || bad "the artefact answers $(func_status /) on / — check the entry and the browser bundle path"
+  [ "$(func_status /pricing)" = "200" ] \
+    && ok "and the prerendered pages" \
+    || bad "the artefact answers $(func_status /pricing) on a prerendered page"
+  [ "$(func_status /nonsense)" = "404" ] \
+    && ok "and answers 404 for an unknown URL" \
+    || bad "the artefact answers $(func_status /nonsense) for an unknown URL"
+
+  kill "$FUNC_PID" 2>/dev/null || true
+  wait "$FUNC_PID" 2>/dev/null || true
+  rm -rf "$OUT"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────
