@@ -295,11 +295,30 @@ function fallbackRobots(indexable: boolean): string {
  * it replaced got this right.
  */
 function isCanonicalHost(req: express.Request): boolean {
-  const requested = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? '')
+  const header = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? '')
     .split(',')[0]
     .trim()
     .toLowerCase();
-  if (!requested) return false;
+  if (!header) return false;
+
+  // Through a URL, so the PORT comes off. A Host header carries one and a
+  // hostname does not: comparing them raw made `localhost:4000` fail to match
+  // a siteUrl of `http://localhost:4200`, and the development server started
+  // refusing to serve its own sitemap. Caught by the build gate, which asks
+  // on a port.
+  let requested: string;
+  try {
+    requested = new URL(`http://${header}`).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  // A development build is its own site whichever loopback name you use to
+  // reach it: siteUrl says localhost, and someone typing 127.0.0.1 should not
+  // silently get a different answer.
+  if (!environment.production && (requested === 'localhost' || requested === '127.0.0.1')) {
+    return true;
+  }
 
   try {
     const canonical = new URL(environment.siteUrl).hostname.toLowerCase();
