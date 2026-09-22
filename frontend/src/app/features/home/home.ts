@@ -55,8 +55,12 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
         <!-- A cue, not an automatic jump. Auto-scrolling takes control away
              from someone who arrived meaning to search, and screen readers
              have no sensible way to follow it. -->
+        <!-- The accessible name has to CONTAIN the visible text, or voice
+             control breaks: someone saying "click 245 rooms" finds nothing,
+             because the only name the button exposed was "Skip to rooms"
+             (WCAG 2.5.3, and axe's label-content-name-mismatch). -->
         <button type="button" class="hero-scroll-cue" (click)="scrollToBoard($event)"
-                aria-label="Skip to rooms">
+                [attr.aria-label]="'Skip to ' + roomCount() + ' rooms'">
           <span>{{ roomCount() }} rooms</span>
           <span class="hero-scroll-cue__chevron" aria-hidden="true">⌄</span>
         </button>
@@ -102,18 +106,21 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
             </ul>
           }
         </div>
-        <select class="search-select" [(ngModel)]="province" (ngModelChange)="onFilterChange()">
+        <select class="search-select" [attr.aria-label]="'search.label_province' | translate"
+                [(ngModel)]="province" (ngModelChange)="onFilterChange()">
           <option value="">{{ 'search.all_provinces' | translate }}</option>
           @for (p of provinces; track p) { <option [value]="p">{{ p }}</option> }
         </select>
-        <select class="search-select" [(ngModel)]="roomType" (ngModelChange)="onFilterChange()">
+        <select class="search-select" [attr.aria-label]="'search.label_room_type' | translate"
+                [(ngModel)]="roomType" (ngModelChange)="onFilterChange()">
           <option value="">{{ 'search.all_room_types' | translate }}</option>
           <option value="shared_house">🏠 Shared house</option>
           <option value="en_suite">🚿 En-suite</option>
           <option value="studio">🏢 Studio</option>
           <option value="private">🔑 Private room</option>
         </select>
-        <select class="search-select" [(ngModel)]="maxRentCents" (ngModelChange)="onFilterChange()">
+        <select class="search-select" [attr.aria-label]="'search.label_max_rent' | translate"
+                [(ngModel)]="maxRentCents" (ngModelChange)="onFilterChange()">
           @for (p of priceOptions; track p.value) {
             <option [value]="p.value">{{ p.label }}</option>
           }
@@ -128,7 +135,7 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
       <aside class="filter-panel" id="filter-panel" [class.open]="filtersOpen()">
         <div class="filter-drawer-handle" aria-hidden="true"></div>
         <div class="filter-drawer-header">
-          <h3>{{ 'filters.title' | translate }}</h3>
+          <h2>{{ 'filters.title' | translate }}</h2>
           <button type="button" class="filter-drawer-close" (click)="filtersOpen.set(false)"
                   aria-label="Close filters">✕</button>
         </div>
@@ -178,8 +185,9 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
         </div>
 
         <div class="filter-group">
-          <div class="filter-label">Housemates</div>
-          <select class="filter-select" [(ngModel)]="housemates" (ngModelChange)="onFilterChange()">
+          <label class="filter-label" for="filter-housemates">Housemates</label>
+          <select id="filter-housemates" class="filter-select"
+                  [(ngModel)]="housemates" (ngModelChange)="onFilterChange()">
             <option value="">Any</option>
             <option value="0">Living alone</option>
             <option value="1-2">1–2 housemates</option>
@@ -189,8 +197,9 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
         </div>
 
         <div class="filter-group">
-          <div class="filter-label">Sort by</div>
-          <select class="filter-select" [(ngModel)]="sortBy" (ngModelChange)="onFilterChange()">
+          <label class="filter-label" for="filter-sort">Sort by</label>
+          <select id="filter-sort" class="filter-select"
+                  [(ngModel)]="sortBy" (ngModelChange)="onFilterChange()">
             <option value="newest">Newest first</option>
             <option value="price_asc">Price: low to high</option>
             <option value="price_desc">Price: high to low</option>
@@ -286,7 +295,11 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
           </div>
         } @else if (rooms().length === 0) {
           <div class="empty-state">
-            <h3>No rooms match your filters</h3>
+            <!-- h2, not h3. The only heading above it in the results column is
+                 the filter drawer's, and on a phone that drawer is off-canvas
+                 and so invisible to the heading outline — which made this jump
+                 straight from the hero h1 to an h3. -->
+            <h2>No rooms match your filters</h2>
             <p>Try widening your search, or clear the filters to see everything available.</p>
             <button type="button" class="btn btn-outline" (click)="clearFilters()">Clear all filters</button>
           </div>

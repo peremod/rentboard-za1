@@ -86,6 +86,19 @@ npm run verify            # builds all three configurations, 27 assertions
 `verify` is the one that refuses to let a release be tagged — unfilled
 `[PLACEHOLDER]` text, a non-indexable production build, a missing canonical.
 
+If the change touched anything a person clicks or reads, add the accessibility
+drive. It needs a server to drive, so serve the build you just made:
+
+```bash
+cd frontend
+NG_ALLOWED_HOSTS=localhost node dist/mastande-frontend/server/server.mjs &
+BASE_URL=http://localhost:4000 node ../scripts/a11y-drive.mjs
+```
+
+Seven public pages in a real browser; exits non-zero on a skipped heading
+level or a control with no accessible name. Against `ng serve` instead, drop
+the `BASE_URL` — it defaults to `http://localhost:4200`.
+
 ---
 
 ## Tags

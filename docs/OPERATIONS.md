@@ -148,6 +148,12 @@ git branch -r --merged origin/develop \
 - [ ] Render + Vercel deploy logs both report healthy.
 - [ ] Production smoke: register → browse → apply → mark-as-let → relist → Stripe checkout.
 - [ ] Internal-link + slug spot check on changed routes (no 404, no redirect chains).
+- [ ] `node scripts/a11y-drive.mjs` against the build being released, with the
+      SSR server running (`BASE_URL=http://localhost:4000` when serving
+      `dist/.../server/server.mjs`). It drives seven public pages in a browser
+      and exits non-zero on a skipped heading level or a control with no
+      accessible name. Lighthouse covers four URLs on a schedule; this covers
+      the accessibility half on every release, in seconds.
 - [ ] Changelog entry published.
 
 ---
