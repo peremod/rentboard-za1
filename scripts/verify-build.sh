@@ -384,6 +384,8 @@ else
     const cfg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
     const fail = (m) => { console.log("FAIL " + m); };
     const pass = (m) => { console.log("PASS " + m); };
+    // Neither passed nor failed: a state we have chosen and are tracking.
+    const note_ = (m) => { console.log("NOTE " + m); };
 
     // A destination ending in .html cannot be reached when cleanUrls is on.
     const rewrites = cfg.rewrites ?? [];
@@ -395,33 +397,71 @@ else
       pass("no rewrite points at a path cleanUrls makes unreachable");
     }
 
-    // Publishing only the browser folder discards the server bundle.
+    // Publishing only the browser folder discards the server bundle, so the
+    // deployment is static: room pages are client-rendered and unknown URLs
+    // cannot carry a status. That is where this project is TODAY, on purpose
+    // and under protest (row 24), because removing the setting without a
+    // replacement took the whole site to 404 — Vercel read outputPath from
+    // angular.json and published dist/mastande-frontend, whose index.html is
+    // one directory further down.
+    //
+    // So the verdict depends on whether the replacement exists yet: once
+    // tools/vercel-build.mjs is in the repo, the deployment is meant to be
+    // serving .vercel/output and this setting would silently disable it.
+    const hasServerBuild = fs.existsSync(process.argv[2]);
     if ((cfg.outputDirectory ?? "").includes("browser")) {
-      fail("outputDirectory publishes only the browser bundle — the SSR server is dropped");
+      hasServerBuild
+        ? fail("outputDirectory publishes only the browser bundle — it overrides the .vercel/output build")
+        : note_("static deploy: outputDirectory publishes the browser bundle, so there is no SSR in production (row 24)");
     } else {
       pass("the deploy does not publish the browser bundle alone");
     }
 
-    // robots.txt and sitemap.xml are answered by src/server.ts, which caches
-    // them and falls back on the indexability the build itself declares. Step
-    // 9 asserts that against a running server; what matters HERE is that
-    // nothing at the edge intercepts them, since a rewrite bypasses both.
-    // They were rewrites until v1.74.0, when the deployment stopped being
-    // static and the server could answer for itself.
+    // robots.txt and sitemap.xml, and which answer is right depends on what
+    // kind of deployment this is:
+    //
+    //   static  — nothing else can answer them, so an edge rewrite is the
+    //             only way to have a robots.txt at all. Without one they 404,
+    //             and a 404 robots.txt means crawl everything.
+    //   server  — src/server.ts answers both, with a cache and a fallback
+    //             derived from the build indexability. An edge rewrite would
+    //             bypass both, so it must NOT be there.
     //
     // NB: no apostrophes in this script. It is inside single quotes in bash,
     // and one apostrophe ends the string early — which is exactly how the
     // first version of this block failed with a syntax error.
+    const isStatic = Boolean(cfg.outputDirectory);
     const intercepted = rewrites.filter((r) => ["/robots.txt", "/sitemap.xml"].includes(r.source));
-    intercepted.length
-      ? fail(`${intercepted.length} edge rewrite(s) intercept robots.txt or sitemap.xml, bypassing the cache and fallback in server.ts`)
-      : pass("nothing at the edge intercepts robots.txt or sitemap.xml");
-  ' "$VERCEL_JSON" > /tmp/vercel-check.txt
+    if (isStatic) {
+      intercepted.length
+        ? pass("robots.txt and sitemap.xml are answered at the edge, as a static deploy needs")
+        : fail("a static deploy with no rewrite for robots.txt — it will 404, which means crawl everything");
+    } else {
+      intercepted.length
+        ? fail(`${intercepted.length} edge rewrite(s) intercept robots.txt or sitemap.xml, bypassing the cache and fallback in server.ts`)
+        : pass("nothing at the edge intercepts robots.txt or sitemap.xml");
+    }
+
+    // A deployment that is not production must not invite crawlers. The
+    // production BUILD sets meta robots index,follow, so a preview host with
+    // no X-Robots-Tag is fully crawlable and will compete with the real
+    // domain for every keyword the day it launches.
+    const noindexHosts = (cfg.headers ?? [])
+      .filter((h) => (h.headers ?? []).some((x) => /x-robots-tag/i.test(x.key ?? "")))
+      .flatMap((h) => (h.has ?? []).map((c) => c.value));
+    noindexHosts.length
+      ? pass(`non-production hosts carry X-Robots-Tag: ${noindexHosts.join(", ")}`)
+      : fail("no host carries an X-Robots-Tag noindex — preview deployments are crawlable");
+  ' "$VERCEL_JSON" "$ROOT/frontend/tools/vercel-build.mjs" > /tmp/vercel-check.txt
   # Read from a file, not a pipe: `node ... | while read` runs the loop in a
   # subshell, so every ok/bad in it would increment a copy of PASS and FAIL
   # and the summary would report neither. A gate that cannot fail again.
   while read -r verdict rest; do
-    [ "$verdict" = "PASS" ] && ok "$rest" || bad "$rest"
+    case "$verdict" in
+      PASS) ok "$rest" ;;
+      NOTE) note "$rest" ;;
+      *)    bad "$rest" ;;
+    esac
   done < /tmp/vercel-check.txt
 fi
 

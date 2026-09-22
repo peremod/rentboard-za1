@@ -251,38 +251,52 @@ this moves to a paid instance.
 2. **Root Directory**: `frontend`
 3. **Framework Preset**: Angular
 4. **Build Command**: `npm run build:prod` (set in `vercel.json`)
-5. **Output Directory**: **leave blank.** Do not set it.
+5. **Output Directory**: `dist/mastande-frontend/browser` (set in `vercel.json`)
 
-### Why the Output Directory must stay empty
+### This is a static deployment, and that is a known limitation
 
-This section used to say `dist/mastande-frontend/browser`, and that one line
-was the whole reason production served a static site.
+Angular builds two things: `browser/`, the client bundle and the prerendered
+pages, and `server/server.mjs`, the SSR server. Naming the browser folder
+publishes those files and nothing else, so the server is built on every deploy
+and thrown away. Room pages are therefore client-rendered in production and
+unknown URLs cannot carry a status — see row 24 of `PRE-LAUNCH-CHECKLIST.md`.
 
-Angular's build produces two things: `browser/`, the client bundle and the
-prerendered pages, and `server/server.mjs`, the SSR server. Naming the browser
-folder tells Vercel to publish those files **and nothing else**, so the server
-was built on every deploy and thrown away. What that cost, measured on the
-live deployment at v1.73.1:
+**Do not "fix" this by deleting the setting.** v1.74.0 did exactly that, on
+the assumption that Vercel would then default to the browser folder. It does
+not: the Angular preset reads `outputPath` from `angular.json`, which is
+`dist/mastande-frontend`, and publishes that — so `index.html` ends up at
+`/browser/index.html` and **every URL on the site 404s, `/` included**. That
+was live until it was reverted. The replacement is a `.vercel/output` build
+(Vercel Build Output API) that routes explicitly instead of relying on what a
+framework preset infers.
 
-| URL | Answered |
-|---|---|
-| `/`, `/pricing`, `/legal/terms`, `/advertise` | 200 — the 19 prerendered pages |
-| `/auth/login` | **404** |
-| `/tenant/dashboard` | **404** |
-| `/rooms/<any id>` | **404** |
+### What a static deployment still has to get right
 
-Every room link ever shared on WhatsApp was dead, and so was the login page.
-The second fault made it certain: `vercel.json` carried an SPA fallback
-rewriting unmatched paths to `/index.html`, and `"cleanUrls": true` strips
-`.html`, so `/index.html` is itself a 308 — the fallback resolved to nothing.
+Both of these were wrong on the live site. `scripts/verify-build.sh` asserts
+them now, because nothing in this repo had ever read `vercel.json`.
 
-With the setting cleared and both the override and the fallback gone from
-`vercel.json`, the Angular preset deploys `server.mjs` as a function, which
-answers every route: prerendered pages from disk, `/rooms/:id` rendered per
-request, unknown URLs with a real 404.
+**1. The SPA fallback must point at `/`, not `/index.html`.** `cleanUrls`
+strips `.html`, so `/index.html` is itself a 308 and a rewrite to it resolves
+to nothing. That is what this cost, measured on the live deployment:
 
-`scripts/verify-build.sh` asserts both faults now — nothing in this repo had
-ever read `vercel.json`.
+| URL | Before | After |
+|---|---|---|
+| `/`, `/pricing`, `/legal/terms`, `/advertise` | 200 | 200 |
+| `/auth/login` | **404** | 200 |
+| `/tenant/dashboard` | **404** | 200 |
+| `/rooms/<any id>` | **404** | 200, client-rendered |
+
+Every room link ever shared on WhatsApp was dead, and so was the login page,
+for as long as that rewrite has existed.
+
+**2. robots.txt, sitemap.xml and X-Robots-Tag.** A static deployment has no
+server to answer the first two, so they are edge rewrites to the API that
+generates them — without one they 404, and a 404 robots.txt means *crawl
+everything*. And because the production build sets `index, follow` in its meta
+robots, any host serving that build which is not the real domain must carry an
+`X-Robots-Tag: noindex` header, or the preview competes with production for
+every keyword the day it launches. Both `staging.umastande.co.za` and
+`rentboard-za1.vercel.app` carry it.
 
 ### Preview deployments
 
