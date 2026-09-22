@@ -301,6 +301,20 @@ else
     echo "$PROD_ROBOTS" | grep -qi 'Sitemap:' \
       && ok "and still points at its sitemap" \
       || bad "the production robots.txt has no Sitemap line"
+
+    # The production build points at the production API, which does not
+    # resolve from any machine that is not production — so this server IS the
+    # unreachable-API case, for free. A room page must answer 503 here, not
+    # 404: "gone" and "could not ask" are different answers, and answering 404
+    # to a blip asks Google to drop every room page on the site.
+    UNREACHABLE=$(curl -s -o /dev/null --max-time 40 -w '%{http_code}' \
+      "http://localhost:4112/rooms/99999999-9999-4999-8999-999999999999")
+    case "$UNREACHABLE" in
+      503) ok "a room page answers 503, not 404, when the API cannot be reached" ;;
+      404) bad "a room page answers 404 when the API is unreachable — that is a deindex request"
+           note "room-detail.ts must only set notFound on a 404/410 from the API" ;;
+      *)   bad "a room page answers $UNREACHABLE with no API — expected 503" ;;
+    esac
     kill "$PROD_PID" 2>/dev/null || true
     wait "$PROD_PID" 2>/dev/null || true
   fi
@@ -343,6 +357,72 @@ else
   kill "$SSR_PID" 2>/dev/null || true
   wait "$SSR_PID" 2>/dev/null || true
   rm -rf "$VERIFY_DIST"
+fi
+
+# ── 10. The deploy config, which nothing has ever looked at ───────────────
+#
+# Every check in this file until now tested the build. None tested how the
+# build gets served, and that is where the site actually broke: on the live
+# deployment, /auth/login, /tenant/dashboard and every /rooms/:id answered 404
+# while the 19 prerendered pages answered 200. Room links shared on WhatsApp
+# were dead and nothing in this repo could have told us.
+#
+# Two faults, both visible in frontend/vercel.json alone:
+#   · "outputDirectory" named the browser folder, so Vercel published those
+#     files and nothing else — the server bundle Angular also builds was never
+#     deployed, which is what made the whole SSR layer inert in production.
+#   · the SPA fallback rewrote unmatched paths to "/index.html", a path that
+#     "cleanUrls": true makes unreachable: Vercel strips .html, so /index.html
+#     is a 308 and the rewrite resolved to nothing.
+step "Deploy config"
+VERCEL_JSON="$ROOT/frontend/vercel.json"
+if [ ! -f "$VERCEL_JSON" ]; then
+  note "SKIP — no frontend/vercel.json"
+else
+  node -e '
+    const fs = require("fs");
+    const cfg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    const fail = (m) => { console.log("FAIL " + m); };
+    const pass = (m) => { console.log("PASS " + m); };
+
+    // A destination ending in .html cannot be reached when cleanUrls is on.
+    const rewrites = cfg.rewrites ?? [];
+    const htmlDest = rewrites.filter((r) => /\.html$/.test(r.destination ?? ""));
+    if (cfg.cleanUrls && htmlDest.length) {
+      fail(`cleanUrls is on and ${htmlDest.length} rewrite(s) point at a .html path: ` +
+           htmlDest.map((r) => r.destination).join(", "));
+    } else {
+      pass("no rewrite points at a path cleanUrls makes unreachable");
+    }
+
+    // Publishing only the browser folder discards the server bundle.
+    if ((cfg.outputDirectory ?? "").includes("browser")) {
+      fail("outputDirectory publishes only the browser bundle — the SSR server is dropped");
+    } else {
+      pass("the deploy does not publish the browser bundle alone");
+    }
+
+    // robots.txt and sitemap.xml are answered by src/server.ts, which caches
+    // them and falls back on the indexability the build itself declares. Step
+    // 9 asserts that against a running server; what matters HERE is that
+    // nothing at the edge intercepts them, since a rewrite bypasses both.
+    // They were rewrites until v1.74.0, when the deployment stopped being
+    // static and the server could answer for itself.
+    //
+    // NB: no apostrophes in this script. It is inside single quotes in bash,
+    // and one apostrophe ends the string early — which is exactly how the
+    // first version of this block failed with a syntax error.
+    const intercepted = rewrites.filter((r) => ["/robots.txt", "/sitemap.xml"].includes(r.source));
+    intercepted.length
+      ? fail(`${intercepted.length} edge rewrite(s) intercept robots.txt or sitemap.xml, bypassing the cache and fallback in server.ts`)
+      : pass("nothing at the edge intercepts robots.txt or sitemap.xml");
+  ' "$VERCEL_JSON" > /tmp/vercel-check.txt
+  # Read from a file, not a pipe: `node ... | while read` runs the loop in a
+  # subshell, so every ok/bad in it would increment a copy of PASS and FAIL
+  # and the summary would report neither. A gate that cannot fail again.
+  while read -r verdict rest; do
+    [ "$verdict" = "PASS" ] && ok "$rest" || bad "$rest"
+  done < /tmp/vercel-check.txt
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────

@@ -305,8 +305,18 @@ app.use((req, res, next) => {
  * rather than a second copy of the route table living out here and drifting
  * from the first.
  */
-const NOT_FOUND_MARKER =
-  /<meta[^>]*name=["']mastande-status["'][^>]*content=["']404["']/i;
+const STATUS_MARKER =
+  /<meta[^>]*name=["']mastande-status["'][^>]*content=["'](\d{3})["']/i;
+
+/**
+ * Statuses a page is allowed to ask for.
+ *
+ * 404 for a page that is genuinely not there, 503 for one we could not build
+ * because something we depend on did not answer. Anything else in the markup
+ * is ignored rather than trusted: this is the one place a rendered page can
+ * change an HTTP status, so it gets a list, not a parse.
+ */
+const ALLOWED_MARKER_STATUSES = new Set([404, 503]);
 
 // No path pattern — this already matches every request that reaches it,
 // and Express 5's path-to-regexp no longer accepts '/**' as a route pattern.
@@ -326,9 +336,11 @@ app.use((req, res, next) => {
       // _ngcontent attribute inside the tag, so the literal never matched —
       // the marker was in the HTML and the status stayed 200 until this was
       // measured on the rendered page rather than assumed from the template.
-      const notFound = NOT_FOUND_MARKER.test(html);
+      const declared = Number(STATUS_MARKER.exec(html)?.[1]);
+      const status = ALLOWED_MARKER_STATUSES.has(declared) ? declared : response.status;
 
-      res.status(notFound ? 404 : response.status);
+      if (status === 503) res.setHeader('Retry-After', '120');
+      res.status(status);
       response.headers.forEach((value, key) => {
         // Length changes with nothing else, but it is the one header that
         // becomes a lie if the body is re-sent from a string.

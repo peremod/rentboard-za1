@@ -221,6 +221,16 @@ import { environment } from '@env/environment';
              server.ts reads it and sets the status. -->
         <meta name="mastande-status" content="404"/>
         <p>Room not found. <a routerLink="/">Back to all rooms</a></p>
+      } @else if (loadFailed()) {
+        <!-- 503, not 404. The room may well exist; we could not ask. A 503 is
+             retried and holds the URL in the index, which is the honest answer
+             when the fault is ours. -->
+        <meta name="mastande-status" content="503"/>
+        <p>
+          This room could not be loaded just now — that is our side, not the
+          listing. <a routerLink="/">Back to all rooms</a>, or try again in a
+          moment.
+        </p>
       } @else {
         <p>Loading…</p>
       }
@@ -305,6 +315,8 @@ export class RoomDetail implements OnInit {
 
   room = signal<Room | null>(null);
   notFound = signal(false);
+  /** The room could not be fetched at all — a 5xx, or no API to ask. */
+  loadFailed = signal(false);
   coverNote = '';
   applying = signal(false);
   applied = signal(false);
@@ -358,16 +370,36 @@ export class RoomDetail implements OnInit {
         this.room.set(r);
         this.applySeo(r);
       },
-      error: () => {
-        this.notFound.set(true);
-        // A room that has been let or removed must not stay indexed under a
-        // 200 with the site's default copy — that is a soft 404.
+      error: (err: { status?: number }) => {
+        this.seo.setJsonLd('room', null);
+
+        // "Gone" and "could not ask" are different answers, and until v1.74.0
+        // this treated them as the same one: any error set notFound, which
+        // renders the marker that makes the server answer 404.
+        //
+        // That is right for a room that has been let or removed — it must not
+        // stay indexed under a 200 with the site's default copy. It is badly
+        // wrong for an API that is unreachable or throwing, because a 404
+        // tells Google to drop the URL: one bad minute for the API and every
+        // room page on the site asks to be deindexed. The unreachable case is
+        // not hypothetical either — it is what a production build does on any
+        // host where the API domain does not resolve.
+        if (err?.status === 404 || err?.status === 410) {
+          this.notFound.set(true);
+          this.seo.apply({
+            title: 'Room no longer available — Mastande',
+            description: 'This room is no longer listed. Browse other rooms to rent across South Africa on Mastande.',
+            noIndex: true,
+          });
+          return;
+        }
+
+        this.loadFailed.set(true);
         this.seo.apply({
-          title: 'Room no longer available — Mastande',
-          description: 'This room is no longer listed. Browse other rooms to rent across South Africa on Mastande.',
+          title: 'Room temporarily unavailable — Mastande',
+          description: 'This room could not be loaded. Please try again in a moment.',
           noIndex: true,
         });
-        this.seo.setJsonLd('room', null);
       },
     });
   }
