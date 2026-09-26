@@ -94,14 +94,24 @@ jobs:
         # 138 KB gzipped, not 7.
         run: node scripts/bundle-budget.mjs
 
+      # `if: !cancelled()` on the three steps below, and on three in the e2e
+      # job. A job stops at its first failing step, so for ten runs the red
+      # production build was also hiding everything after it — and when the
+      # build was finally read, two of the hidden steps were failing too
+      # (checklist row 27). These three do not depend on the production build,
+      # so there is no reason for them to stay silent when it breaks. Not
+      # `always()`: a cancelled run should stop.
       - name: Build (staging)
+        if: ${{ !cancelled() }}
         working-directory: frontend
         run: npm run build:staging
       - name: Build (development)
+        if: ${{ !cancelled() }}
         working-directory: frontend
         run: npx ng build --configuration development
 
       - name: Environment parity
+        if: ${{ !cancelled() }}
         # Each environment file must define the same keys. A key present in
         # production and missing from staging is a runtime undefined that no
         # typecheck catches, because each file is compiled in isolation.
@@ -350,6 +360,7 @@ jobs:
         run: node scripts/a11y-drive.mjs
 
       - name: The three phases, driven in a browser
+        if: ${{ !cancelled() }}
         env:
           ADMIN_EMAIL: ci-admin@mastande.test
           ADMIN_PASSWORD: CiSmokeAdmin123
@@ -357,6 +368,7 @@ jobs:
 
       # Pass 2 — production build, the only one that emits canonical.
       - name: Build frontend (production) and serve
+        if: ${{ !cancelled() }}
         working-directory: frontend
         # Required here, not optional: a production build allows only
         # umastande.co.za and www.umastande.co.za, so without this every
@@ -372,6 +384,7 @@ jobs:
           curl -sf http://localhost:4200/ >/dev/null || { echo "::error::frontend never came up"; cat /tmp/fe-prod.log; exit 1; }
 
       - name: E2E — locale routing and server-rendered SEO
+        if: ${{ !cancelled() }}
         run: npx playwright test --project=desktop e2e/locale-and-seo.spec.ts
 
       - name: Logs and traces on failure

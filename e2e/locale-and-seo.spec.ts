@@ -19,8 +19,15 @@ test.describe('locale routing', () => {
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/pricing$/);
 
     // /en/pricing must not become a duplicate of /pricing.
+    //
+    // 404, not the 200 this asserted until now. When it was written every
+    // unknown URL answered 200 with the not-found page — a soft 404, which
+    // keeps the URL in Google's index competing with the real /pricing, and
+    // which is the defect v1.73.0's '**' route status fixed. The assertion
+    // outlived the bug it described because this spec runs in the CI pass that
+    // an earlier failing step had been skipping.
     const res = await page.goto('/en/pricing');
-    expect(res?.status()).toBe(200); // SPA shell
+    expect(res?.status()).toBe(404);
     await expect(page.locator('h1')).toContainText(/not found/i);
   });
 
