@@ -39,8 +39,7 @@ import { tenantNav } from '../tenant-nav';
   imports: [DatePipe, FormsModule, ZarCentsPipe, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Tenant" avatarColour="var(--sage)">
-      <h1 class="portal-title">Rent</h1>
+    <app-portal-shell [navItems]="navItems" roleLabel="Tenant" avatarColour="var(--sage)" pageTitle="Rent">
 
       <div class="insight-banner">
         🧾
@@ -55,7 +54,9 @@ import { tenantNav } from '../tenant-nav';
         <p class="muted">Loading…</p>
       } @else if (!tenancies().length) {
         <div class="empty-state">
-          <h3>No tenancies yet</h3>
+          <!-- h2: this replaces the page's whole content, so it follows the
+               shell's h1 directly. As an h3 it skipped a level. -->
+          <h2>No tenancies yet</h2>
           <p class="muted">
             Once a landlord accepts your application and confirms you have
             moved in, your rent record appears here.
@@ -64,10 +65,10 @@ import { tenantNav } from '../tenant-nav';
       } @else {
         @for (t of tenancies(); track t.id) {
           <section class="dash-section">
-            <div class="dash-section-title">
+            <h2 class="dash-section-title">
               {{ t.room?.title || 'Your room' }}
               <span class="dash-count">{{ t.rentCents | zarCents }}/mo</span>
-            </div>
+            </h2>
             @if (t.room?.locationDisplay) {
               <p class="muted">{{ t.room?.locationDisplay }}</p>
             }

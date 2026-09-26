@@ -19,7 +19,7 @@ import { ReviewForm } from '../review-form/review-form';
   template: `
     @if (pending().length > 0) {
       <section class="dash-section">
-        <div class="dash-section-title">Reviews</div>
+        <h2 class="dash-section-title">Reviews</h2>
 
         @for (item of pending(); track item.tenancy.id) {
           <div class="review-prompt">

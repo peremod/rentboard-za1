@@ -29,10 +29,13 @@
  * `npm run frontend`). Skips with a clear message rather than failing when
  * either is absent. Creates timestamped rows in the dev database.
  */
+// Sign-in, registration and the API call live in scripts/lib/drive-session.mjs
+// so this drive and the accessibility drive cannot drift apart.
+import { apiCall, registerUser, signIn as signInTo, PASSWORD } from './lib/drive-session.mjs';
+
 const API = process.env.API_URL ?? 'http://localhost:3000';
 const WEB = process.env.WEB_URL ?? 'http://localhost:4200';
 const STAMP = Date.now();
-const PASSWORD = 'DrivePass123';
 
 let pass = 0;
 const failures = [];
@@ -44,20 +47,7 @@ const bad = (name, detail = '') => {
 const check = (name, cond, detail) => (cond ? ok(name) : bad(name, detail));
 const section = (t) => console.log(`\n\x1b[1m── ${t}\x1b[0m`);
 
-async function api(method, path, body, token) {
-  const res = await fetch(API + path, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  const text = await res.text();
-  let json;
-  try { json = JSON.parse(text); } catch { json = text; }
-  return { status: res.status, body: json };
-}
+const api = (method, path, body, token) => apiCall(API, method, path, body, token);
 
 // ── is anything running ────────────────────────────────────────────────────
 for (const [what, url] of [['API', `${API}/health`], ['site', WEB]]) {
@@ -78,15 +68,12 @@ catch { console.log('⏭  @playwright/test not installed.'); process.exit(0); }
 section('Setting up: a landlord, a tenant, a let room, a live tenancy');
 
 const register = async (role, label) => {
-  const email = `${label}+${STAMP}@mastande.test`;
-  const res = await api('POST', '/api/auth/register', {
-    email, password: PASSWORD, fullName: `Drive ${label}`, role,
-  });
-  if (res.status !== 201 && res.status !== 200) {
-    bad(`register a ${label}`, `${res.status} ${JSON.stringify(res.body).slice(0, 200)}`);
-    return null;
+  try {
+    return await registerUser(API, role, STAMP);
+  } catch (err) {
+    bad(`register a ${label}`, err.message);
+    process.exit(1);
   }
-  return { email, token: res.body.accessToken ?? res.body.access_token, id: res.body.user?.id };
 };
 
 const landlord = await register('LANDLORD', 'landlord');
@@ -153,33 +140,17 @@ const browser = await chromium.launch({ args: ['--no-sandbox'] });
 
 /** A logged-in page, signed in through the form like a person would. */
 async function signIn(email, password, width = 412) {
-  const page = await browser.newPage({ viewport: { width, height: 900 } });
-  await page.goto(`${WEB}/auth/login`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(900);
-  // `ng serve` puts a full-page overlay over the app when the last rebuild
-  // failed, and it swallows every click underneath it. Without this the drive
-  // times out on "click the login button" and says nothing about the compile
-  // error that is the actual problem.
-  if (await page.locator('vite-error-overlay').count()) {
-    console.log('\n⏭  the dev server is showing a build error overlay — fix the build and re-run.');
-    await browser.close();
-    process.exit(2);
-  }
-  await page.fill('input[type="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
-  // Wait for the navigation, not for a guess at how long it takes. A fixed
-  // 2.5s passes on this machine and is a coin toss on a CI runner, and a
-  // check that fails one run in five gets ignored like any other alarm that
-  // cries wolf.
   try {
-    await page.waitForURL((url) => !url.pathname.startsWith('/auth/login'), { timeout: 20000 });
-  } catch {
-    const shown = ((await page.locator('body').textContent()) ?? '').replace(/\s+/g, ' ').slice(0, 200);
-    bad(`sign in as ${email}`, `still on ${new URL(page.url()).pathname} — ${shown}`);
+    return await signInTo(browser, WEB, email, password, { width });
+  } catch (err) {
+    if (err.buildOverlay) {
+      console.log('\n⏭  the dev server is showing a build error overlay — fix the build and re-run.');
+      await browser.close();
+      process.exit(2);
+    }
+    bad(`sign in as ${email}`, err.message);
+    throw err;
   }
-  await page.waitForTimeout(800);
-  return page;
 }
 
 const text = async (page) => (await page.locator('body').textContent()) ?? '';
@@ -328,6 +299,61 @@ const draftsText = await visit(lPage, '/landlord/dashboard');
 check('the landlord dashboard mentions the WhatsApp route into a listing',
   /whatsapp/i.test(draftsText), 'nothing on the dashboard tells a landlord they can send a room by WhatsApp');
 
+// ══ DISPUTES ═══════════════════════════════════════════════════════════════
+section('After the letting ends — reporting a problem, and someone reading it');
+
+// The API has been able to do all of this since v1.56.0 and no screen called
+// any of it: neither party could raise a report, see their own or withdraw one,
+// and no admin could read the queue. It was recorded as built.
+//
+// Ending the tenancy is last on purpose: the rent checks above need it live.
+let disputeRaised = false;
+if (tenancyId) {
+  const ended = await api('POST', `/api/tenancies/${tenancyId}/end`,
+    { reason: 'drive: end of lease' }, landlord.token);
+  check('a landlord can end a tenancy', ended.status < 300, `${ended.status} ${JSON.stringify(ended.body).slice(0, 160)}`);
+
+  const dash = await visit(tPage, '/tenant/dashboard', 2200);
+  check('the tenant dashboard offers a way to report a problem once it has ended',
+    /report a problem/i.test(dash), 'no reporting affordance on the dashboard after the tenancy ended');
+  // The Tribunal hears deposit and eviction disputes for free and can order
+  // money repaid, which this platform cannot. Not naming it would be the most
+  // useful thing the screen could withhold.
+  check('and points at the Rental Housing Tribunal, which can order money back',
+    /tribunal/i.test(dash), 'the panel does not mention the Rental Housing Tribunal');
+
+  const reportBtn = tPage.locator('button', { hasText: /report a problem/i }).first();
+  if (await reportBtn.count()) {
+    await reportBtn.click();
+    await tPage.waitForTimeout(600);
+
+    const reasons = await tPage.locator('#disputes select option').allTextContents();
+    // A tenant offered "rent was not paid" produces a report an admin has to
+    // throw away, and teaches them the form does not work.
+    check('the reasons offered are the ones a tenant could actually raise',
+      reasons.length > 0 && /deposit/i.test(reasons.join(' ')) && !/rent was not paid/i.test(reasons.join(' ')),
+      reasons.join(' | ') || 'no reasons rendered');
+
+    await tPage.locator('#disputes textarea').first()
+      .fill('The deposit of R4500 was not returned within the agreed period and two messages went unanswered.');
+    await tPage.locator('#disputes button', { hasText: /send report/i }).first().click();
+    await tPage.waitForTimeout(1500);
+
+    const mine = await api('GET', '/api/tenancies/flags/mine', null, tenant.token);
+    disputeRaised = Array.isArray(mine.body) && mine.body.length > 0;
+    check('sending it from the screen creates the report',
+      disputeRaised, `${mine.status} ${JSON.stringify(mine.body).slice(0, 200)}`);
+
+    const after = await visit(tPage, '/tenant/dashboard', 2200);
+    check('and the tenant is told it is being looked at, not left guessing',
+      /looking at it|withdraw report/i.test(after), 'the raised report is not reflected on the dashboard');
+  } else {
+    bad('the tenant dashboard offers a way to report a problem once it has ended');
+  }
+} else {
+  console.log('  \x1b[90mSKIP\x1b[0m  disputes — no tenancy was created above');
+}
+
 // ══ THE NAV, ON EVERY SCREEN ═══════════════════════════════════════════════
 section('The portal nav — the same on every screen of a portal, or it is wrong');
 
@@ -406,6 +432,41 @@ if (adminPage) {
   }
   const verifs = await visit(adminPage, '/admin/verifications');
   check('the verification queue loads', /verif/i.test(verifs), verifs.slice(0, 160));
+
+  // The other half of the dispute. A report that reduces someone's reach with
+  // nobody able to read it is worse than no reporting at all.
+  const disputes = await visit(adminPage, '/admin/disputes', 2200);
+  check('the dispute queue loads', /dispute/i.test(disputes), disputes.slice(0, 160));
+  if (disputeRaised) {
+    check('the report raised above is in it, with what was written',
+      /deposit of r4500/i.test(disputes), 'the queue does not show the report this drive raised');
+    const dismiss = adminPage.locator('button', { hasText: /^\s*Dismiss\s*$/ }).first();
+    if (await dismiss.count()) {
+      await dismiss.click();
+      await adminPage.waitForTimeout(500);
+      await adminPage.locator('textarea').first().fill('Drive: dismissed, the deposit was returned late but in full.');
+      await adminPage.locator('button', { hasText: /not upheld/i }).first().click();
+      await adminPage.waitForTimeout(1500);
+
+      const stillOpen = await api('GET', '/api/tenancies/flags/open', null, adminToken);
+      const remaining = Array.isArray(stillOpen.body) ? stillOpen.body : [];
+      check('deciding it from the screen takes it off the queue',
+        !remaining.some((f) => /deposit of R4500/i.test(f.detail ?? '')),
+        `${remaining.length} still open`);
+
+      // Dismissing has to give the reach back. Leaving it reduced after
+      // deciding the allegation did not hold makes a dismissal a punishment.
+      const mine = await api('GET', '/api/tenancies/flags/mine', null, tenant.token);
+      const decided = (Array.isArray(mine.body) ? mine.body : [])[0];
+      check('and the person who raised it is told the outcome and why',
+        decided?.status === 'dismissed' && /returned late/i.test(decided?.reviewNote ?? ''),
+        JSON.stringify(decided ?? {}).slice(0, 220));
+    } else {
+      bad('the dispute queue offers a decision', 'no Dismiss button rendered');
+    }
+  } else {
+    console.log('  \x1b[90mSKIP\x1b[0m  the dispute decision — nothing was raised to decide');
+  }
   await adminPage.close();
 } else {
   console.log('  \x1b[90mSKIP\x1b[0m  admin screens — set ADMIN_EMAIL and ADMIN_PASSWORD\x1b[0m');

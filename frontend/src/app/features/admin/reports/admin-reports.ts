@@ -15,8 +15,7 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
   imports: [RouterLink, DatePipe, FormsModule, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)">
-      <div class="dash-section-title">Reports</div>
+    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Reports">
 
       <div class="insight-banner">
         🚩

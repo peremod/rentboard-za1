@@ -458,6 +458,10 @@ img{display:block;max-width:100%}
 }
 .portal-nav-icon{font-size:1rem;flex-shrink:0}
 .portal-main{padding:2rem;background:var(--cream)}
+// The portal's h1. Deliberately close in size to a section title: this is a
+// working screen, not a landing page, and the point of the heading is the
+// outline rather than the drama.
+.portal-title{font-size:1.35rem;font-weight:700;color:var(--ink);margin-bottom:1.25rem;line-height:1.25}
 .insight-banner{
   background:linear-gradient(135deg,rgba(192,78,40,.08),rgba(200,144,42,.06));
   border:1px solid rgba(192,78,40,.2);border-radius:var(--r12);

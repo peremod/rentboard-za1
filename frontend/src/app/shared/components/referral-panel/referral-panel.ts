@@ -20,12 +20,12 @@ type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tena
   template: `
     @if (data(); as d) {
       <section class="dash-section">
-        <div class="dash-section-title">
+        <h2 class="dash-section-title">
           Invite people
           @if (d.summary.qualified > 0) {
             <span class="dash-count">({{ d.summary.qualified }} joined)</span>
           }
-        </div>
+        </h2>
 
         <div class="referral-code-box">
           <div class="referral-code-box__label">Your code</div>
@@ -59,7 +59,7 @@ type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tena
           </p>
         }
 
-        <div class="dash-section-title" style="margin-top:1.25rem">Share</div>
+        <h2 class="dash-section-title" style="margin-top:1.25rem">Share</h2>
         <div class="referral-share">
           @for (option of shareOptions(); track option.kind) {
             <div class="referral-share__row">
@@ -78,7 +78,7 @@ type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tena
         </div>
 
         @if (d.referrals.length > 0) {
-          <div class="dash-section-title" style="margin-top:1.25rem">Who you've invited</div>
+          <h2 class="dash-section-title" style="margin-top:1.25rem">Who you've invited</h2>
           @for (r of d.referrals; track r.id) {
             <div class="app-card">
               <div class="app-thumb portal-thumb" aria-hidden="true">

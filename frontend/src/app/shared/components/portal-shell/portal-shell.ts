@@ -76,6 +76,18 @@ export interface PortalNavItem {
       </nav>
 
       <main class="portal-main">
+        <!-- The portal's h1, and it had none. Not one screen behind a login had
+             a top-level heading: the section titles are styled divs, so the
+             heading outline of every portal page started at the footer's h2s
+             and the page itself contributed nothing. Lighthouse never saw it
+             because all four URLs it audits are public, and the accessibility
+             drive did not cover the portal until now.
+
+             It lives in the shell rather than in fourteen templates so a new
+             portal screen cannot ship without one. -->
+        @if (pageTitle()) {
+          <h1 class="portal-title">{{ pageTitle() }}</h1>
+        }
         <ng-content/>
       </main>
     </div>
@@ -85,6 +97,13 @@ export class PortalShell {
   auth = inject(AuthService);
 
   readonly navItems = input.required<PortalNavItem[]>();
+  /**
+   * The page's own name, rendered as its h1. Not `input.required` only because
+   * that would break every existing caller at once; scripts/a11y-drive.mjs
+   * fails any portal page whose first heading is not an h1, which is the check
+   * that keeps it from being forgotten.
+   */
+  readonly pageTitle = input<string>('');
   readonly roleLabel = input<string>('');
   readonly primaryAction = input<{ label: string; route: string } | null>(null);
   /** Landlords are terracotta, tenants sage — matches the spec's portal avatars. */

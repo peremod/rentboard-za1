@@ -19,11 +19,10 @@ import { tenantNav } from '../../tenant/tenant-nav';
   imports: [FormsModule, ReactiveFormsModule, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems()" [roleLabel]="roleLabel()">
-      <div class="dash-section-title">Account settings</div>
+    <app-portal-shell [navItems]="navItems()" [roleLabel]="roleLabel()" pageTitle="Account settings">
 
       <section class="dash-section">
-        <div class="dash-section-title">Your details</div>
+        <h2 class="dash-section-title">Your details</h2>
         <form [formGroup]="profileForm" (ngSubmit)="saveProfile()" class="settings-form">
           <div class="form-row">
             <label for="fullName">Full name</label>
@@ -84,7 +83,7 @@ import { tenantNav } from '../../tenant/tenant-nav';
       </section>
 
       <section class="dash-section">
-        <div class="dash-section-title">Emails</div>
+        <h2 class="dash-section-title">Emails</h2>
         <p class="muted">
           We'll always email you about your own applications, messages and
           account — that's part of the service. This controls room alerts and
@@ -98,7 +97,7 @@ import { tenantNav } from '../../tenant/tenant-nav';
       </section>
 
       <section class="dash-section">
-        <div class="dash-section-title">Password</div>
+        <h2 class="dash-section-title">Password</h2>
         <form [formGroup]="passwordForm" (ngSubmit)="savePassword()" class="settings-form">
           <div class="form-row">
             <label for="currentPassword">Current password</label>
@@ -123,7 +122,7 @@ import { tenantNav } from '../../tenant/tenant-nav';
       </section>
 
       <section class="dash-section">
-        <div class="dash-section-title">Email address</div>
+        <h2 class="dash-section-title">Email address</h2>
         <p class="muted">
           Currently <strong>{{ auth.user()?.email }}</strong>. Changing it sends a
           confirmation to the new address — the change only takes effect once you

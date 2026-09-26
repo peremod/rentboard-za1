@@ -155,8 +155,11 @@ git branch -r --merged origin/develop \
       SSR server running (`BASE_URL=http://localhost:4000` when serving
       `dist/.../server/server.mjs`). It drives seven public pages in a browser
       and exits non-zero on a skipped heading level or a control with no
-      accessible name. Lighthouse covers four URLs on a schedule; this covers
-      the accessibility half on every release, in seconds. **Seed rooms first**
+      accessible name. Lighthouse covers four URLs on a schedule and cannot
+      reach the portal at all — every screen there needs a login — so this is
+      the only thing that audits the fourteen pages people actually work in.
+      Pass `ADMIN_EMAIL`/`ADMIN_PASSWORD` to include the admin queues.
+      **Seed rooms first**
       (`SEED_DEMO_ROOMS=true`): both defects it has ever found were in the room
       card, and it passes over an empty board — which is what it found four
       times before CI ran it against a seeded one.

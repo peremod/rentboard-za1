@@ -15,8 +15,7 @@ import { ADMIN_NAV } from '../admin-nav';
   imports: [PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)">
-      <div class="dash-section-title">Referrals</div>
+    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Referrals">
 
       @if (stats(); as s) {
         <div class="insight-banner">
@@ -39,7 +38,7 @@ import { ADMIN_NAV } from '../admin-nav';
         </div>
 
         <section class="dash-section">
-          <div class="dash-section-title">Launch codes by city</div>
+          <h2 class="dash-section-title">Launch codes by city</h2>
           @if (s.byCity.length === 0) {
             <p class="muted">
               No launch codes seeded. Run

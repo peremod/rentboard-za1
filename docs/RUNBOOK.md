@@ -111,9 +111,15 @@ NG_ALLOWED_HOSTS=localhost node dist/mastande-frontend/server/server.mjs &
 BASE_URL=http://localhost:4000 node ../scripts/a11y-drive.mjs
 ```
 
-Seven public pages in a real browser; exits non-zero on a skipped heading
-level or a control with no accessible name. Against `ng serve` instead, drop
-the `BASE_URL` — it defaults to `http://localhost:4200`.
+Seven public pages **and fourteen portal pages** in a real browser; exits
+non-zero on a skipped heading level, a control with no accessible name, or a
+portal URL that does not answer 200. Against `ng serve` instead, drop the
+`BASE_URL` — it defaults to `http://localhost:4200`.
+
+The portal pass registers a landlord and a tenant over the API and signs in
+through the form, so it needs the API running. Add `ADMIN_EMAIL` and
+`ADMIN_PASSWORD` to include the seven admin screens; without them it says so
+and skips them rather than passing quietly.
 
 **It needs rooms on the board**, and fails saying so if there are none. Both of
 the defects it found on 26 September were in the room card, and it had passed

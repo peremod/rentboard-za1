@@ -30,8 +30,7 @@ import { landlordNav } from '../landlord-nav';
   imports: [NgTemplateOutlet, FormsModule, RouterLink, ZarCentsPipe, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Landlord">
-      <div class="dash-section-title">Your property</div>
+    <app-portal-shell [navItems]="navItems" roleLabel="Landlord" pageTitle="Your property">
 
       @if (loading()) {
         <p class="muted">Loading…</p>
@@ -62,7 +61,8 @@ import { landlordNav } from '../landlord-nav';
 
         @if (d.totals.rooms === 0) {
           <div class="empty-state">
-            <h3>No rooms yet</h3>
+            <!-- h2, not h3: it follows the shell's h1 with nothing between. -->
+            <h2>No rooms yet</h2>
             <p>Post your first room and it will show up here.</p>
             <a class="btn btn-primary" routerLink="/landlord/rooms/new">Post a room</a>
           </div>
@@ -111,7 +111,7 @@ import { landlordNav } from '../landlord-nav';
           and no screen used either.
         -->
         <section class="dash-section rent-reminders">
-          <div class="dash-section-title">Rent reminders</div>
+          <h2 class="dash-section-title">Rent reminders</h2>
           <p class="muted">
             When a month is marked unpaid, we message the tenant once — after
             this many days from the 1st. Set it to 0 to send nothing at all;

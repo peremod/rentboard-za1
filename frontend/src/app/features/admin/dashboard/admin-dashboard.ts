@@ -21,7 +21,7 @@ import { ADMIN_NAV } from '../admin-nav';
   imports: [RouterLink, DatePipe, LowerCasePipe, FormsModule, PortalShell, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)">
+    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Overview">
 
       @if (stats(); as s) {
         @if (s.moderation.pendingVerifications > 0) {
@@ -45,10 +45,10 @@ import { ADMIN_NAV } from '../admin-nav';
 
         @if (kpis(); as k) {
           <section class="dash-section">
-            <div class="dash-section-title">
+            <h2 class="dash-section-title">
               Marketplace health
               <span class="dash-count">(last {{ k.periodDays }} days)</span>
-            </div>
+            </h2>
 
             <div class="insight-banner">
               💡
@@ -133,10 +133,10 @@ import { ADMIN_NAV } from '../admin-nav';
 
       @if (refunds().length) {
         <section class="dash-section">
-          <div class="dash-section-title">
+          <h2 class="dash-section-title">
             Refunds owed
             <span class="dash-count">({{ refunds().length }})</span>
-          </div>
+          </h2>
 
           <div class="insight-banner">
             💸
@@ -174,7 +174,7 @@ import { ADMIN_NAV } from '../admin-nav';
       }
 
       <section class="dash-section">
-        <div class="dash-section-title">Accounts</div>
+        <h2 class="dash-section-title">Accounts</h2>
 
         <div class="form-row">
           <label for="user-search">Search by name or email</label>

@@ -33,8 +33,7 @@ import { tenantNav } from '../tenant-nav';
   imports: [DatePipe, FormsModule, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Tenant" avatarColour="var(--sage)">
-      <div class="dash-section-title">Renter's Passport</div>
+    <app-portal-shell [navItems]="navItems" roleLabel="Tenant" avatarColour="var(--sage)" pageTitle="Renter's Passport">
 
       @if (progress().complete) {
         <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">

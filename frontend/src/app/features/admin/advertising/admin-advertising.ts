@@ -20,11 +20,11 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
   imports: [DatePipe, DecimalPipe, LowerCasePipe, FormsModule, ReactiveFormsModule, PortalShell, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)">
+    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Advertising">
 
       @if (reach(); as r) {
         <section class="dash-section">
-          <div class="dash-section-title">Are the rates right?</div>
+          <h2 class="dash-section-title">Are the rates right?</h2>
 
           @if (!r.hasBaseline) {
             <p class="muted">
@@ -94,10 +94,10 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
       }
 
       <section class="dash-section">
-        <div class="dash-section-title">
+        <h2 class="dash-section-title">
           Enquiries
           @if (newEnquiryCount() > 0) { <span class="dash-count">({{ newEnquiryCount() }} new)</span> }
-        </div>
+        </h2>
 
         @if (loadingEnquiries()) {
           <p class="muted">Loading…</p>
@@ -139,13 +139,13 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
       </section>
 
       <section class="dash-section">
-        <div class="dash-section-title">
+        <h2 class="dash-section-title">
           New campaign
           <button type="button" class="btn btn-sm btn-outline" style="margin-left:auto"
                   (click)="showForm.set(!showForm())">
             {{ showForm() ? 'Close' : '+ Create' }}
           </button>
-        </div>
+        </h2>
 
         @if (showForm()) {
           <form [formGroup]="campaignForm" (ngSubmit)="createCampaign()" class="campaign-form">
@@ -296,12 +296,12 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
       </section>
 
       <section class="dash-section">
-        <div class="dash-section-title">
+        <h2 class="dash-section-title">
           Campaigns
           @if (pendingReviewCount() > 0) {
             <span class="dash-count">({{ pendingReviewCount() }} awaiting review)</span>
           }
-        </div>
+        </h2>
 
         @if (loadingCampaigns()) {
           <p class="muted">Loading…</p>

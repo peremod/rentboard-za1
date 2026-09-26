@@ -24,7 +24,7 @@ import { ADMIN_NAV } from '../admin-nav';
   imports: [DatePipe, FormsModule, RouterLink, PortalShell, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)">
+    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Account">
       <a routerLink="/admin/dashboard" class="muted">← Back to accounts</a>
 
       @if (loading()) {
@@ -33,11 +33,11 @@ import { ADMIN_NAV } from '../admin-nav';
         <p class="field-error" role="alert">{{ error() }}</p>
       } @else if (detail(); as d) {
 
-        <div class="dash-section-title" style="margin-top:1rem">
+        <h2 class="dash-section-title" style="margin-top:1rem">
           {{ d.user.fullName }}
           @if (!d.user.isActive) { <span class="badge badge-reserved">Suspended</span> }
           @if (d.user.landlordProfile?.idVerified) { <span class="badge badge-verified">✓ Verified</span> }
-        </div>
+        </h2>
 
         @if (d.activity.reportsAgainst > 0) {
           <div class="insight-banner" style="background:rgba(178,59,59,.08);border-color:rgba(178,59,59,.25)">
@@ -51,7 +51,7 @@ import { ADMIN_NAV } from '../admin-nav';
         }
 
         <section class="dash-section">
-          <div class="dash-section-title">Account</div>
+          <h2 class="dash-section-title">Account</h2>
           <div class="detail__facts">
             <dl>
               <div><dt>Email</dt><dd>{{ d.user.email }}</dd></div>
@@ -80,7 +80,7 @@ import { ADMIN_NAV } from '../admin-nav';
 
         @if (d.rooms.length > 0) {
           <section class="dash-section">
-            <div class="dash-section-title">Listings</div>
+            <h2 class="dash-section-title">Listings</h2>
             @for (r of d.rooms; track r.id) {
               <div class="app-card">
                 <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
@@ -103,7 +103,7 @@ import { ADMIN_NAV } from '../admin-nav';
 
         @if (d.applications.length > 0) {
           <section class="dash-section">
-            <div class="dash-section-title">Applications</div>
+            <h2 class="dash-section-title">Applications</h2>
             @for (a of d.applications; track a.id) {
               <div class="app-card" [class.app-card--closed]="!!a.archivedAt">
                 <div class="app-thumb portal-thumb" aria-hidden="true">📋</div>
@@ -123,7 +123,7 @@ import { ADMIN_NAV } from '../admin-nav';
 
         @if (d.tenancies.length > 0) {
           <section class="dash-section">
-            <div class="dash-section-title">Tenancies</div>
+            <h2 class="dash-section-title">Tenancies</h2>
             @for (t of d.tenancies; track t.id) {
               <div class="app-card">
                 <div class="app-thumb portal-thumb" aria-hidden="true">🔑</div>
@@ -142,7 +142,7 @@ import { ADMIN_NAV } from '../admin-nav';
 
         @if (d.verifications.length > 0) {
           <section class="dash-section">
-            <div class="dash-section-title">Verification history</div>
+            <h2 class="dash-section-title">Verification history</h2>
             @for (v of d.verifications; track v.id) {
               <div class="app-card">
                 <div class="app-thumb portal-thumb" aria-hidden="true">🪪</div>
@@ -166,7 +166,7 @@ import { ADMIN_NAV } from '../admin-nav';
 
         @if (d.payments.length > 0) {
           <section class="dash-section">
-            <div class="dash-section-title">Payments</div>
+            <h2 class="dash-section-title">Payments</h2>
             @for (p of d.payments; track p.id) {
               <div class="app-card">
                 <div class="app-thumb portal-thumb" aria-hidden="true">💳</div>
@@ -185,7 +185,7 @@ import { ADMIN_NAV } from '../admin-nav';
 
         @if (d.reviewsReceived.length > 0) {
           <section class="dash-section">
-            <div class="dash-section-title">Reviews received</div>
+            <h2 class="dash-section-title">Reviews received</h2>
             @for (r of d.reviewsReceived; track r.id) {
               <div class="app-card" [class.app-card--closed]="r.isHidden">
                 <div class="app-thumb portal-thumb" aria-hidden="true">⭐</div>

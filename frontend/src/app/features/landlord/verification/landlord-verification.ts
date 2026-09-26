@@ -24,8 +24,7 @@ import { landlordNav } from '../landlord-nav';
   imports: [DatePipe, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Landlord">
-      <div class="dash-section-title">Verification</div>
+    <app-portal-shell [navItems]="navItems" roleLabel="Landlord" pageTitle="Verification">
 
       @if (verification.isIdentityVerified()) {
         <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
@@ -60,7 +59,7 @@ import { landlordNav } from '../landlord-nav';
       }
 
       <section class="dash-section">
-        <div class="dash-section-title">What happens to your document</div>
+        <h2 class="dash-section-title">What happens to your document</h2>
         <ul class="verify-facts">
           <li>Uploaded privately — it is never shown on your listings or to tenants</li>
           <li>Seen only by a Mastande reviewer</li>
@@ -72,7 +71,7 @@ import { landlordNav } from '../landlord-nav';
       </section>
 
       <section class="dash-section">
-        <div class="dash-section-title">Submit a document</div>
+        <h2 class="dash-section-title">Submit a document</h2>
 
         @for (type of types; track type.value) {
           <div class="app-card">

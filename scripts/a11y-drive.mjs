@@ -21,17 +21,21 @@
  *
  *   node scripts/a11y-drive.mjs                     # against localhost:4200
  *   BASE_URL=http://localhost:4000 node scripts/a11y-drive.mjs
+ *   ADMIN_EMAIL=… ADMIN_PASSWORD=… node scripts/a11y-drive.mjs   # + admin
+ *
+ * Seven public pages plus the portal, which needs a landlord and a tenant
+ * registered over the API. Needs the API on :3000 and rooms on the board.
  *
  * Exits non-zero on any skipped heading level or any unnamed control, so it
  * can be a gate. Skips with a clear message when the site is not running.
  */
+import { registerUser, signIn, PASSWORD } from './lib/drive-session.mjs';
+
 const BASE = (process.env.BASE_URL ?? 'http://localhost:4200').replace(/\/$/, '');
+const API = (process.env.API_URL ?? 'http://localhost:3000').replace(/\/$/, '');
 const WIDTH = Number(process.env.VIEWPORT_WIDTH ?? 412);
 
-// Public pages only. Adding the portal screens means a logged-in session, and
-// a script that seeds a tenant is a different job from this one — the portal
-// pages are driven by scripts/smoke-test.sh and the feature drives instead.
-const PAGES = [
+const PUBLIC_PAGES = [
   '/',
   '/how-it-works',
   '/pricing',
@@ -39,6 +43,32 @@ const PAGES = [
   '/legal/terms',
   '/legal/privacy',
   '/legal/paia',
+];
+
+/**
+ * The portal, which this drive used to leave out.
+ *
+ * It said so, and the reason it gave was that a session is a different job —
+ * which was true and was also the reason the portal had never been audited by
+ * anything. Lighthouse cannot reach these pages either: every one of them
+ * needs a login, so the four URLs it visits are all public. So nothing had
+ * ever looked at the screens people actually spend time in, and the h1 → h3
+ * heading skip we fixed on the public board still existed on every one of
+ * them, because the section titles were styled divs rather than headings.
+ *
+ * The accounts are registered over the API and signed in through the form,
+ * using the same helper as scripts/phase-drive.mjs.
+ */
+const LANDLORD_PAGES = ['/landlord/dashboard', '/landlord/yard', '/landlord/verification', '/account/settings'];
+const TENANT_PAGES = ['/tenant/dashboard', '/tenant/rent', '/tenant/passport'];
+const ADMIN_PAGES = [
+  '/admin/dashboard',
+  '/admin/verifications',
+  '/admin/reports',
+  '/admin/disputes',
+  '/admin/advertising',
+  '/admin/referrals',
+  '/admin/analytics',
 ];
 
 let chromium;
@@ -64,8 +94,14 @@ const failures = [];
 const clip = (text) => (text.length > 70 ? text.slice(0, 70) + '…' : text);
 const locate = (c) => (c.cls ? '.' + c.cls : c.href ? `[href="${c.href}"]` : '(no class)');
 
-for (const path of PAGES) {
-  const page = await browser.newPage({ viewport: { width: WIDTH, height: 823 } });
+/**
+ * Audit one URL on a page that may already carry a session.
+ *
+ * `close` is false for the portal passes: they reuse one signed-in page across
+ * several URLs, because signing in once per screen is seven logins to audit
+ * seven screens.
+ */
+async function auditPage(page, path, { close = true } = {}) {
   let status = 0;
   try {
     const res = await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -73,11 +109,18 @@ for (const path of PAGES) {
     await page.waitForTimeout(1200);
   } catch (err) {
     failures.push(`${path}: did not load (${err.message})`);
-    await page.close();
-    continue;
+    if (close) await page.close();
+    return;
   }
 
   console.log(`\n=== ${path} (${status}) ===`);
+
+  // A portal URL that 404s is not an accessibility pass. The not-found page has
+  // a perfectly good heading outline, so without this a route that does not
+  // exist — or a guard that redirects the wrong way — reads as green.
+  if (status !== 200) {
+    failures.push(`${path}: answered ${status}, not 200 — the page under audit did not render`);
+  }
 
   // Only headings a sighted visitor can see. checkVisibility with
   // visibilityProperty, NOT offsetParent: the filter drawer is `position:
@@ -194,7 +237,71 @@ for (const path of PAGES) {
     }
   }
 
-  await page.close();
+  if (close) await page.close();
+}
+
+// ── public pages, no session ───────────────────────────────────────────────
+for (const path of PUBLIC_PAGES) {
+  const page = await browser.newPage({ viewport: { width: WIDTH, height: 823 } });
+  await auditPage(page, path);
+}
+
+// ── the portal, which needs one ────────────────────────────────────────────
+//
+// Skipped loudly rather than silently when there is no API to register
+// against. A drive that quietly audits seven pages instead of seventeen and
+// still prints a tick is how the room card went unchecked for four releases.
+let portalPages = 0;
+const apiReachable = await fetch(`${API}/health`, { signal: AbortSignal.timeout(4000) })
+  .then((r) => r.ok)
+  .catch(() => false);
+
+if (!apiReachable) {
+  console.log(`\n⏭  SKIP the portal — no API on ${API} to register a landlord and a tenant against.`);
+  failures.push(`the portal was not audited: no API on ${API}`);
+} else {
+  const stamp = Date.now();
+  for (const [role, pages] of [
+    ['LANDLORD', LANDLORD_PAGES],
+    ['TENANT', TENANT_PAGES],
+  ]) {
+    let session;
+    try {
+      const user = await registerUser(API, role, stamp);
+      session = await signIn(browser, BASE, user.email, PASSWORD, { width: WIDTH });
+    } catch (err) {
+      if (err.buildOverlay) {
+        console.log('\n⏭  the dev server is showing a build error overlay — fix the build and re-run.');
+        await browser.close();
+        process.exit(2);
+      }
+      failures.push(`${role.toLowerCase()} portal: could not sign in (${err.message})`);
+      continue;
+    }
+    for (const path of pages) {
+      await auditPage(session, path, { close: false });
+      portalPages++;
+    }
+    await session.close();
+  }
+
+  // The admin screens carry the densest tables in the product and the least
+  // traffic, which is exactly the combination nobody notices.
+  if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+    let session;
+    try {
+      session = await signIn(browser, BASE, process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD, { width: WIDTH });
+      for (const path of ADMIN_PAGES) {
+        await auditPage(session, path, { close: false });
+        portalPages++;
+      }
+      await session.close();
+    } catch (err) {
+      failures.push(`admin portal: could not sign in (${err.message})`);
+    }
+  } else {
+    console.log('\n⏭  SKIP the admin screens — set ADMIN_EMAIL and ADMIN_PASSWORD to include them.');
+  }
 }
 
 await browser.close();
@@ -205,4 +312,7 @@ if (failures.length) {
   failures.forEach((f) => console.log('   • ' + f));
   process.exit(1);
 }
-console.log(`✅ ${PAGES.length} pages: heading order intact, every control named.`);
+console.log(
+  `✅ ${PUBLIC_PAGES.length} public + ${portalPages} portal pages: ` +
+    'heading order intact, every control named.',
+);

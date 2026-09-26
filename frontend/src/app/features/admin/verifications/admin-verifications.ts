@@ -24,8 +24,7 @@ import { VerificationService } from '../../../core/services/verification.service
   imports: [DatePipe, FormsModule, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)">
-      <div class="dash-section-title">Verification queue</div>
+    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Verification queue">
 
       <div class="insight-banner">
         🔒

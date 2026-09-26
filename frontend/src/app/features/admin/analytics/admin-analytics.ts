@@ -17,17 +17,16 @@ import { ADMIN_NAV } from '../admin-nav';
   imports: [PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)">
-      <div class="dash-section-title">How the site is used</div>
+    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="How the site is used">
 
       @if (growth(); as g) {
         <section class="dash-section">
-          <div class="dash-section-title">
+          <h2 class="dash-section-title">
             Active users
             <span class="live-dot" [class.live-dot--on]="g.active.onlineNow > 0"
                   aria-hidden="true"></span>
             <span class="dash-count">{{ g.active.onlineNow }} online now</span>
-          </div>
+          </h2>
 
           <div class="stat-row">
             <div class="stat-box"><div class="val">{{ g.active.daily }}</div><div class="lbl">Today</div></div>
@@ -65,12 +64,12 @@ import { ADMIN_NAV } from '../admin-nav';
         </section>
 
         <section class="dash-section">
-          <div class="dash-section-title">
+          <h2 class="dash-section-title">
             New sign-ups
             <span class="dash-count">
               ({{ g.totals.tenants + g.totals.landlords }} total)
             </span>
-          </div>
+          </h2>
 
           <div class="stat-row">
             <div class="stat-box"><div class="val">{{ g.signups.today }}</div><div class="lbl">Today</div></div>
@@ -122,10 +121,10 @@ import { ADMIN_NAV } from '../admin-nav';
 
       @if (funnels(); as f) {
         <section class="dash-section">
-          <div class="dash-section-title">
+          <h2 class="dash-section-title">
             Listing a room
             <span class="dash-count">(last {{ f.periodDays }} days)</span>
-          </div>
+          </h2>
           <p class="muted">
             A landlord who abandons the wizard is a room the board never gets.
             The biggest drop is where to look first.
@@ -150,7 +149,7 @@ import { ADMIN_NAV } from '../admin-nav';
         </section>
 
         <section class="dash-section">
-          <div class="dash-section-title">Applying for a room</div>
+          <h2 class="dash-section-title">Applying for a room</h2>
           @for (s of f.applyFunnel; track s.step) {
             <div class="funnel-row">
               <div class="funnel-row__label">{{ s.step }}</div>
@@ -171,7 +170,7 @@ import { ADMIN_NAV } from '../admin-nav';
         </section>
 
         <section class="dash-section">
-          <div class="dash-section-title">Feature use</div>
+          <h2 class="dash-section-title">Feature use</h2>
           <p class="muted">
             Low numbers here are worth acting on: a feature nobody uses is either
             not wanted or not findable, and those need different fixes.
@@ -189,7 +188,7 @@ import { ADMIN_NAV } from '../admin-nav';
 
       @if (signals(); as sig) {
         <section class="dash-section">
-          <div class="dash-section-title">Listing quality</div>
+          <h2 class="dash-section-title">Listing quality</h2>
           <p class="muted">
             From data the platform already had — no tracking involved. Each of
             these is a fixable problem rather than a mystery.
