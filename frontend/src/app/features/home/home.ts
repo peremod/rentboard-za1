@@ -283,10 +283,19 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
             <option value="featured">Featured first</option>
           </select>
 
-          <p class="results-count">
+          <!-- h2, not p. The results are a section of the page and had no
+               heading of any kind, so every room card's h3 followed the hero's
+               h1 directly — a skipped level on the busiest page in the site.
+               The empty state below already carries an h2 for exactly this
+               reason; nothing gave the populated state one, because no check
+               had ever seen the board with rooms on it.
+
+               The count is the heading: it is the visible text that names the
+               region, so making it the heading beats inventing a hidden one. -->
+          <h2 class="results-count">
             @if (loading() && rooms().length === 0) { Loading rooms… }
             @else { {{ 'found_rooms' | translate:{count: total()} }} }
-          </p>
+          </h2>
         </div>
 
         @if (loading() && rooms().length === 0) {

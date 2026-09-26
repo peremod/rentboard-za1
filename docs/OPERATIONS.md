@@ -144,7 +144,10 @@ git branch -r --merged origin/develop \
 ## 7. Release day checklist
 
 - [ ] `CONTRIBUTING.md` release flow followed (tag, merge to `main`).
-- [ ] CI green on `main` post-merge.
+- [ ] CI green on `main` post-merge. **Read the run, do not glance at it.** CI
+      went red at v1.73.0 and six releases were tagged over it before anyone
+      opened a log; a job stops at its first failing step, so a red run is also
+      hiding every check after that step (see checklist rows 25–27).
 - [ ] Render + Vercel deploy logs both report healthy.
 - [ ] Production smoke: register → browse → apply → mark-as-let → relist → Stripe checkout.
 - [ ] Internal-link + slug spot check on changed routes (no 404, no redirect chains).
@@ -153,7 +156,10 @@ git branch -r --merged origin/develop \
       `dist/.../server/server.mjs`). It drives seven public pages in a browser
       and exits non-zero on a skipped heading level or a control with no
       accessible name. Lighthouse covers four URLs on a schedule; this covers
-      the accessibility half on every release, in seconds.
+      the accessibility half on every release, in seconds. **Seed rooms first**
+      (`SEED_DEMO_ROOMS=true`): both defects it has ever found were in the room
+      card, and it passes over an empty board — which is what it found four
+      times before CI ran it against a seeded one.
 - [ ] Changelog entry published.
 
 ---

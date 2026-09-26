@@ -212,7 +212,9 @@ img{display:block;max-width:100%}
   display:flex;align-items:center;justify-content:space-between;
   margin-bottom:1.25rem;flex-wrap:wrap;gap:.5rem;
 }
-.results-count{font-size:.88rem;color:var(--slate)}
+// font-weight: this is an h2 (the results region's heading) and must not
+// look like one — the count's <strong> below is what carries the emphasis.
+.results-count{font-size:.88rem;color:var(--slate);font-weight:500}
 .results-count strong{color:var(--ink);font-weight:700}
 .sort-select{
   padding:.4rem .75rem;border:1.5px solid var(--border);border-radius:var(--r4);

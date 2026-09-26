@@ -31,11 +31,22 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
         {{ isSaved() ? '♥' : '♡' }}
       </button>
 
-      <a [routerLink]="['/rooms', room().id]" [attr.aria-label]="'View room: ' + room().title">
+      <!-- No aria-label on this anchor. It used to carry
+           "View room: {title}", and an aria-label REPLACES the content it sits
+           on: a screen-reader user tabbing the board heard a list of titles
+           and nothing else — not the rent, not the suburb, not whether the
+           room is free now. Every one of those is on the card, in text, for
+           anyone who can see it. Named by its own content, the card announces
+           what it shows, and WCAG 2.5.3 holds by construction rather than by
+           keeping two strings in step.
+
+           alt="" on the photo for the same reason: it repeated the title
+           verbatim, two lines above the h3 that says it. -->
+      <a [routerLink]="['/rooms', room().id]">
 
         @if (room().heroImagePath) {
           <img class="room-card-img" [ngSrc]="heroPath()" width="280" height="196"
-               [priority]="isFirstCard()" [alt]="room().title"/>
+               [priority]="isFirstCard()" alt=""/>
         } @else {
           <div class="room-card-img-placeholder" aria-hidden="true">🏠</div>
         }
@@ -85,7 +96,11 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
 
           <div class="room-footer">
             <div class="landlord-info">
-              <div class="avatar" [style.background]="avatarColour()">{{ landlordInitial() }}</div>
+              <!-- The initial is the landlord's name's first letter, set in a
+                   coloured circle beside the name itself. Read out, it is a
+                   stutter: "D Demo L." -->
+              <div class="avatar" aria-hidden="true"
+                   [style.background]="avatarColour()">{{ landlordInitial() }}</div>
               <div>
                 <div class="landlord-name">{{ landlordName() }}</div>
                 @if (room().landlord?.landlordProfile?.rating; as rating) {

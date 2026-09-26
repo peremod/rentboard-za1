@@ -60,6 +60,10 @@ try {
 const browser = await chromium.launch({ args: ['--no-sandbox'] });
 const failures = [];
 
+/** A card's visible text is a paragraph; the failure line has to stay readable. */
+const clip = (text) => (text.length > 70 ? text.slice(0, 70) + '…' : text);
+const locate = (c) => (c.cls ? '.' + c.cls : c.href ? `[href="${c.href}"]` : '(no class)');
+
 for (const path of PAGES) {
   const page = await browser.newPage({ viewport: { width: WIDTH, height: 823 } });
   let status = 0;
@@ -127,6 +131,9 @@ for (const path of PAGES) {
       return {
         tag,
         cls: e.className && typeof e.className === 'string' ? e.className.split(' ')[0] : '',
+        // A card link carries no class of its own, so `.` was the whole
+        // locator in the failure output. The href identifies it.
+        href: e.getAttribute('href') ?? '',
         type: e.getAttribute('type') ?? '',
         visible: e.checkVisibility({ visibilityProperty: true, contentVisibilityAuto: true }),
         hidden: e.getAttribute('aria-hidden') === 'true',
@@ -157,12 +164,34 @@ for (const path of PAGES) {
 
   console.log(`  controls: ${controls.length} — ${unnamed.length} unnamed, ${mismatched.length} name/text mismatch`);
   for (const c of unnamed) {
-    console.log(`    ❌ <${c.tag}${c.type ? ' type=' + c.type : ''}> .${c.cls}${c.visible ? '' : ' (hidden)'} has no accessible name`);
-    failures.push(`${path}: <${c.tag}> .${c.cls} has no accessible name`);
+    console.log(`    ❌ <${c.tag}${c.type ? ' type=' + c.type : ''}> ${locate(c)}${c.visible ? '' : ' (hidden)'} has no accessible name`);
+    failures.push(`${path}: <${c.tag}> ${locate(c)} has no accessible name`);
   }
   for (const c of mismatched) {
-    console.log(`    ❌ <${c.tag}> .${c.cls}: label "${c.ariaLabel}" does not contain visible text "${c.visibleText}"`);
-    failures.push(`${path}: <${c.tag}> .${c.cls} label/text mismatch`);
+    // Worded as what it costs, not as the rule number. An aria-label REPLACES
+    // the content it sits on, so text missing from the name is text a
+    // screen-reader user is not told about at all — which is the finding, and
+    // WCAG 2.5.3 is the reason it is a failure rather than a preference.
+    console.log(`    ❌ <${c.tag}> ${locate(c)}: aria-label "${c.ariaLabel}" hides visible text "${clip(c.visibleText)}"`);
+    failures.push(`${path}: <${c.tag}> ${locate(c)} aria-label hides its own visible text`);
+  }
+
+  // The board with rooms on it is the state that hid two real defects for
+  // four releases: the room card's h3 followed the hero's h1 with no h2
+  // between them, and the card's aria-label replaced everything the card
+  // shows. Nothing here could see either one, because no check had ever
+  // loaded this page with a single room on it — CI's Lighthouse run has no
+  // API, and a fresh database has no listings. A drive that reads the empty
+  // state and reports seven green pages is the same as no drive at all.
+  if (path === '/') {
+    const cards = await page.locator('app-room-card').count();
+    console.log(`  room cards on the board: ${cards}`);
+    if (cards === 0) {
+      failures.push(
+        '/: the board had no rooms, so the room card was never checked — ' +
+          'seed them (SEED_DEMO_ROOMS=true npx ts-node prisma/seed.ts) and run this again',
+      );
+    }
   }
 
   await page.close();
