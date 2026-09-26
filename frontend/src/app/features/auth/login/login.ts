@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
 
 /**
  * Login — email/password + Google OAuth entry point.
@@ -14,7 +15,7 @@ import { AuthService } from '../../../core/services/auth.service';
   standalone: true,
   // FormsModule for the phone fields, which use ngModel rather than joining
   // the reactive form — they are a separate sign-in path, not extra login fields.
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="auth">
@@ -37,12 +38,12 @@ import { AuthService } from '../../../core/services/auth.service';
 
         <form [formGroup]="form" (ngSubmit)="onSubmit()">
           <div class="auth__field">
-            <label for="email">Email address</label>
+            <label for="email">{{ 'auth.email' | translate }}</label>
             <input id="email" type="email" formControlName="email" autocomplete="email"/>
           </div>
 
           <div class="auth__field">
-            <label for="password">Password</label>
+            <label for="password">{{ 'auth.password' | translate }}</label>
             <input id="password" type="password" formControlName="password" autocomplete="current-password"/>
           </div>
 
@@ -51,7 +52,7 @@ import { AuthService } from '../../../core/services/auth.service';
           }
 
           <button type="submit" class="auth__submit" [disabled]="form.invalid || loading()">
-            {{ loading() ? 'Logging in…' : 'Log in' }}
+            {{ loading() ? ('auth.logging_in' | translate) : ('auth.login' | translate) }}
           </button>
         </form>
 

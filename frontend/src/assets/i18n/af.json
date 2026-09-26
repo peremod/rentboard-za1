@@ -6,9 +6,6 @@
   "nav.dashboard": "Paneelbord",
   "nav.logout": "Meld af",
   "hero.eyebrow": "Suid-Afrika se kamerverhuring-kennisgewingbord",
-  "hero.title_line1": "Vind jou volgende kamer.",
-  "hero.title_line2": "Direk van verhuurders.",
-  "hero.subtitle": "Geen eiendomsagente nie. Geen fooie om aansoek te doen nie. Kamers direk deur verhuurders regoor Suid-Afrika geplaas.",
   "hero.cta": "Adverteer 'n kamer gratis →",
   "search.placeholder": "Soek volgens stad, voorstad of area…",
   "search.all_provinces": "Alle provinsies",
@@ -35,5 +32,17 @@
   "footer.terms": "Bepalings & Voorwaardes",
   "footer.disclaimer": "Vrywaring",
   "footer.cookies": "Koekiebeleid",
-  "footer.paia": "PAIA-handleiding"
+  "footer.paia": "PAIA-handleiding",
+  "hero.tenant_title": "Vind jou volgende kamer.",
+  "hero.tenant_emphasis": "Direk van verhuurders.",
+  "hero.tenant_sub": "Geen eiendomsagente nie. Geen fooie om aansoek te doen nie. Deelhuise, kamers met eie bad, enkelvertrekke en privaat kamers regoor Suid-Afrika.",
+  "hero.landlord_title": "Vind jou volgende huurder.",
+  "hero.landlord_emphasis": "Altyd gratis om te plaas.",
+  "hero.landlord_sub": "Plaas ’n kamer in minute, keur aansoekers, en verhuur dit sonder om aan enigiemand kommissie te betaal.",
+  "hero.stat_rooms": "kamers beskikbaar",
+  "hero.stat_landlords": "gekeurde verhuurders",
+  "hero.stat_free": "Gratis",
+  "hero.stat_to_apply": "om aansoek te doen",
+  "auth.logging_in": "Meld tans aan…",
+  "auth.creating_account": "Skep tans rekening…"
 }

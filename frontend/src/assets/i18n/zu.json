@@ -6,9 +6,6 @@
   "nav.dashboard": "Ideshibhodi",
   "nav.logout": "Phuma",
   "hero.eyebrow": "Ibhodi lezaziso zokuqashisa amagumbi eNingizimu Afrika",
-  "hero.title_line1": "Thola igumbi lakho elilandelayo.",
-  "hero.title_line2": "Ngokuqondile kubaqashisi.",
-  "hero.subtitle": "Ayikho amaejenti ezindlu. Azikho izindleko zokufaka isicelo. Amagumbi afakwa ngqo ngabaqashisi kulo lonke elaseNingizimu Afrika.",
   "hero.cta": "Faka igumbi mahhala →",
   "search.placeholder": "Sesha ngedolobha, isubhethi noma indawo…",
   "search.all_provinces": "Zonke izifundazwe",
@@ -35,5 +32,17 @@
   "footer.terms": "Imigomo Nemibandela",
   "footer.disclaimer": "Isaziso",
   "footer.cookies": "Inqubomgomo Yamakhukhi",
-  "footer.paia": "Incwadi Yolwazi ye-PAIA"
+  "footer.paia": "Incwadi Yolwazi ye-PAIA",
+  "hero.tenant_title": "Thola igumbi lakho elilandelayo.",
+  "hero.tenant_emphasis": "Ngqo kubaqashisi.",
+  "hero.tenant_sub": "Akukho ama-ejenti ezindlu. Akukho izindleko zokufaka isicelo. Izindlu ezihlanganyelwayo, amagumbi anendlu yangasese, ama-studio namagumbi angasese kulo lonke iNingizimu Afrika.",
+  "hero.landlord_title": "Thola umqashi wakho olandelayo.",
+  "hero.landlord_emphasis": "Kumahhala ukufaka, njalo.",
+  "hero.landlord_sub": "Faka igumbi ngemizuzu embalwa, khetha abafake izicelo, bese uqashisa ngaphandle kokukhokhela noma ubani ikhomishini.",
+  "hero.stat_rooms": "amagumbi atholakalayo",
+  "hero.stat_landlords": "abaqashisi abaqinisekisiwe",
+  "hero.stat_free": "Mahhala",
+  "hero.stat_to_apply": "ukufaka isicelo",
+  "auth.logging_in": "Iyangena…",
+  "auth.creating_account": "Idala i-akhawunti…"
 }

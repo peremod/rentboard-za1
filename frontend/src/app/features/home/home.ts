@@ -34,19 +34,21 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
              to speak to both; one fixed message tells half the visitors this
              site is not for them. -->
         <h1 class="hero-headline" [class.hero-headline--swap]="swapping()">
-          {{ heroMessage().title }}<br/><em>{{ heroMessage().emphasis }}</em>
+          {{ heroMessage().title | translate }}<br/><em>{{ heroMessage().emphasis | translate }}</em>
         </h1>
         <p class="hero-sub hero-headline" [class.hero-headline--swap]="swapping()">
-          {{ heroMessage().sub }}
+          {{ heroMessage().sub | translate }}
         </p>
         <div class="hero-ctas">
-          <a href="#board" class="btn btn-primary btn-lg" (click)="scrollToBoard($event)">Browse rooms</a>
-          <a routerLink="/auth/register" class="btn btn-ghost btn-lg">List a room free →</a>
+          <a href="#board" class="btn btn-primary btn-lg" (click)="scrollToBoard($event)">
+            {{ 'nav.browse_rooms' | translate }}
+          </a>
+          <a routerLink="/auth/register" class="btn btn-ghost btn-lg">{{ 'hero.cta' | translate }}</a>
         </div>
         <div class="hero-stats">
-          <div class="hero-stat"><strong>{{ total() }}</strong><span>rooms available</span></div>
-          <div class="hero-stat"><strong>{{ landlordCount() }}</strong><span>verified landlords</span></div>
-          <div class="hero-stat"><strong>Free</strong><span>to apply</span></div>
+          <div class="hero-stat"><strong>{{ total() }}</strong><span>{{ 'hero.stat_rooms' | translate }}</span></div>
+          <div class="hero-stat"><strong>{{ landlordCount() }}</strong><span>{{ 'hero.stat_landlords' | translate }}</span></div>
+          <div class="hero-stat"><strong>{{ 'hero.stat_free' | translate }}</strong><span>{{ 'hero.stat_to_apply' | translate }}</span></div>
           <div class="hero-stat"><strong>9 provinces</strong><span>and growing</span></div>
         </div>
       </div>
@@ -365,16 +367,24 @@ export class Home implements OnInit, OnDestroy {
    * Two audiences, alternating. Starts on whichever suits the visitor when we
    * can tell — a signed-in landlord should not be pitched rooms to rent.
    */
+  /**
+   * Translation keys, not English. The headline is the largest text on the site
+   * and it was the one string on the home page the translate pipe did not
+   * reach — so an Afrikaans or isiZulu visitor got a translated navbar, a
+   * translated search bar, translated filters, and then the site's single
+   * biggest sentence in English. The bundles carried keys for the hero this
+   * one replaced, which nothing had read since the rotating version shipped.
+   */
   private readonly heroMessages = [
     {
-      title: 'Find your next room.',
-      emphasis: 'Direct from landlords.',
-      sub: 'No estate agents. No fees to apply. Shared houses, en-suites, studios and private rooms across South Africa.',
+      title: 'hero.tenant_title',
+      emphasis: 'hero.tenant_emphasis',
+      sub: 'hero.tenant_sub',
     },
     {
-      title: 'Find your next tenant.',
-      emphasis: 'Free to list, always.',
-      sub: 'Post a room in minutes, shortlist applicants, and let it without paying commission to anyone.',
+      title: 'hero.landlord_title',
+      emphasis: 'hero.landlord_emphasis',
+      sub: 'hero.landlord_sub',
     },
   ];
 

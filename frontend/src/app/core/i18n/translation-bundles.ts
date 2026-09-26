@@ -1,4 +1,16 @@
 import { LanguageCode } from '../models/language.model';
+import EN_BUNDLE from '../../../assets/i18n/en.json';
+
+/**
+ * English, statically — not through the map below.
+ *
+ * It is the fallback set for every locale, so it is needed on every page in
+ * every language. Loading it as a lazy chunk meant the bootstrap had to await
+ * it before the first render, which on a bare English URL is a round trip for
+ * nothing. Imported statically it costs ~1.5KB in the main bundle and makes
+ * `use('en')` fully synchronous.
+ */
+export const EN: Record<string, string> = EN_BUNDLE as Record<string, string>;
 
 /**
  * Translation bundles, as lazily-imported modules rather than HTTP fetches.

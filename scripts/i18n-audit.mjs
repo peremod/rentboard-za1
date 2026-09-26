@@ -122,6 +122,54 @@ for (const [code, bundle] of Object.entries(bundles)) {
   }
 }
 
+// ── 3b. Every key is actually read by a template ──────────────────────────
+//
+// Half the translation work in this repo was dead. Eighteen of thirty-seven
+// keys — the whole footer, the auth labels, the room card's "Bills incl.", and
+// four describing a hero that had been replaced — were translated into
+// Afrikaans and isiZulu and never read by anything. So a visitor who picked
+// Afrikaans got a translated navbar and search bar, English everywhere else,
+// and the work to fix that had already been done and paid for.
+//
+// The reverse direction is what the key-coverage check above already does.
+// This one catches a translation nobody will ever see, which is the failure
+// that is invisible from inside a bundle.
+console.log('\n── Keys the app actually reads ──────────────────────────────');
+
+const APP_DIR = join(ROOT, 'frontend/src/app');
+const templateSrc = (function walk(dir) {
+  let out = '';
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out += walk(full);
+    else if (entry.name.endsWith('.ts') || entry.name.endsWith('.html')) out += readFileSync(full, 'utf8');
+  }
+  return out;
+})(APP_DIR);
+
+// Both the template form and the string constants a component passes to the
+// pipe — the rotating hero holds its keys in a TypeScript array, so a check
+// that only read `'x' | translate` would call every one of them dead.
+const usedKeys = new Set([
+  ...[...templateSrc.matchAll(/'([a-z][a-z0-9_.]*)'\s*\|\s*translate/g)].map((m) => m[1]),
+  ...[...templateSrc.matchAll(/'(hero\.[a-z0-9_]+|nav\.[a-z0-9_]+|room\.[a-z0-9_]+|auth\.[a-z0-9_]+|footer\.[a-z0-9_]+|filters\.[a-z0-9_]+|search\.[a-z0-9_]+)'/g)].map((m) => m[1]),
+]);
+
+const deadKeys = [...enKeys].filter((k) => !k.startsWith('_meta') && !usedKeys.has(k));
+if (deadKeys.length === 0) {
+  ok(`all ${enKeys.size} keys are read by a template`);
+} else {
+  fail(`${deadKeys.length} key(s) are translated but never read: ${deadKeys.join(', ')}`);
+  console.log('    Either use them or delete them — a translation nobody sees is');
+  console.log('    work spent and a false sense of how much of the UI is covered.');
+}
+
+// How much of the UI the pipe reaches at all. Not a gate: raising it is a
+// product decision, and a number nobody can act on should not fail a build.
+const pipeUses = (templateSrc.match(/\|\s*translate/g) ?? []).length;
+console.log(`  ℹ ${usedKeys.size} keys in use across ${pipeUses} call sites`);
+console.log('    Everything outside those is English in every locale.');
+
 // ── 4. Frontend and backend locale lists agree ────────────────────────────
 console.log('\n── Locale list sync (frontend ↔ backend) ───────────────────');
 

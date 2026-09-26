@@ -193,6 +193,35 @@ delete its `_meta_needs_translation` key, flip `translated: true` in the
 language model, and add the code to `PREFIXED_LOCALES` in the backend SEO
 controller. `npm run audit:i18n` fails if you do only some of those.
 
+### A published locale has to be served in that locale
+
+Stated because it was not true. `/af` and `/af/pricing` were served in English
+with `lang="af-ZA"` on them for as long as locale routing has existed, and
+`/zu` was translated or not depending on which promise resolved first — the
+app initializer fired the bundle load without awaiting it, so the render did
+not wait. Everything around it was correct and every check agreed: the lang
+attribute, the canonical, the hreflang set, the bundle's completeness, and the
+page in a browser after hydration.
+
+Two rules follow, and both are now asserted:
+
+1. **The locale is applied before the first render.** The seed comes from
+   `PlatformLocation` — the request URL on the server — and the app
+   initializer *returns* the promise. English is a static import, so a bare
+   URL waits for nothing.
+2. **A check on served HTML reads the served bytes.** Playwright's
+   `page.content()` serialises the hydrated DOM, which is the browser's
+   repaired version of whatever the server sent. The locale-content assertion
+   in `e2e/locale-and-seo.spec.ts` uses `request.get()`, and it was verified by
+   putting the bug back and watching it fail.
+
+And what "translated" covers: `scripts/i18n-audit.mjs` fails on a bundle key
+no template reads. Eighteen of thirty-seven keys were translated and never
+used — the footer, the auth labels, a hero that had been replaced — so the
+switcher offered Afrikaans and delivered a translated navbar on an English
+page. That is the same defect as publishing an untranslated locale, arriving
+from the other side.
+
 ### Room pages carry no alternates
 
 A landlord's title and description are written in their own words and are

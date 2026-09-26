@@ -3,6 +3,7 @@ import { NgOptimizedImage } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { Room } from '../../../core/models/room.model';
 import { ZarCentsPipe } from '../../pipes/zar-cents.pipe';
+import { TranslatePipe } from '../../pipes/translate.pipe';
 import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
 
 /**
@@ -19,7 +20,7 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
 @Component({
   selector: 'app-room-card',
   standalone: true,
-  imports: [NgOptimizedImage, RouterLink, ZarCentsPipe],
+  imports: [NgOptimizedImage, RouterLink, ZarCentsPipe, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <article class="room-card" [class.featured]="room().isFeatured">
@@ -66,7 +67,7 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
         <div class="room-card-body">
           <div class="room-price">
             {{ room().rentCents | zarCents }}<span class="room-price-per">/mo</span>
-            @if (room().billsIncluded) { <span class="bills-tag">Bills incl.</span> }
+            @if (room().billsIncluded) { <span class="bills-tag">{{ 'room.bills_included' | translate }}</span> }
           </div>
 
           <h3 class="room-title">{{ room().title }}</h3>

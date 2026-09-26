@@ -3,12 +3,13 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
 import { ReferralsService } from '../../../core/services/referrals.service';
 
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="auth">
@@ -34,17 +35,17 @@ import { ReferralsService } from '../../../core/services/referrals.service';
 
         <form [formGroup]="form" (ngSubmit)="onSubmit()">
           <div class="auth__field">
-            <label for="fullName">Full name</label>
+            <label for="fullName">{{ 'auth.full_name' | translate }}</label>
             <input id="fullName" type="text" formControlName="fullName" autocomplete="name"/>
           </div>
 
           <div class="auth__field">
-            <label for="email">Email address</label>
+            <label for="email">{{ 'auth.email' | translate }}</label>
             <input id="email" type="email" formControlName="email" autocomplete="email"/>
           </div>
 
           <div class="auth__field">
-            <label for="password">Password</label>
+            <label for="password">{{ 'auth.password' | translate }}</label>
             <input id="password" type="password" formControlName="password" autocomplete="new-password"/>
             <p class="field-hint">At least 8 characters, with one uppercase letter and one number.</p>
           </div>
@@ -70,7 +71,7 @@ import { ReferralsService } from '../../../core/services/referrals.service';
           }
 
           <button type="submit" class="auth__submit" [disabled]="form.invalid || loading()">
-            {{ loading() ? 'Creating account…' : 'Create account free' }}
+            {{ loading() ? ('auth.creating_account' | translate) : ('auth.register' | translate) }}
           </button>
         </form>
 

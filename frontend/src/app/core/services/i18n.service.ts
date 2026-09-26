@@ -6,7 +6,7 @@ import {
   DEFAULT_LANGUAGE,
   isLanguageCode,
 } from '../models/language.model';
-import { TRANSLATION_BUNDLES } from '../i18n/translation-bundles';
+import { EN, TRANSLATION_BUNDLES } from '../i18n/translation-bundles';
 import { SeoService } from './seo.service';
 
 const LANG_STORAGE_KEY = 'rb_lang';
@@ -37,7 +37,12 @@ export class I18nService {
 
   private readonly _currentLang = signal<LanguageCode>(DEFAULT_LANGUAGE);
   private readonly _translations = signal<Record<string, string>>({});
-  private readonly _fallback = signal<Record<string, string>>({});
+  /**
+   * English, available before anything is awaited. A missing key in another
+   * bundle degrades to an English word rather than a raw dot-notation key, and
+   * that has to be true on the very first render, not one microtask later.
+   */
+  private readonly _fallback = signal<Record<string, string>>(EN);
   private readonly _loading = signal(true);
 
   readonly currentLang = this._currentLang.asReadonly();
@@ -59,13 +64,8 @@ export class I18nService {
     this._loading.set(true);
     this._currentLang.set(code);
 
-    // English always loads as the fallback set, even when viewing another
-    // language, so a missing key in e.g. zu.json degrades to an English word,
-    // never a raw dot-notation key shown to a real person.
-    if (Object.keys(this._fallback()).length === 0) {
-      this._fallback.set(await this.load('en'));
-    }
-
+    // English needs no load at all — it is imported statically as the fallback
+    // set, so this returns without awaiting anything for a bare English URL.
     this._translations.set(code === 'en' ? this._fallback() : await this.load(code));
     this._loading.set(false);
 

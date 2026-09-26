@@ -7,6 +7,7 @@ import { ApplicationsService } from '../../core/services/applications.service';
 import { AuthService } from '../../core/services/auth.service';
 import { Room } from '../../core/models/room.model';
 import { ZarCentsPipe } from '../../shared/pipes/zar-cents.pipe';
+import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 import { ReportDialog } from '../../shared/components/report-dialog/report-dialog';
 import { ReviewList } from '../../shared/components/review-list/review-list';
 import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
@@ -25,7 +26,7 @@ import { environment } from '@env/environment';
 @Component({
   selector: 'app-room-detail',
   standalone: true,
-  imports: [NgOptimizedImage, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot],
+  imports: [NgOptimizedImage, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="room-detail">
@@ -161,13 +162,13 @@ import { environment } from '@env/environment';
           } @else if (auth.isLandlord()) {
             <p class="muted">Landlord accounts can't apply to rooms.</p>
           } @else if (applied()) {
-            <p class="pill pill--green">✓ Application sent</p>
+            <p class="pill pill--green">✓ {{ 'room.application_sent' | translate }}</p>
           } @else {
             <h3>Apply for this room</h3>
             <textarea [(ngModel)]="coverNote" rows="3" placeholder="Introduce yourself to the landlord (optional)"></textarea>
             @if (applyError()) { <p class="error">{{ applyError() }}</p> }
             <button type="button" [disabled]="applying()" (click)="apply(r.id)">
-              {{ applying() ? 'Sending…' : 'Apply free →' }}
+              {{ applying() ? 'Sending…' : ('room.apply_now' | translate) }}
             </button>
           }
         </div>

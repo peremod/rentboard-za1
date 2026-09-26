@@ -6,12 +6,34 @@ import { test, expect } from '@playwright/test';
  * These assert the two things that are easy to break silently and expensive
  * to notice: a visitor being dropped out of their language mid-flow, and
  * metadata that is applied after hydration rather than served in the HTML.
- * A crawler that runs no JavaScript sees only the served HTML, so anything
- * asserted here via `page.content()` is deliberately checked before any
- * client-side work could have run.
+ * A crawler that runs no JavaScript sees only the served HTML — and
+ * `page.content()` is NOT that. It serialises the live DOM, so hydration has
+ * already run and has already repaired anything the server got wrong. This
+ * docblock used to claim the opposite, and the claim was load-bearing: the
+ * locale-content check below passed with the bug it was written for put back,
+ * because the browser translated the page a moment after the server served it
+ * in English.
+ *
+ * So anything that must be true of the SERVED bytes uses `request.get()`,
+ * which is a plain HTTP fetch with no browser attached. Assertions made
+ * through `page` are about the hydrated result, which is a different and also
+ * useful thing — just not what a crawler reads.
  */
 
 const PUBLISHED_LOCALES = ['af', 'zu'];
+
+/**
+ * One string that must be present and one that must be absent, per locale.
+ *
+ * Both directions on purpose: "contains some Afrikaans" passes on a page that
+ * is half translated, and the failure being fixed here was exactly that shape.
+ * The absent string is the English footer heading, which appears on every page
+ * in the site — so if it is there, the page was rendered in English.
+ */
+const LOCALE_MARKERS: Record<string, { present: string; absent: string }> = {
+  af: { present: 'Privaatheid (POPIA)', absent: 'Privacy Policy (POPIA)' },
+  zu: { present: 'Ubumfihlo (POPIA)', absent: 'Privacy Policy (POPIA)' },
+};
 
 test.describe('locale routing', () => {
   test('English lives at the bare path and /en does not exist', async ({ page }) => {
@@ -39,6 +61,38 @@ test.describe('locale routing', () => {
         'href',
         new RegExp(`/${locale}/pricing$`),
       );
+    });
+
+    /**
+     * The check none of these had: that the page is actually IN that language.
+     *
+     * Everything structural was asserted and correct — the lang attribute, the
+     * canonical, the hreflang set, the bundle's completeness — and /af and
+     * /af/pricing were served to crawlers as English with lang="af-ZA" on
+     * them, because the app initializer fired the bundle load without awaiting
+     * it. /zu was translated or not depending on which promise won. A locale
+     * page that declares a language it is not written in is worse than no
+     * translation at all: it is a promise to Google that the content breaks.
+     *
+     * Read from page.content() before any client work, so this is the served
+     * HTML and not the result of hydration repairing it.
+     */
+    test(`/${locale} is served IN ${locale}, not just labelled as it`, async ({ request, baseURL }) => {
+      const marker = LOCALE_MARKERS[locale];
+      for (const path of ['', '/pricing', '/how-it-works']) {
+        const res = await request.get(`${baseURL}/${locale}${path}`);
+        expect(res.status(), `/${locale}${path}`).toBe(200);
+        const html = await res.text();
+
+        expect(html, `/${locale}${path} was served with no ${locale} copy in it`)
+          .toContain(marker.present);
+        expect(html, `/${locale}${path} was served containing the English "${marker.absent}"`)
+          .not.toContain(marker.absent);
+        // The label has to match the content. Either alone is a lie to a
+        // crawler; together they are a translated page.
+        expect(html, `/${locale}${path} does not declare lang="${locale}-ZA"`)
+          .toContain(`lang="${locale}-ZA"`);
+      }
     });
 
     test(`internal links keep the visitor in ${locale}`, async ({ page }) => {

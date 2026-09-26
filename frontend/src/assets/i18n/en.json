@@ -6,9 +6,6 @@
   "nav.dashboard": "Dashboard",
   "nav.logout": "Log out",
   "hero.eyebrow": "South Africa's room-letting notice board",
-  "hero.title_line1": "Find your next room.",
-  "hero.title_line2": "Direct from landlords.",
-  "hero.subtitle": "No estate agents. No fees to apply. Rooms posted directly by landlords across South Africa.",
   "hero.cta": "List a room free →",
   "search.placeholder": "Search by city, suburb or area…",
   "search.all_provinces": "All provinces",
@@ -35,5 +32,17 @@
   "footer.terms": "Terms & Conditions",
   "footer.disclaimer": "Disclaimer",
   "footer.cookies": "Cookie Policy",
-  "footer.paia": "PAIA Manual"
+  "footer.paia": "PAIA Manual",
+  "hero.tenant_title": "Find your next room.",
+  "hero.tenant_emphasis": "Direct from landlords.",
+  "hero.tenant_sub": "No estate agents. No fees to apply. Shared houses, en-suites, studios and private rooms across South Africa.",
+  "hero.landlord_title": "Find your next tenant.",
+  "hero.landlord_emphasis": "Free to list, always.",
+  "hero.landlord_sub": "Post a room in minutes, shortlist applicants, and let it without paying commission to anyone.",
+  "hero.stat_rooms": "rooms available",
+  "hero.stat_landlords": "verified landlords",
+  "hero.stat_free": "Free",
+  "hero.stat_to_apply": "to apply",
+  "auth.logging_in": "Logging in…",
+  "auth.creating_account": "Creating account…"
 }

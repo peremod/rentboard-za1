@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { TranslatePipe } from '../../pipes/translate.pipe';
 
 @Component({
   selector: 'app-footer',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <footer class="footer">
@@ -49,13 +50,16 @@ import { RouterLink } from '@angular/router';
         </div>
 
         <div class="footer-col">
-          <h2>Legal</h2>
+          <!-- The only part of the footer the bundles carry translations for,
+               and nothing had ever read them. These five links are on every
+               page of the site. -->
+          <h2>{{ 'nav.legal' | translate }}</h2>
           <ul>
-            <li><a routerLink="/legal/privacy">Privacy Policy (POPIA)</a></li>
-            <li><a routerLink="/legal/terms">Terms &amp; Conditions</a></li>
-            <li><a routerLink="/legal/disclaimer">Disclaimer</a></li>
-            <li><a routerLink="/legal/cookies">Cookie Policy</a></li>
-            <li><a routerLink="/legal/paia">PAIA Manual</a></li>
+            <li><a routerLink="/legal/privacy">{{ 'footer.privacy' | translate }}</a></li>
+            <li><a routerLink="/legal/terms">{{ 'footer.terms' | translate }}</a></li>
+            <li><a routerLink="/legal/disclaimer">{{ 'footer.disclaimer' | translate }}</a></li>
+            <li><a routerLink="/legal/cookies">{{ 'footer.cookies' | translate }}</a></li>
+            <li><a routerLink="/legal/paia">{{ 'footer.paia' | translate }}</a></li>
           </ul>
         </div>
       </div>
