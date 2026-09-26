@@ -88,8 +88,16 @@ cd ..
 
 ```bash
 npm run audit             # routes, i18n, environment parity
-npm run verify            # builds all three configurations, 27 assertions
+npm run verify            # builds all three configurations, 55-60 assertions
 ```
+
+The count varies on purpose: five of those checks need something to talk to
+and say so out loud rather than passing. Four need the API **up** (a room page
+server-rendering the room, its JSON-LD, the sitemap). One needs it **down** —
+the hanging-API check binds the API's own port to prove a render cannot wait
+forever, so it skips while the API holds that port. Before tagging, run
+`verify` once each way; a run that reports 55 and a run that reports 59 have
+together checked everything, and neither alone has.
 
 `verify` is the one that refuses to let a release be tagged — unfilled
 `[PLACEHOLDER]` text, a non-indexable production build, a missing canonical.
@@ -106,6 +114,15 @@ BASE_URL=http://localhost:4000 node ../scripts/a11y-drive.mjs
 Seven public pages in a real browser; exits non-zero on a skipped heading
 level or a control with no accessible name. Against `ng serve` instead, drop
 the `BASE_URL` — it defaults to `http://localhost:4200`.
+
+**It needs rooms on the board**, and fails saying so if there are none. Both of
+the defects it found on 26 September were in the room card, and it had passed
+seven green pages over them four times, because every machine it had ever run
+on showed an empty board. Seed them first:
+
+```bash
+cd backend && SEED_DEMO_ROOMS=true ADMIN_EMAIL=… ADMIN_PASSWORD=… npx ts-node prisma/seed.ts
+```
 
 And if the change touched anything in the three phases — verification, yards,
 rent, the fee or the refund — drive those too. This one needs the API and the

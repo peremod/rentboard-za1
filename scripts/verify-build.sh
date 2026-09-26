@@ -377,6 +377,44 @@ else
     note "SKIP room page checks — no API on ${API_URL:-http://localhost:3000}"
   fi
 
+  # An API that is DOWN and an API that never answers are different failures,
+  # and only the first one was ever checked here. A refused connection fails in
+  # microseconds; a hostname that resolves to something which accepts the
+  # connection and then says nothing hangs forever — and a render waiting on it
+  # never finishes. That is not hypothetical: it failed every production build
+  # from v1.73.0 to v1.75.1 on the runner, and nothing in this file could see
+  # it, because on this machine api.umastande.co.za refuses fast.
+  #
+  # So: black-hole the port this build talks to, and ask for a room page.
+  API_PORT=$(printf '%s' "${API_URL:-http://localhost:3000}" | sed -n 's/.*:\([0-9]*\)$/\1/p')
+  API_PORT=${API_PORT:-3000}
+  if curl -s -o /dev/null --max-time 2 "http://localhost:$API_PORT/" ; then
+    note "SKIP the hanging-API check — something is already listening on $API_PORT"
+    note "(stop the API and re-run to exercise it)"
+  else
+    node -e '
+      // Accepts, reads, and never replies. Deliberately not an HTTP server:
+      // the point is that no response ever arrives.
+      require("net").createServer((s) => { s.on("data", () => {}); s.on("error", () => {}); })
+        .listen(Number(process.argv[1]), "127.0.0.1");
+    ' "$API_PORT" &
+    BLACKHOLE_PID=$!
+    sleep 1
+    HANG_START=$(date +%s)
+    HANG_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 \
+      "http://localhost:4111/rooms/99999999-9999-4999-8999-999999999999")
+    HANG_SECONDS=$(( $(date +%s) - HANG_START ))
+    case "$HANG_STATUS" in
+      503) ok "a room page answers 503 in ${HANG_SECONDS}s when the API accepts the connection and never answers" ;;
+      000) bad "a room page never answered at all with a hanging API — the render has no ceiling"
+           note "serverTimeoutInterceptor must be in app.config.ts's withInterceptors list."
+           note "Without it, @angular/build aborts the route at 30s and fails the whole build." ;;
+      *)   bad "a room page answers $HANG_STATUS with a hanging API — expected 503" ;;
+    esac
+    kill "$BLACKHOLE_PID" 2>/dev/null || true
+    wait "$BLACKHOLE_PID" 2>/dev/null || true
+  fi
+
   kill "$SSR_PID" 2>/dev/null || true
   wait "$SSR_PID" 2>/dev/null || true
   rm -rf "$VERIFY_DIST"

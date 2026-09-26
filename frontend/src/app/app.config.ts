@@ -10,6 +10,7 @@ import { provideLocaleRouting, provideRememberedLocaleRedirect } from './core/i1
 import { LOCALE_URL_SERIALIZER_PROVIDER } from './core/i18n/locale-url-serializer';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
+import { serverTimeoutInterceptor } from './core/interceptors/server-timeout.interceptor';
 import { environment } from '@env/environment';
 
 /**
@@ -42,6 +43,14 @@ export const appConfig: ApplicationConfig = {
        */
       withNavigationErrorHandler((event) => {
         console.error('Navigation failed:', event.error);
+        // Browser only, and not as a nicety: this handler runs during SSR too,
+        // where sessionStorage and window do not exist — so it threw a
+        // ReferenceError from inside the handler for the navigation error,
+        // replacing a failure the renderer could report with one it could not.
+        // Seen in the SSR log the day a stale chunk reference made a
+        // server-side navigation fail. A hard reload is not something a render
+        // can do anyway; the renderer's own error path is the right one there.
+        if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') return;
         const retryKey = `rb_nav_retry_${event.url}`;
         if (sessionStorage.getItem(retryKey)) {
           // Already retried this exact URL once this session — reloading again
@@ -72,7 +81,17 @@ export const appConfig: ApplicationConfig = {
      */
     provideRouteSeo(),
 
-    provideHttpClient(withFetch(), withInterceptors([authInterceptor, errorInterceptor])),
+    /**
+     * serverTimeoutInterceptor is FIRST on purpose: it has to wrap the rest of
+     * the chain, so its ceiling covers the auth interceptor's hold as well as
+     * the request itself. Behind it, a server-side render can no longer wait
+     * on the API indefinitely — which is what failed every production build
+     * between v1.73.0 and v1.75.1.
+     */
+    provideHttpClient(
+      withFetch(),
+      withInterceptors([serverTimeoutInterceptor, authInterceptor, errorInterceptor]),
+    ),
     provideClientHydration(withEventReplay()),
 
     /**

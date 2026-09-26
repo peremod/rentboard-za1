@@ -287,6 +287,32 @@ testing locally at all.
 routes, **boots the function entry and asks it for three URLs**. A deployment
 that cannot serve its own board fails the build before it reaches you.
 
+### What a render will wait for
+
+Eight seconds, and then it gives up: `serverTimeoutInterceptor` puts a ceiling
+on every server-side request to our own API. Browser requests are untouched.
+
+Two things depend on it.
+
+The **build** depends on it. `@angular/build` aborts a prerendered route after
+30 seconds, and it does not fail that route alone — the worker pool is torn
+down and every route still rendering fails with "Terminating worker thread".
+So one hanging request during prerender fails the entire production build, and
+the error names six routes and none of the cause. That is not a scenario: it
+is what happened on every CI run from v1.73.0 to v1.75.1, because
+`api.umastande.co.za` resolves on a GitHub runner to something that accepts the
+connection and never replies. A refused connection had always been fine; a
+silent one had never been tried.
+
+The **site** depends on it too. The API sleeps when idle on its current plan.
+Under the ceiling a room page answers `503` with `Retry-After: 120` while the
+API wakes — an honest answer that Google retries, and never `404`, which asks
+it to drop a room that exists. Over the ceiling nothing answers at all and the
+function times out.
+
+The number is a compromise between those two limits and is documented where it
+is set. If the API moves to a plan that does not sleep, it can come down.
+
 ### Hostnames
 
 `server.ts` allows the domain in its environment file, plus whatever Vercel
