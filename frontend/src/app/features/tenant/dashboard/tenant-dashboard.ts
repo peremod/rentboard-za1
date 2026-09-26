@@ -9,6 +9,7 @@ import { MessageThread } from '../../../shared/components/message-thread/message
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
+import { DisputePanel } from '../../../shared/components/dispute-panel/dispute-panel';
 import { ReferralPanel } from '../../../shared/components/referral-panel/referral-panel';
 import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
 import { AlertsService } from '../../../core/services/alerts.service';
@@ -22,10 +23,10 @@ import { tenantNav } from '../tenant-nav';
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, MessageThread, PortalShell, RoomCard, ReviewPrompt, ReferralPanel],
+  imports: [RouterLink, ZarCentsPipe, MessageThread, PortalShell, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems()" roleLabel="Tenant" avatarColour="var(--sage)">
+    <app-portal-shell [navItems]="navItems()" roleLabel="Tenant" avatarColour="var(--sage)" pageTitle="Your dashboard">
 
       @if (shortlistedCount() > 0) {
         <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
@@ -46,8 +47,13 @@ import { tenantNav } from '../tenant-nav';
 
       <app-review-prompt/>
 
+      <!-- Beside the reviews, because they are the same moment in a
+           person's life — the letting is over — and two different things to
+           do about it. -->
+      <app-dispute-panel role="tenant"/>
+
       <section class="dash-section" id="your-applications">
-        <div class="dash-section-title">Your applications</div>
+        <h2 class="dash-section-title">Your applications</h2>
         <p class="muted">Live — you're waiting on the landlord.</p>
 
         @if (loading()) {
@@ -104,10 +110,10 @@ import { tenantNav } from '../tenant-nav';
            not history. Buried under "Closed applications" nobody sees it. -->
       @if (availableAgain().length > 0) {
         <section class="dash-section">
-          <div class="dash-section-title">
+          <h2 class="dash-section-title">
             Available again
             <span class="dash-count">({{ availableAgain().length }})</span>
-          </div>
+          </h2>
           <p class="muted">
             Rooms you applied for that are back on the board. Your earlier
             application closed when the landlord relisted — applying again puts
@@ -139,10 +145,10 @@ import { tenantNav } from '../tenant-nav';
 
       @if (closedApplications().length > 0) {
         <section class="dash-section">
-          <div class="dash-section-title">
+          <h2 class="dash-section-title">
             Closed applications
             <span class="dash-count">({{ closedApplications().length }})</span>
-          </div>
+          </h2>
           <p class="muted">Finished — nothing more to do on these.</p>
           @for (app of closedApplications(); track app.id) {
             <div class="app-card app-card--closed">
@@ -171,12 +177,12 @@ import { tenantNav } from '../tenant-nav';
       <app-referral-panel/>
 
       <section class="dash-section" id="room-alerts">
-        <div class="dash-section-title">
+        <h2 class="dash-section-title">
           Room alerts
           @if (alerts.searches().length > 0) {
             <span class="dash-count">({{ alerts.searches().length }})</span>
           }
-        </div>
+        </h2>
 
         @if (alerts.searches().length === 0) {
           <div class="empty-state">
@@ -217,10 +223,10 @@ import { tenantNav } from '../tenant-nav';
       </section>
 
       <section class="dash-section" id="saved-rooms">
-        <div class="dash-section-title">
+        <h2 class="dash-section-title">
           Saved rooms
           @if (savedRooms.count() > 0) { <span class="dash-count">({{ savedRooms.count() }})</span> }
-        </div>
+        </h2>
 
         @if (savedRooms.count() === 0) {
           <p class="muted">

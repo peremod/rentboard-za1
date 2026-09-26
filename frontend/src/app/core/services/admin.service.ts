@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '@env/environment';
 import { VerificationRequest, VerificationStatus } from '../models/verification.model';
+import { OpenTenancyFlag, TenancyFlag } from '../models/tenancy.model';
 
 export interface AdminStats {
   users: { total: number; landlords: number; tenants: number; suspended: number };
@@ -316,6 +317,23 @@ export class AdminService {
 
   recentRooms() {
     return this.http.get<any[]>(`${this.api}/admin/rooms`);
+  }
+
+  // ── Post-tenancy disputes ────────────────────────────────────────────────
+  //
+  // Oldest first, from the API. A report sitting unread is the thing to fix:
+  // it is reducing someone's reach on an allegation nobody has checked.
+
+  openTenancyFlags() {
+    return this.http.get<OpenTenancyFlag[]>(`${this.api}/tenancies/flags/open`);
+  }
+
+  /**
+   * Dismissing restores the account's visibility immediately — leaving it
+   * reduced would make a dismissed allegation a punishment.
+   */
+  reviewTenancyFlag(id: string, status: 'upheld' | 'dismissed', reviewNote?: string) {
+    return this.http.patch<TenancyFlag>(`${this.api}/tenancies/flags/${id}/review`, { status, reviewNote });
   }
 
   pendingVerifications() {

@@ -11,6 +11,7 @@ import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { landlordNav } from '../landlord-nav';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
+import { DisputePanel } from '../../../shared/components/dispute-panel/dispute-panel';
 import { ReferralPanel } from '../../../shared/components/referral-panel/referral-panel';
 
 /**
@@ -23,11 +24,11 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
 @Component({
   selector: 'app-landlord-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, DatePipe, PortalShell, ReviewPrompt, ReferralPanel],
+  imports: [RouterLink, ZarCentsPipe, DatePipe, PortalShell, ReviewPrompt, DisputePanel, ReferralPanel],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems()" roleLabel="Landlord"
-                      [primaryAction]="{ label: '+ List a Room', route: '/landlord/rooms/new' }">
+                      [primaryAction]="{ label: '+ List a Room', route: '/landlord/rooms/new' }" pageTitle="Your dashboard">
 
       <!-- A listing dictated over WhatsApp, waiting to be finished. Top of
            the page because the landlord sent it from their phone and is
@@ -81,8 +82,13 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
 
       <app-review-prompt/>
 
+      <!-- Beside the reviews, because they are the same moment in a
+           person's life — the letting is over — and two different things to
+           do about it. -->
+      <app-dispute-panel role="landlord"/>
+
       <section class="dash-section" id="active-listings">
-        <div class="dash-section-title">Active listings</div>
+        <h2 class="dash-section-title">Active listings</h2>
 
         @if (loading()) {
           <p class="muted">Loading…</p>
@@ -149,10 +155,10 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
 
       @if (pausedRooms().length > 0) {
         <section class="dash-section">
-          <div class="dash-section-title">
+          <h2 class="dash-section-title">
             Paused
             <span class="dash-count">({{ pausedRooms().length }})</span>
-          </div>
+          </h2>
           <p class="muted">
             Off the board and not visible to tenants. Existing applications are
             untouched — resume whenever you're ready.
@@ -184,10 +190,10 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
       }
 
       <section class="dash-section">
-        <div class="dash-section-title">
+        <h2 class="dash-section-title">
           Drafts
           @if (draftRooms().length > 0) { <span class="dash-count">({{ draftRooms().length }})</span> }
-        </div>
+        </h2>
 
         @if (draftRooms().length === 0) {
           <p class="muted">No drafts. Rooms you start but do not publish appear here.</p>
@@ -220,7 +226,7 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
       </section>
 
       <section class="dash-section">
-        <div class="dash-section-title">Previously let — relist instantly</div>
+        <h2 class="dash-section-title">Previously let — relist instantly</h2>
 
         @if (loadingArchived()) {
           <p class="muted">Loading…</p>

@@ -22,6 +22,15 @@ export const ADMIN_ROUTES: Routes = [
     title: 'Reports — Mastande admin',
   },
   {
+    // Separate from 'reports', which is listing reports — a fraudulent or
+    // duplicate ad. This is a dispute between two people who were in a
+    // tenancy, and conflating the queues would mix "this listing is a scam"
+    // with "my deposit was not returned".
+    path: 'disputes',
+    loadComponent: () => import('./disputes/admin-disputes').then((m) => m.AdminDisputes),
+    title: 'Disputes — Mastande admin',
+  },
+  {
     path: 'advertising',
     loadComponent: () => import('./advertising/admin-advertising').then((m) => m.AdminAdvertising),
     title: 'Advertising — Mastande admin',
