@@ -222,6 +222,28 @@ switcher offered Afrikaans and delivered a translated navbar on an English
 page. That is the same defect as publishing an untranslated locale, arriving
 from the other side.
 
+### Getting Google to know the site exists
+
+Being crawlable is not being indexed. Nothing here submits the site anywhere —
+Google finds a site by following a link to it or by being told, and a new
+domain with no inbound links can go weeks undiscovered.
+
+`GOOGLE_SITE_VERIFICATION` is the one piece of that which lives in the code.
+Set it to the exact filename Search Console offers for HTML-file verification
+(`google<hash>.html`) and `server.ts` serves it, with no rebuild and no file
+committed — the body is derivable from the name. The token is not a secret: it
+proves possession of the site to Google and grants nothing else.
+
+The file method rather than the DNS TXT method on purpose. DNS is the usual
+route and it is the one unavailable here while zone edits are not reaching the
+authoritative nameservers. A URL-prefix property verified by file needs nothing
+from DNS at all.
+
+After verifying: submit `https://www.umastande.co.za/sitemap.xml` in Search
+Console, and use URL Inspection → Request Indexing on the home page. Indexing
+then takes days; ranking for anything competitive takes months, and neither is
+something a deploy can hurry.
+
 ### Room pages carry no alternates
 
 A landlord's title and description are written in their own words and are

@@ -380,6 +380,14 @@ served before the engine sees them. A site that is half 400 and half fine is
 worse than one that is plainly broken. `NG_ALLOWED_HOSTS` still adds hosts by
 hand for anything the platform does not name, such as a custom staging domain.
 
+**`GOOGLE_SITE_VERIFICATION`** — optional, and the only other variable the
+frontend server reads. Set it to the exact filename Google Search Console
+offers for HTML-file verification (`google<hash>.html`); `server.ts` then
+serves that path with the body Google expects, derived from the name. No
+rebuild, no committed file. Used instead of the DNS TXT method because zone
+edits are not currently reaching this domain's authoritative nameservers.
+
+
 ### Environment variable
 
 ```

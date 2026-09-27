@@ -380,6 +380,44 @@ app.get(['/robots.txt', '/sitemap.xml'], async (req, res) => {
   }
 });
 
+/**
+ * Google Search Console's HTML-file verification, from an environment variable.
+ *
+ * Search Console offers several ways to prove you own a site. The one everyone
+ * reaches for is a DNS TXT record, and that is the one this project cannot use:
+ * zone edits are not reaching the authoritative nameservers, which is a support
+ * ticket with the host rather than something a deploy can fix.
+ *
+ * So: the file method, driven by `GOOGLE_SITE_VERIFICATION` set to the exact
+ * filename Search Console offers (`google<hash>.html`). The body is derivable
+ * from the name, which is why no file needs to be committed — set the variable
+ * in Vercel and the route exists on the next request, with no rebuild and no
+ * code change when the token is rotated or a second property is added.
+ *
+ * The token is not a secret. It proves possession of the site to Google and
+ * nothing else; publishing it grants no access to anything.
+ *
+ * Registered before the static middleware and the Angular engine, because the
+ * catch-all answers 404 to anything it does not recognise — which is correct,
+ * and would swallow this.
+ */
+const googleVerificationFile = process.env['GOOGLE_SITE_VERIFICATION']?.trim();
+if (googleVerificationFile) {
+  // Shaped like Search Console's own filename, so a mistyped value fails
+  // visibly at boot rather than turning the server into an open redirect for
+  // arbitrary paths.
+  if (/^google[a-z0-9]+\.html$/.test(googleVerificationFile)) {
+    app.get(`/${googleVerificationFile}`, (_req, res) => {
+      res.type('text/plain').send(`google-site-verification: ${googleVerificationFile}`);
+    });
+    console.log(`Search Console verification served at /${googleVerificationFile}`);
+  } else {
+    console.warn(
+      `GOOGLE_SITE_VERIFICATION is "${googleVerificationFile}", which is not a google<hash>.html filename — ignoring it.`,
+    );
+  }
+}
+
 app.use(
   express.static(browserDistFolder, {
     maxAge: '1y',
