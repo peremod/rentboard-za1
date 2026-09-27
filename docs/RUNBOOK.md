@@ -105,9 +105,15 @@ To clear what was already left behind:
 
 ```bash
 cd backend
-npx ts-node prisma/purge-test-data.ts          # dry run — prints, deletes nothing
-npx ts-node prisma/purge-test-data.ts --yes    # deletes
+DATABASE_URL="<the production connection string>" npx ts-node prisma/purge-test-data.ts
+DATABASE_URL="<the production connection string>" npx ts-node prisma/purge-test-data.ts --yes
 ```
+
+**Pass `DATABASE_URL` explicitly.** Without it Prisma reads `backend/.env`,
+which points at a local development database — so the command gives a calm,
+accurate dry run about entirely the wrong rows while production stays exactly
+as it was. The script prints the host and database name it is connected to
+before it does anything, so read that line before typing `--yes`.
 
 It matches on the `@mastande.test` email domain, which RFC 2606 reserves, so
 it can never match a real person however they named their room. Deleting the

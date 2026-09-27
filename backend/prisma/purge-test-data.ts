@@ -30,8 +30,33 @@ const prisma = new PrismaClient();
 /** RFC 2606 reserves .test — no real address can ever end in it. */
 const TEST_DOMAIN = '@mastande.test';
 
+/**
+ * Say which database this is talking to, before it touches anything.
+ *
+ * Prisma reads DATABASE_URL, and in a checkout that means backend/.env — which
+ * points at a local development database. So the obvious invocation gives a
+ * calm, accurate dry run about entirely the wrong rows, and the production
+ * board stays exactly as it was. Printing the target is the difference between
+ * a destructive script you can trust and one you have to reason about.
+ *
+ * Host and database name only. The password is never printed.
+ */
+function describeTarget(): string {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) return 'DATABASE_URL is not set';
+  try {
+    const url = new URL(raw);
+    return `${url.hostname}${url.port ? ':' + url.port : ''}${url.pathname}`;
+  } catch {
+    return 'DATABASE_URL is set but could not be parsed';
+  }
+}
+
 async function main() {
   const commit = process.argv.includes('--yes');
+
+  console.log(`Database: ${describeTarget()}`);
+  console.log(`Mode:     ${commit ? 'DELETE' : 'dry run'}\n`);
 
   // Admins are excluded unless asked for. The seed creates the admin from
   // ADMIN_EMAIL, and on this project that has been an @mastande.test address —
