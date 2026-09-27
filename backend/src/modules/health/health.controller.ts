@@ -2,6 +2,7 @@ import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PrismaService } from '../../prisma/prisma.service';
+import { appEnv } from '../../config/environment';
 
 /**
  * Read once at startup, from package.json rather than a hand-maintained
@@ -45,6 +46,21 @@ export class HealthController {
       status: dbOk ? 'ok' : 'degraded',
       db: dbOk ? 'connected' : 'unavailable',
       version: VERSION,
+      /**
+       * Which deployment this is, so a destructive tool can refuse before it
+       * writes rather than after.
+       *
+       * scripts/smoke-test.sh registers landlords, creates and renames rooms,
+       * and uploads placeholder photos. It carried the line "Never run it
+       * against production" as a comment and nothing enforced it, so a
+       * production board ended up showing "Wizard test studio in Rosebank
+       * (updated)" and a landlord called "Renamed Landlord" to real visitors.
+       * A comment is not a guard.
+       *
+       * Not sensitive: indexability, robots.txt and the CORS allow-list all
+       * announce which environment this is already.
+       */
+      env: appEnv(),
       uptime: Math.floor(process.uptime()),
       ts: new Date().toISOString(),
     };

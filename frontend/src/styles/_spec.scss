@@ -29,6 +29,16 @@
   --terra:#AD4222;
   --terra2:#E06038;
   --gold:#C8902A;
+  /**
+   * The same gold, dark enough to be read.
+   *
+   * #C8902A is 2.81:1 on the card — fine for a star glyph, and a contrast
+   * failure the moment it carries words. Lighthouse found it on the board's
+   * rating ("★ 5.0") the first time the board had rooms on it, which is the
+   * same blind spot that hid the room card's heading order and its aria-label.
+   * Measured: #946B1F is 4.60:1, over the 4.5:1 small-text floor.
+   */
+  --gold-text:#946B1F;
   --gold2:#E8AE3A;
   --sage:#3D7040;
   --sage2:#4E8E52;
@@ -304,7 +314,7 @@ img{display:block;max-width:100%}
   font-size:.72rem;font-weight:700;color:#fff;flex-shrink:0;
 }
 .landlord-name{font-size:.75rem;color:var(--slate);font-weight:500}
-.rating{font-size:.72rem;color:var(--gold);font-weight:600}
+.rating{font-size:.72rem;color:var(--gold-text);font-weight:600}
 .avail-from{font-size:.72rem;color:var(--slate)}
 
 /* ═══ PAGE SECTIONS ═══ */
@@ -772,7 +782,11 @@ img{display:block;max-width:100%}
   padding:.22rem .6rem;border-radius:var(--r-full);
   font-size:.7rem;font-weight:700;
 }
-.gp{background:rgba(184,134,11,.12);color:#B8860B}
+// #886308, not #B8860B: 2.86:1 against its own tint, measured, where small
+// bold text needs 4.5:1. The other three provinces already passed — wc 5.56,
+// kzn 5.11, ec 4.94 — so only Gauteng changes, which is also the one on most
+// of the board.
+.gp{background:rgba(184,134,11,.12);color:#886308}
 .wc{background:rgba(30,95,168,.1);color:#1E5FA8}
 .kzn{background:rgba(61,112,64,.1);color:#3D7040}
 .ec{background:rgba(192,78,40,.1);color:var(--terra)}

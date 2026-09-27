@@ -84,6 +84,38 @@ ADMIN_EMAIL=you@example.co.za ADMIN_PASSWORD='choose-a-strong-one' npx ts-node p
 cd ..
 ```
 
+### Test data must never reach production
+
+`scripts/smoke-test.sh` and the demo seed both create obviously fake rows —
+landlords called "Renamed Landlord", a room called "Wizard test studio in
+Rosebank (updated)", hero images pointing at `/smoke-test-placeholder.jpg`.
+Both carried a comment saying never to run them against production, and on
+27 September a production board served every one of those to real visitors.
+
+A comment is not a guard, so there are guards now:
+
+- `/health` reports `env`, and **smoke-test.sh refuses outright** when that
+  says `production`. No override flag — the only reason to add one is to use
+  it.
+- **The seed refuses** `SEED_DEMO_ROOMS`, `SEED_DEMO_ADS` or
+  `SEED_LAUNCH_CODES` when `APP_ENV=production`. The rest of the seed (admin,
+  place taxonomy) still runs, because production legitimately needs it.
+
+To clear what was already left behind:
+
+```bash
+cd backend
+npx ts-node prisma/purge-test-data.ts          # dry run — prints, deletes nothing
+npx ts-node prisma/purge-test-data.ts --yes    # deletes
+```
+
+It matches on the `@mastande.test` email domain, which RFC 2606 reserves, so
+it can never match a real person however they named their room. Deleting the
+account cascades to their rooms, applications, messages and tenancies. Admin
+accounts are **kept** unless you pass `--include-admins` — on this project the
+admin has been an `@mastande.test` address, and being locked out of moderation
+is worse than one leftover row.
+
 ### Before pushing anything
 
 ```bash

@@ -14,12 +14,44 @@
 # Assumes:  backend on :3000, database migrated (npm run db:push)
 #
 # Creates real rows in your dev database using timestamped test emails, so
-# it is safe to run repeatedly. Never run it against production.
+# it is safe to run repeatedly. It REFUSES to run against production — see
+# below, and see why.
 # ═══════════════════════════════════════════════════════════════════════════
 set -uo pipefail
 
 API="${API:-http://localhost:3000}"
 STAMP=$(date +%s)
+
+# ── Refuse to touch production ─────────────────────────────────────────────
+#
+# This line used to read "Never run it against production" and that was the
+# entire protection. It was not enough: a production board served real
+# visitors a room called "Wizard test studio in Rosebank (updated)", a
+# landlord renamed to "Renamed Landlord", and a hero image pointing at
+# /smoke-test-placeholder.jpg — every one of them created by this script.
+#
+# So it asks. /health reports which deployment it is, and production is a
+# hard stop with no override flag, because the only reason to add one is to
+# use it. Run it against a local API, a staging API, or a throwaway database.
+SMOKE_ENV=$(curl -s --max-time 10 "$API/health" | sed -n 's/.*"env":"\([a-z]*\)".*/\1/p')
+if [ "$SMOKE_ENV" = "production" ]; then
+  printf '\033[31m%s\033[0m\n' "REFUSING: $API reports APP_ENV=production."
+  echo
+  echo "  This script registers landlords and tenants, publishes rooms, renames"
+  echo "  accounts and uploads placeholder photos. Those rows are visible to"
+  echo "  real visitors on a production board, and they have been before."
+  echo
+  echo "  Point API at a local or staging server:"
+  echo "    API=http://localhost:3000 bash scripts/smoke-test.sh"
+  exit 2
+fi
+if [ -z "$SMOKE_ENV" ]; then
+  # An older API that does not report its environment, or one that is down.
+  # Warned rather than blocked: the run will fail on its own if nothing is
+  # listening, and refusing outright would break every checkout older than
+  # this guard.
+  printf '\033[33m%s\033[0m\n' "⚠ $API did not report an environment — cannot confirm this is not production."
+fi
 LANDLORD_EMAIL="landlord+${STAMP}@mastande.test"
 TENANT_EMAIL="tenant+${STAMP}@mastande.test"
 PASSWORD="TestPass123"

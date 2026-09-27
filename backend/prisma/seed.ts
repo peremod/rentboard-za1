@@ -17,6 +17,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { appEnv } from '../src/config/environment';
 
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 12;
@@ -76,6 +77,21 @@ Optional: ADMIN_NAME="Your Name"
   // Optional demo advertising, so the ad slots are visible without having to
   // sell a placement first. Never runs unless asked for — nobody wants fake
   // adverts appearing on a production board.
+  // ── Demo content never lands on production ───────────────────────────────
+  //
+  // Demo rooms, demo ads and launch codes are obviously fake, and the docblocks
+  // have said "never on production data" since they were written. A comment
+  // does not stop a command. This does.
+  const demoFlags = ['SEED_DEMO_ROOMS', 'SEED_DEMO_ADS', 'SEED_LAUNCH_CODES'].filter(
+    (flag) => process.env[flag] === 'true',
+  );
+  if (demoFlags.length && appEnv() === 'production') {
+    throw new Error(
+      `${demoFlags.join(', ')} set with APP_ENV=production. These create fake listings and ` +
+        'campaigns; on a production board real visitors see rooms that do not exist. Refusing.',
+    );
+  }
+
   if (process.env.SEED_DEMO_ADS === 'true') {
     await seedDemoAds();
   }

@@ -47,7 +47,7 @@ import { Review } from '../../../core/models/review.model';
   `,
   styles: [`
     .review-summary { display: flex; align-items: baseline; gap: .5rem; margin-bottom: 1rem; }
-    .review-summary__score { font-family: var(--font-mono); font-size: 1.35rem; color: var(--gold); font-weight: 500; }
+    .review-summary__score { font-family: var(--font-mono); font-size: 1.35rem; color: var(--gold-text); font-weight: 500; }
     .review-summary__count { font-size: .82rem; color: var(--slate); }
     .review { padding: .9rem 0; border-bottom: 1px solid var(--border); }
     .review:last-child { border-bottom: none; }
