@@ -1468,6 +1468,28 @@ if [[ "$DEMO_COUNT" -gt 0 ]]; then
     red "  FAIL  click endpoint returned $CLICK_CODE, expected a redirect"; FAIL=$((FAIL+1))
   fi
 
+  # WHERE it redirects to, which the check above never asked.
+  #
+  # House ads point at our own pages, and res.redirect('/how-it-works')
+  # resolves against the origin serving the redirect — the API. So every click
+  # on the board's only call to action landed on
+  # {"message":"Cannot GET /how-it-works","statusCode":404} at a hostname the
+  # visitor has never heard of, while this section reported a pass because a
+  # redirect to the wrong place is still a redirect.
+  CLICK_LOCATION=$(curl -s -o /dev/null -D - "$API/api/ads/$DEMO_ID/click" 2>/dev/null \
+    | sed -n 's/^[Ll]ocation: *//p' | tr -d '\r')
+  if [[ "$CLICK_LOCATION" == /* ]]; then
+    red "  FAIL  click redirects to a relative path (\"$CLICK_LOCATION\") — it resolves against the API, not the site"
+    FAIL=$((FAIL+1))
+  elif [[ "$CLICK_LOCATION" == "$API"* ]]; then
+    red "  FAIL  click redirects to this API (\"$CLICK_LOCATION\") — a visitor lands on JSON, not a page"
+    FAIL=$((FAIL+1))
+  elif [[ -n "$CLICK_LOCATION" ]]; then
+    green "  PASS  and to an absolute destination off this API  ($CLICK_LOCATION)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  click sent no Location header"; FAIL=$((FAIL+1))
+  fi
+
   req POST /api/ads/impressions "{\"campaignIds\":[\"$DEMO_ID\"]}"
   if [[ "$STATUS" == "204" ]]; then
     green "  PASS  impression recorded anonymously"; PASS=$((PASS+1))

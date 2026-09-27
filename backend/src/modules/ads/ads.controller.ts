@@ -11,11 +11,15 @@ import {
   CreateAdEnquiryDto, UpdateEnquiryDto,
 } from './dto/ads.dto';
 import { Throttle } from '@nestjs/throttler';
+import { ConfigService } from '@nestjs/config';
 
 @ApiTags('ads')
 @Controller('ads')
 export class AdsController {
-  constructor(private adsService: AdsService) {}
+  constructor(
+    private adsService: AdsService,
+    private config: ConfigService,
+  ) {}
 
   /**
    * Ads for a page context. Public and unauthenticated on purpose — no user is
@@ -53,10 +57,40 @@ export class AdsController {
   @ApiExcludeEndpoint()
   async click(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     const target = await this.adsService.recordClick(id);
-    if (!target) return res.redirect('/');
+    if (!target) return res.redirect(this.siteOrigin());
+
     // noopener/noreferrer equivalent: do not leak our URL to the advertiser.
     res.setHeader('Referrer-Policy', 'no-referrer');
-    return res.redirect(target);
+    return res.redirect(this.resolveTarget(target));
+  }
+
+  /** Where a click belongs when there is nowhere else to send it. */
+  private siteOrigin(): string {
+    return (this.config.get<string>('frontendUrl') ?? '/').replace(/\/$/, '');
+  }
+
+  /**
+   * A relative target belongs to the SITE, not to this API.
+   *
+   * House ads point at our own pages — `/how-it-works`, `/auth/register` —
+   * and `res.redirect('/how-it-works')` resolves against the origin serving
+   * the redirect, which is api.umastande.co.za. So every click on a house ad
+   * landed on `{"message":"Cannot GET /how-it-works","statusCode":404}`, on a
+   * hostname the visitor has never heard of. The board's only call to action
+   * for a new visitor, and it went to a JSON 404.
+   *
+   * The smoke test asserted the endpoint returns 301 or 302 and never looked
+   * at the Location header, so a redirect to the wrong origin was still a
+   * redirect and the check passed.
+   *
+   * An advertiser's absolute URL is left alone: sending a visitor off-site is
+   * what a paid ad click IS, and Referrer-Policy above keeps our URL out of
+   * their logs. A protocol-relative `//evil.com` is not treated as absolute
+   * here, so it becomes a path on our own site rather than an open redirect.
+   */
+  private resolveTarget(target: string): string {
+    if (/^https?:\/\//i.test(target)) return target;
+    return `${this.siteOrigin()}${target.startsWith('/') ? '' : '/'}${target}`;
   }
 
   /**
