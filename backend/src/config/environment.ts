@@ -113,6 +113,50 @@ export function validateEnvironment(): void {
     for (const key of ['IMAGEKIT_PRIVATE_KEY', 'RESEND_API_KEY', 'RESEND_WEBHOOK_SECRET', 'ADMIN_ALERT_EMAIL']) {
       if (!process.env[key]) errors.push(`${key} is required in production.`);
     }
+
+    /**
+     * API_URL is the origin PayFast posts its payment notification to.
+     *
+     * Unset or wrong, nothing fails visibly and nothing logs: the landlord is
+     * charged R149, PayFast POSTs the ITN to whatever this says, and the
+     * payment is never marked paid. The person has paid and the product
+     * believes they have not. There is no error to see, because from this
+     * server's point of view nothing happened at all.
+     */
+    if (!process.env.API_URL) {
+      errors.push('API_URL is required in production — PayFast posts its payment notification to it.');
+    }
+
+    /**
+     * A value that is set but meaningless passes every "is it set" check ever
+     * written, and this validator was one of them: API_URL was
+     * `https://example.com` on the live deployment while three other checks
+     * above reported the environment as incomplete for entirely different
+     * reasons.
+     */
+    const PLACEHOLDER = /example\.(com|org|net)|localhost|127\.0\.0\.1|changeme|your-domain|yourdomain/i;
+    for (const key of ['SITE_URL', 'FRONTEND_URL', 'API_URL']) {
+      const value = process.env[key];
+      if (value && PLACEHOLDER.test(value)) {
+        errors.push(`${key} is "${value}" in production — that is a placeholder, not a deployment.`);
+      }
+    }
+
+    /**
+     * Warned rather than failed, because a cutover can legitimately run with
+     * these apart for a while. But every link in every email, the WhatsApp
+     * listing bot's claim URL, the reference request a previous landlord
+     * clicks, and PayFast's return and cancel URLs are all built from
+     * FRONTEND_URL — so while they differ, real people are being sent
+     * somewhere other than the site the canonical names.
+     */
+    const frontendOrigin = process.env.FRONTEND_URL?.replace(/\/$/, '');
+    const siteOrigin = siteUrl?.replace(/\/$/, '');
+    if (frontendOrigin && siteOrigin && frontendOrigin !== siteOrigin) {
+      warnings.push(
+        `FRONTEND_URL (${frontendOrigin}) and SITE_URL (${siteOrigin}) differ in production. Email links, the WhatsApp claim URL and PayFast's return URL are all built from FRONTEND_URL.`,
+      );
+    }
   } else {
     // Staging with live payment credentials is a real risk, not a theoretical
     // one — it charges real cards from a box nobody is watching.

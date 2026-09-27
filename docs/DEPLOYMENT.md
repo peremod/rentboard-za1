@@ -140,6 +140,36 @@ plan removes the sleeping, which fixes cold starts and makes the scheduled jobs
 reliable. That is the point where free stops being a saving and starts being a
 liability.
 
+
+### The environment guard, and what it will not let you start with
+
+`validateEnvironment()` runs before `app.listen()` and refuses to boot on a
+misconfigured environment rather than serving traffic that is subtly wrong. In
+production it requires:
+
+| variable | why the boot fails without it |
+|---|---|
+| `SITE_URL`, `FRONTEND_URL`, `DATABASE_URL`, `JWT_SECRET` | required in every environment |
+| `API_URL` | PayFast POSTs its payment notification here. Wrong, and a landlord is charged while the payment is never marked paid — silently, with nothing logged |
+| `IMAGEKIT_PRIVATE_KEY` | signed uploads |
+| `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` | the webhook fails closed without the secret: bounces stop being recorded and the sending domain's reputation degrades quietly |
+| `ADMIN_ALERT_EMAIL` | where the alerts go |
+| `PAYFAST_SANDBOX` must not be `"true"` | real payments would go to the sandbox |
+
+It also rejects a **placeholder** in `SITE_URL`, `FRONTEND_URL` or `API_URL` —
+`example.com`, `localhost`, `changeme` and friends. That check exists because
+`API_URL=https://example.com` sat on the live deployment and passed every
+"is it set" test in this file.
+
+And it warns when `FRONTEND_URL` and `SITE_URL` differ in production: email
+links, the WhatsApp claim URL, the reference-request link and PayFast's return
+URL are all built from `FRONTEND_URL`, so while they disagree, real people are
+being sent somewhere other than the canonical site.
+
+CI drives it both ways — a broken production config must be refused, and a
+correct one must boot.
+
+
 ## 3. Render — the backend
 
 1. **New Project** → Deploy from GitHub repo → select the repo

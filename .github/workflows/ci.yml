@@ -177,6 +177,61 @@ jobs:
         working-directory: backend
         run: npm run build
 
+      # The environment guard, driven both ways.
+      #
+      # It is the thing that stopped a misconfigured production deploy from
+      # serving traffic, and it is also code nothing had ever tested — the
+      # version that ran in production accepted API_URL=https://example.com,
+      # which is the value PayFast posts its payment notification to. A
+      # landlord pays R149, the ITN goes to example.com, and the payment is
+      # never marked paid. Nothing throws and nothing logs.
+      #
+      # Both directions, because a guard that cannot pass is as useless as one
+      # that cannot fail.
+      - name: Environment guard refuses a broken production config
+        if: ${{ !cancelled() }}
+        working-directory: backend
+        run: |
+          set +e
+          OUT=$(env -i PATH="$PATH" \
+            APP_ENV=production NODE_ENV=production \
+            DATABASE_URL=postgresql://postgres:test@localhost:5432/mastande_test \
+            JWT_SECRET=test-secret-minimum-32-characters-long-ok \
+            SITE_URL=https://www.umastande.co.za \
+            FRONTEND_URL=https://www.umastande.co.za \
+            API_URL=https://example.com \
+            PAYFAST_SANDBOX=true \
+            node dist/main.js 2>&1)
+          CODE=$?
+          set -e
+          if [ "$CODE" = "0" ]; then
+            echo "::error::the environment guard started with a placeholder API_URL and PAYFAST_SANDBOX=true in production"
+            exit 1
+          fi
+          echo "$OUT" | grep -q "placeholder, not a deployment" \
+            || { echo "::error::the guard failed, but not on the placeholder API_URL"; echo "$OUT" | tail -20; exit 1; }
+          echo "✅ refuses a broken production config, naming the reason"
+
+      - name: Environment guard accepts a correct one
+        if: ${{ !cancelled() }}
+        working-directory: backend
+        run: |
+          set -e
+          env -i PATH="$PATH" \
+            APP_ENV=production NODE_ENV=production PORT=3399 \
+            DATABASE_URL=postgresql://postgres:test@localhost:5432/mastande_test \
+            JWT_SECRET=test-secret-minimum-32-characters-long-ok \
+            SITE_URL=https://www.umastande.co.za \
+            FRONTEND_URL=https://www.umastande.co.za \
+            API_URL=https://api.umastande.co.za \
+            PAYFAST_SANDBOX=false PAYFAST_MERCHANT_ID=1 PAYFAST_MERCHANT_KEY=k \
+            IMAGEKIT_PRIVATE_KEY=priv RESEND_API_KEY=re_test RESEND_WEBHOOK_SECRET=whsec_x \
+            ADMIN_ALERT_EMAIL=ci@mastande.test \
+            timeout 40 node dist/main.js > /tmp/env-ok.log 2>&1 || true
+          grep -q "Environment OK — APP_ENV=production" /tmp/env-ok.log \
+            || { echo "::error::a correct production config did not pass the guard"; tail -25 /tmp/env-ok.log; exit 1; }
+          echo "✅ accepts a correct production config"
+
       # The real backend gate. There are no unit tests — `npm test` is an
       # honest stub — but scripts/smoke-test.sh has existed all along and
       # nothing ever ran it. It drives the whole MVP against a live API:
