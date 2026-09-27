@@ -10,12 +10,19 @@
  * Both of those tools now refuse to touch production. This is the other half:
  * clearing what they already left behind.
  *
- * **Identified by email domain, not by guessing at titles.** Every account the
- * smoke test, the drives and the demo seed create ends in `@mastande.test`,
- * which is a reserved TLD that can never belong to a real person (RFC 2606).
- * So the rule is exact, and it cannot match a real landlord no matter what
- * they called their room. Deleting the user cascades to their rooms,
- * applications, messages, tenancies and payments.
+ * **Identified by the reserved `.test` TLD, not by a brand name.** RFC 2606
+ * reserves `.test` precisely so it can never resolve or belong to anyone, so
+ * the rule is exact and cannot match a real landlord however they named their
+ * room. Deleting the user cascades to their rooms, applications, messages,
+ * tenancies and payments.
+ *
+ * It matched `@mastande.test` at first, and that was wrong. The project was
+ * renamed from RentBoard mid-development, and the smoke test's accounts before
+ * that rename end in `@rentboard.test` — so the first version of this script
+ * reported "nothing to do" against a production database whose board was
+ * serving smoke-test rooms from 21 September. A check that reports clean on
+ * dirty data is worse than no check, and hard-coding today's brand into the
+ * rule is how it happened. The TLD cannot be renamed.
  *
  *   npx ts-node prisma/purge-test-data.ts            # dry run — prints, deletes nothing
  *   npx ts-node prisma/purge-test-data.ts --yes      # actually deletes
@@ -27,8 +34,12 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-/** RFC 2606 reserves .test — no real address can ever end in it. */
-const TEST_DOMAIN = '@mastande.test';
+/**
+ * RFC 2606 reserves the whole `.test` TLD — no real address can ever end in
+ * it. Deliberately the TLD and not `@mastande.test`: the brand has changed
+ * once already and the accounts from before it end in `@rentboard.test`.
+ */
+const TEST_DOMAIN = '.test';
 
 /**
  * Say which database this is talking to, before it touches anything.
@@ -82,7 +93,7 @@ async function main() {
   });
 
   if (users.length === 0) {
-    console.log(`No accounts ending in ${TEST_DOMAIN}. Nothing to do.`);
+    console.log(`No accounts on the reserved ${TEST_DOMAIN} TLD. Nothing to do.`);
     return;
   }
 

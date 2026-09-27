@@ -115,8 +115,20 @@ accurate dry run about entirely the wrong rows while production stays exactly
 as it was. The script prints the host and database name it is connected to
 before it does anything, so read that line before typing `--yes`.
 
-It matches on the `@mastande.test` email domain, which RFC 2606 reserves, so
-it can never match a real person however they named their room. Deleting the
+It matches on the reserved `.test` TLD, which RFC 2606 guarantees can never
+belong to anyone, so it cannot match a real person however they named their
+room. The TLD and not `@mastande.test`: this project was renamed from
+RentBoard, and the smoke accounts from before that end in `@rentboard.test` —
+the first version of this script hard-coded today's brand and reported
+"nothing to do" against a production board that was serving smoke-test rooms.
+
+`prisma/inspect-board.ts` is the read-only companion. It prints every listed
+room with the account that owns it, and a count of accounts by email domain,
+which is the fastest way to see what a database is actually made of:
+
+```bash
+DATABASE_URL="<connection string>" npx ts-node prisma/inspect-board.ts
+``` Deleting the
 account cascades to their rooms, applications, messages and tenancies. Admin
 accounts are **kept** unless you pass `--include-admins` — on this project the
 admin has been an `@mastande.test` address, and being locked out of moderation
