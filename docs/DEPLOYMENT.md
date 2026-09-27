@@ -313,6 +313,29 @@ function times out.
 The number is a compromise between those two limits and is documented where it
 is set. If the API moves to a plan that does not sleep, it can come down.
 
+### Which hostname is the site
+
+`www.umastande.co.za`, and `siteUrl` names it.
+
+The apex is a CNAME-shaped problem: `www` points at Vercel and works, while
+`umastande.co.za` still resolves to the old cPanel host, which answers
+`301 → https://www.umastande.co.za/`. A canonical must name the URL that
+answers, not one that redirects to it — otherwise every page in the index
+carries a hop through an origin we do not control.
+
+Nothing in the code cares which of the two it is. `allowedHosts()` adds the
+apex/www counterpart of whatever `siteUrl` names, and `isCanonicalHost()`
+accepts both, so a visitor or crawler arriving on either gets the real
+robots.txt and a rendered page rather than `Disallow: /`. `verify-build.sh`
+asserts that for both hostnames.
+
+**If the apex is later pointed at Vercel** (an `A` record at the value Vercel's
+Domains screen shows), nothing here needs changing: set the apex to redirect to
+www in the Vercel project, and `siteUrl` stays correct. Flipping it the other
+way is also a one-line change — but then check the apex actually serves before
+merging it, because a canonical pointing at a host that 301s is worse than one
+pointing at a host that answers.
+
 ### Hostnames
 
 `server.ts` allows the domain in its environment file, plus whatever Vercel

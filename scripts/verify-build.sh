@@ -304,6 +304,22 @@ else
       && ok "and still points at its sitemap" \
       || bad "the production robots.txt has no Sitemap line"
 
+    # Both hostnames, because which one siteUrl names is now a deployment
+    # decision rather than a fixed fact. www.umastande.co.za is what serves the
+    # site today and the apex 301s to it from the old host; the day the apex A
+    # record points at Vercel, traffic arrives on the apex instead. Whichever
+    # of the two siteUrl names, the OTHER one must still be treated as the site
+    # and not as a copy — a visitor or a crawler arriving on it must not be
+    # told to go away. Asserted here because the check above only ever asked
+    # one of them, and it asked the one that stopped being the answer.
+    WWW_ROBOTS=$(curl -s --max-time 25 -H "Host: www.umastande.co.za" http://localhost:4112/robots.txt)
+    if echo "$WWW_ROBOTS" | grep -qiE '^[[:space:]]*Disallow:[[:space:]]*/[[:space:]]*$'; then
+      bad "the production build tells www.umastande.co.za not to crawl it"
+      note "isCanonicalHost() in server.ts must accept the apex and www alike."
+    else
+      ok "and treats both the apex and www as itself, whichever siteUrl names"
+    fi
+
     # And as one of its copies. Every deployment URL, branch alias and preview
     # serves this same production build, so `indexable` says yes on all of
     # them — which had rentboard-za1.vercel.app answering Allow: / for a site
