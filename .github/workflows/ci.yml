@@ -429,7 +429,12 @@ jobs:
       # development build served on :4200. Both skip with a message rather
       # than failing if a server is missing, so a change to this job cannot
       # turn them into silent passes.
-      - name: Accessibility — heading order and accessible names, 7 pages
+      # The name says what the run checks. It read "heading order and
+      # accessible names, 7 pages" after the drive had grown to 14 pages and,
+      # with axe, to colour contrast — so a green tick claimed less than it had
+      # earned and, worse, a reader looking for contrast coverage would have
+      # concluded there was none.
+      - name: Accessibility — headings, accessible names and contrast, 14 pages
         run: node scripts/a11y-drive.mjs
 
       - name: The three phases, driven in a browser
