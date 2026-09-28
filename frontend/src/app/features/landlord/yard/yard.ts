@@ -3,7 +3,21 @@ import { NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { PropertiesService } from '../../../core/services/properties.service';
-import { RentPeriod, RentStatus, YardGroup } from '../../../core/models/property.model';
+import {
+  HousemateProfile, Property, RentPeriod, RentStatus, YardGroup,
+} from '../../../core/models/property.model';
+
+/**
+ * Plain English for each profile, in the tenant's terms rather than the
+ * enum's. `unstated` has no label on purpose — it is never rendered, because
+ * printing "not stated" shows a non-answer as though it were information.
+ */
+const HOUSEMATE_LABELS: Record<Exclude<HousemateProfile, 'unstated'>, string> = {
+  professionals: 'working people',
+  students: 'students',
+  mixed: 'a mix of people',
+  couples: 'couples',
+};
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { DialogService } from '../../../core/services/dialog.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
@@ -161,11 +175,70 @@ import { landlordNav } from '../landlord-nav';
               }
             </div>
             @if (group.property) {
-              <button type="button" class="link-btn" (click)="deleteYard(group.property.id, group.property.name)">
-                Delete yard
-              </button>
+              <div class="yard__actions">
+                <!-- Bulk relist, the action a multi-room landlord actually has:
+                     a yard empties at month end and putting six rooms back is
+                     six trips through the dashboard. Disabled when there is
+                     nothing to relist, rather than offered and then refused. -->
+                @if (group.let || group.paused) {
+                  <button type="button" class="btn btn-sm btn-sage"
+                          [disabled]="relisting() === group.property.id"
+                          (click)="relistYard(group.property.id, group.property.name)">
+                    {{ relisting() === group.property.id ? 'Relisting…' : '↻ Relist all' }}
+                  </button>
+                }
+                <button type="button" class="link-btn" (click)="editShared(group.property)">
+                  Shared details
+                </button>
+                <button type="button" class="link-btn" (click)="deleteYard(group.property.id, group.property.name)">
+                  Delete yard
+                </button>
+              </div>
             }
           </div>
+
+          <!-- What the whole address shares. Shown read-only here, because the
+               point is that a landlord can SEE it is set once for the yard
+               rather than per room. -->
+          @if (group.property && sharedSummary(group.property); as shared) {
+            <p class="yard__shared muted">{{ shared }}</p>
+          }
+
+          @if (editing() === group.property?.id) {
+            <form class="yard-shared-form" (ngSubmit)="saveShared(group.property.id)">
+              <label>
+                <span>House rules</span>
+                <textarea rows="3" [(ngModel)]="form.houseRules" name="houseRules"
+                          placeholder="Gate locked at 21:00. Tell me before overnight visitors."></textarea>
+              </label>
+              <label>
+                <span>Shared facilities, separated by commas</span>
+                <input type="text" [(ngModel)]="form.sharedAmenities" name="sharedAmenities"
+                       placeholder="Shared kitchen, outside tap, washing line"/>
+              </label>
+              <label>
+                <span>People already living here</span>
+                <input type="number" min="0" max="100" [(ngModel)]="form.currentHousemates" name="currentHousemates"/>
+              </label>
+              <label>
+                <span>Who lives here</span>
+                <select [(ngModel)]="form.housemateProfile" name="housemateProfile">
+                  <option value="unstated">Rather not say</option>
+                  <option value="mixed">A mix of people</option>
+                  <option value="professionals">Working people</option>
+                  <option value="students">Students</option>
+                  <option value="couples">Couples</option>
+                </select>
+              </label>
+              @if (sharedError()) { <p class="field-error" role="alert">{{ sharedError() }}</p> }
+              <div class="yard-shared-form__actions">
+                <button type="submit" class="btn btn-primary btn-sm" [disabled]="savingShared()">
+                  {{ savingShared() ? 'Saving…' : 'Save' }}
+                </button>
+                <button type="button" class="link-btn" (click)="editing.set(null)">Cancel</button>
+              </div>
+            </form>
+          }
 
           <div class="yard__counts">
             <span>{{ group.roomCount }} rooms</span>
@@ -250,6 +323,27 @@ export class Yard implements OnInit {
   protected readonly savingGrace = signal(false);
   protected readonly graceSaved = signal(false);
   protected readonly graceError = signal<string | null>(null);
+
+  // ── Shared living, and bulk relist ────────────────────────────────────────
+  protected readonly editing = signal<string | null>(null);
+  protected readonly savingShared = signal(false);
+  protected readonly sharedError = signal<string | null>(null);
+  protected readonly relisting = signal<string | null>(null);
+
+  /**
+   * The edit form's working copy.
+   *
+   * `sharedAmenities` is a comma-separated STRING here and a string[] on the
+   * wire. A landlord typing "kitchen, tap, washing line" is doing the obvious
+   * thing, and making them add rows one at a time for three short phrases
+   * would be a worse form for no gain.
+   */
+  protected form: {
+    houseRules: string;
+    sharedAmenities: string;
+    currentHousemates: number | null;
+    housemateProfile: HousemateProfile;
+  } = { houseRules: '', sharedAmenities: '', currentHousemates: null, housemateProfile: 'unstated' };
 
   ngOnInit() {
     this.reload();
@@ -372,6 +466,107 @@ export class Yard implements OnInit {
    * "delete everything in it", and a landlord who believes that will not use
    * the feature at all.
    */
+  /**
+   * One line describing what the whole address shares, or null.
+   *
+   * Null when the landlord has said nothing, so the yard shows nothing rather
+   * than an empty scaffold. `unstated` is deliberately not rendered: it is the
+   * absence of an answer, and printing "who lives here: not stated" would put
+   * a non-answer on screen as though it were information.
+   */
+  protected sharedSummary(property: Property): string | null {
+    const parts: string[] = [];
+    if (property.sharedAmenities?.length) parts.push(property.sharedAmenities.join(', '));
+    if (property.currentHousemates != null) {
+      parts.push(`${property.currentHousemates} living here`);
+    }
+    if (property.housemateProfile && property.housemateProfile !== 'unstated') {
+      parts.push(HOUSEMATE_LABELS[property.housemateProfile]);
+    }
+    if (property.houseRules) parts.push(property.houseRules);
+    return parts.length ? parts.join(' · ') : null;
+  }
+
+  protected editShared(property: Property) {
+    this.sharedError.set(null);
+    this.form = {
+      houseRules: property.houseRules ?? '',
+      sharedAmenities: (property.sharedAmenities ?? []).join(', '),
+      currentHousemates: property.currentHousemates ?? null,
+      housemateProfile: property.housemateProfile ?? 'unstated',
+    };
+    this.editing.set(property.id);
+  }
+
+  protected saveShared(id: string) {
+    if (this.savingShared()) return;
+    this.savingShared.set(true);
+    this.sharedError.set(null);
+
+    const amenities = this.form.sharedAmenities
+      .split(',')
+      .map((a) => a.trim())
+      .filter(Boolean);
+
+    this.properties
+      .update(id, {
+        houseRules: this.form.houseRules.trim(),
+        sharedAmenities: amenities,
+        // Sent only when given. Omitting leaves the stored value alone, which
+        // is why an empty box cannot silently zero a real count.
+        ...(this.form.currentHousemates != null ? { currentHousemates: this.form.currentHousemates } : {}),
+        housemateProfile: this.form.housemateProfile,
+      })
+      .subscribe({
+        next: () => {
+          this.savingShared.set(false);
+          this.editing.set(null);
+          this.reload();
+        },
+        error: () => {
+          this.savingShared.set(false);
+          this.sharedError.set('That did not save. Check your connection and try again.');
+        },
+      });
+  }
+
+  /**
+   * Relist every relistable room in this yard.
+   *
+   * Confirmed first, because relisting archives the previous cycle's
+   * applicants on every room it touches — the same consequence the single-room
+   * relist warns about, multiplied.
+   *
+   * The result names what was skipped rather than reporting a count. A
+   * landlord who pressed "relist all" on six rooms and got four back needs to
+   * know which two and why, and "4 of 6 relisted" is the shape of message that
+   * sends someone hunting through the list themselves.
+   */
+  protected async relistYard(id: string, name: string) {
+    const confirmed = await this.dialogs.confirm(
+      `Relist every room in ${name}?`,
+      'Rooms that are let, paused or removed go back on the board. Anyone who applied in the previous round is archived, as they are when you relist one room. Rooms already listed are left alone.',
+      'Relist them',
+      'Not now',
+    );
+    if (!confirmed) return;
+
+    this.relisting.set(id);
+    this.properties.relistAll(id).subscribe({
+      next: (result) => {
+        this.relisting.set(null);
+        this.reload();
+        const lines = [`${result.relisted.length} room(s) back on the board.`];
+        for (const s of result.skipped) lines.push(`${s.title} — ${s.reason}`);
+        void this.dialogs.confirm('Relisted', lines.join('\n'), 'OK', '');
+      },
+      error: () => {
+        this.relisting.set(null);
+        this.error.set('Could not relist those rooms. Check your connection and try again.');
+      },
+    });
+  }
+
   protected async deleteYard(id: string, name: string) {
     const confirmed = await this.dialogs.confirm(
       `Delete "${name}"?`,

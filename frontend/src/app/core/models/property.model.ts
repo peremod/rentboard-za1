@@ -9,14 +9,39 @@ export type RentStatus = 'unpaid' | 'paid' | 'partial' | 'waived';
  * from another, which a name and a suburb do — and a room's public page has
  * always shown the suburb rather than the street for the tenant's safety.
  */
+export type HousemateProfile = 'professionals' | 'students' | 'mixed' | 'couples' | 'unstated';
+
 export interface Property {
   id: string;
   name: string;
   suburb?: string | null;
   city: string;
   province: string;
+
+  // ── What the whole address shares ────────────────────────────────────────
+  //
+  // On the property and not on each room: four rooms at one address have one
+  // kitchen, one set of rules and one group of housemates, and held per-room
+  // the copies drift in front of tenants deciding where to live.
+
+  /** The landlord's own words. Free text, not a checklist. */
+  houseRules?: string | null;
+  /** What everyone here uses — NOT Room.amenities, which is per room. */
+  sharedAmenities?: string[];
+  /** People already at the address. Null means not said. */
+  currentHousemates?: number | null;
+  /** `unstated` is the absence of an answer, never a claim — see the schema. */
+  housemateProfile?: HousemateProfile;
+
   createdAt: string;
   _count?: { rooms: number };
+}
+
+/** The result of relisting every relistable room in a yard. */
+export interface RelistAllResult {
+  relisted: { id: string; title: string }[];
+  /** Named, not counted: a landlord needs to know WHICH room was left. */
+  skipped: { id: string; title: string; reason: string }[];
 }
 
 /** A room as the yard dashboard sees it — enough for a row, not the full record. */
