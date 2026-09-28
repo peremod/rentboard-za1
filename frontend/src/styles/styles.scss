@@ -198,8 +198,12 @@ input[type='radio'] {
 
   transition: all .15s;
 
+  // Hover darkens. It used to lighten to $color-terra-2, which drops white
+  // text from 5.87:1 to 3.56:1 — so every primary button in the app failed
+  // WCAG 1.4.3 for as long as a pointer was over it, in the one state where
+  // someone is about to act. $color-terra-deep is 7.86:1.
   &:hover:not(:disabled) {
-    background: $color-terra-2;
+    background: $color-terra-deep;
     transform: translateY(-1px);
     box-shadow: 0 4px 14px rgba(192, 78, 40, .35);
   }

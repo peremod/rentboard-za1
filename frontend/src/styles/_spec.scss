@@ -27,7 +27,11 @@
      white, and raises white-on-terracotta buttons from 4.81:1 to 5.87:1 —
      better in both directions, and still the same terracotta. */
   --terra:#AD4222;
+  /* Brand accent for text on dark — the logo, the hero, the footer. It is
+     5.12:1 on --ink there. It is NOT a background for white text: that is
+     3.56:1, which is what --terra-deep exists for. */
   --terra2:#E06038;
+  --terra-deep:#8E3519;
   --gold:#C8902A;
   /**
    * The same gold, dark enough to be read.
@@ -42,7 +46,14 @@
   --gold2:#E8AE3A;
   --sage:#3D7040;
   --sage2:#4E8E52;
-  --slate:#7A6E60;
+  /**
+   * Muted body text. Was #7A6E60, which is 4.26:1 on --cream2 and fails the
+   * 4.5:1 WCAG needs for small text — measured by axe on /legal/terms,
+   * /legal/privacy, /legal/paia and both dashboards, not eyeballed.
+   * #736755 is 4.74:1 on --cream2 and 5.16:1 on --cream, so it clears the
+   * threshold on both surfaces this token is used over.
+   */
+  --slate:#736755;
   --border:#E0D5C4;
   --card:#FDFAF4;
   --white:#FFFFFF;
@@ -94,7 +105,9 @@ img{display:block;max-width:100%}
   font-family:var(--font-body);white-space:nowrap;line-height:1;
 }
 .btn-primary{background:var(--terra);color:#fff}
-.btn-primary:hover{background:var(--terra2);transform:translateY(-1px);box-shadow:0 4px 14px rgba(192,78,40,.35)}
+/* Darkens on hover. --terra2 is the brand accent for text on dark; as a
+   background under white text it is 3.56:1. See --terra-deep. */
+.btn-primary:hover{background:var(--terra-deep);transform:translateY(-1px);box-shadow:0 4px 14px rgba(192,78,40,.35)}
 .btn-ghost{background:transparent;color:rgba(250,247,240,.75);border:1.5px solid rgba(250,247,240,.25)}
 .btn-ghost:hover{border-color:rgba(250,247,240,.6);color:var(--cream)}
 .btn-outline{background:transparent;color:var(--terra);border:1.5px solid var(--terra)}

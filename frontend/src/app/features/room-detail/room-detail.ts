@@ -277,7 +277,7 @@ import { environment } from '@env/environment';
                        color: rgba(255,255,255,.75); font-size: .85rem; }
     h1 { font-size: 1.4rem; margin: 1rem 0 .3rem; }
     .room-detail__price { font-size: 1.15rem; font-weight: 700; color: var(--terra); margin-bottom: .3rem; }
-    .room-detail__location { color: #7A6E60; margin-bottom: .8rem; }
+    .room-detail__location { color: var(--slate); margin-bottom: .8rem; }
     .room-detail__flags { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
     .pill { font-size: .72rem; font-weight: 700; background: #F2EDE3; padding: .2rem .6rem; border-radius: 20px; }
     .pill--green { background: rgba(61,112,64,.1); color: #3D7040; }
@@ -288,7 +288,7 @@ import { environment } from '@env/environment';
     .room-detail__apply button { padding: .6rem 1.2rem; border-radius: 6px; border: none; background: var(--terra); color: #fff; font-weight: 700; cursor: pointer; }
     .room-detail__apply button:disabled { opacity: .5; }
     .error { color: #D63B3B; font-size: .82rem; margin-bottom: .5rem; }
-    .muted { color: #7A6E60; }
+    .muted { color: var(--slate); }
   `],
 })
 export class RoomDetail implements OnInit {

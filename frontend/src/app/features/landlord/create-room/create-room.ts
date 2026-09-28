@@ -242,7 +242,7 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
       width: 100%; padding: .55rem .7rem; border: 1.5px solid #DDD5C8;
       border-radius: 6px; font-size: .85rem; margin-top: .3rem; font-family: inherit;
     }
-    .muted { font-size: .78rem; color: #7A6E60; }
+    .muted { font-size: .78rem; color: var(--slate); }
     .error { color: #D63B3B; font-size: .82rem; }
     .wizard__actions { display: flex; justify-content: space-between; margin-top: 1.5rem; }
     button { padding: .6rem 1.2rem; border-radius: 6px; border: none; background: var(--terra); color: #fff; font-weight: 700; cursor: pointer; }

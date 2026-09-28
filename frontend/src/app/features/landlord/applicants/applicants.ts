@@ -165,7 +165,7 @@ import { TenantReferences } from '../../../core/models/review.model';
   styles: [`
     .applicants { max-width: 640px; margin: 2rem auto; padding: 0 1.25rem; font-family: sans-serif; }
     h1 { font-size: 1.3rem; margin: .5rem 0 1.5rem; }
-    .muted { color: #7A6E60; }
+    .muted { color: var(--slate); }
     .applicant-card { border: 1px solid #DDD5C8; border-radius: 8px; margin-bottom: .75rem; overflow: hidden; }
     .applicant-card__header { padding: .8rem 1rem; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: #FDFAF5; }
     .pill { font-size: .6rem; font-weight: 700; background: rgba(61,112,64,.1); color: #3D7040; padding: .1rem .4rem; border-radius: 10px; margin-left: .4rem; }
@@ -177,16 +177,16 @@ import { TenantReferences } from '../../../core/models/review.model';
     .applicant-card__refs { margin: .75rem 0; padding: .75rem 0; border-top: 1px solid #E0D5C4; }
     .refs-toggle { background: none; border: 1px solid #E0D5C4; border-radius: 6px; padding: .35rem .75rem;
                    font-size: .78rem; font-weight: 600; cursor: pointer; color: #3A3228; }
-    .refs-note { font-size: .72rem; color: #7A6E60; line-height: 1.6; margin-top: .6rem; }
+    .refs-note { font-size: .72rem; color: var(--slate); line-height: 1.6; margin-top: .6rem; }
     .undo-banner { display: flex; align-items: center; justify-content: space-between;
                    gap: .75rem; flex-wrap: wrap; padding: .7rem .9rem; margin-bottom: .4rem;
                    background: rgba(61,112,64,.08); border: 1px solid rgba(61,112,64,.25);
                    border-radius: 8px; font-size: .85rem; color: #3A3228; }
-    .undo-note { font-size: .75rem; color: #7A6E60; margin-bottom: .5rem; }
+    .undo-note { font-size: .75rem; color: var(--slate); margin-bottom: .5rem; }
     .applicant-group { margin: 1.25rem 0 .5rem; }
     .applicant-group__title { font-size: .95rem; font-weight: 700; color: #3A3228; }
-    .applicant-group__count { color: #7A6E60; font-weight: 400; }
-    .applicant-group__hint { font-size: .8rem; color: #7A6E60; line-height: 1.6; margin-top: .2rem; }
+    .applicant-group__count { color: var(--slate); font-weight: 400; }
+    .applicant-group__hint { font-size: .8rem; color: var(--slate); line-height: 1.6; margin-top: .2rem; }
     .applicant-card__actions { display: flex; gap: .5rem; margin-bottom: .5rem; flex-wrap: wrap; }
     .applicant-card__actions button { padding: .4rem .8rem; border-radius: 6px; border: 1px solid #DDD5C8; background: #fff; cursor: pointer; font-size: .78rem; font-weight: 600; }
     .applicant-card__actions .accept { background: #3D7040; color: #fff; border: none; }

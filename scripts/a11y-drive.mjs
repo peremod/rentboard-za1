@@ -30,6 +30,30 @@
  * can be a gate. Skips with a clear message when the site is not running.
  */
 import { registerUser, signIn, PASSWORD } from './lib/drive-session.mjs';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+
+/**
+ * axe-core, read once and injected into each page.
+ *
+ * Checklist row 32: Lighthouse found two contrast failures on the live board
+ * — the Gauteng badge at 2.86:1 and the board's rating at 2.81:1, where small
+ * text needs 4.5:1 — and this drive could not see either, because it looked
+ * at headings and names and never at colour. Fixing those two instances left
+ * the class uncovered, and the row said so.
+ *
+ * Contrast is not a thing to reimplement. The ratio depends on what is behind
+ * the text after every ancestor's background, opacity and gradient have
+ * composited, which is why the two that shipped were both alpha over a card.
+ * axe already does that properly, so this runs axe rather than a formula.
+ */
+const require = createRequire(import.meta.url);
+let axeSource = null;
+try {
+  axeSource = readFileSync(require.resolve('axe-core'), 'utf8');
+} catch {
+  console.log('⏭  axe-core not installed — contrast will not be checked. npm install at the repo root.');
+}
 
 const BASE = (process.env.BASE_URL ?? 'http://localhost:4200').replace(/\/$/, '');
 const API = (process.env.API_URL ?? 'http://localhost:3000').replace(/\/$/, '');
@@ -106,6 +130,18 @@ async function auditPage(page, path, { close = true } = {}) {
   try {
     const res = await page.goto(BASE + path, { waitUntil: 'domcontentloaded', timeout: 30000 });
     status = res?.status() ?? 0;
+    // Park the pointer in the corner before measuring anything.
+    //
+    // The pointer stays where it was last clicked, and signIn() clicks a
+    // submit button — so on the next page whatever sits under that coordinate
+    // is in :hover. That made the contrast check report a landlord button at
+    // 3.55:1 on one run and not the next, depending on layout. A check whose
+    // result depends on where the mouse happened to stop is worse than no
+    // check: it produces findings nobody can reproduce.
+    //
+    // Hover contrast is still worth auditing; it just cannot be audited by
+    // accident. Measure the resting state here, deliberately.
+    await page.mouse.move(0, 0);
     await page.waitForTimeout(1200);
   } catch (err) {
     failures.push(`${path}: did not load (${err.message})`);
@@ -219,6 +255,57 @@ async function auditPage(page, path, { close = true } = {}) {
     failures.push(`${path}: <${c.tag}> ${locate(c)} aria-label hides its own visible text`);
   }
 
+  // ── Colour contrast, measured by axe against the composited page ────────
+  //
+  // Only the `color-contrast` rule, deliberately. Turning on axe's full
+  // ruleset here would surface dozens of findings at once, and a gate that is
+  // red on the day it lands is a gate someone turns off. Widening it is a
+  // decision to take with the findings in hand, not a default to inherit.
+  if (axeSource) {
+    try {
+      await page.evaluate(axeSource);
+      const contrast = await page.evaluate(async () => {
+        const run = await window.axe.run(document, {
+          runOnly: { type: 'rule', values: ['color-contrast'] },
+          resultTypes: ['violations'],
+        });
+        return run.violations.flatMap((v) =>
+          v.nodes.map((n) => {
+            // axe puts the measured ratio and the threshold in the check's
+            // own data, which is the part worth printing: "2.86:1, needs
+            // 4.5:1" is actionable, "insufficient contrast" is not.
+            const d = n.any?.[0]?.data ?? {};
+            return {
+              target: Array.isArray(n.target) ? n.target.join(' ') : String(n.target),
+              ratio: d.contrastRatio ?? null,
+              needs: d.expectedContrastRatio ?? null,
+              fg: d.fgColor ?? '',
+              bg: d.bgColor ?? '',
+              text: (n.html ?? '').replace(/\s+/g, ' ').slice(0, 60),
+            };
+          }),
+        );
+      });
+
+      if (!contrast.length) {
+        console.log('  ✅ contrast: every visible text node meets its WCAG threshold');
+      } else {
+        console.log(`  contrast: ${contrast.length} below threshold`);
+        for (const c of contrast) {
+          const measured = c.ratio ? `${c.ratio}:1` : 'below';
+          const required = c.needs ? `, needs ${c.needs}` : '';
+          console.log(`    ❌ ${c.target} — ${measured}${required}  ${c.fg} on ${c.bg}  ${clip(c.text)}`);
+          failures.push(`${path}: contrast ${measured}${required} at ${c.target}`);
+        }
+      }
+    } catch (err) {
+      // A thrown axe is not a pass. It used to be possible to lose this
+      // silently by catching and continuing.
+      console.log(`    ❌ contrast check did not run: ${err.message}`);
+      failures.push(`${path}: the contrast check itself failed — ${err.message}`);
+    }
+  }
+
   // The board with rooms on it is the state that hid two real defects for
   // four releases: the room card's h3 followed the hero's h1 with no h2
   // between them, and the card's aria-label replaced everything the card
@@ -314,5 +401,9 @@ if (failures.length) {
 }
 console.log(
   `✅ ${PUBLIC_PAGES.length} public + ${portalPages} portal pages: ` +
-    'heading order intact, every control named.',
+    'heading order intact, every control named' +
+    // Named separately rather than folded into "accessible": a summary that
+    // claims more than the run checked is how row 32 happened in the first
+    // place — the drive reported green while looking at no colour at all.
+    (axeSource ? ', every text node over its contrast threshold.' : '. Contrast NOT checked — axe-core missing.'),
 );

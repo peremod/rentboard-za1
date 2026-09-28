@@ -106,7 +106,7 @@ import { ReferenceRequestView } from '../../core/models/verification.model';
     .reference { max-width: 520px; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
     h1 { font-size: 1.35rem; margin: 0 0 .75rem; }
     .reference__lead { line-height: 1.6; margin-bottom: 1.5rem; }
-    .reference__muted { color: #7A6E60; font-size: .85rem; }
+    .reference__muted { color: var(--slate); font-size: .85rem; }
     .reference__q { margin-bottom: 1.5rem; }
     .reference__q p { margin: 0 0 .6rem; }
     .reference__choices { display: flex; gap: .5rem; flex-wrap: wrap; }
@@ -130,7 +130,7 @@ import { ReferenceRequestView } from '../../core/models/verification.model';
       background: var(--terra); color: #fff; font-weight: 700; cursor: pointer; font-size: .95rem;
     }
     .reference__submit:disabled { opacity: .5; cursor: not-allowed; }
-    .reference__popia { margin-top: 1.5rem; font-size: .78rem; color: #7A6E60; line-height: 1.6; }
+    .reference__popia { margin-top: 1.5rem; font-size: .78rem; color: var(--slate); line-height: 1.6; }
   `],
 })
 export class ReferenceRespond implements OnInit {
