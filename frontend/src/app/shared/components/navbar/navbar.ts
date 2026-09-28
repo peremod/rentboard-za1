@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
-import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { LangSwitcher } from '../lang-switcher/lang-switcher';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 
@@ -67,7 +66,6 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
   `,
 })
 export class Navbar {
-  readonly billingEnabled = BILLING_ENABLED;
   auth = inject(AuthService);
   mobileOpen = signal(false);
 

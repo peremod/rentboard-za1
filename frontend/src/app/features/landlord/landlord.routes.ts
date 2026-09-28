@@ -1,5 +1,4 @@
 import { Routes } from '@angular/router';
-import { billingEnabledGuard } from '../../core/guards/billing-enabled.guard';
 
 /** Landlord portal — guarded by [authGuard, landlordGuard] at the parent route in app.routes.ts. */
 export const LANDLORD_ROUTES: Routes = [
@@ -29,12 +28,13 @@ export const LANDLORD_ROUTES: Routes = [
     loadComponent: () => import('./verification/landlord-verification').then((m) => m.LandlordVerification),
     title: 'Verification — Mastande',
   },
-  {
-    path: 'upgrade',
-    canActivate: [billingEnabledGuard],
-    loadComponent: () => import('./upgrade/upgrade').then((m) => m.Upgrade),
-    title: 'Upgrade Your Plan — Mastande',
-  },
+  // No 'upgrade' route. It served a page offering Pro at R349/mo and Agency at
+  // R1,499/mo — plans that have no payment provider behind them and never had:
+  // Stripe was removed (it does not operate in South Africa for receiving) and
+  // PayFast recurring was never built. The page was unreachable behind a flag
+  // and a guard, which kept visitors off it but kept the prices in the build,
+  // where they were copied into the Terms as a binding subscription table.
+  // Deleted rather than re-hidden. Nothing here recurs; see /pricing.
   {
     path: 'yard',
     loadComponent: () => import('./yard/yard').then((m) => m.Yard),

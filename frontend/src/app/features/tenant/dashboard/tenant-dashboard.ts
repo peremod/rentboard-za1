@@ -6,7 +6,6 @@ import { ApplicationsService } from '../../../core/services/applications.service
 import { Application } from '../../../core/models/application.model';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { MessageThread } from '../../../shared/components/message-thread/message-thread';
-import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
 import { DisputePanel } from '../../../shared/components/dispute-panel/dispute-panel';
@@ -255,7 +254,6 @@ export class TenantDashboard implements OnInit {
   auth = inject(AuthService);
   private applicationsService = inject(ApplicationsService);
 
-  billingEnabled = BILLING_ENABLED;
   savedRooms = inject(SavedRoomsService);
   private roomsService = inject(RoomsService);
 

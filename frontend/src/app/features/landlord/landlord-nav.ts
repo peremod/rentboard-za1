@@ -1,5 +1,4 @@
 import { PortalNavItem } from '../../shared/components/portal-shell/portal-shell';
-import { BILLING_ENABLED } from '../../core/config/feature-flags';
 
 /** Counts shown as badges. A screen that does not know one leaves it out. */
 export interface LandlordNavBadges {
@@ -42,6 +41,8 @@ export function landlordNav(badges: LandlordNavBadges = {}): PortalNavItem[] {
     { label: 'My property', icon: '🏘️', route: '/landlord/yard' },
     { label: 'Verification', icon: '🪪', route: '/landlord/verification' },
     { label: 'Settings', icon: '⚙️', route: '/account/settings' },
-    ...(BILLING_ENABLED ? [{ label: 'Billing', icon: '💳', route: '/landlord/upgrade' }] : []),
+    // No Billing entry. It pointed at /landlord/upgrade, which has been
+    // deleted — there are no paid plans to bill for, so a landlord has no
+    // billing to look at. Restoring this means restoring a real page first.
   ];
 }
