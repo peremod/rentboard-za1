@@ -403,10 +403,42 @@ model Tenancy {
 
   status TenancyStatus @default(pending)
 
-  /// Agreed move-in date. Null until confirmed.
+  /// Agreed move-in date. Null until confirmed. This is the lease start; there
+  /// is no separate `leaseStartDate`, because a second date meaning the same
+  /// thing is a second date to keep in sync.
   startDate DateTime?
   /// Actual move-out. Set when the tenancy is ended by either party.
+  ///
+  /// NOT the same as `leaseEndDate`, and the distinction matters: this is what
+  /// happened, that is what was agreed. A tenancy can end early, run over, or
+  /// have no agreed end at all. Conflating them would make the renewal flag
+  /// fire on tenancies that had already ended.
   endDate   DateTime?
+
+  /// When the fixed term ends, if there is one.
+  ///
+  /// Null means MONTH-TO-MONTH, which is the common case in this market and is
+  /// not a missing value. A null here is why the renewal flag cannot simply be
+  /// "leases ending soon": most tenancies never have an end date, and the thing
+  /// that ends them is notice.
+  leaseEndDate DateTime?
+
+  /// Days of notice the LEASE requires, as the parties agreed it.
+  ///
+  /// The platform does not assert what the law requires and this field is not
+  /// legal advice. South African notice periods depend on the agreement and on
+  /// whether the Consumer Protection Act applies, which turns on facts this
+  /// product does not know. 30 is the default because a calendar month is what
+  /// most leases in this market say, not because it is a statutory figure.
+  noticePeriodDays Int @default(30)
+
+  /// When notice was given, and by whom — null while nobody has given any.
+  ///
+  /// A month-to-month tenancy has nothing to count down to until this is set.
+  /// It is what starts the countdown and the relist prompt, which is why it is
+  /// a recorded event rather than something inferred from a status change.
+  noticeGivenAt   DateTime?
+  noticeGivenById String?
 
   /// Rent at the time, in ZAR cents. Copied rather than referenced because the
   /// room's rent changes on relist and a review should reflect what was paid.
