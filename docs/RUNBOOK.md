@@ -84,6 +84,46 @@ ADMIN_EMAIL=you@example.co.za ADMIN_PASSWORD='choose-a-strong-one' npx ts-node p
 cd ..
 ```
 
+### Updating the house adverts on production
+
+The three `[HOUSE]` adverts fill unsold slots. Their copy lives in
+`backend/prisma/house-ads.ts`; the rows live in the database, so changing the
+file changes nothing until something writes them.
+
+**Use the standalone script, not the full seed.** `prisma/seed.ts` writes them
+too, but it will not run without `ADMIN_EMAIL` and `ADMIN_PASSWORD` and it
+**resets that admin's password** — it says so as it does it. Changing advert
+copy should not cost you your admin password.
+
+```bash
+cd backend
+
+# 1. Dry run. Prints which database it is pointed at, then the current copy
+#    beside the new copy. Writes nothing.
+DATABASE_URL='<the production connection string>' npx ts-node prisma/seed-house-ads.ts
+
+# 2. Read the diff. If the host on the Database: line is not the production
+#    one, stop — without DATABASE_URL it reads backend/.env and reports a
+#    calm, accurate result about your local database instead.
+
+# 3. Write.
+DATABASE_URL='<the production connection string>' npx ts-node prisma/seed-house-ads.ts --apply
+
+cd ..
+```
+
+No redeploy afterwards: the adverts are read from the database per request.
+Re-running is safe — the script reports "nothing to change" when the rows
+already match, which is also how you confirm the write landed.
+
+Expected on the first production run, because these rows predate the rename:
+
+```
+[HOUSE] How it works — sidebar
+  - headline: New to RentBoard?
+  + headline: New to Mastande?
+```
+
 ### Test data must never reach production
 
 `scripts/smoke-test.sh` and the demo seed both create obviously fake rows —
