@@ -554,7 +554,12 @@ async function auditPage(page, path, { close = true } = {}) {
 // ── public pages, no session ───────────────────────────────────────────────
 for (const path of PUBLIC_PAGES) {
   const page = await browser.newPage({ viewport: { width: WIDTH, height: 823 } });
-  await auditPage(page, path);
+  try {
+    await auditPage(page, path);
+  } catch (err) {
+    failures.push(`${path}: the audit could not complete (${err.message})`);
+    await page.close().catch(() => {});
+  }
 }
 
 // ── the portal, which needs one ────────────────────────────────────────────
@@ -590,8 +595,16 @@ if (!apiReachable) {
       continue;
     }
     for (const path of pages) {
-      await auditPage(session, path, { close: false });
-      portalPages++;
+      // Guarded per page for the same reason as the admin loop below: an
+      // unguarded throw here does not fail the drive, it CRASHES it, before
+      // the summary that lists what was found. A stack trace where a findings
+      // list should be is how a check stops being readable.
+      try {
+        await auditPage(session, path, { close: false });
+        portalPages++;
+      } catch (err) {
+        failures.push(`${path}: the audit could not complete (${err.message})`);
+      }
     }
     await session.close();
   }
@@ -600,15 +613,31 @@ if (!apiReachable) {
   // traffic, which is exactly the combination nobody notices.
   if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
     let session;
+    // The try covers the sign-in and NOTHING else, as the landlord and tenant
+    // blocks above already do. It used to wrap the audit loop too, so a
+    // locator timeout on /admin/disputes was reported as "admin portal: could
+    // not sign in" — naming a cause that was not the cause — and skipped every
+    // screen after it. Three runs failed here and none of them said why; this
+    // is the reason the message was useless.
     try {
       session = await signIn(browser, BASE, process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD, { width: WIDTH });
-      for (const path of ADMIN_PAGES) {
-        await auditPage(session, path, { close: false });
-        portalPages++;
-      }
-      await session.close();
     } catch (err) {
       failures.push(`admin portal: could not sign in (${err.message})`);
+      session = null;
+    }
+    if (session) {
+      for (const path of ADMIN_PAGES) {
+        // Per page, so one bad screen costs that screen and not the six
+        // after it. A drive that stops at the first problem finds one
+        // problem per run, which is one CI cycle per problem.
+        try {
+          await auditPage(session, path, { close: false });
+          portalPages++;
+        } catch (err) {
+          failures.push(`${path}: the audit could not complete (${err.message})`);
+        }
+      }
+      await session.close();
     }
   } else {
     console.log('\n⏭  SKIP the admin screens — set ADMIN_EMAIL and ADMIN_PASSWORD to include them.');

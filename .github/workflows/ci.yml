@@ -482,25 +482,39 @@ jobs:
       - name: Logs and traces on failure
         if: failure()
         run: |
-          # Ordered by how likely it is to be the answer, LAST — because only
-          # the tail of a job is readable through the log API, so whatever is
-          # printed last is what can actually be retrieved. Putting the
-          # accessibility output first buried it behind 50 lines of Nest route
-          # mappings, which is how two attempts at reading this failure came
-          # back with nothing but container teardown.
+          # Printed for someone reading the job in a browser, and COPIED for
+          # everyone else. Three attempts to read one accessibility failure
+          # through the log API came back with nothing but container teardown,
+          # and reordering the printing did not help: this job has a Postgres
+          # service container, whose whole log is flushed after the last step,
+          # so the tail of the job is always Postgres and never the failure.
+          # The steps' own output is only reachable by downloading the full
+          # archive. An artifact is, so the logs go in one.
+          mkdir -p ci-logs
+          for f in a11y phase fe fe-prod api; do
+            cp "/tmp/$f.log" "ci-logs/$f.log" 2>/dev/null || true
+          done
           echo "── frontend ──"; tail -12 /tmp/fe.log      2>/dev/null || true
           tail -12 /tmp/fe-prod.log 2>/dev/null || true
           # Route mappings are never the answer; errors at the end might be.
           echo "── API ──";      tail -15 /tmp/api.log     2>/dev/null || true
           echo "── accessibility ──"; tail -60 /tmp/a11y.log 2>/dev/null || true
-      - name: Upload Playwright report on failure
+      - name: Upload logs and the Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: e2e-diagnostics
+          # ci-logs/ first because it is the one that is always there. The
+          # other two only exist when Playwright itself failed — the CI
+          # reporters are `github` and `list`, which write no report directory,
+          # and test-results/ holds traces only for failing tests. So a run
+          # that dies in the accessibility drive, as three in a row have,
+          # produced an artifact with nothing in it at all.
           path: |
+            ci-logs/
             playwright-report/
             test-results/
+          if-no-files-found: warn
           retention-days: 7
 
   commitlint:
