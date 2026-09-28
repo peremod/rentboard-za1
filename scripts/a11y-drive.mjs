@@ -361,11 +361,28 @@ async function auditPage(page, path, { close = true } = {}) {
   //
   // :focus is different — el.focus() is real state — so that half stayed in
   // the page where it is cheaper.
-  const hoverTargets = await page.locator('button:visible, a[href]:visible').elementHandles();
+  // One control per CSS signature, not the first N.
+  //
+  // This capped at the first 24 elements, which on the board meant two thirds
+  // of 76 controls were never hovered — and, worse, the 24 were whatever
+  // happened to come first in the DOM, so coverage depended on layout order.
+  // What actually needs testing is each distinct rule, since a colour pair
+  // comes from a class and not from an instance; that is the same lesson as
+  // the status pills, where 28 nodes were one defect. Sampling by signature
+  // covers every rule on the page and usually costs fewer hovers.
+  const allTargets = await page.locator('button:visible, a[href]:visible').elementHandles();
+  const bySignature = new Map();
+  for (const handle of allTargets) {
+    const signature = await handle.evaluate((el) =>
+      `${el.tagName}.${(typeof el.className === 'string' ? el.className : '').trim().split(/\s+/).sort().join('.')}`,
+    );
+    if (!bySignature.has(signature)) bySignature.set(signature, handle);
+  }
+  const hoverTargets = [...bySignature.values()];
   const hoverFindings = [];
   let hoverSkipped = 0;
 
-  for (const handle of hoverTargets.slice(0, 24)) {
+  for (const handle of hoverTargets) {
     try {
       await handle.hover({ timeout: 1500, force: true });
     } catch {
@@ -502,7 +519,7 @@ async function auditPage(page, path, { close = true } = {}) {
 
   if (!unique.length) {
     console.log(
-      `  ✅ hover/focus: ${hoverTargets.slice(0, 24).length} hovered + ${states.checked} focused, all over threshold` +
+      `  ✅ hover/focus: ${hoverTargets.length} distinct control styles hovered + ${states.checked} focused, all over threshold` +
         (states.skipped + hoverSkipped ? ` (${states.skipped + hoverSkipped} translucent, not measurable here)` : ''),
     );
   } else {

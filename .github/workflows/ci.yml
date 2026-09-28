@@ -444,7 +444,12 @@ jobs:
         env:
           ADMIN_EMAIL: ci-admin@mastande.test
           ADMIN_PASSWORD: CiSmokeAdmin123
-        run: node scripts/a11y-drive.mjs
+        # `set -o pipefail` first: without it the pipeline's status is tee's,
+        # which always succeeds, and a failing drive would report green — the
+        # exact class of defect this whole suite keeps finding.
+        run: |
+          set -o pipefail
+          node scripts/a11y-drive.mjs 2>&1 | tee /tmp/a11y.log
 
       - name: The three phases, driven in a browser
         if: ${{ !cancelled() }}
@@ -477,6 +482,12 @@ jobs:
       - name: Logs and traces on failure
         if: failure()
         run: |
+          # The a11y drive's own output first — it is the step most likely to
+          # have failed, and its findings were unreadable from outside: the log
+          # API returns only the tail of a job, and three later steps push the
+          # drive's output past it. A failure nobody can read is a failure
+          # nobody can fix.
+          echo "── accessibility ──"; tail -120 /tmp/a11y.log 2>/dev/null || true
           echo "── API ──";      tail -50 /tmp/api.log     2>/dev/null || true
           echo "── frontend ──"; tail -50 /tmp/fe.log      2>/dev/null || true
           tail -50 /tmp/fe-prod.log 2>/dev/null || true

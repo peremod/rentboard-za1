@@ -67,6 +67,11 @@ export async function registerUser(base, role, stamp = Date.now()) {
  */
 export async function signIn(browser, web, email, password, { width = 412, height = 900 } = {}) {
   const page = await browser.newPage({ viewport: { width, height } });
+
+  /** Requests the browser could not complete — the diagnosis when sign-in fails. */
+  const failedRequests = [];
+  page.on('requestfailed', (req) => failedRequests.push(req.url()));
+
   await page.goto(`${web}/auth/login`, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(900);
 
@@ -87,8 +92,22 @@ export async function signIn(browser, web, email, password, { width = 412, heigh
   try {
     await page.waitForURL((url) => !url.pathname.startsWith('/auth/login'), { timeout: 20000 });
   } catch {
-    const shown = ((await page.locator('body').textContent()) ?? '').replace(/\s+/g, ' ').slice(0, 200);
-    const err = new Error(`still on ${new URL(page.url()).pathname} — ${shown}`);
+    // Name the request that failed, not just the screen.
+    //
+    // "could not sign in (still on /auth/login)" reads as an auth bug, and
+    // twice it was not one: the served bundle had been built for production,
+    // so the browser was calling https://api.umastande.co.za, which is not
+    // reachable from a development machine. Both times that cost a debugging
+    // cycle chasing credentials. The origin the page actually tried is the
+    // whole answer, so it belongs in the message.
+    const origins = [...new Set(failedRequests.map((u) => {
+      try { return new URL(u).origin; } catch { return u; }
+    }))];
+    const shown = ((await page.locator('body').textContent()) ?? '').replace(/\s+/g, ' ').slice(0, 160);
+    const blocked = origins.length
+      ? ` — the page could not reach ${origins.join(', ')}; if that is not the API you are running, the served bundle was built for a different environment`
+      : '';
+    const err = new Error(`still on ${new URL(page.url()).pathname}${blocked} — ${shown}`);
     err.signInFailed = true;
     throw err;
   }
