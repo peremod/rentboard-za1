@@ -8,6 +8,7 @@ export const ADMIN_NAV: PortalNavItem[] = [
   { label: 'Disputes', icon: '⚖️', route: '/admin/disputes' },
   { label: 'Advertising', icon: '📢', route: '/admin/advertising' },
   { label: 'Referrals', icon: '🎟️', route: '/admin/referrals' },
+  { label: 'Survey', icon: '📝', route: '/admin/surveys' },
   { label: 'Usage', icon: '📈', route: '/admin/analytics' },
   // An admin had no way to reach their own settings from any admin screen:
   // the shell has no user menu, and /account/settings was only ever linked
