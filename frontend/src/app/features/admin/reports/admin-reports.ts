@@ -30,7 +30,7 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
         <p class="muted">Loading reports…</p>
       } @else if (reports().length === 0) {
         <div class="empty-state">
-          <h3>Nothing open</h3>
+          <h2>Nothing open</h2>
           <p>Reports from tenants and visitors will appear here.</p>
         </div>
       } @else {

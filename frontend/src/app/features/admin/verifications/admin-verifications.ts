@@ -41,7 +41,7 @@ import { VerificationService } from '../../../core/services/verification.service
         <p class="field-error" role="alert">{{ error() }}</p>
       } @else if (requests().length === 0) {
         <div class="empty-state">
-          <h3>Nothing waiting</h3>
+          <h2>Nothing waiting</h2>
           <p>New verification submissions will appear here.</p>
         </div>
       } @else {
