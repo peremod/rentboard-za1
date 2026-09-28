@@ -17,10 +17,21 @@
 set -uo pipefail
 
 PASS=0
+SKIPPED=0
+SKIP_LIST=""
 FAIL=0
 ok()   { echo "  ✅ $1"; PASS=$((PASS+1)); }
 bad()  { echo "  ❌ $1"; FAIL=$((FAIL+1)); }
-note() { echo "     ↳ $1"; }
+# Counted, not just printed.
+#
+# This script said "68 passed, 0 failed — Verified. Safe to tag." and, on a run
+# where the API was not up, "64 passed, 0 failed — Verified. Safe to tag."
+# Four assertions had quietly stopped running and the verdict did not change
+# by one word. That is the same overclaiming summary this repository has spent
+# the week removing from other checks, sitting in the script that gates
+# releases — a green tick that means "everything I looked at passed" while
+# saying "everything passed".
+note() { echo "     ↳ $1"; case "$1" in SKIP*) SKIPPED=$((SKIPPED+1)); SKIP_LIST="$SKIP_LIST\n     · $1";; esac; }
 step() { echo; echo "── $1 ─────────────────────────────────────────"; }
 
 cd "$(dirname "$0")/.."
@@ -746,10 +757,24 @@ fi
 # ── Summary ───────────────────────────────────────────────────────────────
 echo
 echo "════════════════════════════════════════════════════════"
-echo "  $PASS passed, $FAIL failed"
+if [ "$SKIPPED" -gt 0 ]; then
+  echo "  $PASS passed, $FAIL failed, $SKIPPED SKIPPED"
+else
+  echo "  $PASS passed, $FAIL failed"
+fi
 echo "════════════════════════════════════════════════════════"
 if [ "$FAIL" -gt 0 ]; then
   echo "  Do not tag a release until these are resolved."
   exit 1
+fi
+if [ "$SKIPPED" -gt 0 ]; then
+  # Not a failure — several skips are legitimate, such as running without an
+  # API. But it is not "verified" either, and the difference matters most at
+  # exactly the moment someone reads this line to decide whether to tag.
+  printf '  %s check(s) did NOT run:%b\n' "$SKIPPED" "$SKIP_LIST"
+  echo
+  echo "  Everything that ran passed. That is not the same as verified —"
+  echo "  start the API and re-run before tagging, or tag knowing what was skipped."
+  exit 0
 fi
 echo "  Verified. Safe to tag."
