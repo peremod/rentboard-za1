@@ -193,6 +193,42 @@ delete its `_meta_needs_translation` key, flip `translated: true` in the
 language model, and add the code to `PREFIXED_LOCALES` in the backend SEO
 controller. `npm run audit:i18n` fails if you do only some of those.
 
+### The board is rendered per request; everything else is prerendered
+
+`/` and `/{locale}` are `RenderMode.Server`. Pricing, how-it-works, advertise
+and the legal pages are `RenderMode.Prerender`.
+
+The split is content that changes between deploys. A prerendered page carries
+whatever the API returned when the build ran, and on 28 September the
+production database was cleaned of test rooms while the live board went on
+advertising three of them, because the HTML holding them was days old. A room
+let last week keeps its card until somebody redeploys. For a marketplace whose
+value is which rooms are free right now, that is the wrong trade; for a pricing
+page that says the same thing every day, prerendering is exactly right.
+
+Rendering per request would be a bad trade on its own — a render, and an API
+call, on the page a first-time visitor lands on, against an API that sleeps
+when idle. So the freshness is bounded instead of per-request:
+
+```
+Cache-Control: public, max-age=0, s-maxage=60, stale-while-revalidate=600
+```
+
+`s-maxage` lets the CDN answer for a minute from one render.
+`stale-while-revalidate` lets it keep answering instantly from the old copy
+while fetching a new one, so a cold API delays a background revalidation
+rather than a person. `max-age=0` keeps the visitor's own reload honest.
+
+It is safe to cache publicly because the server renders the same HTML for
+everyone: there is no session server-side, so a signed-in visitor gets the
+signed-out shell and hydration corrects it — exactly as when this page was
+prerendered for everybody.
+
+Both halves are asserted. `verify-build.sh` fails if `index.html` reappears in
+the build, if the served board is `ng-server-context="ssg"` rather than `ssr`,
+or if the Cache-Control loses its shared-cache window — proven by reverting the
+route and watching all three fail.
+
 ### A published locale has to be served in that locale
 
 Stated because it was not true. `/af` and `/af/pricing` were served in English

@@ -164,7 +164,25 @@ const eachLocale = async (): Promise<Record<string, string>[]> =>
 
 export const serverRoutes: ServerRoute[] = [
   // ── English (unprefixed) ──
-  { path: '', renderMode: RenderMode.Prerender },
+  /**
+   * The board is rendered per request, not baked at build time.
+   *
+   * It was Prerender, and that meant the home page showed whatever the API
+   * returned during the last deploy. On 28 September the production database
+   * was cleaned of test rooms and the live board went on advertising three of
+   * them to every visitor, because the HTML they were in had been built days
+   * earlier. A room let last week keeps its card until someone redeploys.
+   *
+   * For a marketplace whose entire value is which rooms are free right now,
+   * that is the wrong trade. Every other prerendered page here — pricing, how
+   * it works, the legal pages — says the same thing every day and stays
+   * prerendered; the board does not.
+   *
+   * The cost is a render per request, and `server.ts` answers it with a CDN
+   * cache (`s-maxage` + `stale-while-revalidate`) rather than by making every
+   * visitor wait on the API. See BOARD_CACHE_CONTROL there.
+   */
+  { path: '', renderMode: RenderMode.Server },
   { path: 'rooms/:id', renderMode: RenderMode.Server },
   { path: 'legal/**', renderMode: RenderMode.Prerender },
   { path: 'how-it-works', renderMode: RenderMode.Prerender },
@@ -172,8 +190,11 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'advertise', renderMode: RenderMode.Prerender },
 
   // ── The other ten locales ──
-  // Prerendered where the URL is fully enumerable: ten locales × four pages.
-  { path: ':lang', renderMode: RenderMode.Prerender, getPrerenderParams: eachLocale },
+  // Prerendered where the URL is fully enumerable AND the content does not
+  // change between deploys: ten locales × three pages.
+  // The localised boards, for the same reason as '' above: same page, same
+  // listings, same staleness.
+  { path: ':lang', renderMode: RenderMode.Server },
   { path: ':lang/how-it-works', renderMode: RenderMode.Prerender, getPrerenderParams: eachLocale },
   { path: ':lang/pricing', renderMode: RenderMode.Prerender, getPrerenderParams: eachLocale },
   { path: ':lang/advertise', renderMode: RenderMode.Prerender, getPrerenderParams: eachLocale },

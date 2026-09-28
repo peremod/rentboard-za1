@@ -72,14 +72,28 @@ jobs:
         run: |
           set -e
           PRERENDER=dist/mastande-frontend/browser
-          for page in index.html pricing/index.html how-it-works/index.html advertise/index.html; do
+          # The board is NOT on this list. It is RenderMode.Server so that a
+          # room let last week stops being advertised — a prerendered board
+          # shows whatever the API returned at deploy time, which is how the
+          # live site went on displaying three test rooms for hours after the
+          # database was cleaned of them.
+          for page in pricing/index.html how-it-works/index.html advertise/index.html; do
             test -f "$PRERENDER/$page" || { echo "❌ $page was not prerendered"; exit 1; }
           done
           # Locale-prefixed pages must prerender too, or a crawler gets a
           # client-side shell where translated HTML was promised.
           for locale in af zu; do
-            test -f "$PRERENDER/$locale/index.html" || { echo "❌ /$locale was not prerendered"; exit 1; }
+            test -f "$PRERENDER/$locale/pricing/index.html" \
+              || { echo "❌ /$locale/pricing was not prerendered"; exit 1; }
           done
+          # And the other direction, which is the one that rots quietly: a
+          # board baked into the build is a silent revert to the behaviour
+          # above, and nothing else here would notice.
+          for stale in index.html af/index.html zu/index.html; do
+            test -f "$PRERENDER/$stale" && {
+              echo "❌ $stale was prerendered — the board must be RenderMode.Server"; exit 1; }
+          done
+          echo "✅ the board is not baked into the build
           # Metadata must be in the served HTML, not applied after hydration.
           grep -q 'rel="canonical"' "$PRERENDER/pricing/index.html" || { echo "❌ no canonical in prerendered output"; exit 1; }
           grep -q 'hreflang=' "$PRERENDER/pricing/index.html" || { echo "❌ no hreflang alternates in prerendered output"; exit 1; }

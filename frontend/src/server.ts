@@ -9,6 +9,7 @@ import express from 'express';
 import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { environment } from './environments/environment';
+import { isPrefixedLocale } from './app/core/models/language.model';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 const app = express();
@@ -481,6 +482,39 @@ app.use((req, res, next) => {
  * rather than a second copy of the route table living out here and drifting
  * from the first.
  */
+/**
+ * How long a rendered board may be reused by a shared cache.
+ *
+ * The board is `RenderMode.Server` so that a room let last week stops being
+ * advertised, and that would be a bad trade on its own: a render per request,
+ * each one waiting on an API that sleeps when idle on its current plan, on the
+ * page a first-time visitor lands on.
+ *
+ * So the freshness is bounded rather than per-request. `s-maxage=60` lets
+ * Vercel's CDN answer for a minute from one render, and
+ * `stale-while-revalidate=600` lets it keep answering instantly from the old
+ * copy while it fetches a new one behind the scenes. A cold API therefore
+ * delays a background revalidation, not a person — and after the first fill,
+ * nobody waits on it again.
+ *
+ * `max-age=0` so a browser still revalidates: the visitor's own tab should
+ * not hold a board for a minute when they hit reload looking for new rooms.
+ *
+ * Safe to cache publicly because the server renders the same HTML for
+ * everyone. There is no session on the server — the auth interceptor drops
+ * anything needing one — so a signed-in visitor is served the signed-out
+ * shell and hydration corrects it, exactly as it did when this page was
+ * prerendered for everybody.
+ */
+const BOARD_CACHE_CONTROL = 'public, max-age=0, s-maxage=60, stale-while-revalidate=600';
+
+/** `/` and `/af`, `/zu`, … — the same page, once per published locale. */
+function isBoardPath(path: string): boolean {
+  if (path === '/') return true;
+  const segments = path.split('/').filter(Boolean);
+  return segments.length === 1 && isPrefixedLocale(segments[0]);
+}
+
 const STATUS_MARKER =
   /<meta[^>]*name=["']mastande-status["'][^>]*content=["'](\d{3})["']/i;
 
@@ -522,6 +556,13 @@ app.use((req, res, next) => {
         // becomes a lie if the body is re-sent from a string.
         if (key.toLowerCase() !== 'content-length') res.setHeader(key, value);
       });
+      // AFTER the copy above, not before: the engine sets its own
+      // Cache-Control and would overwrite this one. Only a good render of the
+      // board is worth caching — a 404 or a 503 must not be held by the CDN
+      // for ten minutes.
+      if (status === 200 && isBoardPath(req.path)) {
+        res.setHeader('Cache-Control', BOARD_CACHE_CONTROL);
+      }
       res.send(html);
       return undefined;
     })

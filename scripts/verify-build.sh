@@ -89,19 +89,38 @@ done
 # ── 5. Prerendered output ─────────────────────────────────────────────────
 step "Prerendered pages"
 if [ -d "$DIST" ]; then
-  for page in index.html pricing/index.html how-it-works/index.html advertise/index.html; do
+  for page in pricing/index.html how-it-works/index.html advertise/index.html; do
     [ -f "$DIST/$page" ] && ok "prerendered /$page" || bad "/$page was NOT prerendered"
   done
   # Locale pages: the whole point of locale-scoped URLs.
   for locale in af zu; do
-    if [ -f "$DIST/$locale/index.html" ]; then
-      ok "prerendered /$locale"
+    if [ -f "$DIST/$locale/pricing/index.html" ]; then
+      ok "prerendered /$locale/pricing"
     else
-      bad "/$locale was NOT prerendered"
+      bad "/$locale/pricing was NOT prerendered"
       note "If the build otherwise succeeded, getPrerenderParams did not run."
       note "Switch those routes to RenderMode.Server — see note in step 4."
     fi
   done
+
+  # The board must NOT be here, and that is the assertion — not an omission.
+  #
+  # A prerendered board shows whatever the API returned at deploy time. The
+  # live site advertised three test rooms for hours after the database was
+  # cleaned of them, because the HTML holding them had been built days
+  # earlier. Reverting '' to RenderMode.Prerender brings that back and every
+  # other check in this file would still pass, so this one looks for it.
+  BOARD_BAKED=""
+  for stale in index.html af/index.html zu/index.html; do
+    [ -f "$DIST/$stale" ] && BOARD_BAKED="$BOARD_BAKED $stale"
+  done
+  if [ -n "$BOARD_BAKED" ]; then
+    bad "the board was prerendered:$BOARD_BAKED"
+    note "'' and ':lang' must be RenderMode.Server, or a let room keeps its card"
+    note "on the board until somebody redeploys. See app.routes.ts."
+  else
+    ok "the board is rendered per request, not baked into the build"
+  fi
 else
   bad "no build output at $DIST — builds did not complete"
 fi
@@ -236,6 +255,35 @@ else
   type_of()   { curl -s -o /dev/null -w '%{content_type}' --max-time 20 "http://localhost:4111$1"; }
 
   [ "$(status_of /)" = "200" ] && ok "/ answers 200" || bad "/ does not answer 200"
+
+  # Rendered per request, not served from the build.
+  #
+  # ng-server-context says which it was: "ssg" means the HTML came out of the
+  # build and the board in it is as old as the deploy; "ssr" means it was
+  # rendered for this request. The live site showed three test rooms for hours
+  # after the database was cleaned of them because it was ssg, and every check
+  # in this file passed the whole time.
+  status_of / >/dev/null
+  if grep -q 'ng-server-context="ssr"' /tmp/verify-body.html; then
+    ok "and is rendered per request, so a let room loses its card"
+  else
+    CONTEXT=$(grep -o 'ng-server-context="[a-z]*"' /tmp/verify-body.html | head -1)
+    bad "the board was served as ${CONTEXT:-unknown}, not ssr"
+    note "'' must be RenderMode.Server in app.routes.ts."
+  fi
+
+  # And bounded, so rendering per request does not mean waiting on the API per
+  # request. Without this the change above trades stale content for a slow
+  # home page on a free-tier API that sleeps.
+  BOARD_CC=$(curl -s -o /dev/null -D - --max-time 25 "http://localhost:4111/" \
+    | sed -n 's/^[Cc]ache-[Cc]ontrol: *//p' | tr -d '\r')
+  case "$BOARD_CC" in
+    *s-maxage=*stale-while-revalidate=*)
+      ok "and cacheable at the edge — $BOARD_CC" ;;
+    *)
+      bad "the board's Cache-Control is \"${BOARD_CC:-unset}\" — no shared-cache window"
+      note "BOARD_CACHE_CONTROL in server.ts is what keeps a per-request render cheap." ;;
+  esac
 
   # A 404 must BE a 404.
   if [ "$(status_of /this-page-does-not-exist)" = "404" ]; then
@@ -477,11 +525,14 @@ else
     const pass = (m) => console.log("PASS " + m);
 
     for (const [label, path] of [
-      ["the static bundle", out + "/static/index.html"],
+      // pricing, not index.html: the board is RenderMode.Server now, so there
+      // is no index.html to find. A page that is still prerendered proves the
+      // same thing — that the prerendered output reached the artefact.
+      ["the static bundle", out + "/static/pricing/index.html"],
       ["the function entry", func + "/index.mjs"],
       ["its runtime config", func + "/.vc-config.json"],
       ["the server bundle", func + "/server/server.mjs"],
-      ["the browser bundle it reads", func + "/browser/index.html"],
+      ["the browser bundle it reads", func + "/browser/pricing/index.html"],
     ]) {
       fs.existsSync(path) ? pass(`${label} is in the artefact`) : fail(`${label} is MISSING from the artefact`);
     }
