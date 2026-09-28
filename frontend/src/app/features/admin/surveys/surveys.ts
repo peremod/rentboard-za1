@@ -21,7 +21,13 @@ interface SurveyAggregate {
   active: boolean;
   responses: number;
   anonymous: number;
-  bySource: Record<string, number>;
+  /**
+   * Partial on purpose. A survey nobody answered over WhatsApp has no
+   * `whatsapp` key at all, so indexing it yields undefined — and typing it as
+   * a total Record made the compiler flag the `?? 0` guards as dead code while
+   * the runtime still needed them.
+   */
+  bySource: Partial<Record<string, number>>;
   segmentQuestionId: string | null;
   segments: string[];
   questions: AggregateQuestion[];

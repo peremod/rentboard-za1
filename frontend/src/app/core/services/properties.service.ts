@@ -3,7 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { tap } from 'rxjs';
 import { environment } from '@env/environment';
 import {
-  HousemateProfile, Property, RelistAllResult, RentPeriod, RentStatus, YardDashboard,
+  Expense, ExpenseCategory, ExpenseSummary, HousemateProfile, Property,
+  RelistAllResult, RentPeriod, RentStatus, YardDashboard,
 } from '../models/property.model';
 
 @Injectable({ providedIn: 'root' })
@@ -63,6 +64,40 @@ export class PropertiesService {
 
   unassignRoom(roomId: string) {
     return this.http.delete(`${this.api}/properties/rooms/${roomId}`);
+  }
+
+  // ── Expenses ──
+
+  listExpenses(propertyId: string) {
+    return this.http.get<Expense[]>(`${this.api}/properties/${propertyId}/expenses`);
+  }
+
+  createExpense(body: {
+    propertyId: string; roomId?: string; category: ExpenseCategory;
+    amountCents: number; incurredOn: string; receiptPath?: string; note?: string;
+  }) {
+    return this.http.post<Expense>(`${this.api}/properties/expenses`, body);
+  }
+
+  /** Partial. `roomId: null` detaches a room; omitting it leaves it alone. */
+  updateExpense(id: string, body: Record<string, unknown>) {
+    return this.http.patch<Expense>(`${this.api}/properties/expenses/${id}`, body);
+  }
+
+  deleteExpense(id: string) {
+    return this.http.delete<{ deleted: true }>(`${this.api}/properties/expenses/${id}`);
+  }
+
+  /** `month` is YYYY-MM; omitted means the current one. */
+  expenseSummary(month?: string) {
+    const q = month ? `?month=${month}` : '';
+    return this.http.get<ExpenseSummary>(`${this.api}/properties/expenses/summary${q}`);
+  }
+
+  expenseCsv(propertyId: string, year: number) {
+    return this.http.get<{ filename: string; csv: string; count: number }>(
+      `${this.api}/properties/${propertyId}/expenses/csv?year=${year}`,
+    );
   }
 
   // ── Rent ──
