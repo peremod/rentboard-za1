@@ -19,7 +19,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
       <div class="legal-container">
         <header class="legal-header">
           <h1>Privacy Policy</h1>
-          <p class="legal-meta">Last updated: 28 July 2026 · Version 1.0 · Republic of South Africa · POPIA compliant</p>
+          <p class="legal-meta">Last updated: 28 September 2026 · Version 1.1 · Republic of South Africa · POPIA compliant</p>
           <p class="legal-intro">
             Mastande is committed to protecting your personal information in accordance with the
             <strong>Protection of Personal Information Act 4 of 2013 (POPIA)</strong>. This policy explains how we
@@ -60,7 +60,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
               <tr><td>Account management</td><td>Contract — s.11(1)(b)</td></tr>
               <tr><td>Payment processing (ZAR)</td><td>Contract — s.11(1)(b)</td></tr>
               <tr><td>Marketing emails</td><td>Consent — s.11(1)(a)</td></tr>
-              <tr><td>Analytics cookies</td><td>Consent — s.11(1)(a)</td></tr>
+              <tr><td>Usage measurement</td><td>Not personal information — daily counts only, no cookie</td></tr>
               <tr><td>WhatsApp notifications</td><td>Consent + Contract</td></tr>
               <tr><td>Fraud prevention</td><td>Legitimate interest — s.11(1)(f)</td></tr>
             </tbody>
@@ -86,7 +86,74 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
         </section>
 
         <section>
-          <h2>6. Information Regulator</h2>
+          <h2>6. Who Else Handles Your Information (Operators)</h2>
+          <p>We use other companies to run Mastande. Under POPIA they are <strong>Operators</strong>:
+          they process your information on our instructions, and we stay responsible for it. We do
+          not sell your personal information to anyone, and we do not use it for advertising.</p>
+          <table class="legal-table">
+            <thead><tr><th>Operator</th><th>What it receives</th><th>Where it is processed</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><strong>PayFast</strong><br/>payments</td>
+                <td>Only if you pay the R149 verification fee: your first name, email address, the
+                amount, and a reference number. Your card or banking details are entered on
+                PayFast's own pages and never reach us.</td>
+                <td>South Africa</td>
+              </tr>
+              <tr>
+                <td><strong>Neon</strong><br/>database</td>
+                <td>Everything you give us that we store — your account, listings, applications and
+                messages.</td>
+                <td><strong>Frankfurt, Germany</strong></td>
+              </tr>
+              <tr>
+                <td><strong>Render</strong><br/>application hosting</td>
+                <td>Everything the site processes while you use it.</td>
+                <td><strong>Frankfurt, Germany</strong></td>
+              </tr>
+              <tr>
+                <td><strong>Vercel</strong><br/>website hosting</td>
+                <td>Your IP address and the pages you request.</td>
+                <td>Outside South Africa</td>
+              </tr>
+              <tr>
+                <td><strong>ImageKit</strong><br/>photo and document storage</td>
+                <td>Room photographs, and any identity or supporting document you upload. These go
+                from your browser straight to ImageKit; documents are stored privately, are not
+                publicly viewable, and are deleted once reviewed — only the outcome is kept
+                (POPIA s.26).</td>
+                <td>Outside South Africa</td>
+              </tr>
+              <tr>
+                <td><strong>Resend</strong><br/>email delivery</td>
+                <td>Your email address and name, and the contents of emails we send you.</td>
+                <td>Outside South Africa</td>
+              </tr>
+              <tr>
+                <td><strong>Meta Platforms</strong><br/>WhatsApp messages</td>
+                <td>Only if you use WhatsApp with us: your phone number and the contents of those
+                messages.</td>
+                <td>Outside South Africa</td>
+              </tr>
+              <tr>
+                <td><strong>Google</strong><br/>sign-in</td>
+                <td>Only if you choose to sign in with Google: Google tells us your email address,
+                name and profile photo, and Google learns that you signed in to Mastande. We ask
+                for nothing else from your Google account.</td>
+                <td>Outside South Africa</td>
+              </tr>
+            </tbody>
+          </table>
+          <p><strong>Information sent outside South Africa (POPIA s.72).</strong> As the table shows,
+          most of these operators process your information outside the country — our database and
+          application servers are in Frankfurt, Germany. We use them under their standard data
+          protection terms, which require them to protect your information and to process it only
+          on our instructions. If you would like details of the safeguards that apply, email
+          <strong>privacy&#64;umastande.co.za</strong>.</p>
+        </section>
+
+        <section>
+          <h2>7. Information Regulator</h2>
           <p>You have the right to lodge a complaint with the <strong>Information Regulator (South Africa)</strong>:</p>
           <address>
             JD House, 27 Stiemens Street, Braamfontein, Johannesburg, 2001<br/>

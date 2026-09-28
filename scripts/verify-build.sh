@@ -244,6 +244,36 @@ if [ -f "$PP" ]; then
     bad "Privacy Policy names processors this platform does not use:$STALE"
     note "Stripe sat here for four months after processing its last payment"
   fi
+
+  # Every operator the backend is configured to send personal information to
+  # must appear in the table. The keys in configuration.ts are the list: an
+  # integration cannot be added without one, so a new operator that nobody
+  # discloses fails here rather than at the Information Regulator.
+  # google is deliberately absent from the derivation — it is configured the
+  # same way but is checked below with the rest, so the grep stays simple.
+  MISSING=""
+  for op in imagekit resend whatsapp payfast google; do
+    echo "$PP_TEXT" | grep -qiw "$op" && continue
+    # WhatsApp is disclosed under the company that runs it.
+    [ "$op" = whatsapp ] && echo "$PP_TEXT" | grep -qi "meta platforms" && continue
+    MISSING="$MISSING $op"
+  done
+  if [ -z "$MISSING" ]; then
+    ok "and names every operator the backend is configured to use"
+  else
+    bad "Privacy Policy does not name these operators:$MISSING"
+    note "POPIA s.18 — configured in backend/src/config/configuration.ts, undisclosed here"
+  fi
+
+  # Frankfurt is where Neon and Render are, per DEPLOYMENT.md and render.yaml.
+  # Personal information leaving South Africa is s.72's subject; the policy
+  # said nothing about it at all until v1.1.
+  if echo "$PP_TEXT" | grep -qi "s\.72\|outside South Africa"; then
+    ok "and discloses that information is processed outside South Africa"
+  else
+    bad "Privacy Policy does not mention cross-border processing"
+    note "The database and API are in Frankfurt — POPIA s.72 applies"
+  fi
 else
   bad "cannot check the Privacy Policy — /legal/privacy was not prerendered"
 fi
