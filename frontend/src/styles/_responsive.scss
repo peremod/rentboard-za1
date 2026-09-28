@@ -26,6 +26,10 @@
   padding: .25rem .5rem;
 }
 .nav-links-lang { display: none; }
+// The drawer's copy of the auth actions. Hidden on desktop, where the header
+// shows them; shown in the drawer at the width where the header hides the
+// ghost buttons for space. Without this a phone had no Log in at all.
+.nav-links-auth { display: none; }
 
 .filter-toggle-btn {
   display: none;
@@ -241,6 +245,18 @@
   .nav-actions app-lang-switcher,
   .nav-actions .btn-ghost { display: none; }
   .nav-links-lang { display: block; margin-top: .25rem; }
+  // The actions the header just hid, in the drawer where the comment above
+  // always claimed they were. Stacked and full width: they are the primary
+  // thing a returning visitor opens this menu for.
+  .nav-links-auth {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin-top: .75rem;
+    padding-top: .75rem;
+    border-top: 1px solid rgba(255, 255, 255, .15);
+  }
+  .nav-links-auth .btn { width: 100%; justify-content: center; }
   .nav-inner { padding: 0 .85rem; gap: .5rem; }
   .nav-logo { font-size: 1.25rem; }
   .nav-actions .btn { padding: .45rem .7rem; font-size: .78rem; }

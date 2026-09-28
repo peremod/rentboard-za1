@@ -1,4 +1,4 @@
-import { ApplicationConfig, provideZonelessChangeDetection } from '@angular/core';
+import { ApplicationConfig, inject, provideAppInitializer, provideZonelessChangeDetection } from '@angular/core';
 import { provideRouter, withComponentInputBinding, withInMemoryScrolling, withPreloading, withNavigationErrorHandler } from '@angular/router';
 import { provideHttpClient, withFetch, withInterceptors } from '@angular/common/http';
 import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
@@ -6,6 +6,7 @@ import { IMAGE_LOADER, ImageLoaderConfig } from '@angular/common';
 import { routes } from './app.routes';
 import { PublicPreloadStrategy } from './core/preloading/public-preload.strategy';
 import { provideRouteSeo } from './core/seo/route-seo';
+import { NavigationHistoryService } from './core/services/navigation-history.service';
 import { provideLocaleRouting, provideRememberedLocaleRedirect } from './core/i18n/locale-routing';
 import { LOCALE_URL_SERIALIZER_PROVIDER } from './core/i18n/locale-url-serializer';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
@@ -20,6 +21,25 @@ import { environment } from '@env/environment';
 export const appConfig: ApplicationConfig = {
   providers: [
     provideZonelessChangeDetection(),
+
+    /**
+     * Instantiated at bootstrap, not on first injection.
+     *
+     * NavigationHistoryService subscribes to router events in its constructor,
+     * and `providedIn: 'root'` means Angular creates it the first time anything
+     * asks for it — which was the room detail page. So it started listening
+     * AFTER the navigation it existed to record, had no idea the visitor came
+     * from their dashboard, and offered "Back to all rooms" to a landlord
+     * looking at their own room.
+     *
+     * Reported from a phone. My first two explanations were about NavigationEnd
+     * ordering and both were wrong; the service was simply not alive yet. A
+     * service that must observe everything cannot be created lazily by one of
+     * the things it observes.
+     */
+    provideAppInitializer(() => {
+      inject(NavigationHistoryService);
+    }),
     provideRouter(
       routes,
       withComponentInputBinding(),

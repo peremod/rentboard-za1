@@ -139,7 +139,7 @@ export class RoomsService {
     ];
 
     const skip = (page - 1) * limit;
-    const [data, total] = await Promise.all([
+    const [data, total, verifiedLandlords] = await Promise.all([
       this.prisma.room.findMany({
         where,
         orderBy,
@@ -150,9 +150,31 @@ export class RoomsService {
         ...PUBLIC_LANDLORD,
       }),
       this.prisma.room.count({ where }),
+      /**
+       * Landlords who have actually passed an identity check AND have a room
+       * matching this search. Counted here, on the server, for two reasons.
+       *
+       * The hero stat said "verified landlords" and was computed in the browser
+       * as `new Set(loadedRooms.map(r => r.landlordId)).size` — distinct
+       * landlords among the rooms on screen. That was wrong twice over: it
+       * never looked at whether anyone was verified, so an unverified landlord
+       * counted as verified; and it counted only the CURRENT PAGE, so the
+       * number of "verified landlords" grew as a visitor scrolled. A trust
+       * figure that is both false and unstable is worse than no figure.
+       *
+       * `distinct` on landlordId rather than a groupBy: the question is how
+       * many people, not how many rooms.
+       */
+      this.prisma.room
+        .findMany({
+          where: { ...where, landlord: { landlordProfile: { idVerified: true } } },
+          select: { landlordId: true },
+          distinct: ['landlordId'],
+        })
+        .then((rows) => rows.length),
     ]);
 
-    return { data, total, page, limit, hasMore: skip + data.length < total };
+    return { data, total, page, limit, hasMore: skip + data.length < total, verifiedLandlords };
   }
 
   /**

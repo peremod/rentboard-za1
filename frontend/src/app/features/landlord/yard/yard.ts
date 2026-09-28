@@ -32,6 +32,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { DialogService } from '../../../core/services/dialog.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { landlordNav } from '../landlord-nav';
+import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 
 /**
  * The yard dashboard.
@@ -51,7 +52,7 @@ import { landlordNav } from '../landlord-nav';
 @Component({
   selector: 'app-yard',
   standalone: true,
-  imports: [NgTemplateOutlet, DatePipe, FormsModule, RouterLink, ZarCentsPipe, PortalShell],
+  imports: [PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink, ZarCentsPipe, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems" roleLabel="Landlord" pageTitle="Your property">
@@ -287,7 +288,7 @@ import { landlordNav } from '../landlord-nav';
           }
 
           <div class="yard__counts">
-            <span>{{ group.roomCount }} rooms</span>
+            <span>{{ group.roomCount | plural: 'room' }}</span>
             <span class="yard__count--vacant">{{ group.vacant }} vacant</span>
             <span>{{ group.let }} let</span>
             @if (group.draft) { <span>{{ group.draft }} draft</span> }
