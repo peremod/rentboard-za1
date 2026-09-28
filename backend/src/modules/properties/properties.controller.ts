@@ -86,6 +86,19 @@ export class PropertiesController {
     return this.properties.assignRooms(id, dto, user.id);
   }
 
+  /**
+   * Relist every room in this yard that can be relisted.
+   *
+   * POST rather than PATCH: it is an action with side effects on every room —
+   * archived applications, a new cycle, tenant alerts — not an edit to the
+   * property.
+   */
+  @Post(':id/relist-all')
+  @ApiOperation({ summary: 'Relist every relistable room in this yard' })
+  relistAll(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.properties.relistAll(id, user.id);
+  }
+
   @Delete('rooms/:roomId')
   @UseGuards(LandlordGuard)
   @ApiOperation({ summary: 'Take a room out of its yard. The room is untouched.' })

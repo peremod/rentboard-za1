@@ -128,6 +128,7 @@ LEFT_PENDING=""
 LET_STATUS=""
 LIQ=""
 LOWED=""
+SHARED_YARD=""
 SURVEY_AGAIN=""
 SURVEY_MICRO=""
 SURVEY_RECORDED=""
@@ -2488,6 +2489,56 @@ YARD_ID=$(echo "$BODY" | jq -r '.id // empty')
 
 req POST /api/properties '{"name":"Tenant yard","city":"Johannesburg","province":"Gauteng"}' "$TTOKEN"
 check "a tenant cannot create a yard" 403 "$STATUS" "$BODY"
+
+# ── Shared living, which belongs to the address and not to each room ───────
+#
+# Four rooms at one address have one kitchen, one set of rules and one group of
+# housemates. Held per-room they get typed four times and the copies drift, in
+# front of tenants deciding where to live.
+req POST /api/properties '{"name":"Shared yard","city":"Johannesburg","province":"Gauteng","houseRules":"Gate locked at 21:00.","sharedAmenities":["Shared kitchen","Outside tap"],"currentHousemates":4,"housemateProfile":"mixed"}' "$LTOKEN"
+check "a yard carries house rules, shared amenities and who lives there" 201 "$STATUS" "$BODY"
+SHARED_YARD=$(echo "$BODY" | jq -r '.id // empty')
+if echo "$BODY" | jq -e '.houseRules != null and (.sharedAmenities | length) == 2 and .currentHousemates == 4 and .housemateProfile == "mixed"' >/dev/null 2>&1; then
+  green "  PASS  all four shared-living fields persisted"; PASS=$((PASS+1))
+else
+  red "  FAIL  shared-living fields did not persist: $(echo "$BODY" | jq -c '{houseRules,sharedAmenities,currentHousemates,housemateProfile}')"; FAIL=$((FAIL+1))
+fi
+
+# Saying nothing must stay "unstated" rather than becoming a claim about who a
+# tenant would be living with.
+req POST /api/properties '{"name":"Quiet yard","city":"Durban","province":"KwaZulu-Natal"}' "$LTOKEN"
+if echo "$BODY" | jq -e '.housemateProfile == "unstated"' >/dev/null 2>&1; then
+  green "  PASS  an unanswered housemate profile is 'unstated', not a guess"; PASS=$((PASS+1))
+else
+  red "  FAIL  default housemateProfile was $(echo "$BODY" | jq -r '.housemateProfile')"; FAIL=$((FAIL+1))
+fi
+
+if [[ -n "$SHARED_YARD" ]]; then
+  # Editing one field must leave the rest alone.
+  req PATCH "/api/properties/$SHARED_YARD" '{"houseRules":"Gate locked at 22:00."}' "$LTOKEN"
+  if echo "$BODY" | jq -e '.houseRules == "Gate locked at 22:00." and (.sharedAmenities | length) == 2' >/dev/null 2>&1; then
+    green "  PASS  editing house rules leaves the shared amenities alone"; PASS=$((PASS+1))
+  else
+    red "  FAIL  a single-field edit clobbered the others"; FAIL=$((FAIL+1))
+  fi
+
+  # Bulk relist: a yard empties at month end and six rooms is six trips.
+  # A room already on the board is SKIPPED, not an error — otherwise the
+  # button is useless in exactly the mixed case it is for.
+  req POST "/api/properties/$SHARED_YARD/relist-all" "" "$LTOKEN"
+  check "bulk relist runs on a yard" 201 "$STATUS" "$BODY"
+  if echo "$BODY" | jq -e 'has("relisted") and has("skipped")' >/dev/null 2>&1; then
+    green "  PASS  bulk relist reports what it did and what it skipped"; PASS=$((PASS+1))
+  else
+    red "  FAIL  bulk relist result names neither relisted nor skipped"; FAIL=$((FAIL+1))
+  fi
+
+  req POST "/api/properties/$SHARED_YARD/relist-all" "" "$TTOKEN"
+  check "a tenant cannot bulk relist" 403 "$STATUS" "$BODY"
+
+  req POST "/api/properties/$SHARED_YARD/relist-all" "" "$OTHER_LTOKEN"
+  check "another landlord cannot bulk relist your yard" 403 "$STATUS" "$BODY"
+fi
 
 req GET /api/properties/dashboard "" "$LTOKEN"
 check "yard dashboard returns" 200 "$STATUS" "$BODY"

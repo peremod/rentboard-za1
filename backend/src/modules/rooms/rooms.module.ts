@@ -11,5 +11,7 @@ import { ReferralsModule } from '../referrals/referrals.module';
   imports: [NotificationsModule, AlertsModule, ReferralsModule],
   controllers: [RoomsController],
   providers: [RoomsService],
+  // Exported so PropertiesService.relistAll can call the one relist rule.
+  exports: [RoomsService],
 })
 export class RoomsModule {}

@@ -1,7 +1,48 @@
-import { IsOptional, IsString, MaxLength, MinLength, IsArray, IsUUID, ArrayMaxSize } from 'class-validator';
+import {
+  IsOptional, IsString, MaxLength, MinLength, IsArray, IsUUID, ArrayMaxSize,
+  IsEnum, IsInt, Min, Max,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { HousemateProfile } from '@prisma/client';
 
-export class CreatePropertyDto {
+/**
+ * The shared-living fields, on both create and update.
+ *
+ * A class the two DTOs extend rather than two copies: this project has been
+ * bitten by duplicated definitions drifting apart more than once, and a
+ * validation rule that exists twice is one that will eventually disagree with
+ * itself about what a landlord may type.
+ */
+export class SharedLivingDto {
+  @ApiPropertyOptional({
+    example: 'Gate locked at 21:00. No visitors overnight without telling me first.',
+    description: "Free text, in the landlord's own words — a checklist would replace the rules that matter with generic ones.",
+  })
+  @IsOptional() @IsString() @MaxLength(2000)
+  houseRules?: string;
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['Shared kitchen', 'Outside tap', 'Washing line', 'Locked gate'],
+    description: 'What everyone at this address uses. Not Room.amenities, which is what comes with one room.',
+  })
+  @IsOptional() @IsArray() @ArrayMaxSize(20)
+  @IsString({ each: true }) @MaxLength(60, { each: true })
+  sharedAmenities?: string[];
+
+  @ApiPropertyOptional({
+    example: 4,
+    description: 'People already living at the address, across all rooms. Omit if not saying.',
+  })
+  @IsOptional() @IsInt() @Min(0) @Max(100)
+  currentHousemates?: number;
+
+  @ApiPropertyOptional({ enum: ['professionals', 'students', 'mixed', 'couples', 'unstated'] })
+  @IsOptional() @IsEnum(['professionals', 'students', 'mixed', 'couples', 'unstated'])
+  housemateProfile?: HousemateProfile;
+}
+
+export class CreatePropertyDto extends SharedLivingDto {
   @ApiProperty({
     example: 'Ext 7 back rooms',
     description: "The landlord's own words — they have to recognise it in a list at a glance.",
@@ -22,7 +63,7 @@ export class CreatePropertyDto {
   province!: string;
 }
 
-export class UpdatePropertyDto {
+export class UpdatePropertyDto extends SharedLivingDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(2) @MaxLength(120)
   name?: string;
 

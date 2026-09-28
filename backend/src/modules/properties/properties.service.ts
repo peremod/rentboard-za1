@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreatePropertyDto, UpdatePropertyDto, AssignRoomsDto } from './dto/property.dto';
+import { RoomsService } from '../rooms/rooms.service';
 
 /**
  * Yards — several rooms at one place, under one landlord.
@@ -18,7 +19,11 @@ import { CreatePropertyDto, UpdatePropertyDto, AssignRoomsDto } from './dto/prop
 export class PropertiesService {
   private readonly logger = new Logger(PropertiesService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    /** Relist lives in RoomsService and is called, never reimplemented — see relistAll. */
+    private rooms: RoomsService,
+  ) {}
 
   private async assertOwned(propertyId: string, landlordId: string) {
     const property = await this.prisma.property.findUnique({ where: { id: propertyId } });
@@ -34,6 +39,70 @@ export class PropertiesService {
   async update(id: string, dto: UpdatePropertyDto, landlordId: string) {
     await this.assertOwned(id, landlordId);
     return this.prisma.property.update({ where: { id }, data: dto });
+  }
+
+
+  /**
+   * Relist every room in a yard that can be relisted.
+   *
+   * The bulk action a multi-room landlord actually has: a yard empties at the
+   * end of a month and putting six rooms back on the board is six trips
+   * through the dashboard.
+   *
+   * ── Two decisions worth stating
+   *
+   * It calls RoomsService.relist per room rather than writing its own
+   * updateMany. Relisting is not one field: it archives the previous cycle's
+   * applications, increments relistCount so the applicant list matches the
+   * cycle, resets applicationCount, clears letAt and notifies matching
+   * tenants. A faster bulk version would be a second copy of that rule, and
+   * the copy is always the one that misses the next fix — this repository has
+   * paid for that lesson repeatedly.
+   *
+   * It SKIPS rooms that cannot be relisted instead of failing the call. An
+   * active room in the same yard is not an error, it is the normal case: a
+   * landlord with four let rooms and two live ones means "put the four back",
+   * and refusing the whole thing because two are already listed would make the
+   * button useless exactly when it is most wanted. Every skip is named and
+   * returned, so the result says what happened rather than only how much.
+   */
+  async relistAll(propertyId: string, landlordId: string) {
+    await this.assertOwned(propertyId, landlordId);
+
+    const rooms = await this.prisma.room.findMany({
+      where: { propertyId, landlordId },
+      select: { id: true, title: true, status: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const relisted: { id: string; title: string }[] = [];
+    const skipped: { id: string; title: string; reason: string }[] = [];
+
+    for (const room of rooms) {
+      if (!['let', 'paused', 'deleted'].includes(room.status)) {
+        skipped.push({
+          id: room.id,
+          title: room.title,
+          reason: room.status === 'active' ? 'already on the board' : `cannot be relisted while ${room.status}`,
+        });
+        continue;
+      }
+      try {
+        await this.rooms.relist(room.id, {}, landlordId);
+        relisted.push({ id: room.id, title: room.title });
+      } catch (err) {
+        // One room failing must not take the other five with it. The reason is
+        // carried back rather than logged and swallowed.
+        skipped.push({
+          id: room.id,
+          title: room.title,
+          reason: err instanceof Error ? err.message : 'could not be relisted',
+        });
+      }
+    }
+
+    this.logger.log(`Property ${propertyId}: relisted ${relisted.length}, skipped ${skipped.length}`);
+    return { relisted, skipped };
   }
 
   /**
