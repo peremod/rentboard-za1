@@ -2538,6 +2538,23 @@ if [[ -n "$SHARED_YARD" ]]; then
 
   req POST "/api/properties/$SHARED_YARD/relist-all" "" "$OTHER_LTOKEN"
   check "another landlord cannot bulk relist your yard" 403 "$STATUS" "$BODY"
+
+  # A tenant reading a room must see what the house is like — and must NOT see
+  # the yard's private nickname, which is the landlord's own dashboard label.
+  if [[ -n "$ROOM_ID" ]]; then
+    req POST "/api/properties/$SHARED_YARD/rooms" "{\"roomIds\":[\"$ROOM_ID\"]}" "$LTOKEN"
+    req GET "/api/rooms/$ROOM_ID"
+    if echo "$BODY" | jq -e '.property.houseRules != null and (.property.sharedAmenities | length) > 0' >/dev/null 2>&1; then
+      green "  PASS  a room page carries the house rules and shared facilities"; PASS=$((PASS+1))
+    else
+      red "  FAIL  the room detail does not carry shared living: $(echo "$BODY" | jq -c '.property')"; FAIL=$((FAIL+1))
+    fi
+    if echo "$BODY" | jq -e '.property | has("name") | not' >/dev/null 2>&1; then
+      green "  PASS  and not the yard's private nickname"; PASS=$((PASS+1))
+    else
+      red "  FAIL  the yard's internal name is exposed on the public room page"; FAIL=$((FAIL+1))
+    fi
+  fi
 fi
 
 req GET /api/properties/dashboard "" "$LTOKEN"

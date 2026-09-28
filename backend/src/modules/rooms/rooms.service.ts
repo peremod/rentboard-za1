@@ -46,6 +46,33 @@ const PUBLIC_LANDLORD = {
   },
 } as const;
 
+/**
+ * What a tenant is told about the rest of the house, on the detail page only.
+ *
+ * Four fields and no more. NOT the yard's `name`: that is the landlord's own
+ * label for their dashboard — "Ext 7 back rooms", "the Vilakazi place" — and
+ * publishing an internal nickname beside a room is how a landlord ends up
+ * surprised by their own listing. City and province are already on the room,
+ * and the suburb is what the room shows publicly rather than the street, for
+ * the tenant's safety.
+ *
+ * Detail page only, deliberately. The board returns many rooms per request and
+ * house rules can run to a paragraph; nobody reads them from a card.
+ */
+const PUBLIC_ROOM_DETAIL = {
+  include: {
+    ...PUBLIC_LANDLORD.include,
+    property: {
+      select: {
+        houseRules: true,
+        sharedAmenities: true,
+        currentHousemates: true,
+        housemateProfile: true,
+      },
+    },
+  },
+} as const;
+
 @Injectable()
 export class RoomsService {
   private readonly logger = new Logger(RoomsService.name);
@@ -139,7 +166,7 @@ export class RoomsService {
     // the one place a tenant decides whether to trust a stranger with their
     // deposit — and the aggregateRating in that page's JSON-LD was silently
     // dropped on every room, because the data it reads was never sent.
-    const room = await this.prisma.room.findUnique({ where: { id }, ...PUBLIC_LANDLORD });
+    const room = await this.prisma.room.findUnique({ where: { id }, ...PUBLIC_ROOM_DETAIL });
     if (!room) throw new NotFoundException(`Room ${id} not found`);
 
     const isOwner = viewerId === room.landlordId;

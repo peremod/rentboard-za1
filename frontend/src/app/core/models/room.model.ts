@@ -8,6 +8,19 @@ export const SA_PROVINCES = [
 export type SAProvince = (typeof SA_PROVINCES)[number];
 
 /** Public landlord summary attached to a room by the rooms API. */
+/**
+ * What the rest of the house is like — returned on the room DETAIL only.
+ *
+ * Deliberately not the yard's name: that is the landlord's own dashboard label
+ * and is never published beside a listing.
+ */
+export interface RoomSharedLiving {
+  houseRules?: string | null;
+  sharedAmenities?: string[];
+  currentHousemates?: number | null;
+  housemateProfile?: 'professionals' | 'students' | 'mixed' | 'couples' | 'unstated';
+}
+
 export interface RoomLandlord {
   id: string;
   fullName: string;
@@ -20,6 +33,8 @@ export interface RoomLandlord {
 }
 
 export interface Room {
+  /** Present only on the detail response, and only when the room is in a yard. */
+  property?: RoomSharedLiving | null;
   id: string;
   landlordId: string;
   /** Populated on list and detail responses; absent on landlord-owned queries. */
