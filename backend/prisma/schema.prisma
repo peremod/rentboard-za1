@@ -125,7 +125,6 @@ model User {
   rooms           Room[]
   applications    Application[]
   messagesSent    Message[]
-  rentersPassport RentersPassport?
   refreshTokens   RefreshToken[]
 
   @@index([email])
@@ -140,12 +139,6 @@ model LandlordProfile {
   companyName          String?
   planTier             PlanTier  @default(free)
   planExpiresAt        DateTime?
-  /// ⚠️ DEAD COLUMNS — nothing reads or writes them. Stripe was removed in
-  /// v1.79.0 and there are no recurring plans to subscribe to. Kept only
-  /// because dropping them needs a migration against the live database; see
-  /// PRE-LAUNCH-CHECKLIST row 41.
-  stripeCustomerId     String?   @unique
-  stripeSubscriptionId String?   @unique
   idVerified           Boolean   @default(false)
 
   /// Days after the 1st before an unpaid month triggers a reminder.
@@ -233,7 +226,6 @@ model Room {
   publishedAt DateTime?
 
   applications Application[]
-  boosts       RoomBoost[]
   tenancies    Tenancy[]
   reviews      Review[]
   savedBy      SavedRoom[]
@@ -1275,34 +1267,6 @@ model LandlordWhatsappConfig {
   @@map("landlord_whatsapp_configs")
 }
 
-/// ⚠️ DEAD TABLE — nothing reads or writes it. Kept only because dropping it
-/// needs a migration against the live database; see PRE-LAUNCH-CHECKLIST row 41.
-///
-/// It described a one-off "featured" boost bought through Stripe Checkout,
-/// with stripeSessionId as the webhook's idempotency key. Stripe was removed
-/// in v1.79.0 — it does not operate in South Africa for receiving — and the
-/// boost feature itself was never built: the dashboard's "Boost R99" button
-/// sits behind BILLING_ENABLED, which is false, and there is no endpoint
-/// behind it. `grep -rn roomBoost src/` returns nothing.
-///
-/// Note `stripeSessionId String @unique` is NOT nullable, so a row could not
-/// be inserted today even if something tried — which is a fair summary of the
-/// state of this table.
-model RoomBoost {
-  id              String    @id @default(uuid())
-  roomId          String
-  room            Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  stripeSessionId String    @unique
-  amountCents     Int
-  durationDays    Int
-  boostedFrom     DateTime?
-  boostedUntil    DateTime?
-  status          String    @default("pending") // pending | active | expired
-  createdAt       DateTime  @default(now())
-
-  @@index([roomId])
-  @@map("room_boosts")
-}
 
 enum PassportStatus {
   pending
@@ -1311,39 +1275,6 @@ enum PassportStatus {
   cancelled
 }
 
-/// ⚠️ DEAD TABLE — nothing reads or writes it. Kept only because dropping it
-/// needs a migration against the live database; see PRE-LAUNCH-CHECKLIST row 41.
-///
-/// The Renter's Passport is REAL and is live — it is simply not this table.
-/// What a landlord actually sees is `TenantProfile.hasPassport`, computed in
-/// verification.service.ts as `idVerified && incomeVerified` from approved
-/// VerificationRequests, with `passportExpiresAt` beside it.
-///
-/// This model's own description was wrong in a way worth naming: it called the
-/// Passport "paid" and wired a Stripe subscription lifecycle. The Passport is
-/// FREE and always was meant to be — charging the side of this market with the
-/// least money to prove they are poor enough to need a room is the fastest way
-/// to lose it (see verification.rules.ts) — and Stripe was removed in v1.79.0.
-/// So the schema described a paid product that cannot be bought, through a
-/// processor that is gone, in a table nothing reads. That is the same defect
-/// as checklist row 35, where the Terms advertised four subscriptions that did
-/// not exist: prose outliving the thing it describes.
-model RentersPassport {
-  id                   String         @id @default(uuid())
-  tenantId             String         @unique
-  tenant               User           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  status               PassportStatus @default(pending)
-  stripeCustomerId     String?
-  stripeSubscriptionId String?        @unique
-  idVerified           Boolean        @default(false)
-  incomeVerified       Boolean        @default(false)
-  purchasedAt          DateTime?
-  expiresAt            DateTime?
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-
-  @@map("renters_passports")
-}
 
 /// Refresh tokens — opaque random values, only ever stored HASHED (sha256).
 /// Rotated on every use: presenting a token revokes it and issues a new one.
