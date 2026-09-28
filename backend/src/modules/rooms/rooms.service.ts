@@ -10,11 +10,15 @@ import { RelistDto } from './dto/relist.dto';
 import { sanitizeText } from '../../common/utils/sanitize.util';
 
 /**
- * Billing is temporarily disabled (see StripeModule — commented out of
- * AppModule) — every landlord is effectively on an unlimited free tier
- * for now. FREE_PLAN_ROOM_LIMIT / enforcePlanLimit() are kept in the file,
- * just unused, so re-enabling billing later is a small, obvious diff
- * rather than reconstructing this from scratch. See PRE-LAUNCH-CHECKLIST.md.
+ * There is no room limit: unlimited listings is the product, not a pause.
+ * "Free to list, free to apply" is the whole position against RoomKing,
+ * AmaRoom, Gumtree and Facebook, and the only charge Mastande takes is the
+ * once-off R149 identity check. See /pricing and Terms §4.
+ *
+ * FREE_PLAN_ROOM_LIMIT / enforcePlanLimit() stay in the file, unused. They
+ * described a two-room cap on a free tier below plans that were deleted along
+ * with the Stripe module that was meant to sell them; reintroducing a cap
+ * would be a product decision, not a matter of uncommenting this.
  */
 // const FREE_PLAN_ROOM_LIMIT = 2;
 

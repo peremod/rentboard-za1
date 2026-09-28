@@ -239,7 +239,6 @@ deliberate — check this list when adding an endpoint.
 - `GET /rooms/suggest`
 - `GET /robots.txt`
 - `GET /sitemap.xml`
-- `POST /stripe/webhook`
 - `GET /references/respond/:token`
 - `POST /references/respond/:token`
 - `GET /whatsapp/webhook`

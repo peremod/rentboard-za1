@@ -28,11 +28,17 @@ import { WhatsappModule } from './modules/whatsapp/whatsapp.module';
 import { ApplicationsModule } from './modules/applications/applications.module';
 import { UploadsModule } from './modules/uploads/uploads.module';
 import { MessagesModule } from './modules/messages/messages.module';
-// Billing is not wired to a provider. Stripe was removed in v1.54.0: it does
-// not operate in South Africa for receiving payments, so a ZA-registered
-// business cannot accept money through it. PayFast already handles verification
-// payments; subscriptions and boosts would need PayFast recurring billing,
-// which is not built. See docs/PAYMENTS.md.
+// No StripeModule. Stripe was dropped in v1.54.0 — it does not operate in
+// South Africa for receiving payments, so a ZA-registered business cannot
+// take money through it — but only the import was removed then. The module,
+// its service and a POST /stripe/webhook controller stayed in the tree for
+// four months, unmounted: no route served them and no code called them, while
+// the webhook still appeared in the generated list of endpoints reachable
+// without a token. Deleted now.
+//
+// PayFast handles the one charge that exists, the R149 verification fee.
+// Subscriptions and boosts would need PayFast recurring billing, which is not
+// built and is not currently planned. See docs/PAYMENTS.md.
 /**
  * Root module — foundation release.
  * Feature modules (Auth, Rooms, Applications, Messages, WhatsApp...)

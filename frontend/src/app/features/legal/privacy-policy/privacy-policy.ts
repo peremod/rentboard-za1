@@ -45,7 +45,10 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
             <li><strong>Account:</strong> hashed password — never stored in plain text</li>
             <li><strong>Listing data:</strong> property details, pricing in ZAR, photographs</li>
             <li><strong>Application data:</strong> employment status, income, cover notes</li>
-            <li><strong>Financial:</strong> billing details processed by Stripe in ZAR — we never store card numbers</li>
+            <li><strong>Financial:</strong> if you pay the R149 verification fee, your name, email
+            address and the amount are passed to <strong>PayFast</strong>, our payment processor, in
+            ZAR. You enter your card or banking details on PayFast's own pages — they never reach
+            Mastande, and we never store them. This is the only payment we take.</li>
           </ul>
         </section>
 
