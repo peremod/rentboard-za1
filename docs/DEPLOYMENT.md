@@ -265,12 +265,37 @@ for you. **Run this before every deploy that changes the schema:**
 ```bash
 export NEON_POOLED="..."   # pooled, host has -pooler
 export NEON_DIRECT="..."   # unpooled
-npm run migrate:staging
+DATABASE_URL="$NEON_POOLED" DIRECT_URL="$NEON_DIRECT" npm run migrate:staging
 ```
 
-This is worse than automatic and worth naming as such: it can be forgotten, and
-a forgotten migration means the API starts against a schema it does not expect
-— usually surfacing as a 500 on one endpoint rather than a clear failure.
+It prints the host and database it is about to change, shows the pending
+migrations, and asks before applying. Pass `CONFIRM=yes` for an unattended run.
+
+**It refuses rather than guessing** when `DATABASE_URL` is unset or empty, when
+it points at localhost, or when `DIRECT_URL` points at the pooled host. That is
+not defensiveness for its own sake — the previous version of this step was:
+
+```bash
+DATABASE_URL="$NEON_POOLED" DIRECT_URL="$NEON_DIRECT" npx prisma migrate deploy
+```
+
+and `NEON_POOLED` is a placeholder you export by hand, defined nowhere in the
+repository. Unexported, bash substitutes an empty string, Prisma falls back to
+`backend/.env` — a **local** database — and prints:
+
+```
+No pending migrations to apply.
+```
+
+True, accurate, and about entirely the wrong database. It reads as "staging is
+migrated". Staging is untouched. That happened on v1.81.0: the staging
+deployment check failed three times while the migration was believed done, and
+the only clue was a version mismatch.
+
+This is still worse than automatic and worth naming as such: it can be
+forgotten, and a forgotten migration means the API starts against a schema it
+does not expect — usually surfacing as a 500 on one endpoint rather than a clear
+failure.
 
 Add `preDeployCommand: npx prisma migrate deploy` back to `render.yaml` the day
 this moves to a paid instance.
