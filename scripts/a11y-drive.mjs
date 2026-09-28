@@ -306,12 +306,26 @@ async function auditPage(page, path, { close = true } = {}) {
       if (!contrast.length) {
         console.log('  ✅ contrast: every visible text node meets its WCAG threshold');
       } else {
-        console.log(`  contrast: ${contrast.length} below threshold`);
+        // Grouped by the colour pair and the class that carries it, not
+        // listed per node. One CSS rule on the admin reports screen produced
+        // 28 identical lines differing only by :nth-child, which buries the
+        // finding in its own repetitions — and there is one thing to fix, not
+        // 28. The count is kept so the scale is still visible.
+        const groups = new Map();
         for (const c of contrast) {
+          // The last class in the selector is the rule worth naming.
+          const rule = (c.target.split(/\s+/).pop() ?? c.target).replace(/:nth-child\(\d+\)/g, '');
+          const key = `${rule}|${c.fg}|${c.bg}|${c.ratio}`;
+          if (!groups.has(key)) groups.set(key, { ...c, rule, count: 0 });
+          groups.get(key).count++;
+        }
+        console.log(`  contrast: ${contrast.length} below threshold in ${groups.size} rule(s)`);
+        for (const c of groups.values()) {
           const measured = c.ratio ? `${c.ratio}:1` : 'below';
           const required = c.needs ? `, needs ${c.needs}` : '';
-          console.log(`    ❌ ${c.target} — ${measured}${required}  ${c.fg} on ${c.bg}  ${clip(c.text)}`);
-          failures.push(`${path}: contrast ${measured}${required} at ${c.target}`);
+          const times = c.count > 1 ? ` ×${c.count}` : '';
+          console.log(`    ❌ ${c.rule}${times} — ${measured}${required}  ${c.fg} on ${c.bg}  ${clip(c.text)}`);
+          failures.push(`${path}: contrast ${measured}${required} at ${c.rule}${times}`);
         }
       }
     } catch (err) {

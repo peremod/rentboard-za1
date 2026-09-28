@@ -42,7 +42,11 @@
    * same blind spot that hid the room card's heading order and its aria-label.
    * Measured: #946B1F is 4.60:1, over the 4.5:1 small-text floor.
    */
-  --gold-text:#946B1F;
+  /* Darkened from #946B1F, which was chosen against the card (4.60:1) and
+     fails on the 12% gold tint the admin status pills use — 4.13:1 there.
+     #8A6420 clears both: 5.14:1 on the card, 4.61:1 on the tint. Picking a
+     value that works on one surface is how row 32's fix left this one. */
+  --gold-text:#8A6420;
   --gold2:#E8AE3A;
   --sage:#3D7040;
   --sage2:#4E8E52;
@@ -522,9 +526,11 @@ img{display:block;max-width:100%}
   padding:.28rem .7rem;border-radius:var(--r-full);font-size:.72rem;font-weight:700;
   white-space:nowrap;
 }
-.status-pending{background:rgba(200,144,42,.12);color:var(--gold)}
+.status-pending{background:rgba(200,144,42,.12);color:var(--gold-text)}
 .status-shortlisted{background:rgba(61,112,64,.12);color:var(--sage)}
-.status-accepted{background:rgba(61,112,64,.2);color:var(--sage)}
+/* --sage on its own 20% tint is 4.24:1; --sage-deep is 5.78:1. Same shape
+   as .status-pending: a brand colour readable on white and not on its tint. */
+.status-accepted{background:rgba(61,112,64,.2);color:var(--sage-deep)}
 .status-rejected{background:rgba(122,110,96,.1);color:var(--slate)}
 
 /* ═══ COOKIE BANNER ═══ */

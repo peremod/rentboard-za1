@@ -434,7 +434,16 @@ jobs:
       # with axe, to colour contrast — so a green tick claimed less than it had
       # earned and, worse, a reader looking for contrast coverage would have
       # concluded there was none.
-      - name: Accessibility — headings, accessible names and contrast, 14 pages
+      # ADMIN_EMAIL/ADMIN_PASSWORD are what turn the seven admin screens on.
+      # Without them the drive prints "⏭ SKIP the admin screens" and exits 0,
+      # so the verification queue, the dispute queue, reports, advertising and
+      # analytics had never been audited by anything — the step below already
+      # had these credentials, and this one did not. The first run with them
+      # found a status pill at 2.42:1 on the reports screen.
+      - name: Accessibility — headings, accessible names and contrast, 21 pages
+        env:
+          ADMIN_EMAIL: ci-admin@mastande.test
+          ADMIN_PASSWORD: CiSmokeAdmin123
         run: node scripts/a11y-drive.mjs
 
       - name: The three phases, driven in a browser
