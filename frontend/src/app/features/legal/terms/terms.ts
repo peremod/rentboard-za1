@@ -11,7 +11,7 @@ import { RouterLink } from '@angular/router';
       <div class="legal-container">
         <header class="legal-header">
           <h1>Terms &amp; Conditions</h1>
-          <p class="legal-meta">Last updated: 28 July 2026 · Republic of South Africa · ECTA 25 of 2002</p>
+          <p class="legal-meta">Last updated: 28 September 2026 · Republic of South Africa · ECTA 25 of 2002</p>
           <p class="legal-intro">
             By using Mastande you accept these terms under <strong>ECTA Section 11</strong>. Mastande is an online
             intermediary — <strong>not an estate agent</strong> registered with the PPRA.
@@ -44,16 +44,28 @@ import { RouterLink } from '@angular/router';
         </section>
 
         <section>
-          <h2>4. Subscription Plans (ZAR, VAT inclusive)</h2>
+          <h2>4. What Mastande Charges (ZAR)</h2>
+          <p><strong>There are no subscription plans.</strong> Listing a room is free and
+          applying for one is free, with no commission on rent and no limit on how many
+          rooms a landlord may list.</p>
           <table class="legal-table">
-            <thead><tr><th>Plan</th><th>Monthly</th><th>Annual</th></tr></thead>
+            <thead><tr><th>What</th><th>Who pays</th><th>Price</th></tr></thead>
             <tbody>
-              <tr><td>Free</td><td>R 0</td><td>R 0</td></tr>
-              <tr><td>Pro</td><td>R 349</td><td>R 2,999</td></tr>
-              <tr><td>Agency</td><td>R 1,499</td><td>R 12,999</td></tr>
-              <tr><td>Renter's Passport</td><td>R 89</td><td>R 799</td></tr>
+              <tr><td>Listing a room</td><td>Landlords</td><td>R 0</td></tr>
+              <tr><td>Applying for a room</td><td>Tenants</td><td>R 0</td></tr>
+              <tr><td>Renter's Passport</td><td>Tenants</td><td>R 0</td></tr>
+              <tr><td>Landlord identity verification</td><td>Landlords, optional</td><td>R 149 once off</td></tr>
             </tbody>
           </table>
+          <p>The <strong>R 149 identity check is the only charge</strong>. It is a once-off
+          amount, not a recurring one, and it is optional — an unverified listing is shown
+          and searched exactly the same way as a verified one. If we cannot verify you, the
+          R 149 is refunded in full. A further attempt after a rejection is a new R 149.</p>
+          <p>Advertising on the board is charged separately to advertisers under its own
+          terms, and is not a charge to any landlord or tenant.</p>
+          <p>Should paid plans ever be offered, these terms will be updated first and the
+          notice periods in section 2 will apply. Until then, nothing on Mastande renews,
+          and no payment method is stored.</p>
         </section>
 
         <section>

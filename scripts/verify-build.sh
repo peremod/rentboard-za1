@@ -163,6 +163,40 @@ else
   note "Fill them in before tagging — these render to real visitors exactly as written"
 fi
 
+# ── 6c. The Terms page may only name prices this platform actually charges ─
+# Same failure as 6b, one page over. Terms §4 advertised a subscription table
+# — Pro R349/R2,999, Agency R1,499/R12,999, Renter's Passport R89/R799 — in a
+# binding consumer contract, for four products that cannot be bought. Billing
+# has no payment provider (BILLING_ENABLED=false; Stripe does not operate in
+# South Africa for receiving, PayFast recurring is not built), the Passport
+# was made free, and the only live charge is the R149 once-off identity check.
+# Nothing failed, because the table was valid HTML and rendered perfectly.
+#
+# So the rule is the product's, not a spelling one: the only rand amounts that
+# may appear on /legal/terms are R0 and R149. A price here is a CPA s.41
+# representation, and one for something we cannot supply is a false one.
+step "Terms names only prices that exist"
+T="$DIST/legal/terms/index.html"
+if [ -f "$T" ]; then
+  # Strip tags first: a price split across markup should still be caught.
+  TERMS_PRICES=$(sed 's/<[^>]*>/ /g' "$T" \
+    | grep -oE 'R[[:space:]]?[0-9][0-9,]*' \
+    | tr -d ' ' | sort -u || true)
+  BOGUS=$(echo "$TERMS_PRICES" | grep -vxE 'R0|R149' || true)
+  if [ -z "$BOGUS" ]; then
+    ok "Terms prices are only R0 and R149 — $(echo "$TERMS_PRICES" | tr '\n' ' ')"
+  else
+    bad "Terms names prices this platform does not charge: $(echo "$BOGUS" | tr '\n' ' ')"
+    note "Nothing on Mastande recurs. If that changed, change this check deliberately."
+  fi
+  grep -q 'no subscription plans' "$T" \
+    && ok "and states plainly that there are no subscription plans" \
+    || { bad "Terms no longer states that there are no subscription plans"; \
+         note "Silence reads as 'plans exist, priced elsewhere' — say it outright"; }
+else
+  bad "cannot check Terms prices — /legal/terms was not prerendered"
+fi
+
 # Private routes must be noindex and carry no canonical.
 step "Private routes excluded from the index"
 L="$DIST/auth/login/index.html"
