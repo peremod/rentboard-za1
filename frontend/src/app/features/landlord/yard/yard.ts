@@ -22,6 +22,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { DialogService } from '../../../core/services/dialog.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { landlordNav } from '../landlord-nav';
+import { LeasePanel } from '../../../shared/components/lease-panel/lease-panel';
 
 /**
  * The yard dashboard.
@@ -41,7 +42,7 @@ import { landlordNav } from '../landlord-nav';
 @Component({
   selector: 'app-yard',
   standalone: true,
-  imports: [NgTemplateOutlet, FormsModule, RouterLink, ZarCentsPipe, PortalShell],
+  imports: [NgTemplateOutlet, FormsModule, RouterLink, ZarCentsPipe, PortalShell, LeasePanel],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems" roleLabel="Landlord" pageTitle="Your property">
@@ -160,6 +161,12 @@ import { landlordNav } from '../landlord-nav';
           </p>
         </section>
       }
+
+      <!-- What needs deciding, above the inventory. A lease ending is the one
+           thing on this screen with a deadline attached; the room list is
+           reference. headingLevel 2 because this sits directly under the page
+           h1, and a component cannot know its own depth. -->
+      <app-lease-panel [headingLevel]="2"/>
 
       <ng-template #yardTpl let-group>
         <div class="yard">

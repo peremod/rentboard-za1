@@ -105,3 +105,31 @@ export interface RentPeriod {
   tenantNote?: string | null;
   reminderSentAt?: string | null;
 }
+
+/** Why a tenancy needs attention. The API decides; the screen does not re-derive it. */
+export type UpcomingReason = 'lease_ending' | 'notice_given';
+
+/**
+ * A tenancy that is about to free up a room.
+ *
+ * Either a fixed term inside the lead window, or one where notice has been
+ * given. A month-to-month tenancy with no notice appears in neither, because
+ * nothing is happening to it.
+ */
+export interface UpcomingLease {
+  tenancyId: string;
+  room: { id: string; title: string; status: string };
+  tenant: { id: string; fullName: string };
+  rentCents: number;
+  leaseEndDate: string | null;
+  noticePeriodDays: number;
+  noticeGivenAt: string | null;
+  /** 'you' or 'the tenant' — in the landlord's terms, not an id. */
+  noticeGivenBy: string | null;
+  /** The day the room frees up: notice + period, or the lease end. */
+  emptiesOn: string | null;
+  daysUntilEmpty: number | null;
+  reason: UpcomingReason;
+  /** Already past. Shown rather than hidden — an overdue relist is the urgent one. */
+  overdue: boolean;
+}
