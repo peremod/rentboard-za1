@@ -197,6 +197,57 @@ else
   bad "cannot check Terms prices — /legal/terms was not prerendered"
 fi
 
+# ── 6d. The Privacy Policy must name the payment processor the code uses ───
+# It named Stripe for four months after Stripe stopped processing anything,
+# and never named PayFast, which takes the R149. POPIA s.18 requires telling a
+# data subject who receives their personal information; that disclosure was
+# wrong in both directions at once, and no check looked at prose.
+#
+# So this one is derived from the code rather than hardcoded. The processors
+# are whatever services sit in backend/src/modules/payments — swap PayFast for
+# Ozow tomorrow and this fails until the page says so, which is the point. The
+# deny list is separate and exists for the proven failure: a processor we no
+# longer use still being named.
+step "Privacy Policy names the processor the code uses"
+PP="$DIST/legal/privacy/index.html"
+if [ -f "$PP" ]; then
+  PP_TEXT=$(sed 's/<[^>]*>/ /g' "$PP")
+
+  # payments.service.ts is the module's own orchestration, not a processor.
+  PROCESSORS=$(find backend/src/modules/payments -name '*.service.ts' -exec basename {} .service.ts \; 2>/dev/null \
+    | grep -vx 'payments' | sort -u || true)
+
+  if [ -z "$PROCESSORS" ]; then
+    bad "no payment processor found in backend/src/modules/payments"
+    note "This check derives the name from the code; it cannot run without one"
+  else
+    for proc in $PROCESSORS; do
+      if echo "$PP_TEXT" | grep -qi "$proc"; then
+        ok "Privacy Policy names $proc, which the code uses"
+      else
+        bad "the code pays through $proc and the Privacy Policy never names it"
+        note "POPIA s.18 — a data subject must be told who receives their information"
+      fi
+    done
+  fi
+
+  # Processors we do not use. Naming one tells people their money and details
+  # go somewhere they do not.
+  STALE=""
+  for other in stripe paypal yoco ozow snapscan paystack peach adyen payu zapper; do
+    echo "$PROCESSORS" | grep -qx "$other" && continue
+    echo "$PP_TEXT" | grep -qiw "$other" && STALE="$STALE $other"
+  done
+  if [ -z "$STALE" ]; then
+    ok "and names no processor it does not use"
+  else
+    bad "Privacy Policy names processors this platform does not use:$STALE"
+    note "Stripe sat here for four months after processing its last payment"
+  fi
+else
+  bad "cannot check the Privacy Policy — /legal/privacy was not prerendered"
+fi
+
 # Private routes must be noindex and carry no canonical.
 step "Private routes excluded from the index"
 L="$DIST/auth/login/index.html"
