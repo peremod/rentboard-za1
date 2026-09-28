@@ -84,6 +84,27 @@ The same defect already breaks sendOtp. See checklist row 40.
 
 Also: verify-build.sh now counts and names skipped checks instead of
 reporting 'Verified. Safe to tag.' over assertions that never ran."
+tag_if_missing "v1.81.0" "4f2c8137e1d5d27a3af8b590caa2a1562b66c4ea" "2026-09-28 18:46:28 +0000" "v1.81.0 — yard shared-living details and bulk relist (Phase 2 Tier 1)
+
+A yard carries what the whole address shares: house rules in the landlord's
+own words, shared facilities, how many people already live there, and what
+kind of household it is. On Property rather than Room, because four rooms at
+one address have one kitchen and one set of rules.
+
+  · housemateProfile defaults to 'unstated' and is never rendered — silence is
+    not a claim about who someone would be living with
+  · the room page shows it under 'The rest of the house', and never the yard's
+    private dashboard nickname
+  · bulk relist puts every relistable room back on the board, skipping what it
+    cannot and naming why per room
+
+Also: the accessibility drive now audits a real room page, reached by following
+the first card on the board. Its first run found a live WCAG 1.3.1 failure —
+the ad slot hardcoded an h4 for house-advert headlines, so the room page went
+H2 to H4. Fixed, and the summary counts the extra page.
+
+Tier 2 deliberately not started: the brief gates it on survey data that does
+not exist yet."
 
 echo
 echo "Created $created tag(s), skipped $skipped."
