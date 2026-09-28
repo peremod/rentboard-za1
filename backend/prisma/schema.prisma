@@ -126,6 +126,7 @@ model User {
   applications    Application[]
   messagesSent    Message[]
   refreshTokens   RefreshToken[]
+  expenses        Expense[]             @relation("ExpensesRecorded")
 
   @@index([email])
   @@index([role])
@@ -230,6 +231,7 @@ model Room {
   reviews      Review[]
   savedBy      SavedRoom[]
   reports      Report[]
+  expenses     Expense[]
 
   @@index([status])
   @@index([province, city])
@@ -1462,7 +1464,8 @@ model Property {
 
   housemateProfile HousemateProfile @default(unstated)
 
-  rooms Room[]
+  rooms    Room[]
+  expenses Expense[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1712,4 +1715,90 @@ model SurveyDismissal {
 
   @@unique([surveyId, landlordProfileId])
   @@map("survey_dismissals")
+}
+
+/// What a landlord spends on a property.
+///
+/// The categories are the ones that actually appear on a South African
+/// landlord's bank statement for a let property, not a generic accounting
+/// chart. `municipal` covers the consolidated bill many municipalities issue;
+/// water and electricity are separate because prepaid meters are bought
+/// separately from it and a landlord thinks of them separately.
+enum ExpenseCategory {
+  municipal
+  water
+  electricity
+  maintenance
+  other
+}
+
+/// One thing the landlord paid for.
+///
+/// Why this is the feature most likely to bring someone back: a landlord with
+/// no vacancy and no rent due has no reason to open the app, and every
+/// competitor in this market is a listing portal you visit only when a room is
+/// empty. Recording the geyser repair is a reason to be here on the other 340
+/// days.
+///
+/// ── Shape
+///
+/// It hangs off the PROPERTY, because that is how the money is actually spent:
+/// one municipal bill, one plumber, one gate motor for the whole address.
+/// `roomId` narrows it when a cost genuinely belongs to one room — a geyser in
+/// room 3 — and stays null otherwise. Forcing every expense onto a room would
+/// make the common case a lie.
+///
+/// ── Deliberately NOT built here
+///
+/// Nothing in this model assumes a single payer, and nothing stores a share.
+/// Phase 6 wants co-tenants splitting a bill between them, and the way to not
+/// block that is to keep the expense a record of a COST and let any future
+/// split be its own table pointing here — rather than adding `paidBy` or
+/// `sharePercent` now and guessing at semantics nobody has specified. See
+/// docs/FLOW-AUDIT.md §5.7.
+///
+/// ── POPIA
+///
+/// A receipt is the landlord's own business record, not information about a
+/// tenant, so unlike a verification document it is kept rather than deleted on
+/// a decision — a landlord needs it at tax time. It is never shown to anyone
+/// but its owner, and no tenant is named on an expense.
+model Expense {
+  id String @id @default(uuid())
+
+  /// Denormalised from the property so a landlord's own expenses can be read
+  /// and authorised without a join on every request.
+  landlordId String
+  landlord   User   @relation("ExpensesRecorded", fields: [landlordId], references: [id], onDelete: Cascade)
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  /// Set only when the cost belongs to one room rather than the address.
+  /// SetNull rather than Cascade: deleting a listing must not erase what the
+  /// landlord spent on it, which they still need at tax time.
+  roomId String?
+  room   Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  category ExpenseCategory
+  /// ZAR cents, like every other amount in this schema.
+  amountCents Int
+
+  /// The day the money went out, which is not the day it was typed in. A
+  /// landlord catching up on a month of receipts needs the real dates or the
+  /// monthly totals are wrong.
+  incurredOn DateTime
+
+  /// ImageKit path, uploaded straight from the browser like every other image
+  /// here. Optional: most of this market pays cash and has no receipt.
+  receiptPath String?
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([landlordId, incurredOn])
+  @@index([propertyId, incurredOn])
+  @@map("expenses")
 }
