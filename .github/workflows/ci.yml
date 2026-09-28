@@ -93,7 +93,7 @@ jobs:
             test -f "$PRERENDER/$stale" && {
               echo "❌ $stale was prerendered — the board must be RenderMode.Server"; exit 1; }
           done
-          echo "✅ the board is not baked into the build
+          echo "✅ the board is not baked into the build"
           # Metadata must be in the served HTML, not applied after hydration.
           grep -q 'rel="canonical"' "$PRERENDER/pricing/index.html" || { echo "❌ no canonical in prerendered output"; exit 1; }
           grep -q 'hreflang=' "$PRERENDER/pricing/index.html" || { echo "❌ no hreflang alternates in prerendered output"; exit 1; }

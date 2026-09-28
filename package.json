@@ -2,7 +2,7 @@
   "name": "mastande-za",
   "version": "1.78.0",
   "private": true,
-  "description": "Mastande ZA — South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
+  "description": "Mastande ZA \u2014 South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
   "scripts": {
     "prepare": "husky",
     "frontend": "npm --prefix frontend run start",
@@ -24,7 +24,8 @@
   "devDependencies": {
     "@commitlint/cli": "^19.5.0",
     "@commitlint/config-conventional": "^19.5.0",
+    "@playwright/test": "^1.50.0",
     "husky": "^9.1.6",
-    "@playwright/test": "^1.50.0"
+    "js-yaml": "^4.1.0"
   }
 }
