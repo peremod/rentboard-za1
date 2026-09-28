@@ -1595,3 +1595,116 @@ model WhatsappDraft {
   @@index([status, lastMessageAt])
   @@map("whatsapp_drafts")
 }
+
+/// Where a response came from. Kept because the three surfaces do not measure
+/// the same thing: the micro-survey catches someone at the moment a room is
+/// let, the dashboard catches someone with time to think, and WhatsApp reaches
+/// a landlord who does not open the portal at all — which is exactly the
+/// segment whose answers the product knows least about. Pooling them would
+/// hide that difference in the aggregate.
+enum SurveySource {
+  micro
+  dashboard
+  whatsapp
+}
+
+/// A questionnaire. One row per survey, questions carried as JSON.
+///
+/// Deliberately NOT a form builder. The questions are authored in
+/// prisma/surveys.ts and seeded; this model is general enough that a second
+/// survey is a hand-written seed entry rather than a schema change, and no
+/// further than that. A generic builder is a product in its own right and
+/// nobody has asked for one.
+///
+/// `questions` is an array of objects, each:
+///   { id: string, prompt: string, kind: 'choice' | 'text',
+///     options?: string[], optionalText?: boolean }
+///
+/// `id` is what answers are keyed by and must never be reused or renumbered —
+/// responses already collected point at it. Reordering the array is safe;
+/// changing an id silently reinterprets every answer already given.
+model Survey {
+  id    String @id @default(uuid())
+  /// Stable handle used by the code that triggers it (e.g. 'landlord-pain-2026').
+  slug  String @unique
+  title String
+
+  /// Shown above the first question. Plain English, like everything else.
+  intro String?
+
+  questions Json
+
+  /// Who should see it, as a filter the server applies — never trusted from
+  /// the client. Shape: { role: 'LANDLORD', minRooms?: number }.
+  /// A survey nobody matches is not an error; it simply never shows.
+  audience Json
+
+  /// Off by default. A half-written survey that is live by accident is worse
+  /// than one nobody can find.
+  active Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  responses  SurveyResponse[]
+  dismissals SurveyDismissal[]
+
+  @@map("surveys")
+}
+
+/// One person's answers.
+///
+/// `landlordProfileId` is nullable because the brief allows triggering before
+/// sign-in. An anonymous response still counts in the aggregate; it simply
+/// cannot be segmented by room count, and the admin view says so rather than
+/// quietly dropping it.
+///
+/// POPIA: answers are opinions about the product, not personal information,
+/// and nothing here stores a name or a number. The link to a landlord exists
+/// so the same person is not asked twice and so question 3 can segment the
+/// rest — not so answers can be read back against an individual. The admin
+/// view aggregates and never shows who said what.
+model SurveyResponse {
+  id       String @id @default(uuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  landlordProfileId String?
+
+  source SurveySource
+
+  /// Keyed by question id: { q1: 'Facebook', q5: { choice: 'yes', text: '…' } }.
+  /// Partial by design — someone who answers two questions and stops has told
+  /// us something, and discarding it to insist on a complete set would bias
+  /// the result toward people with time.
+  answers Json
+
+  createdAt DateTime @default(now())
+
+  /// One response per landlord per survey. Without this the dashboard prompt
+  /// and the WhatsApp message collect the same person twice and the counts
+  /// overstate agreement.
+  @@unique([surveyId, landlordProfileId])
+  @@index([surveyId, source])
+  @@map("survey_responses")
+}
+
+/// "Not now." Recorded so the prompt can honour it for 30 days.
+///
+/// Separate from SurveyResponse rather than a status on it, because a
+/// dismissal is not a partial answer and must never be counted as one. Asking
+/// again after 30 days is the point — a landlord who skips in a busy week may
+/// answer in a quiet one — but asking on the next page load is how a prompt
+/// becomes something people learn to dismiss without reading.
+model SurveyDismissal {
+  id       String @id @default(uuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  landlordProfileId String
+
+  dismissedAt DateTime @default(now())
+
+  @@unique([surveyId, landlordProfileId])
+  @@map("survey_dismissals")
+}
