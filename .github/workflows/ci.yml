@@ -103,9 +103,13 @@ jobs:
         # This used to measure `main*.js` alone against 500 KB. Under the
         # esbuild builder main-*.js is a 7 KB bootstrap and the dependencies
         # live in sibling chunk-*.js files, so the check compared 7 KB against
-        # 500 KB and could never fail. The script reads index.html and sums
-        # every script the browser fetches before the page is interactive —
-        # 138 KB gzipped, not 7.
+        # 500 KB and could never fail. The script sums every script the browser
+        # fetches before the page is interactive — 140 KB gzipped, not 7.
+        #
+        # It boots the server bundle to read the board, which is no longer a
+        # file in the build. Needs no API: with nothing on the other end the
+        # board still renders its empty state, and the script graph in the
+        # document does not depend on the data. Measured, not assumed.
         run: node scripts/bundle-budget.mjs
 
       # `if: !cancelled()` on the three steps below, and on three in the e2e
