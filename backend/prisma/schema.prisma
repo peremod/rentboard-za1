@@ -140,6 +140,10 @@ model LandlordProfile {
   companyName          String?
   planTier             PlanTier  @default(free)
   planExpiresAt        DateTime?
+  /// ⚠️ DEAD COLUMNS — nothing reads or writes them. Stripe was removed in
+  /// v1.79.0 and there are no recurring plans to subscribe to. Kept only
+  /// because dropping them needs a migration against the live database; see
+  /// PRE-LAUNCH-CHECKLIST row 41.
   stripeCustomerId     String?   @unique
   stripeSubscriptionId String?   @unique
   idVerified           Boolean   @default(false)
@@ -1271,10 +1275,19 @@ model LandlordWhatsappConfig {
   @@map("landlord_whatsapp_configs")
 }
 
-/// One-off "featured" boost purchase for a single room — separate from the
-/// landlord's recurring plan subscription. stripeSessionId (the Checkout
-/// Session ID, known at creation time) is the idempotency key: the webhook
-/// only ever activates a boost once per session.
+/// ⚠️ DEAD TABLE — nothing reads or writes it. Kept only because dropping it
+/// needs a migration against the live database; see PRE-LAUNCH-CHECKLIST row 41.
+///
+/// It described a one-off "featured" boost bought through Stripe Checkout,
+/// with stripeSessionId as the webhook's idempotency key. Stripe was removed
+/// in v1.79.0 — it does not operate in South Africa for receiving — and the
+/// boost feature itself was never built: the dashboard's "Boost R99" button
+/// sits behind BILLING_ENABLED, which is false, and there is no endpoint
+/// behind it. `grep -rn roomBoost src/` returns nothing.
+///
+/// Note `stripeSessionId String @unique` is NOT nullable, so a row could not
+/// be inserted today even if something tried — which is a fair summary of the
+/// state of this table.
 model RoomBoost {
   id              String    @id @default(uuid())
   roomId          String
@@ -1298,13 +1311,23 @@ enum PassportStatus {
   cancelled
 }
 
-/// Renter's Passport — a tenant's paid, portable pre-verification badge.
-/// idVerified/incomeVerified here are DELIBERATELY separate from the same
-/// flags on TenantProfile: this pass wires the payment + subscription
-/// lifecycle only. Actual document/ID verification is a third-party KYC
-/// integration (e.g. Smile Identity, Youverify) NOT included in this pass
-/// — see README §18. Until that lands, these flags require manual/admin
-/// verification and must not be presented to users as automatic.
+/// ⚠️ DEAD TABLE — nothing reads or writes it. Kept only because dropping it
+/// needs a migration against the live database; see PRE-LAUNCH-CHECKLIST row 41.
+///
+/// The Renter's Passport is REAL and is live — it is simply not this table.
+/// What a landlord actually sees is `TenantProfile.hasPassport`, computed in
+/// verification.service.ts as `idVerified && incomeVerified` from approved
+/// VerificationRequests, with `passportExpiresAt` beside it.
+///
+/// This model's own description was wrong in a way worth naming: it called the
+/// Passport "paid" and wired a Stripe subscription lifecycle. The Passport is
+/// FREE and always was meant to be — charging the side of this market with the
+/// least money to prove they are poor enough to need a room is the fastest way
+/// to lose it (see verification.rules.ts) — and Stripe was removed in v1.79.0.
+/// So the schema described a paid product that cannot be bought, through a
+/// processor that is gone, in a table nothing reads. That is the same defect
+/// as checklist row 35, where the Terms advertised four subscriptions that did
+/// not exist: prose outliving the thing it describes.
 model RentersPassport {
   id                   String         @id @default(uuid())
   tenantId             String         @unique
