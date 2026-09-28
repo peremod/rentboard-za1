@@ -482,15 +482,17 @@ jobs:
       - name: Logs and traces on failure
         if: failure()
         run: |
-          # The a11y drive's own output first — it is the step most likely to
-          # have failed, and its findings were unreadable from outside: the log
-          # API returns only the tail of a job, and three later steps push the
-          # drive's output past it. A failure nobody can read is a failure
-          # nobody can fix.
-          echo "── accessibility ──"; tail -120 /tmp/a11y.log 2>/dev/null || true
-          echo "── API ──";      tail -50 /tmp/api.log     2>/dev/null || true
-          echo "── frontend ──"; tail -50 /tmp/fe.log      2>/dev/null || true
-          tail -50 /tmp/fe-prod.log 2>/dev/null || true
+          # Ordered by how likely it is to be the answer, LAST — because only
+          # the tail of a job is readable through the log API, so whatever is
+          # printed last is what can actually be retrieved. Putting the
+          # accessibility output first buried it behind 50 lines of Nest route
+          # mappings, which is how two attempts at reading this failure came
+          # back with nothing but container teardown.
+          echo "── frontend ──"; tail -12 /tmp/fe.log      2>/dev/null || true
+          tail -12 /tmp/fe-prod.log 2>/dev/null || true
+          # Route mappings are never the answer; errors at the end might be.
+          echo "── API ──";      tail -15 /tmp/api.log     2>/dev/null || true
+          echo "── accessibility ──"; tail -60 /tmp/a11y.log 2>/dev/null || true
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
