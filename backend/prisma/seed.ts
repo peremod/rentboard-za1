@@ -15,10 +15,11 @@
  * standing privilege-escalation risk if the guard around it is ever wrong;
  * requiring database credentials to mint an admin is the safer trade.
  */
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { appEnv } from '../src/config/environment';
 import { HOUSE_ADS, HOUSE_ADVERTISER, HOUSE_ADVERTISER_ID, houseAdRow } from './house-ads';
+import { LANDLORD_PAIN_SURVEY, microQuestion } from './surveys';
 
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 12;
@@ -100,6 +101,7 @@ Optional: ADMIN_NAME="Your Name"
   // House ads. Always seeded, not opt-in: they fill unsold inventory and give
   // the rate card a national baseline to measure against.
   await seedHouseAds();
+  await seedSurveys();
 
   // Place taxonomy. Always seeded — search and ad targeting depend on it, and
   // it is reference data rather than demo data.
@@ -138,6 +140,42 @@ async function seedHouseAds() {
   }
 
   console.log(`Seeded ${HOUSE_ADS.length} house ads (nationwide, fill-only).`);
+}
+
+/**
+ * Writes the landlord pain-point survey. Questions live in prisma/surveys.ts.
+ *
+ * Upsert on slug, so running the full seed twice does not create a second copy
+ * and does not disturb responses already collected. Unlike seed-survey.ts this
+ * one does not refuse when a question id would disappear — the full seed is a
+ * development and CI tool run against throwaway databases, and the refusal
+ * belongs on the script that gets pointed at production.
+ */
+async function seedSurveys() {
+  // Throws if the micro question is missing or ambiguous, here rather than at
+  // the moment a landlord marks a room let and the prompt has nothing to ask.
+  microQuestion();
+
+  await prisma.survey.upsert({
+    where: { slug: LANDLORD_PAIN_SURVEY.slug },
+    update: {
+      title: LANDLORD_PAIN_SURVEY.title,
+      intro: LANDLORD_PAIN_SURVEY.intro,
+      questions: LANDLORD_PAIN_SURVEY.questions as unknown as Prisma.InputJsonValue,
+      audience: LANDLORD_PAIN_SURVEY.audience as unknown as Prisma.InputJsonValue,
+      active: LANDLORD_PAIN_SURVEY.active,
+    },
+    create: {
+      slug: LANDLORD_PAIN_SURVEY.slug,
+      title: LANDLORD_PAIN_SURVEY.title,
+      intro: LANDLORD_PAIN_SURVEY.intro,
+      questions: LANDLORD_PAIN_SURVEY.questions as unknown as Prisma.InputJsonValue,
+      audience: LANDLORD_PAIN_SURVEY.audience as unknown as Prisma.InputJsonValue,
+      active: LANDLORD_PAIN_SURVEY.active,
+    },
+  });
+
+  console.log(`Seeded 1 survey (${LANDLORD_PAIN_SURVEY.questions.length} questions).`);
 }
 
 /**

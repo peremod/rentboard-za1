@@ -128,6 +128,12 @@ LEFT_PENDING=""
 LET_STATUS=""
 LIQ=""
 LOWED=""
+SURVEY_AGAIN=""
+SURVEY_MICRO=""
+SURVEY_RECORDED=""
+SURVEY_SEG=""
+SURVEY_SLUG=""
+SURVEY_TENANT=""
 MINE=""
 MSGS=""
 OTHER_LL=""
@@ -2651,6 +2657,78 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   fi
 else
   grey "  SKIP  refunds queue contents — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
+fi
+
+
+# ── Landlord survey (Phase 0) ──────────────────────────────────────────────
+#
+# The survey is seeded by prisma/seed.ts, so a database seeded without it
+# SKIPS rather than fails — a smoke run against an older database should not
+# report a bug that is really a missing seed.
+head_ "Landlord survey"
+
+req GET /api/surveys/prompt "" "$LTOKEN"
+check "GET /surveys/prompt as a landlord" 200 "$STATUS" "$BODY"
+SURVEY_SLUG=$(echo "$BODY" | jq -r '.slug // empty')
+
+if [[ -z "$SURVEY_SLUG" ]]; then
+  grey "  SKIP  no active survey seeded — run npx ts-node prisma/seed-survey.ts --apply"; SKIP=$((SKIP+1))
+else
+  SURVEY_MICRO=$(echo "$BODY" | jq -r '.microQuestion.id // empty')
+  if [[ -n "$SURVEY_MICRO" ]]; then
+    green "  PASS  the prompt names a micro question ($SURVEY_MICRO)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  no micro question — the post-letting prompt would have nothing to ask"; FAIL=$((FAIL+1))
+  fi
+
+  # An unknown question id must be DROPPED, not stored. Anything that reaches
+  # the aggregate must be explained by a question, or the admin view shows
+  # counts against keys nobody asked about.
+  req POST "/api/surveys/$SURVEY_SLUG/responses" \
+    '{"answers":{"q3_room_count":"2 to 4","not_a_question":"should be dropped"},"source":"dashboard"}' "$LTOKEN"
+  check "POST a survey response" 201 "$STATUS" "$BODY"
+  SURVEY_RECORDED=$(echo "$BODY" | jq -r '.recorded // empty')
+  if [[ "$SURVEY_RECORDED" == "1" ]]; then
+    green "  PASS  an unknown question id is dropped, not stored"; PASS=$((PASS+1))
+  else
+    red "  FAIL  expected 1 answer recorded, got $SURVEY_RECORDED — an unknown id was stored"; FAIL=$((FAIL+1))
+  fi
+
+  # Having answered, the landlord must not be asked again.
+  req GET /api/surveys/prompt "" "$LTOKEN"
+  SURVEY_AGAIN=$(echo "$BODY" | jq -r '.slug // empty')
+  if [[ -z "$SURVEY_AGAIN" ]]; then
+    green "  PASS  the prompt goes quiet once answered"; PASS=$((PASS+1))
+  else
+    red "  FAIL  still prompting after an answer — the same person would be counted twice"; FAIL=$((FAIL+1))
+  fi
+
+  # A tenant is not in the audience and must never be asked.
+  req GET /api/surveys/prompt "" "$TTOKEN"
+  SURVEY_TENANT=$(echo "$BODY" | jq -r '.slug // empty')
+  if [[ -z "$SURVEY_TENANT" ]]; then
+    green "  PASS  a tenant is not asked a landlord survey"; PASS=$((PASS+1))
+  else
+    red "  FAIL  a tenant was offered a landlord-only survey"; FAIL=$((FAIL+1))
+  fi
+
+  # Aggregates are admin-only: they are the product's own research, and the
+  # open-text answers are things landlords said about their tenants.
+  req GET "/api/surveys/admin/$SURVEY_SLUG/results" "" "$LTOKEN"
+  check "survey results refused to a non-admin" 403 "$STATUS" "$BODY"
+
+  if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+    req GET "/api/surveys/admin/$SURVEY_SLUG/results" "" "$ADMIN_TOKEN"
+    check "survey results as admin" 200 "$STATUS" "$BODY"
+    SURVEY_SEG=$(echo "$BODY" | jq -r '.segmentQuestionId // empty')
+    if [[ -n "$SURVEY_SEG" ]]; then
+      green "  PASS  results are segmented by $SURVEY_SEG"; PASS=$((PASS+1))
+    else
+      red "  FAIL  results are not segmented — a table segmented by nothing looks like agreement"; FAIL=$((FAIL+1))
+    fi
+  else
+    grey "  SKIP  survey aggregate — set ADMIN_TOKEN to include it"; SKIP=$((SKIP+1))
+  fi
 fi
 
 # ── Summary ────────────────────────────────────────────────────────────────

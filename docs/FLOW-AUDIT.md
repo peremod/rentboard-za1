@@ -492,6 +492,38 @@ a stranger.
 
 ---
 
+### 5.5 Landlord research survey — ✅ built in v1.80.0
+
+Phase 0. Nothing in the product had ever asked a landlord what is hard about
+the job, so the yard-management tiers rested on an assumption. The survey is
+what turns that into data before the engineering is spent.
+
+Two surfaces, never both at once: one question straight after a landlord marks
+a room let, and the full seven as a skippable card on the dashboard. A skip is
+recorded server-side and honoured for 30 days — not in `localStorage`, because
+a dismissal that lives in one browser means being asked again on the next
+device, which teaches people to clear the prompt without reading it.
+
+Eligibility is decided on the server and never by the client. `audience`
+supports `minRooms`, which counts rooms the landlord actually has; the point of
+targeting "2+ rooms" is to reach people whose situation the product does not
+know, and a client that decides its own eligibility can be asked to lie.
+
+Results are at `/admin/surveys`, segmented by the room-count question, counts
+rather than percentages, and with the number who answered beside each question.
+Nobody is named: the landlord link exists so the same person is not asked twice
+and so answers can be segmented, not so opinions can be read back against an
+individual.
+
+❌ **Not built: WhatsApp delivery.** Deferred to Phase 7g, and not for
+scheduling reasons — see checklist row 40. Every outbound message in this
+codebase is free-form `type: 'text'`, which Meta permits only inside the
+24-hour customer service window. Reaching a landlord who does not open the
+portal is business-initiated by definition and needs an approved template,
+which does not exist here. The same defect already affects `sendOtp`, so the
+template work is shared and is better done once, in 7g.
+
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: 70+ checks

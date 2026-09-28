@@ -92,6 +92,7 @@ const ADMIN_PAGES = [
   '/admin/disputes',
   '/admin/advertising',
   '/admin/referrals',
+  '/admin/surveys',
   '/admin/analytics',
 ];
 
