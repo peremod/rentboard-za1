@@ -229,6 +229,16 @@ the build, if the served board is `ng-server-context="ssg"` rather than `ssr`,
 or if the Cache-Control loses its shared-cache window — proven by reverting the
 route and watching all three fail.
 
+One thing depended on `index.html` existing and broke when it stopped:
+`scripts/bundle-budget.mjs` read that file to sum the initial JavaScript.
+It boots the server bundle and asks for `/` now, and also measures every
+prerendered page, holding the costliest to the 170 KB budget. The board is the
+costliest — 140.8 KB against `/pricing`'s 118.5 KB, because each page adds its
+own route preloads to a shared nine-chunk graph and the board's are the
+largest. Worth knowing before reaching for a prerendered page as a stand-in:
+that substitution would quietly hand the budget 22 KB of headroom it does not
+have.
+
 ### A published locale has to be served in that locale
 
 Stated because it was not true. `/af` and `/af/pricing` were served in English
