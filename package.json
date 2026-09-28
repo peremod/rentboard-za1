@@ -1,8 +1,8 @@
 {
   "name": "mastande-za",
-  "version": "1.78.0",
+  "version": "1.78.1",
   "private": true,
-  "description": "Mastande ZA \u2014 South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
+  "description": "Mastande ZA — South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
   "scripts": {
     "prepare": "husky",
     "frontend": "npm --prefix frontend run start",
