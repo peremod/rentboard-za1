@@ -46,6 +46,8 @@
   --gold2:#E8AE3A;
   --sage:#3D7040;
   --sage2:#4E8E52;
+  /* Hover. #4E8E52 is 3.95:1 with white; this is 7.11:1. */
+  --sage-deep:#356237;
   /**
    * Muted body text. Was #7A6E60, which is 4.26:1 on --cream2 and fails the
    * 4.5:1 WCAG needs for small text — measured by axe on /legal/terms,
@@ -113,7 +115,9 @@ img{display:block;max-width:100%}
 .btn-outline{background:transparent;color:var(--terra);border:1.5px solid var(--terra)}
 .btn-outline:hover{background:var(--terra);color:#fff}
 .btn-sage{background:var(--sage);color:#fff}
-.btn-sage:hover{background:var(--sage2)}
+/* Darkens, for the same reason --terra-deep exists: --sage2 is 3.95:1 with
+   white and hover is not a state where contrast is allowed to drop. */
+.btn-sage:hover{background:var(--sage-deep);color:#fff}
 .btn-sm{padding:.4rem .9rem;font-size:.8rem}
 .btn-lg{padding:.75rem 1.75rem;font-size:1rem}
 

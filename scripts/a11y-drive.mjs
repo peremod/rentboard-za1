@@ -116,6 +116,22 @@ const failures = [];
 
 /** A card's visible text is a paragraph; the failure line has to stay readable. */
 const clip = (text) => (text.length > 70 ? text.slice(0, 70) + '…' : text);
+
+/** `rgb()`/`rgba()` as the browser always reports it. */
+function parseColour(css) {
+  const m = String(css).match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+  return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+}
+
+/** WCAG relative luminance and the 1.4.3 ratio. Solid colours only. */
+function contrastRatio(fg, bg) {
+  const lum = ({ r, g, b }) =>
+    [r, g, b]
+      .map((v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4))
+      .reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const [hi, lo] = [lum(fg), lum(bg)].sort((a, b) => b - a);
+  return (hi + 0.05) / (lo + 0.05);
+}
 const locate = (c) => (c.cls ? '.' + c.cls : c.href ? `[href="${c.href}"]` : '(no class)');
 
 /**
@@ -306,6 +322,183 @@ async function auditPage(page, path, { close = true } = {}) {
     }
   }
 
+  // ── Hover and focus, which the parked pointer stopped measuring ──────────
+  //
+  // Row 36's open half. Parking the pointer made the resting-state audit
+  // reproducible and, in the same move, removed the only thing that had ever
+  // looked at :hover — and what it had found there was real: every primary
+  // button in the app sat at 3.56:1 while a pointer was over it, because hover
+  // LIGHTENED the background under white text. That was discovered by accident,
+  // which is not a plan.
+  //
+  // axe cannot be pointed at a pseudo-class, so this drives the states: hover
+  // each control, read what the browser computed, and do the ratio. Solid
+  // backgrounds only — a semi-transparent hover would need the compositing axe
+  // does properly, and reporting a wrong number is worse than reporting none,
+  // so those are counted and named rather than guessed at.
+  //
+  // The hover half is driven from here, not from inside the page. The first
+  // version dispatched a synthetic PointerEvent and read the computed style,
+  // which cannot work: CSS :hover follows the browser's real pointer position,
+  // and a dispatched event does not move it. It reported every page green with
+  // the 3.56:1 hover colour deliberately restored — a check that passes while
+  // the bug it exists for is present. Found by reverting --terra-deep and
+  // watching it stay ✅.
+  //
+  // :focus is different — el.focus() is real state — so that half stayed in
+  // the page where it is cheaper.
+  const hoverTargets = await page.locator('button:visible, a[href]:visible').elementHandles();
+  const hoverFindings = [];
+  let hoverSkipped = 0;
+
+  for (const handle of hoverTargets.slice(0, 24)) {
+    try {
+      await handle.hover({ timeout: 1500, force: true });
+    } catch {
+      continue; // off-screen or covered; not a finding
+    }
+    // Let the transition finish before reading. `.btn` carries
+    // `transition: all .15s`, and getComputedStyle returns the value as it is
+    // animating — so reading immediately after hover returns the colour the
+    // button is leaving, not the one it is arriving at. That made this check
+    // report every page green with the 3.56:1 hover colour deliberately
+    // restored, which is also why the defect was originally found by accident:
+    // the pointer had been resting on that button, long past .15s.
+    await page.waitForTimeout(220);
+    const seenNow = await handle.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return {
+        color: cs.color,
+        background: cs.backgroundColor,
+        fontSize: parseFloat(cs.fontSize),
+        bold: Number(cs.fontWeight) >= 700,
+        text: (el.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 44),
+        cls: el.className && typeof el.className === 'string'
+          ? el.className.split(' ').filter(Boolean)[0] ?? el.tagName.toLowerCase()
+          : el.tagName.toLowerCase(),
+        // Resolve a fully transparent background to the first painted ancestor.
+        behind: (() => {
+          for (let p = el.parentElement; p; p = p.parentElement) {
+            const b = getComputedStyle(p).backgroundColor;
+            const m = b.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+            if (m && (m[4] === undefined || +m[4] === 1)) return b;
+            if (m && +m[4] > 0) return null;
+          }
+          return null;
+        })(),
+      };
+    });
+    const f = parseColour(seenNow.color);
+    let b = parseColour(seenNow.background);
+    if (b && b.a === 0) b = seenNow.behind ? parseColour(seenNow.behind) : null;
+    if (!f || !b || b.a < 1) { hoverSkipped++; continue; }
+    if (!/[a-z0-9]/i.test(seenNow.text)) continue;
+
+    const needs = seenNow.fontSize >= 24 || (seenNow.bold && seenNow.fontSize >= 18.66) ? 3 : 4.5;
+    const r = contrastRatio(f, b);
+    if (r < needs) {
+      hoverFindings.push({
+        state: 'hover', text: seenNow.text, ratio: r.toFixed(2), needs,
+        fg: seenNow.color, bg: seenNow.background === 'rgba(0, 0, 0, 0)' ? seenNow.behind : seenNow.background,
+        cls: seenNow.cls,
+      });
+    }
+  }
+  await page.mouse.move(0, 0);
+
+  const states = await page.evaluate(async () => {
+    const parse = (c) => {
+      const m = c.match(/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/);
+      return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+    };
+    const lum = ({ r, g, b }) =>
+      [r, g, b]
+        .map((v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4))
+        .reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+    const ratio = (fg, bg) => {
+      const [hi, lo] = [lum(fg), lum(bg)].sort((a, b) => b - a);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+
+    const findings = [];
+    let skipped = 0;
+    const controls = [...document.querySelectorAll('button, a[href]')].filter((el) =>
+      el.checkVisibility({ visibilityProperty: true, contentVisibilityAuto: true }),
+    );
+
+    for (const el of controls.slice(0, 40)) {
+      // Focus only. Hover is driven by the real pointer, above — a dispatched
+      // event does not move it and so never triggers CSS :hover.
+      for (const state of ['focus']) {
+        el.focus();
+
+        const cs = getComputedStyle(el);
+        const fg = parse(cs.color);
+
+        // A fully transparent background is not unmeasurable — the text simply
+        // sits on whatever is behind it, so walk up to the first ancestor that
+        // paints. The first version skipped these and reported 44 of 71
+        // controls unmeasured, which is a blind spot larger than the thing it
+        // was checking: every link on the page has no background of its own.
+        //
+        // Partial alpha is different and is still skipped: blending 0 < a < 1
+        // correctly is what axe does properly, and a wrong ratio reported
+        // confidently is worse than an honest gap.
+        let bg = parse(cs.backgroundColor);
+        if (bg && bg.a === 0) {
+          bg = null;
+          for (let p = el.parentElement; p; p = p.parentElement) {
+            const pb = parse(getComputedStyle(p).backgroundColor);
+            if (pb && pb.a === 1) { bg = pb; break; }
+            if (pb && pb.a > 0) break; // translucent ancestor — needs real compositing
+          }
+          if (!bg) { skipped++; continue; }
+        }
+        if (!fg || !bg) continue;
+        if (bg.a < 1) { skipped++; continue; }
+
+        const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+        if (!/[a-z0-9]/i.test(text)) continue;
+
+        // 4.5:1 for normal text; 3:1 once it is 24px, or 18.66px and bold.
+        const px = parseFloat(cs.fontSize);
+        const bold = Number(cs.fontWeight) >= 700;
+        const needs = px >= 24 || (bold && px >= 18.66) ? 3 : 4.5;
+        const r = ratio(fg, bg);
+        if (r < needs) {
+          findings.push({
+            state, text: text.slice(0, 44), ratio: r.toFixed(2), needs,
+            fg: cs.color, bg: cs.backgroundColor,
+            cls: (el.className && typeof el.className === 'string' ? el.className.split(' ')[0] : el.tagName.toLowerCase()),
+          });
+        }
+        el.blur();
+      }
+    }
+    return { findings, skipped, checked: controls.length };
+  });
+
+  const seen = new Set();
+  const unique = [...hoverFindings, ...states.findings].filter((f) => {
+    const key = `${f.state}|${f.cls}|${f.ratio}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  if (!unique.length) {
+    console.log(
+      `  ✅ hover/focus: ${hoverTargets.slice(0, 24).length} hovered + ${states.checked} focused, all over threshold` +
+        (states.skipped + hoverSkipped ? ` (${states.skipped + hoverSkipped} translucent, not measurable here)` : ''),
+    );
+  } else {
+    console.log(`  hover/focus: ${unique.length} below threshold`);
+    for (const f of unique) {
+      console.log(`    ❌ :${f.state} .${f.cls} — ${f.ratio}:1, needs ${f.needs}  ${f.fg} on ${f.bg}  "${f.text}"`);
+      failures.push(`${path}: :${f.state} contrast ${f.ratio}:1 (needs ${f.needs}) on .${f.cls}`);
+    }
+  }
+
   // The board with rooms on it is the state that hid two real defects for
   // four releases: the room card's h3 followed the hero's h1 with no h2
   // between them, and the card's aria-label replaced everything the card
@@ -405,5 +598,7 @@ console.log(
     // Named separately rather than folded into "accessible": a summary that
     // claims more than the run checked is how row 32 happened in the first
     // place — the drive reported green while looking at no colour at all.
-    (axeSource ? ', every text node over its contrast threshold.' : '. Contrast NOT checked — axe-core missing.'),
+    (axeSource
+      ? ', every text node over its contrast threshold at rest, on hover and on focus.'
+      : '. Contrast NOT checked — axe-core missing.'),
 );

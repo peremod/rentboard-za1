@@ -202,7 +202,16 @@ input[type='radio'] {
   // text from 5.87:1 to 3.56:1 — so every primary button in the app failed
   // WCAG 1.4.3 for as long as a pointer was over it, in the one state where
   // someone is about to act. $color-terra-deep is 7.86:1.
+  // `color` moves with `background`, and that is the whole point.
+  //
+  // This rule paints EVERY button terracotta on hover, at zero specificity, so
+  // any variant without its own :hover inherits it — while keeping its own
+  // resting text colour. A chip with terracotta text landed on a terracotta
+  // background at 1.34:1, and the board's Filters button at 2.28:1. Setting
+  // the background without setting the foreground is the defect; they are one
+  // decision.
   &:hover:not(:disabled) {
+    color: #fff;
     background: $color-terra-deep;
     transform: translateY(-1px);
     box-shadow: 0 4px 14px rgba(192, 78, 40, .35);
