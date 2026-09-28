@@ -563,6 +563,52 @@ for (const path of PUBLIC_PAGES) {
   }
 }
 
+/**
+ * A real room page, found by following the first card on the board.
+ *
+ * It cannot be a fixed path — a room's URL carries its id — which is exactly
+ * why it had never been audited. The room detail page is the most-read page on
+ * the site after the board, carries the apply form, the landlord's verified
+ * badge and now the shared-living section, and nothing had ever looked at its
+ * heading order or its colours. The same shape of gap as the seven admin
+ * screens in checklist row 38: not a decision, an omission that followed from
+ * the list being literal paths.
+ *
+ * Skipped loudly rather than silently when the board is empty, because a drive
+ * that quietly audits one page fewer and still prints a tick is the defect
+ * this file exists to prevent.
+ */
+let publicPages = PUBLIC_PAGES.length;
+{
+  const page = await browser.newPage({ viewport: { width: WIDTH, height: 823 } });
+  try {
+    await page.goto(`${BASE}/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1200);
+    const href = await page.locator('app-room-card a').first().getAttribute('href').catch(() => null);
+    await page.close().catch(() => {});
+
+    if (!href) {
+      console.log('\n⏭  SKIP the room page — no rooms on the board to open.');
+      failures.push('the room detail page was not audited: the board had no rooms');
+    } else {
+      const roomPage = await browser.newPage({ viewport: { width: WIDTH, height: 823 } });
+      try {
+        await auditPage(roomPage, href);
+        // Counted, so the summary line says what the run actually covered.
+        // Leaving it out would make the tick claim one page fewer than it
+        // earned — checklist row 38 pointing the other way.
+        publicPages++;
+      } catch (err) {
+        failures.push(`${href}: the audit could not complete (${err.message})`);
+        await roomPage.close().catch(() => {});
+      }
+    }
+  } catch (err) {
+    failures.push(`the room page could not be reached from the board (${err.message})`);
+    await page.close().catch(() => {});
+  }
+}
+
 // ── the portal, which needs one ────────────────────────────────────────────
 //
 // Skipped loudly rather than silently when there is no API to register
@@ -654,7 +700,7 @@ if (failures.length) {
   process.exit(1);
 }
 console.log(
-  `✅ ${PUBLIC_PAGES.length} public + ${portalPages} portal pages: ` +
+  `✅ ${publicPages} public + ${portalPages} portal pages: ` +
     'heading order intact, every control named' +
     // Named separately rather than folded into "accessible": a summary that
     // claims more than the run checked is how row 32 happened in the first

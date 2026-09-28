@@ -524,6 +524,35 @@ which does not exist here. The same defect already affects `sendOtp`, so the
 template work is shared and is better done once, in 7g.
 
 
+### 5.6 Yard shared-living details — ✅ built in v1.81.0
+
+Phase 2 Tier 1. A yard now carries what the whole address shares: house rules
+in the landlord's own words, shared facilities, how many people already live
+there, and what kind of household it is.
+
+On `Property` rather than `Room` because four rooms at one address have one
+kitchen, one set of rules and one group of housemates. Held per room they get
+typed four times and the copies drift — in front of tenants deciding where to
+live.
+
+`housemateProfile` defaults to `unstated`, which is a distinct value from
+`mixed` and is never rendered. `mixed` is a claim about who a person would be
+living with; silence is not one, and a default that made the claim would put a
+description on a listing that no landlord wrote.
+
+The room detail page shows all of it under "The rest of the house" — and does
+not show the yard's `name`, which is the landlord's own dashboard label.
+
+Bulk relist puts every relistable room in a yard back on the board in one
+action, skipping what it cannot relist and naming why per room.
+
+❌ **Not built: Tier 2** (rent roll beyond what already exists, days-to-fill
+analytics, maintenance log). The brief gates Tier 2 on the Phase 0 survey
+confirming rent tracking and trust are the top pain points, and no survey
+responses exist yet. Building it now would be the assumption the survey was
+written to test.
+
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: 70+ checks

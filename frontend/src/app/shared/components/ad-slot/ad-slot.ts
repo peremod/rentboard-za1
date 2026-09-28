@@ -33,7 +33,11 @@ import { getImageUrl } from '../../utils/imagekit.utils';
                  width="600" height="400" loading="lazy" decoding="async"/>
           }
           <div class="ad-slot__body">
-            <h4 class="ad-slot__headline">{{ advert.headline }}</h4>
+            @if (headingLevel() === 3) {
+              <h3 class="ad-slot__headline">{{ advert.headline }}</h3>
+            } @else {
+              <h4 class="ad-slot__headline">{{ advert.headline }}</h4>
+            }
             @if (advert.body) { <p class="ad-slot__text">{{ advert.body }}</p> }
             <span class="ad-slot__cta">{{ advert.ctaLabel }} →</span>
             <span class="ad-slot__advertiser">by {{ advert.advertiser }}</span>
@@ -65,6 +69,33 @@ import { getImageUrl } from '../../utils/imagekit.utils';
 })
 export class AdSlot implements OnInit {
   private ads = inject(AdsService);
+
+  /**
+
+   * The level for the advert's headline, set by whoever places the slot.
+
+   *
+
+   * It was a hardcoded h4. On the room page the slot follows an h2, so the
+
+   * page went H2 → H4 and a screen reader moving by heading was told a level
+
+   * was skipped — WCAG 1.3.1, live, on the most-read page after the board.
+
+   * Found the moment the accessibility drive started auditing a room page at
+
+   * all; nothing had ever looked at it.
+
+   *
+
+   * A component cannot know its own depth, so it is the host's to declare —
+
+   * the same fix as the survey card, and the same mistake underneath.
+
+   */
+
+  readonly headingLevel = input<3 | 4>(4);
+
 
   readonly placement = input.required<AdPlacement>();
   readonly province = input<string | undefined>(undefined);

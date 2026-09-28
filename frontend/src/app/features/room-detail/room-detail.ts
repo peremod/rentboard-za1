@@ -18,6 +18,15 @@ import { Review } from '../../core/models/review.model';
 import { AMENITY_LABELS } from '../../core/models/room.model';
 import { environment } from '@env/environment';
 
+/** Plain English, in a tenant's terms. `unstated` has no entry: it is never shown. */
+const HOUSEMATE_SENTENCE: Record<'professionals' | 'students' | 'mixed' | 'couples', string> = {
+  professionals: 'mostly working people',
+  students: 'mostly students',
+  mixed: 'a mix of people',
+  couples: 'mostly couples',
+};
+
+
 /**
  * Room detail — gallery, full description, and the apply flow.
  * `id` is bound automatically from the :id route segment via
@@ -184,6 +193,38 @@ import { environment } from '@env/environment';
           </section>
         }
 
+        <!-- The rest of the house.
+             Placed straight after what comes with the room, because a person
+             choosing a room in a shared house is choosing housemates and rules
+             as much as a room, and until now the page said nothing about
+             either. Nothing renders when the landlord has said nothing —
+             an empty "House rules" heading reads as "there are none". -->
+        @if (sharedLiving(); as shared) {
+          <section class="detail__section">
+            <h2>The rest of the house</h2>
+
+            @if (shared.who) {
+              <p class="shared-who">{{ shared.who }}</p>
+            }
+
+            @if (shared.facilities.length) {
+              <div class="room-amenities">
+                @for (f of shared.facilities; track f) {
+                  <span class="room-amenity">{{ f }}</span>
+                }
+              </div>
+            }
+
+            @if (shared.rules) {
+              <div class="shared-rules">
+                <h3>House rules</h3>
+                <!-- The landlord's own words, shown as written. -->
+                <p>{{ shared.rules }}</p>
+              </div>
+            }
+          </section>
+        }
+
         <section class="detail__section">
           <h2>What previous tenants said</h2>
           @if (loadingReviews()) {
@@ -195,7 +236,8 @@ import { environment } from '@env/environment';
           }
         </section>
 
-        <app-ad-slot placement="room_detail"
+        <!-- headingLevel 3: this slot follows a section opening with an h2. -->
+        <app-ad-slot placement="room_detail" [headingLevel]="3"
                      [province]="room()?.province"
                      [city]="room()?.city"
                      [roomType]="room()?.roomType"/>
@@ -297,6 +339,41 @@ export class RoomDetail implements OnInit {
   amenityLabel(value: string) {
     return AMENITY_LABELS[value] ?? value;
   }
+
+  /**
+   * What to say about the rest of the house, or null to say nothing.
+   *
+   * Null in three cases that all mean the same thing to a reader: the room is
+   * not in a yard, the yard exists but the landlord has filled nothing in, or
+   * the only thing set is `unstated`. An empty "House rules" heading reads as
+   * "there are no house rules", which is a claim the landlord never made.
+   *
+   * `unstated` is dropped rather than labelled for the same reason it is on
+   * the landlord's own screen: it is the absence of an answer, not an answer.
+   */
+  sharedLiving = computed(() => {
+    const p = this.room()?.property;
+    if (!p) return null;
+
+    const bits: string[] = [];
+    if (p.currentHousemates != null) {
+      bits.push(
+        p.currentHousemates === 1
+          ? 'One person already lives here'
+          : `${p.currentHousemates} people already live here`,
+      );
+    }
+    if (p.housemateProfile && p.housemateProfile !== 'unstated') {
+      bits.push(HOUSEMATE_SENTENCE[p.housemateProfile]);
+    }
+
+    const shared = {
+      who: bits.join(' — ') || null,
+      facilities: p.sharedAmenities ?? [],
+      rules: p.houseRules?.trim() || null,
+    };
+    return shared.who || shared.facilities.length || shared.rules ? shared : null;
+  });
 
   /** Report dialog visibility. Available signed out — see ReportDialog. */
   reportOpen = signal(false);

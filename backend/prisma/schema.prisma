@@ -1399,6 +1399,26 @@ model TenancyFlag {
 /// specific people live, held for nothing that uses it — and a room's public
 /// page has always shown the suburb rather than the street for the tenant's
 /// safety, so holding the street elsewhere would undercut that.
+/// Who already lives at a property, as a shape rather than a list of names.
+///
+/// The single thing a person sharing a house most wants to know before they
+/// apply, and the thing a listing almost never says. It sits on Property, not
+/// Room, because it is a fact about the house: four rooms at one address share
+/// one answer, and asking a landlord to set it four times guarantees the four
+/// disagree.
+enum HousemateProfile {
+  professionals
+  students
+  /// Working people and students together, or simply varied. The honest answer
+  /// for most shared houses in this market.
+  mixed
+  couples
+  /// The landlord has not said. Distinct from `mixed`, which is a claim —
+  /// this is the absence of one, and the room page shows nothing rather than
+  /// inventing a description of who a person would be living with.
+  unstated
+}
+
 model Property {
   id         String @id @default(uuid())
   landlordId String
@@ -1410,6 +1430,37 @@ model Property {
   suburb   String?
   city     String
   province String
+
+  // ── What the whole address shares ──────────────────────────────────────
+  //
+  // These are properties of the HOUSE, and they live here rather than on Room
+  // for one reason: four rooms at one address have one kitchen, one set of
+  // rules and one group of housemates. Held per-room, a landlord has to type
+  // them four times and the four copies drift — which is the same defect as
+  // the portal nav defined six times, and it would drift in front of tenants
+  // deciding where to live.
+  //
+  // Room keeps what genuinely differs per room: its own rent, its own
+  // `amenities` (an en-suite is not shared), its own availability.
+
+  /// House rules in the landlord's own words — "no visitors after 10", "gate
+  /// locked at 9". Free text rather than a checklist: the rules that matter in
+  /// this market are specific, and a checklist would replace them with the
+  /// generic ones that do not.
+  houseRules String?
+
+  /// Shared facilities — the kitchen, the tap, the washing line, the gate.
+  /// Named `sharedAmenities`, NOT `propertyAmenities`, so it can never be read
+  /// as a synonym for `Room.amenities`: one is what everyone at this address
+  /// uses, the other is what comes with this room alone.
+  sharedAmenities String[]
+
+  /// How many people already live at the address, across all rooms. Null means
+  /// not said. Distinct from `Room.housematesCount`, which several rooms may
+  /// each answer about their own sharing arrangement.
+  currentHousemates Int?
+
+  housemateProfile HousemateProfile @default(unstated)
 
   rooms Room[]
 
