@@ -42,6 +42,23 @@ export class PaymentsService {
     if (request.status !== 'pending_payment') {
       throw new BadRequestException('This request has already been paid for.');
     }
+    /**
+     * PayFast requires an email address, so a phone-only account cannot check
+     * out — Phase 7g made email optional and this is the one place that notices.
+     *
+     * Refused here, BEFORE a Payment row is created, so there is no pending
+     * payment left behind for a checkout that could never start.
+     *
+     * Not given a placeholder address: PayFast emails the receipt there, and a
+     * disputed payment with no paper trail is a far worse outcome for the
+     * landlord than being asked for an email first. Adding one afterwards is a
+     * supported flow — account settings — so this is a detour, not a wall.
+     */
+    if (!request.user.email) {
+      throw new BadRequestException(
+        'Add an email address to your account before paying. Our payment provider sends the receipt there, and you will need it if anything goes wrong with the payment.',
+      );
+    }
 
     // Reuse an unfinished attempt rather than stacking rows for one user
     // clicking pay twice.
@@ -69,6 +86,8 @@ export class PaymentsService {
       amountCents: payment.amountCents,
       itemName: 'Mastande landlord verification',
       itemDescription: 'One-off identity check. Refunded in full if we cannot verify you.',
+      // Non-null by the guard above, which refuses the checkout outright rather
+      // than inventing an address.
       buyerEmail: request.user.email,
       buyerFirstName: request.user.fullName.split(' ')[0],
       returnUrl: `${frontend}/landlord/verification?payment=success`,

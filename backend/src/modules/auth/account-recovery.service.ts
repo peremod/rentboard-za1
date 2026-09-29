@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { NoticeRouter } from '../notifications/notice-router.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -32,6 +33,7 @@ export class AccountRecoveryService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private notice: NoticeRouter,
   ) {}
 
   private hash(token: string) {
@@ -60,10 +62,19 @@ export class AccountRecoveryService {
             expiresAt: new Date(Date.now() + RESET_TTL_MINUTES * 60_000),
           },
         });
-        this.notifications
-          .sendPasswordResetEmail(user.email, { fullName: user.fullName, token, ttlMinutes: RESET_TTL_MINUTES })
-          .catch(() => {});
-      } else {
+        // Guarded on the address existing, not on the user existing.
+        //
+        // A phone-only account (Phase 7g) has nothing to send a reset link TO.
+        // That is not an error and must not change the response: this endpoint
+        // deliberately answers identically whether or not the address has an
+        // account, and a different outcome here would leak which addresses are
+        // real. Their route back in is the one-time code, which needs no email.
+        if (user.email) {
+          this.notifications
+            .sendPasswordResetEmail(user.email, { fullName: user.fullName, token, ttlMinutes: RESET_TTL_MINUTES })
+            .catch(() => {});
+        }
+      } else if (user.email) {
         this.notifications
           .sendGoogleOnlyAccountEmail(user.email, { fullName: user.fullName })
           .catch(() => {});
@@ -97,8 +108,15 @@ export class AccountRecoveryService {
       }),
     ]);
 
-    this.notifications
-      .sendPasswordChangedEmail(record.user.email, { fullName: record.user.fullName })
+    // A security alert, so it must reach a phone-only account too: if somebody
+    // else changed the password, this is the message that tells them.
+    this.notice
+      .deliver(record.user, {
+        kind: 'password_changed',
+        title: 'Your password was changed',
+        body: 'If that was not you, sign in with your phone number and change it again straight away.',
+        link: '/account/settings',
+      }, (email) => this.notifications.sendPasswordChangedEmail(email, { fullName: record.user.fullName }))
       .catch(() => {});
 
     this.logger.log(`Password reset completed for user ${record.userId}`);
@@ -123,7 +141,14 @@ export class AccountRecoveryService {
       data: { passwordHash: await bcrypt.hash(newPassword, SALT_ROUNDS) },
     });
 
-    this.notifications.sendPasswordChangedEmail(user.email, { fullName: user.fullName }).catch(() => {});
+    this.notice
+      .deliver(user, {
+        kind: 'password_changed',
+        title: 'Your password was changed',
+        body: 'If that was not you, sign in with your phone number and change it again straight away.',
+        link: '/account/settings',
+      }, (email) => this.notifications.sendPasswordChangedEmail(email, { fullName: user.fullName }))
+      .catch(() => {});
     return { message: 'Password updated.' };
   }
 
@@ -162,7 +187,21 @@ export class AccountRecoveryService {
     });
 
     this.notifications.sendEmailChangeConfirmation(normalised, { fullName: user.fullName, token }).catch(() => {});
-    this.notifications.sendEmailChangeAlert(user.email, { fullName: user.fullName, newEmail: normalised }).catch(() => {});
+    // Warns the OLD address that someone is moving the account. A phone-only user
+    // has no old address to warn, and adding an email is not a change of one — so
+    // a notice instead, which is still the "was this you?" they need.
+    if (user.email) {
+      this.notifications.sendEmailChangeAlert(user.email, { fullName: user.fullName, newEmail: normalised }).catch(() => {});
+    } else {
+      this.notice
+        .deliver(user, {
+          kind: 'email_added',
+          title: 'An email address is being added to your account',
+          body: `We sent a confirmation to ${normalised}. If that was not you, change your password.`,
+          link: '/account/settings',
+        })
+        .catch(() => {});
+    }
 
     return { message: `Confirm the change from the email we sent to ${normalised}.` };
   }

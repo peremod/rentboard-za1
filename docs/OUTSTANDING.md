@@ -7,7 +7,8 @@ written down rather than left in a chat that ends.
 **Each item has: the command, how to tell it worked, and what breaks if it is
 skipped.** Tick them off by editing this file.
 
-Last updated: 2026-09-29, after Phase 5e/5f. Repo state: 17 migrations in
+Last updated: 2026-09-29, after Phase 7g's schema and hardening. Repo state: 19
+migrations in
 `backend/prisma/migrations/`. Check the gap to master with
 `git rev-list --left-right --count origin/master...develop` rather than trusting
 a number written here.
@@ -194,7 +195,7 @@ outside it is rejected with error 131047 and no template.
 
 | What | Needs | Blocks |
 |---|---|---|
-| `sendOtp` | An **authentication** template | Phase 7g phone/WhatsApp login entirely |
+| `sendOtp` | An **authentication** template | Phone login for anyone outside the 24-hour window |
 | Survey outreach | A **utility** template | The WhatsApp delivery variant of the Phase 0 survey |
 | Rent reminders (4a) | A **utility** template | Reminders to tenants who have not messaged in 24h |
 
@@ -204,9 +205,14 @@ Approval is typically hours to a couple of days.
 **Worked when:** the templates show *Approved*, and their names are wired into
 the WhatsApp service.
 
-**If skipped:** phone login cannot ship, and rent reminders silently fail for
-anyone who has not messaged recently — the worst kind of failure, because the
+**If skipped:** rent reminders and notification fallbacks silently fail for
+anyone who has not messaged in 24 hours — the worst kind of failure, because the
 landlord believes the tenant was reminded.
+
+This is why v1.85.0's notification fallback writes an **in-app notice** first and
+treats WhatsApp as a best-effort improvement on top: a fallback that only works
+inside the 24-hour window is not a fallback. `Notice.whatsappError` records the
+refusal so the gap is visible rather than silent.
 
 ---
 
@@ -261,6 +267,22 @@ git branch -r --merged develop \
 branches until the tags exist; deleting first could make them unreachable.
 
 **If skipped:** nothing breaks. It is housekeeping.
+
+---
+
+## 11. A phone-only landlord cannot pay the verification fee
+
+PayFast's `email_address` is required by their API. Phase 7g made email optional,
+so a landlord with only a phone number is refused at checkout with a plain
+instruction to add an email first.
+
+That is deliberate rather than a bug: a placeholder address means the receipt goes
+nowhere and a disputed payment has no paper trail, which is worse for the landlord
+than being asked for an email. Adding one later is a supported flow.
+
+**Decide before launch:** accept this (a phone-only landlord who wants the
+verified badge adds an email), or ask PayFast whether the field can be omitted.
+Nothing is broken either way — the refusal is explicit and tells them what to do.
 
 ---
 

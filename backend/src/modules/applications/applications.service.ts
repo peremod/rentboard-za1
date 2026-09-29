@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NoticeRouter } from '../notifications/notice-router.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { TenanciesService } from '../tenancies/tenancies.service';
@@ -25,6 +26,7 @@ export class ApplicationsService {
     private config: ConfigService,
     private tenancies: TenanciesService,
     private referrals: ReferralsService,
+    private notice: NoticeRouter,
   ) {}
 
   async create(dto: CreateApplicationDto, tenantId: string) {
@@ -98,12 +100,20 @@ export class ApplicationsService {
 
     await this.prisma.room.update({ where: { id: room.id }, data: { applicationCount: { increment: 1 } } });
 
-    await this.notifications.sendNewApplicationEmail(room.landlord.email, {
+    // Through the router: a landlord with no email address must not silently
+    // miss an application, which is the single worst consequence of making email
+    // optional. When there IS an address the email path runs unchanged.
+    await this.notice.deliver(room.landlord, {
+      kind: 'new_application',
+      title: `${tenant.fullName} applied for "${room.title}"`,
+      body: 'Open the app to read their note and respond.',
+      link: `/landlord/rooms/${room.id}/applicants`,
+    }, (email) => this.notifications.sendNewApplicationEmail(email, {
       landlordName: room.landlord.fullName,
       tenantName: tenant.fullName,
       roomTitle: room.title,
       applicationId: application.id,
-    });
+    }));
     if (room.landlord.landlordProfile) {
       await this.whatsapp.notifyLandlord(
         room.landlord.landlordProfile.id,
@@ -206,11 +216,15 @@ export class ApplicationsService {
     });
 
     const tenant = await this.prisma.user.findUniqueOrThrow({ where: { id: application.tenantId } });
-    await this.notifications.sendApplicationViewedEmail(tenant.email, {
+    await this.notice.deliver(tenant, {
+      kind: 'application_viewed',
+      title: `The landlord has seen your application for "${application.room.title}"`,
+      link: '/tenant/dashboard',
+    }, (email) => this.notifications.sendApplicationViewedEmail(email, {
       tenantName: tenant.fullName,
       roomTitle: application.room.title,
       applicationId,
-    });
+    }));
     return updated;
   }
 
@@ -221,11 +235,15 @@ export class ApplicationsService {
     const updated = await this.prisma.application.update({ where: { id: applicationId }, data: { status: 'shortlisted' } });
 
     const tenant = await this.prisma.user.findUniqueOrThrow({ where: { id: application.tenantId } });
-    await this.notifications.sendShortlistedEmail(tenant.email, {
+    await this.notice.deliver(tenant, {
+      kind: 'shortlisted',
+      title: `You have been shortlisted for "${application.room.title}"`,
+      link: '/tenant/dashboard',
+    }, (email) => this.notifications.sendShortlistedEmail(email, {
       tenantName: tenant.fullName,
       roomTitle: application.room.title,
       applicationId,
-    });
+    }));
     return updated;
   }
 
@@ -337,12 +355,17 @@ export class ApplicationsService {
 
     await this.prisma.room.update({ where: { id: application.roomId }, data: { status: 'let', letAt: new Date() } });
 
-    await this.notifications.sendAcceptedEmail(tenant.email, {
+    await this.notice.deliver(tenant, {
+      kind: 'accepted',
+      title: `You got the room — "${application.room.title}"`,
+      body: 'The landlord accepted your application. Open the app to arrange moving in.',
+      link: '/tenant/dashboard',
+    }, (email) => this.notifications.sendAcceptedEmail(email, {
       tenantName: tenant.fullName,
       roomTitle: application.room.title,
       rentCents: application.room.rentCents,
       city: application.room.city,
-    });
+    }));
 
     await this.autoRejectOthers(application.roomId, applicationId, 'Another applicant was chosen for this room.');
 
@@ -378,12 +401,19 @@ export class ApplicationsService {
       this.prisma.user.findUniqueOrThrow({ where: { id: application.tenantId } }),
     ]);
 
-    await this.notifications.sendRejectionEmail(tenant.email, {
+    await this.notice.deliver(tenant, {
+      kind: 'rejected',
+      title: `"${application.room.title}" went to someone else`,
+      body: dto.reason
+        ? `The landlord said: ${sanitizeText(dto.reason)}`
+        : 'There are other rooms in the same area — have a look.',
+      link: `/?province=${encodeURIComponent(application.room.province)}`,
+    }, (email) => this.notifications.sendRejectionEmail(email, {
       tenantName: tenant.fullName,
       roomTitle: application.room.title,
       reason: dto.reason ? sanitizeText(dto.reason) : dto.reason,
       searchUrl: `${this.config.get<string>('frontendUrl')}/?province=${encodeURIComponent(application.room.province)}`,
-    });
+    }));
     return updated;
   }
 
@@ -441,12 +471,17 @@ export class ApplicationsService {
         // these and no others.
         data: { status: 'rejected', decidedAt: new Date(), rejectionReason: reason },
       });
-      await this.notifications.sendRejectionEmail(other.tenant.email, {
+      await this.notice.deliver(other.tenant, {
+        kind: 'rejected',
+        title: `"${other.room.title}" went to someone else`,
+        body: reason,
+        link: `/?province=${encodeURIComponent(other.room.province)}`,
+      }, (email) => this.notifications.sendRejectionEmail(email, {
         tenantName: other.tenant.fullName,
         roomTitle: other.room.title,
         reason,
         searchUrl: `${this.config.get<string>('frontendUrl')}/?province=${encodeURIComponent(other.room.province)}`,
-      });
+      }));
     }
   }
 

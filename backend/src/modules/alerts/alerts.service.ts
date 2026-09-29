@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { NoticeRouter } from '../notifications/notice-router.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SaveSearchDto } from './dto/save-search.dto';
@@ -10,6 +11,7 @@ export class AlertsService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private notice: NoticeRouter,
   ) {}
 
   list(tenantId: string) {
@@ -70,22 +72,27 @@ export class AlertsService {
             ...(room.petsAllowed ? [] : [{ OR: [{ petsAllowed: null }, { petsAllowed: false }] }]),
           ],
         },
-        include: { tenant: { select: { email: true, fullName: true } } },
+        include: { tenant: { select: { id: true, email: true, fullName: true, phone: true, phoneVerified: true } } },
       });
 
       const instant = matches.filter((m) => m.frequency === 'instant');
 
       for (const search of instant) {
         if (!search.notifyEmail) continue;
-        this.notifications
-          .sendNewMatchEmail(search.tenant.email, {
+        this.notice
+          .deliver(search.tenant, {
+            kind: 'saved_search_match',
+            title: `A new room matches "${search.name}"`,
+            body: `${room.title} — ${room.locationDisplay}`,
+            link: `/rooms/${room.id}`,
+          }, (email) => this.notifications.sendNewMatchEmail(email, {
             tenantName: search.tenant.fullName,
             searchName: search.name,
             roomTitle: room.title,
             roomId: room.id,
             rentCents: room.rentCents,
             locationDisplay: room.locationDisplay,
-          })
+          }))
           .catch(() => {});
       }
 

@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { NoticeRouter } from '../notifications/notice-router.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -20,6 +21,7 @@ export class MessagesService {
     private whatsapp: WhatsappService,
     private notifications: NotificationsService,
     private config: ConfigService,
+    private notice: NoticeRouter,
   ) {}
 
   async getThread(applicationId: string, userId: string) {
@@ -56,12 +58,17 @@ export class MessagesService {
     const sender = await this.prisma.user.findUniqueOrThrow({ where: { id: senderId } });
     const messagesUrl = `${this.config.get<string>('frontendUrl')}/${isTenantSending ? 'landlord' : 'tenant'}/dashboard`;
 
-    await this.notifications.sendNewMessageEmail(recipient.email, {
+    await this.notice.deliver(recipient, {
+      kind: 'new_message',
+      title: `${sender.fullName} sent you a message`,
+      body: body.slice(0, 140),
+      link: `/${isTenantSending ? 'landlord' : 'tenant'}/dashboard`,
+    }, (email) => this.notifications.sendNewMessageEmail(email, {
       recipientName: recipient.fullName,
       senderName: sender.fullName,
       messagePreview: body.slice(0, 140),
       messagesUrl,
-    });
+    }));
 
     // Only tenant→landlord messages go out over WhatsApp — landlords are the
     // ones who opted a phone number in; tenants aren't notified over WhatsApp.
