@@ -96,6 +96,12 @@ model User {
   tenanciesAsTenant   Tenancy[]       @relation("TenanciesAsTenant")
   reviewsWritten      Review[]        @relation("ReviewsWritten")
   reviewsReceived     Review[]        @relation("ReviewsReceived")
+  /// Private notes this landlord wrote. Theirs; nobody else reads them.
+  notesWritten        LandlordNote[]  @relation("NotesWritten")
+  /// Notes OTHER landlords wrote about this user. Present so deleting the
+  /// account removes them — they are about a person with a s.24 right to
+  /// erasure. No endpoint reads this side.
+  notesAbout          LandlordNote[]  @relation("NotesAbout")
   reportsFiled        Report[]        @relation("ReportsFiled")
   reportsAgainst      Report[]        @relation("ReportsAgainst")
   flagsRaised         TenancyFlag[]   @relation("FlagsRaised")
@@ -2119,4 +2125,68 @@ model LeaseDocument {
 
   @@index([tenancyId, createdAt])
   @@map("lease_documents")
+}
+
+/// A landlord's private note about a tenant — Phase 5e.
+///
+/// ── Whose it is, and who can never see it
+///
+/// Written by one landlord, visible to that landlord only. Not to the tenant,
+/// not to other landlords, not to admins. There is no endpoint that returns
+/// somebody else's notes, and that is the whole design: the moment a note could
+/// be read by anyone but its author it stops being a memory aid and becomes an
+/// unregulated reference that follows a person around.
+///
+/// ── Why it outlives the tenancy
+///
+/// It is deliberately keyed on the TENANT, not on a tenancy. A landlord who let
+/// to someone two years ago and is looking at their application again needs what
+/// they wrote at the time — that is the entire value. So a tenancy ending does
+/// not remove the note.
+///
+/// ── POPIA
+///
+/// This is personal information about the tenant held by the landlord, and
+/// Mastande is the operator processing it on their behalf. Three consequences,
+/// all enforced in code rather than asked for politely:
+///
+///   · a tenant exercising their s.23 right of access must be able to get these,
+///     because "the landlord wrote it" does not make it invisible to the data
+///     subject — there is an admin-assisted path for that, logged;
+///   · a note is deleted when its AUTHOR's account goes, because it was theirs;
+///   · a note is deleted when the TENANT's account goes, because it is about
+///     them and they have a s.24 right to erasure.
+///
+/// Both cascades are set below. The second one is the less obvious and the more
+/// important: without it, deleting a tenant would leave notes about a person who
+/// has asked to be forgotten.
+///
+/// ── Not a rating, and not shareable
+///
+/// There is no score, no stars, no flag, and nothing here feeds the review
+/// system or a tenant's Passport. A structured private rating would be a shadow
+/// credit score assembled from opinions, which is precisely what Phase 1 exists
+/// to avoid. Phase 1's landlord-reference check is a separate, consented flow
+/// where a previous landlord answers a specific question knowingly — this model
+/// must never be wired into it, and nothing here blocks it being built.
+model LandlordNote {
+  id String @id @default(uuid())
+
+  /// The author. Their account going takes their notes with it.
+  landlordId String
+  landlord   User   @relation("NotesWritten", fields: [landlordId], references: [id], onDelete: Cascade)
+
+  /// The person it is about. Their account going takes it too — see POPIA above.
+  tenantId String
+  tenant   User   @relation("NotesAbout", fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// The landlord's own words. No structure, no score, on purpose.
+  body String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One landlord's notes about one tenant, newest first.
+  @@index([landlordId, tenantId, createdAt])
+  @@map("landlord_notes")
 }

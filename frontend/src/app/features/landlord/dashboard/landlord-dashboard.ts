@@ -11,6 +11,7 @@ import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { landlordNav } from '../landlord-nav';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { LandlordInboxPanel } from '../../../shared/components/landlord-inbox/landlord-inbox';
+import { LandlordCalendar } from '../../../shared/components/landlord-calendar/landlord-calendar';
 import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
 import { DisputePanel } from '../../../shared/components/dispute-panel/dispute-panel';
 import { ReferralPanel } from '../../../shared/components/referral-panel/referral-panel';
@@ -29,7 +30,7 @@ import { SurveyService } from '../../../core/services/survey';
   standalone: true,
   imports: [
     RouterLink, ZarCentsPipe, DatePipe, PortalShell, ReviewPrompt, DisputePanel,
-    ReferralPanel, SurveyPrompt, LandlordInboxPanel,
+    ReferralPanel, SurveyPrompt, LandlordInboxPanel, LandlordCalendar,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -69,6 +70,10 @@ import { SurveyService } from '../../../core/services/survey';
            counts sit underneath both.
            headingLevel 2: this sits directly under the shell's page h1. -->
       <app-landlord-inbox [headingLevel]="2"/>
+
+      <!-- What is coming up (Phase 5f). Below the inbox: the inbox is what needs
+           DOING, this is what is merely approaching. -->
+      <app-landlord-calendar [headingLevel]="2"/>
 
       <div class="insight-banner">
         📊

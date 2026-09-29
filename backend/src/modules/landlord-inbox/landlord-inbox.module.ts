@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { LandlordInboxController } from './landlord-inbox.controller';
 import { LandlordInboxService } from './landlord-inbox.service';
+import { CalendarService } from './calendar.service';
 import { TenanciesModule } from '../tenancies/tenancies.module';
 
 /**
@@ -11,6 +12,6 @@ import { TenanciesModule } from '../tenancies/tenancies.module';
 @Module({
   imports: [TenanciesModule],
   controllers: [LandlordInboxController],
-  providers: [LandlordInboxService],
+  providers: [LandlordInboxService, CalendarService],
 })
 export class LandlordInboxModule {}
