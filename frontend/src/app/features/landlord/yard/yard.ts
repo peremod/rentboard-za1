@@ -33,6 +33,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { landlordNav } from '../landlord-nav';
 import { PluralPipe } from '../../../shared/pipes/plural.pipe';
+import { LeasePanel } from '../../../shared/components/lease-panel/lease-panel';
 
 /**
  * The yard dashboard.
@@ -52,7 +53,10 @@ import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 @Component({
   selector: 'app-yard',
   standalone: true,
-  imports: [PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink, ZarCentsPipe, PortalShell],
+  imports: [
+    PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink,
+    ZarCentsPipe, PortalShell, LeasePanel,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems" roleLabel="Landlord" pageTitle="Your property">
@@ -171,6 +175,16 @@ import { PluralPipe } from '../../../shared/pipes/plural.pipe';
           </p>
         </section>
       }
+
+      <!-- Order on this screen: what needs DECIDING, then the figures, then the
+           inventory. Two features landed here separately and the merge had to
+           choose; a lease ending carries a deadline and the money card does
+           not, so the deadline goes first. -->
+      <!-- What needs deciding, above the inventory. A lease ending is the one
+           thing on this screen with a deadline attached; the room list is
+           reference. headingLevel 2 because this sits directly under the page
+           h1, and a component cannot know its own depth. -->
+      <app-lease-panel [headingLevel]="2"/>
 
       <!-- The money picture. Rent tracking already said what came in; without
            expenses "how am I doing" could only be half answered, and half an

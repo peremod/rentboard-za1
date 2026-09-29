@@ -4,7 +4,7 @@ import { tap } from 'rxjs';
 import { environment } from '@env/environment';
 import {
   Expense, ExpenseCategory, ExpenseSummary, HousemateProfile, Property,
-  RelistAllResult, RentPeriod, RentStatus, YardDashboard,
+  RelistAllResult, RentPeriod, RentStatus, UpcomingLease, YardDashboard,
 } from '../models/property.model';
 
 @Injectable({ providedIn: 'root' })
@@ -98,6 +98,33 @@ export class PropertiesService {
     return this.http.get<{ filename: string; csv: string; count: number }>(
       `${this.api}/properties/${propertyId}/expenses/csv?year=${year}`,
     );
+  }
+
+  // ── Leases, renewal and notice ──
+  //
+  // On this service rather than a new one: a landlord thinks of "who is in, who
+  // is out, who has not paid, whose lease is ending" as one screen, and the
+  // yard dashboard is where all of it already lives.
+
+  /** Fixed terms inside the lead window, and tenancies under notice. */
+  upcomingLeases() {
+    return this.http.get<UpcomingLease[]>(`${this.api}/tenancies/upcoming`);
+  }
+
+  /** `leaseEndDate: null` means month-to-month — a real value, not "unset". */
+  updateLeaseTerms(
+    tenancyId: string,
+    body: { leaseEndDate?: string | null; noticePeriodDays?: number; startDate?: string },
+  ) {
+    return this.http.patch(`${this.api}/tenancies/${tenancyId}/lease`, body);
+  }
+
+  giveNotice(tenancyId: string, body: { givenBy: 'tenant' | 'landlord'; givenOn?: string }) {
+    return this.http.post(`${this.api}/tenancies/${tenancyId}/notice`, body);
+  }
+
+  withdrawNotice(tenancyId: string) {
+    return this.http.post(`${this.api}/tenancies/${tenancyId}/notice/withdraw`, {});
   }
 
   // ── Rent ──

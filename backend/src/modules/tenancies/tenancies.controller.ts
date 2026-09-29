@@ -9,6 +9,8 @@ import { TenancyFlagsService } from './tenancy-flags.service';
 import { ConfirmStartDto, EndTenancyDto, CancelTenancyDto } from './dto/tenancy.dto';
 import { RaiseFlagDto } from './dto/raise-flag.dto';
 import { ReviewFlagDto } from './dto/review-flag.dto';
+import { LeaseService } from './lease.service';
+import { GiveNoticeDto, UpdateLeaseTermsDto } from './dto/lease.dto';
 
 /**
  * Tenancies are visible only to the two parties. There is no public listing:
@@ -22,7 +24,51 @@ export class TenanciesController {
   constructor(
     private tenanciesService: TenanciesService,
     private flags: TenancyFlagsService,
+    private lease: LeaseService,
   ) {}
+
+  // ── Lease terms, renewal and notice ──────────────────────────────────────
+
+  /**
+   * What is about to need attention: fixed terms inside the lead window, and
+   * tenancies where notice has been given.
+   *
+   * Computed per request rather than flagged by a nightly job — see the note in
+   * LeaseService. A rolling tenancy with no notice appears in neither, because
+   * nothing is happening to it.
+   */
+  @Get('upcoming')
+  @ApiOperation({ summary: 'Leases ending soon, and tenancies under notice' })
+  upcoming(@CurrentUser() user: { id: string }) {
+    return this.lease.upcoming(user.id);
+  }
+
+  @Patch(':id/lease')
+  @ApiOperation({ summary: 'Set the agreed lease terms. leaseEndDate null means month-to-month.' })
+  updateLease(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateLeaseTermsDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.lease.updateTerms(id, dto, user.id);
+  }
+
+  @Post(':id/notice')
+  @ApiOperation({ summary: 'Record that notice was given, by either side' })
+  giveNotice(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: GiveNoticeDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.lease.giveNotice(id, dto, user.id);
+  }
+
+  @Post(':id/notice/withdraw')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Notice was given in error, or withdrawn' })
+  withdrawNotice(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.lease.withdrawNotice(id, user.id);
+  }
 
   @Get('mine')
   @ApiOperation({ summary: 'Tenancies where you are the landlord or the tenant' })
