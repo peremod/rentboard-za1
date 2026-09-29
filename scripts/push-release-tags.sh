@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Recreate and push the Mastande release tags v1.75.2 … v1.80.0.
+# Recreate and push the Mastande release tags v1.75.2 … v1.82.0.
 #
-# These eleven tags were created inside an ephemeral cloud container whose
+# These tags were created inside an ephemeral cloud container whose
 # credentials are refused for refs/tags/* (HTTP 403), so they never reached
 # GitHub and are lost when that container is reclaimed. Every tagged commit IS
 # already on the remote — only the tag objects are missing, which is why this
@@ -106,6 +106,49 @@ H2 to H4. Fixed, and the summary counts the extra page.
 Tier 2 deliberately not started: the brief gates it on survey data that does
 not exist yet."
 
+tag_if_missing "v1.82.0" "27f15165018fcfd09ce331a26482ccc59c4718a1" "2026-09-29 01:54:59 +0000" "v1.82.0 — Phase 4b, 4c and 4d: the money picture, leases ending, who to call
+
+Three features that give a landlord a reason to open Mastande on a day when no
+room is empty. Every competitor in this market is a listing portal you visit
+only when you have a vacancy.
+
+Phase 4b — expenses. What went out, against what came in. An expense hangs off
+the property, not the room, because that is how the money is spent: one
+municipal bill, one plumber, one gate motor for the whole address. The money
+card states which rent months it counts, because a figure whose rules are
+invisible is one someone plans around and is wrong about. Nothing stores a
+share, so Phase 6 co-tenant splits stay open.
+
+Phase 4c — lease renewal and notice. Lease end dates, notice periods, and the
+rooms about to free up.
+
+  · leaseEndDate null means month-to-month: a real answer, not an unset field
+  · a rolling tenancy with no notice appears in neither list, because nothing
+    is happening to it
+  · a lease already past shows as overdue rather than hidden — an overdue
+    relist is the urgent one
+  · a second notice does not overwrite who gave the first
+
+Phase 4d — the contractor directory. Five trades, admin-curated because an open
+directory is a directory of whoever registered fastest. Tap to call or message;
+no booking and no payment, because either would make Mastande a party to the
+job. Numbers normalised to E.164, whatsapp stored rather than inferred,
+providers off by default.
+
+No fee of any kind was added. Listing is free, applying is free. sponsoredUntil
+exists unread and would charge an advertiser rather than a landlord.
+
+Not in this release: Phase 4e, lease documents. Storage only when built, and
+explicitly no e-signature — that is document execution.
+
+Also: lease-ui-drive.mjs now asserts that the two Phase 4 cards order correctly
+on one yard, because the merge had to choose and the accessibility drive cannot
+see it — its landlord has neither card. And verify-build.sh no longer tells you
+to \"start the API and re-run\" for the one skip whose remedy is the opposite.
+
+Verified: 334 API checks, 25 accessibility pages, six browser drives,
+verify-build.sh both ways. Six migrations apply clean in sequence."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -113,7 +156,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|80)[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[012])[.]'"
 else
   echo "Nothing to push."
 fi
