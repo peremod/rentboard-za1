@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -11,6 +11,8 @@ import { RaiseFlagDto } from './dto/raise-flag.dto';
 import { ReviewFlagDto } from './dto/review-flag.dto';
 import { LeaseService } from './lease.service';
 import { GiveNoticeDto, UpdateLeaseTermsDto } from './dto/lease.dto';
+import { LeaseDocumentsService } from './lease-documents.service';
+import { AddLeaseDocumentDto, UpdateLeaseDocumentDto } from './dto/lease-document.dto';
 
 /**
  * Tenancies are visible only to the two parties. There is no public listing:
@@ -25,6 +27,7 @@ export class TenanciesController {
     private tenanciesService: TenanciesService,
     private flags: TenancyFlagsService,
     private lease: LeaseService,
+    private documents: LeaseDocumentsService,
   ) {}
 
   // ── Lease terms, renewal and notice ──────────────────────────────────────
@@ -178,5 +181,67 @@ export class TenanciesController {
   @ApiOperation({ summary: 'Admin: recompute openFlagCount from the flags themselves' })
   recountFlags() {
     return this.flags.recount();
+  }
+
+  // ── Lease documents ──────────────────────────────────────────────────────
+  //
+  // Storage, and nothing but. No route here signs, witnesses or timestamps
+  // anything, and none is going to without ECT Act advice behind it — see
+  // LeaseDocumentsService. There is also NO admin route in this section, which
+  // is a decision: a lease names two people, what they pay and where they
+  // sleep, and no support task requires reading it.
+
+  @Get(':id/documents')
+  @ApiOperation({
+    summary: 'The documents stored against a tenancy',
+    description:
+      'Either party. Storage paths are never returned here — opening a document asks for a short-lived URL of its own.',
+  })
+  listDocuments(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.documents.list(id, user.id);
+  }
+
+  @Post(':id/documents')
+  @ApiOperation({
+    summary: 'Store a signed lease, addendum, inspection or receipt',
+    description:
+      'Either party may upload. This records that a file exists and who put it there — it is not a signature and asserts nothing about what either party agreed.',
+  })
+  addDocument(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddLeaseDocumentDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.documents.add(id, dto, user.id);
+  }
+
+  @Get('documents/:docId/open')
+  @ApiOperation({
+    summary: 'A short-lived URL for reading one document',
+    description:
+      'Party-only, signed, and expires in five minutes — so a link copied out of the app stops working. Asked for when someone opens a file rather than carried in every list.',
+  })
+  openDocument(@Param('docId', ParseUUIDPipe) docId: string, @CurrentUser() user: { id: string }) {
+    return this.documents.openUrlFor(docId, user.id);
+  }
+
+  @Patch('documents/:docId')
+  @ApiOperation({ summary: 'Rename or recategorise your own upload' })
+  updateDocument(
+    @Param('docId', ParseUUIDPipe) docId: string,
+    @Body() dto: UpdateLeaseDocumentDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.documents.update(docId, dto, user.id);
+  }
+
+  @Delete('documents/:docId')
+  @ApiOperation({
+    summary: 'Remove your own upload, and delete the file',
+    description:
+      'Only the uploader, so one party cannot delete the other\u2019s copy of what was agreed. The bytes are queued for deletion from storage, not merely unlinked.',
+  })
+  removeDocument(@Param('docId', ParseUUIDPipe) docId: string, @CurrentUser() user: { id: string }) {
+    return this.documents.remove(docId, user.id);
   }
 }

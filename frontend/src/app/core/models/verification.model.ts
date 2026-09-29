@@ -99,7 +99,10 @@ export interface VerificationRequest {
   hasDocument: boolean;
   reviewNote?: string | null;
   reviewedAt?: string | null;
-  documentDeletedAt?: string | null;
+  /** When the document stopped being reachable. The bytes going is tracked
+   *  server-side on FileDeletion — see the schema; this was called
+   *  documentDeletedAt while nothing was being deleted. */
+  documentWithdrawnAt?: string | null;
   createdAt: string;
   events?: VerificationEvent[];
   reference?: LandlordReferenceSummary | null;

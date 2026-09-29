@@ -633,10 +633,111 @@ an **advertiser**, not a landlord, so it does not touch "free to list, free to
 apply" — and it costs one nullable column now versus a migration later.
 
 
+### 5.10 Lease documents — ✅ built in v1.83.0 (Phase 4e)
+
+Storage. Not signing.
+
+`LeaseDocument` holds a file, its kind, a label and who uploaded it, against a
+tenancy. Either party may upload; only the uploader may rename or remove their
+own, so one side cannot quietly delete the other's copy of what was agreed. Both
+parties see the same list from one component — the landlord's yard behind a
+per-tenancy toggle, the tenant's rent page directly.
+
+⚠️ **No e-signature, deliberately, and asserted.** There is no
+`signedByTenantAt`, no signature image, no hash chain and no trusted timestamp.
+Signing is execution of a legal document: under the ECT Act an "advanced
+electronic signature" is a specific accredited thing, and a product that files a
+finger-drawn squiggle next to a lease invites both parties to believe something
+about enforceability nobody here has advice to support. A half-built e-signature
+is worse than none because it looks like one.
+
+That line is held by tests rather than intentions.
+`scripts/storage-drive.mjs` checks no field on a stored document matches
+`/sign|witness|execut|notar/` and that `POST .../sign` answers 404;
+`scripts/lease-docs-ui-drive.mjs` checks the rendered panel never says "is
+signed", "legally binding", "verified by", "e-signature" or "we have checked",
+and does say that Mastande does not sign anything. A later commit adding any of
+it has to walk past a failing check.
+
+**No admin route.** The only document store in the codebase without one. A lease
+names two people, what they pay and where they sleep, and no support task
+requires reading it — unlike a verification, where an admin must check an ID
+against a claim.
+
+**Retention differs from verification, on purpose.** A lease is personal
+information about both parties (s.1), not special personal information (s.26):
+it is a contract, not an identity document, and both need it for as long as it
+can be disputed. Deleting the only copy of an agreement would be the harm.
+Removal is a real deletion through `FileDeletion` — see §5.11.
+
+Opening a document returns a **signed URL that expires in five minutes**, minted
+per read, so a location is not sitting in every list response or in a link pasted
+into a chat.
+
+### 5.11 Files are actually deleted now — ✅ fixed in v1.83.0
+
+🔴 **The worst defect this codebase has had, found while building §5.10.**
+
+Nothing had ever deleted a stored file. Deciding a verification cleared
+`documentPath`, set a column named `documentDeletedAt`, and wrote an audit event
+reading *"The uploaded document was deleted. Only this outcome is kept — POPIA
+s.26."* There was no ImageKit SDK in `package.json` and no call to its delete
+API anywhere in the repository. The reference went. The ID photograph stayed,
+indefinitely.
+
+Three live statements said otherwise, one of them statutory:
+
+| Where | What it said |
+|---|---|
+| Privacy policy, ImageKit row | "deleted once reviewed — only the outcome is kept" |
+| PAIA manual | "Documents are deleted on decision" |
+| `/tenant/passport`, at the moment of upload | "deleted as soon as someone has looked at it" |
+
+The person relying on those is the one who handed over their identity document.
+
+**Why nobody caught it.** The one smoke assertion covering the promise read
+`documentDeletedAt != null` — true, and proof of nothing but that we had written
+our own timestamp. It also sat behind `ADMIN_TOKEN`, so it had never run. And
+the admin queue's "Open document ↗" linked to the bare stored path, which
+resolved against the app's own origin and 404'd, so no reviewer could see a
+document either way. Every private upload was effectively write-only.
+
+**The fix.**
+
+- `FileDeletion` is a durable queue. The row is written in the **same
+  transaction** as the change that orphans the file, so a committed decision
+  always has a pending deletion behind it and a rolled-back one deletes nothing.
+- `deletedAt` is set from ImageKit's response and **never optimistically**. A
+  failure is recorded as a failure and the row stays outstanding; it is retried
+  hourly, with an attempt cap so the queue depth keeps meaning something.
+- `documentDeletedAt` is renamed `documentWithdrawnAt`, because that is the
+  promise that timestamp can keep. The audit trail now records two facts:
+  `document_withdrawn` when the document leaves view, `document_deleted` only
+  once storage confirms the bytes are gone.
+- `GET /admin/storage/status` makes the promise **checkable** — outstanding,
+  stuck, and the age of the oldest thing still waiting, with no path or filename
+  in the payload. An unfalsifiable claim about someone's ID document is not
+  acceptable, which is how this happened.
+- `StorageService.signedUrl` fixes the write-only problem. The admin queue now
+  gets a signed 15-minute URL instead of a path.
+
+**How it is verified.** `scripts/storage-drive.mjs` **is** an ImageKit stub. The
+API is pointed at it, so the assertion is that a `DELETE` arrived for the right
+file — not that the code contains a `fetch`. It also drives the case that
+matters most: with the stub returning 500, the drive checks the queue reports a
+failure, does **not** stamp the row deleted, and that a retry completes it.
+Reverting the fix makes three assertions fail and the script exit 1; that was
+checked, not assumed.
+
+One thing it cannot settle: whether ImageKit **accepts** our signature. The
+algorithm matches their SDK and the drive recomputes it independently, but only
+a real key proves acceptance — see PRE-LAUNCH-CHECKLIST.
+
+
 ## 6. What "verified" means here
 
-`./scripts/smoke-test.sh` exercises the API against a live server: **334
-passing checks, 20 skipped** at v1.82.0, across auth, room lifecycle,
+`./scripts/smoke-test.sh` exercises the API against a live server: **340
+passing checks, 14 skipped** with ImageKit configured at v1.83.0, across auth, room lifecycle,
 applications, messaging, alerts, verification, cross-tenant isolation, rent, the
 WhatsApp bot, refunds and the listing wizard's validation. The skips are loud and
 named; each states what to set to include it.
@@ -652,6 +753,8 @@ the fixtures are expensive or the assertions are about a browser:
 | `services-drive.mjs` | directory filtering, number normalisation, off-by-default |
 | `services-ui-drive.mjs` | the `tel:`/`wa.me` links, and that errors are not reported twice |
 | `mobile-drive.mjs` | the five bugs found on a real phone, at 390px |
+| `storage-drive.mjs` | **that deleting really deletes** — it IS an ImageKit stub, so it checks a DELETE arrived, and that a 500 is not recorded as success |
+| `lease-docs-ui-drive.mjs` | both parties see the lease, and nothing on screen claims it was signed here |
 | `a11y-drive.mjs` | 25 pages: heading order, accessible names, contrast at rest, on hover and on focus |
 | `refund-drive.mjs` | the refund promise |
 | `verify-build.sh` | what the production build and the deploy artefact actually *serve* |
@@ -669,6 +772,16 @@ way in this codebase:
   passed 23 pages while the admin queues were empty, and a heading defect on a
   populated queue survived it. Where a drive covers something the a11y run
   cannot see, it says so in its own header.
+- **A check can be true and prove nothing.** The retention promise was covered by
+  `documentDeletedAt != null` — our own timestamp, asserting our own claim, with
+  no file deleted anywhere. It was also behind `ADMIN_TOKEN` and had never run.
+  When a check is about something leaving our control, it has to observe the
+  thing leaving: see §5.11.
+- **A check can fail for its own reasons and blame the product.** A phase-drive
+  assertion reported "the new yard is not on the screen" for a working feature,
+  because its loose selector matched "Delete yard" and then the rent-reminder
+  form's "Save". It was pressing a destructive button while claiming to test
+  creation. Selectors are anchored on the element being exercised now.
 - **No single `verify-build.sh` run clears every skip.** The room and sitemap
   checks need an API on port 3000; the hanging-API check has to black-hole that
   same port. Run it both ways before tagging.

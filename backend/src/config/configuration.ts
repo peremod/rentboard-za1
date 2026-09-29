@@ -26,6 +26,11 @@ export default () => ({
     publicKey: process.env.IMAGEKIT_PUBLIC_KEY?.trim(),
     privateKey: process.env.IMAGEKIT_PRIVATE_KEY?.trim(),
     urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT?.trim(),
+    // Overridable so file deletion can be driven against a stub on a machine
+    // with no ImageKit credentials. Without that seam the only way to check
+    // that deletion happens is to read the code and believe it, which is the
+    // standard that let the deletion gap ship in the first place.
+    apiBase: process.env.IMAGEKIT_API_BASE?.trim(),
   },
 
   payfast: {
