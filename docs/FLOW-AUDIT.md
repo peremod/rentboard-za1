@@ -553,18 +553,125 @@ responses exist yet. Building it now would be the assumption the survey was
 written to test.
 
 
+### 5.7 Expense tracking — ✅ built in v1.82.0 (Phase 4b)
+
+What the landlord spends, against what came in. Rent tracking already said what
+arrived; without the other half, "how am I doing this month" could only be
+answered halfway, and half an answer about money is worse than none.
+
+An `Expense` hangs off the **property**, not the room, because that is how the
+money is actually spent: one municipal bill, one plumber, one gate motor for the
+whole address. `roomId` narrows it when a cost genuinely belongs to one room and
+stays null otherwise; forcing every expense onto a room would make the common
+case a lie.
+
+The yard's money card shows rent in, spent, and left over, with the **basis
+line** stating which rent months are counted. A money figure whose rules are
+invisible is one someone plans around and is wrong about. Rent on rooms in no
+yard is reported separately so the per-yard rows need not silently fail to sum.
+
+Amounts render through `zarCents: 'exact'` — two decimals. The rounded default
+is right for a listing price and wrong for a reconciliation.
+
+❌ **Deliberately not built: shares.** Nothing stores `paidBy` or
+`sharePercent`. Phase 6 wants co-tenants splitting a bill, and the way not to
+block that is to keep an expense a record of a *cost* and let any future split
+be its own table pointing here, rather than guessing at semantics nobody has
+specified.
+
+**POPIA.** A receipt is the landlord's own business record, not information
+about a tenant, so unlike a verification document it is kept rather than deleted
+on a decision — they need it at tax time. No tenant is named on an expense, and
+it is never shown to anyone but its owner.
+
+### 5.8 Lease renewal and notice — ✅ built in v1.82.0 (Phase 4c)
+
+`Tenancy` gained `leaseEndDate`, `noticePeriodDays`, `noticeGivenAt` and
+`noticeGivenById`. A yard panel lists the tenancies about to free up a room:
+fixed terms inside the lead window, and tenancies under notice. A month-to-month
+tenancy with nothing happening to it appears in neither, because nothing is.
+
+`leaseEndDate: null` means month-to-month — a real answer, not an unset field.
+The API decides *why* a tenancy needs attention (`lease_ending` or
+`notice_given`) and the screen does not re-derive it. Countdowns read "in 12
+days" rather than a raw date, and a lease already past shows as overdue rather
+than being hidden: an overdue relist is the urgent one.
+
+A second notice does not overwrite who gave the first, and notice can be
+withdrawn.
+
+❌ **Not built: lease documents** (Phase 4e) — see the checklist. Storage only
+when it comes; **no e-signature**, which is document execution.
+
+⚠️ **No money, no legal execution.** Nothing here signs, renews or enforces
+anything. It is a record of dates the landlord and tenant agreed between
+themselves, and a reminder that one is approaching.
+
+### 5.9 Contractor directory — ✅ built in v1.82.0 (Phase 4d)
+
+Who to call when something breaks. Five trades, admin-curated.
+
+**Admin-curated deliberately.** There is no landlord-facing way to add a
+provider. An open directory of tradespeople is a directory of whoever registered
+fastest, and recommending a stranger to someone's tenants is a reputational risk
+this platform would be taking on with no way to manage it.
+
+**No booking, no payment.** The product's job ends at "here is the number" —
+`tel:` to call, `wa.me` to message, and the landlord and the plumber arrange it
+between themselves. Taking a booking would make Mastande a party to the job;
+taking a payment would put it in the money, which Phase 4 is scoped to avoid.
+
+Numbers are stored normalised to E.164, because 082 123 4567 and +27821234567
+are one tradesperson and a directory that lists them twice is one nobody trusts.
+`whatsapp` is stored, never inferred: a `wa.me` link to a number that is not on
+WhatsApp lands the landlord on an error page blaming them. Providers are **off
+by default** — a half-entered provider that is live by accident is worse than
+one nobody can find.
+
+`sponsoredUntil` exists and nothing reads it. A paid placement here would charge
+an **advertiser**, not a landlord, so it does not touch "free to list, free to
+apply" — and it costs one nullable column now versus a migration later.
+
+
 ## 6. What "verified" means here
 
-`./scripts/smoke-test.sh` exercises the API against a live server: 70+ checks
-across auth, room lifecycle, applications, messaging, alerts, verification,
-cross-tenant isolation, and the listing wizard's validation.
+`./scripts/smoke-test.sh` exercises the API against a live server: **334
+passing checks, 20 skipped** at v1.82.0, across auth, room lifecycle,
+applications, messaging, alerts, verification, cross-tenant isolation, rent, the
+WhatsApp bot, refunds and the listing wizard's validation. The skips are loud and
+named; each states what to set to include it.
+
+Some features are driven by their own script rather than folded in here, where
+the fixtures are expensive or the assertions are about a browser:
+
+| Script | What it proves |
+| --- | --- |
+| `phase-drive.mjs` | each phase's screens are *reachable* — the defect three releases shipped with routes that were fine and nav that was not |
+| `lease-drive.mjs` | lease windows and notice as **dates**: 20 days is inside the window, 200 is not, backdated notice is already overdue |
+| `lease-ui-drive.mjs` | the yard panel, and that the two Phase 4 cards order correctly on one screen |
+| `services-drive.mjs` | directory filtering, number normalisation, off-by-default |
+| `services-ui-drive.mjs` | the `tel:`/`wa.me` links, and that errors are not reported twice |
+| `mobile-drive.mjs` | the five bugs found on a real phone, at 390px |
+| `a11y-drive.mjs` | 25 pages: heading order, accessible names, contrast at rest, on hover and on focus |
+| `refund-drive.mjs` | the refund promise |
+| `verify-build.sh` | what the production build and the deploy artefact actually *serve* |
 
 It is an integration check, not a test suite. It does not cover:
 
-- the UI — every flow above was clicked manually, once
 - concurrency — two tenants applying to the last room at the same moment
 - failure paths — what a half-finished transaction leaves behind
 - load, backup, restore
+
+Two things worth knowing about the shape of this coverage, both learned the hard
+way in this codebase:
+
+- **A green check on an empty screen proves nothing.** An accessibility run
+  passed 23 pages while the admin queues were empty, and a heading defect on a
+  populated queue survived it. Where a drive covers something the a11y run
+  cannot see, it says so in its own header.
+- **No single `verify-build.sh` run clears every skip.** The room and sitemap
+  checks need an API on port 3000; the hanging-API check has to black-hole that
+  same port. Run it both ways before tagging.
 
 Treat green as "the happy path and the obvious guard rails hold", not as proof
 of correctness.

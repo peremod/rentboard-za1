@@ -101,6 +101,35 @@ const level = await page.locator('#ending-soon h2, #ending-soon h3').evaluateAll
 );
 level === 'H2' ? ok('its heading is an H2, following the page H1') : bad(`panel heading is ${level}, which skips or repeats a level`);
 
+// ── Both Phase 4 cards on one screen ──────────────────────────────────────
+//
+// Expenses and lease renewal were built on separate branches and both added a
+// card at the same point in the yard template, so the merge had to order them.
+// This is the assertion that ordering is actually sound on a rendered page:
+// the a11y drive's landlord has neither card, so its green yard page says
+// nothing about the two of them together — the same data-dependent blind spot
+// that made an earlier heading defect look environmental.
+const both = await page.locator('#ending-soon, #money').evaluateAll((els) =>
+  els.map((el) => el.id),
+);
+both.length === 2
+  ? ok('the lease panel and the money card both render on one yard')
+  : bad(`only ${both.join(' + ') || 'neither'} rendered — the combined case is untested`);
+
+both[0] === 'ending-soon'
+  ? ok('and the thing with a deadline comes first')
+  : bad(`document order is ${both.join(' then ')} — the money card has no deadline and should not lead`);
+
+// The whole page, not just the panel. Two adjacent h2s are fine; an h3 that
+// now arrives before its h2 is the defect a merge of two sections can cause.
+const order = await page.locator('h1,h2,h3,h4').evaluateAll((els) =>
+  els.filter((el) => (el.offsetWidth || el.offsetHeight)).map((el) => Number(el.tagName[1])),
+);
+const skip = order.findIndex((lvl, i) => i > 0 && lvl > order[i - 1] + 1);
+order[0] === 1 && skip === -1
+  ? ok(`heading order holds with both cards up (${order.map((l) => 'H' + l).join(' → ')})`)
+  : bad(`heading order broken at position ${skip}: ${order.map((l) => 'H' + l).join(' → ')}`);
+
 await browser.close();
 console.log(fail?`\n❌ ${fail} failure(s)`:'\n✅ the lease panel drives correctly');
 process.exit(fail?1:0);

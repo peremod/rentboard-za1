@@ -774,7 +774,19 @@ if [ "$SKIPPED" -gt 0 ]; then
   printf '  %s check(s) did NOT run:%b\n' "$SKIPPED" "$SKIP_LIST"
   echo
   echo "  Everything that ran passed. That is not the same as verified —"
-  echo "  start the API and re-run before tagging, or tag knowing what was skipped."
+  echo "  each skip above names its own remedy. Clear them, or tag knowing"
+  echo "  what was skipped."
+  echo
+  # Said here because the two states are mutually exclusive and neither run
+  # reaches zero skips, which reads like a broken script if you do not know:
+  # the development bundle bakes in http://localhost:3000, so the room and
+  # sitemap checks need an API THERE, while the hanging-API check has to
+  # black-hole that same port and so needs it free. Both runs, or accept one
+  # skip. Making it a single run means teaching `ng build` a fourth
+  # environment purely for this check, which has not been done.
+  echo "  No single run clears every skip: the room and sitemap checks need an"
+  echo "  API on 3000, and the hanging-API check needs 3000 free. Run it both"
+  echo "  ways before tagging."
   exit 0
 fi
 echo "  Verified. Safe to tag."

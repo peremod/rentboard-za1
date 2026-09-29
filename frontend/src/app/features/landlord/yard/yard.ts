@@ -177,13 +177,14 @@ import { LeasePanel } from '../../../shared/components/lease-panel/lease-panel';
       }
 
       <!-- Order on this screen: what needs DECIDING, then the figures, then the
-           inventory. Two features landed here separately and the merge had to
-           choose; a lease ending carries a deadline and the money card does
-           not, so the deadline goes first. -->
-      <!-- What needs deciding, above the inventory. A lease ending is the one
-           thing on this screen with a deadline attached; the room list is
-           reference. headingLevel 2 because this sits directly under the page
-           h1, and a component cannot know its own depth. -->
+           inventory. Expenses and lease renewal were built on separate branches
+           and both added a card here, so the merge had to choose; a lease
+           ending carries a deadline and the money card does not, so the
+           deadline goes first. scripts/lease-ui-drive.mjs asserts this order on
+           a rendered page, because the a11y drive's landlord has neither card.
+
+           headingLevel 2 because this sits directly under the page h1, and a
+           component cannot know its own depth. -->
       <app-lease-panel [headingLevel]="2"/>
 
       <!-- The money picture. Rent tracking already said what came in; without
