@@ -7,8 +7,10 @@ written down rather than left in a chat that ends.
 **Each item has: the command, how to tell it worked, and what breaks if it is
 skipped.** Tick them off by editing this file.
 
-Last updated: 2026-09-29, after Phase 5b. Repo state: `develop` is 31 commits
-ahead of `master`, 16 migrations in `backend/prisma/migrations/`.
+Last updated: 2026-09-29, after Phase 5e/5f. Repo state: 17 migrations in
+`backend/prisma/migrations/`. Check the gap to master with
+`git rev-list --left-right --count origin/master...develop` rather than trusting
+a number written here.
 
 ---
 
@@ -36,8 +38,10 @@ git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-3])[.]'
 **If skipped:** v1.75.2–v1.83.0 have no tags, so there is no way to say which
 commit a given release was, and `git describe` is useless.
 
-> **Note:** v1.84.0 is NOT in the script yet. Phase 5 is unfinished (5c, 5e, 5f,
-> 5g remain), so nothing has been tagged for it.
+> **Note:** v1.84.0 is NOT in the script yet. Phase 5 is unfinished — **5c
+> (share/flyer generator) is the only part left**, and it needs device testing
+> nobody in a container can do; see §10. 5e, 5f and 5h are done, and 5g turned
+> out to be already built.
 
 ---
 
@@ -296,6 +300,29 @@ for these until then.
 
 ---
 
+## 10. Phase 5c needs a real Android phone
+
+The share/flyer generator is the last part of Phase 5 and the only item on this
+list that is blocked on **hardware rather than a credential**.
+
+The brief says: *"Test Web Share API image support across target devices —
+prioritize Android WhatsApp behavior as the primary test target."* That cannot be
+done from a container. `navigator.share()` with a `files` array is supported
+unevenly, WhatsApp's Android share-sheet handling of an attached image is its own
+behaviour, and a desktop browser tells you nothing about either.
+
+It can be **built** without a phone — the canvas rendering, the three output
+shapes, the QR code, the branding, and a download fallback are all verifiable
+here. What cannot be verified is whether tapping "Share to WhatsApp Status"
+actually attaches the image on a real device, versus silently falling back to a
+download.
+
+**So it will ship with the fallback path as the tested one**, and the native
+share as best-effort, unless you can test on an Android phone. Say which and it
+gets built accordingly.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash
@@ -303,7 +330,7 @@ for these until then.
 ADMIN_EMAIL=<seeded admin> ADMIN_PASSWORD=<their password> \
   WHATSAPP_APP_SECRET=<the API's own> \
   RESEND_WEBHOOK_SECRET=<the API's own> \
-  ./scripts/smoke-test.sh          # 453 checks, 3 skip
+  ./scripts/smoke-test.sh          # 461 checks, 3 skip
 
 # What the production build actually serves. Run it BOTH ways:
 ./scripts/verify-build.sh          # with an API on :3000
