@@ -217,11 +217,20 @@ const yardText = await visit(lPage, '/landlord/yard');
 check('the yard screen loads', /yard|propert/i.test(yardText), yardText.slice(0, 160));
 
 // Create a property through the form, not the API.
+//
 // Scoped to the portal's own main region: the footer carries a "Create
 // account" link that matched a looser locator and took the drive to the
 // register form, which then failed on a disabled submit button.
+//
+// And matched on the actual control rather than on the word "yard". The loose
+// pattern took `.first()`, which — once the landlord HAS a yard — is
+// "Delete yard". So this check clicked Delete, found no name field, and
+// reported "the new yard is not on the screen": a red check blaming the product
+// for a working feature, while pressing a destructive button in its own
+// fixture. An API-created yard renders on that page perfectly well, which is
+// what proved it.
 const addYard = lPage.locator('.portal-main button, .portal-main a')
-  .filter({ hasText: /yard|group rooms|add|new/i }).first();
+  .filter({ hasText: /group rooms into a yard/i }).first();
 if (await addYard.count()) {
   await addYard.click();
   await lPage.waitForTimeout(900);
@@ -233,7 +242,17 @@ if (await addYard.count()) {
     await nameField.fill(`Drive yard ${STAMP}`);
     await lPage.locator('.portal-main input[name="city"]:visible').first().fill('Springs');
     await lPage.locator('.portal-main input[name="province"]:visible').first().fill('Gauteng');
-    const save = lPage.locator('.portal-main button:visible').filter({ hasText: /save|add|create|group/i }).first();
+    // The submit button of the form that CONTAINS the name field — not the
+    // first submit on the page, and not a text match.
+    //
+    // Both looser versions picked the wrong control. /save|add|create|group/
+    // matched "+ Group rooms into a yard"; the first form submit on the page is
+    // the rent-reminder form's "Save", which sits above the yard form. Clicking
+    // that saved a grace-days setting and left no yard, and the check then
+    // blamed the yard feature. Anchoring on the field being filled is the only
+    // version that cannot drift.
+    const save = lPage.locator('.portal-main form', { has: lPage.locator('input[name="name"]') })
+      .locator('button[type="submit"]:visible').first();
     await save.click();
     await lPage.waitForTimeout(2200);
     const after = await text(lPage);
