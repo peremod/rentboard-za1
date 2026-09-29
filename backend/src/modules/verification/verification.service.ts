@@ -5,6 +5,7 @@ import { SubmitVerificationDto } from './dto/submit-verification.dto';
 import { ReviewVerificationDto } from './dto/review-verification.dto';
 import { VERIFICATION_RULES, typesFor, requiresPayment, maySubmit } from './verification.rules';
 import { VERIFICATION_FEE_CENTS } from '../payments/payments.constants';
+import { StorageService } from '../storage/storage.service';
 
 /** A Tenant Passport lasts a year before the proofs need refreshing. */
 const PASSPORT_VALID_MONTHS = 12;
@@ -25,8 +26,22 @@ const VERIFICATION_FEE_RANDS = VERIFICATION_FEE_CENTS / 100;
  * information under s.26, so this service
  *   - never returns documentPath to anyone but the submitter and an admin,
  *   - clears documentPath once a decision is made, keeping only the outcome,
+ *   - QUEUES THE FILE ITSELF FOR DELETION from ImageKit, and
  *   - records every step in VerificationEvent, so a decision is auditable
  *     without retaining the document itself.
+ *
+ * The third of those was missing until v1.83.0, and its absence is the worst
+ * defect this codebase has had. Deciding a request cleared the path, set
+ * `documentDeletedAt`, and wrote an audit event reading "The uploaded document
+ * was deleted." Nothing had ever called ImageKit's delete API — there was no
+ * ImageKit SDK in package.json at all. The reference went; the ID photograph
+ * stayed, indefinitely, while the privacy policy, the statutory PAIA manual and
+ * the line shown to the tenant as they uploaded it all said otherwise.
+ *
+ * Deletion now goes through StorageService's queue, and the trail distinguishes
+ * the two promises instead of asserting the stronger one early: taking the
+ * document out of view happens in this transaction and never depended on
+ * ImageKit; the bytes going is recorded when ImageKit confirms it.
  *
  * That last point is the change in v1.56.0. `idVerified = true` is not
  * evidence; a badge that cannot show what was checked is a claim, not a
@@ -40,7 +55,10 @@ const VERIFICATION_FEE_RANDS = VERIFICATION_FEE_CENTS / 100;
 export class VerificationService {
   private readonly logger = new Logger(VerificationService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private storage: StorageService,
+  ) {}
 
   /** The types this person may submit, with the guidance shown beside each. */
   availableTypes(role: UserRole) {
@@ -221,9 +239,21 @@ export class VerificationService {
     return { ...safe, hasDocument: documentPath !== null, label: rule.label };
   }
 
-  /** Admin queue. Includes documentPath — a reviewer must see the document. */
-  listPending() {
-    return this.prisma.verificationRequest.findMany({
+  /**
+   * Admin queue.
+   *
+   * Returns a SIGNED, expiring URL rather than the raw path. It used to return
+   * `documentPath` and the screen linked straight to it — a relative path with
+   * no endpoint and no signature, so "Open document ↗" resolved against the
+   * app\u2019s own origin and 404\u2019d. Every private upload in this codebase was
+   * effectively write-only, which is also why nobody had noticed the files were
+   * never being deleted: no reviewer could see them either way.
+   *
+   * The URL is minted per read and lasts fifteen minutes — long enough to work
+   * a queue, short enough that a link pasted into a chat stops resolving.
+   */
+  async listPending() {
+    const requests = await this.prisma.verificationRequest.findMany({
       // pending_payment is excluded deliberately: reviewing before payment
       // means chasing money from someone you have just told no.
       where: { status: 'pending' },
@@ -238,6 +268,22 @@ export class VerificationService {
         events: { orderBy: { createdAt: 'asc' } },
       },
       orderBy: { createdAt: 'asc' },
+    });
+
+    return requests.map(({ documentPath, ...rest }) => {
+      let documentUrl: string | null = null;
+      if (documentPath) {
+        try {
+          documentUrl = this.storage.signedUrl(documentPath, 15 * 60).url;
+        } catch {
+          // Unconfigured storage must not take the whole queue down — a
+          // reviewer can still read the claim and the trail. hasDocument stays
+          // true so the screen says a document exists but cannot be opened,
+          // rather than silently implying there is none.
+          documentUrl = null;
+        }
+      }
+      return { ...rest, hasDocument: documentPath !== null, documentUrl };
     });
   }
 
@@ -276,7 +322,7 @@ export class VerificationService {
           reviewedAt: new Date(),
           // The document has served its purpose. Keep the outcome, not the ID.
           documentPath: null,
-          documentDeletedAt: request.documentPath ? new Date() : request.documentDeletedAt,
+          documentWithdrawnAt: request.documentPath ? new Date() : request.documentWithdrawnAt,
         },
       });
 
@@ -288,9 +334,18 @@ export class VerificationService {
         reviewerId,
       );
       if (request.documentPath) {
+        // Enqueued inside this transaction, so a committed decision always has
+        // a pending deletion behind it and a rolled-back one deletes nothing.
+        await this.storage.enqueueDelete(tx, request.documentPath, 'verification_decided', id);
+        // Two facts, two events. This one is true the moment this transaction
+        // commits and never depended on ImageKit. StorageService writes the
+        // second — that the bytes are gone — when ImageKit confirms it.
+        //
+        // The single event this replaced asserted both at once, and the
+        // stronger half was not happening at all.
         await this.recordEvent(
-          tx, id, 'system', 'document_deleted',
-          'The uploaded document was deleted. Only this outcome is kept — POPIA s.26.',
+          tx, id, 'system', 'document_withdrawn',
+          'The uploaded document has been taken out of view and queued for deletion from storage. Only this outcome is kept — POPIA s.26.',
         );
       }
 

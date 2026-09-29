@@ -151,7 +151,7 @@ production it requires:
 |---|---|
 | `SITE_URL`, `FRONTEND_URL`, `DATABASE_URL`, `JWT_SECRET` | required in every environment |
 | `API_URL` | PayFast POSTs its payment notification here. Wrong, and a landlord is charged while the payment is never marked paid — silently, with nothing logged |
-| `IMAGEKIT_PRIVATE_KEY` | signed uploads |
+| `IMAGEKIT_PRIVATE_KEY` | signed uploads — **and file deletion.** Without it, uploaded documents are never removed from storage, while the privacy policy, the PAIA manual and the tenant-facing upload screen all state that they are. The hourly drain logs this at error level rather than passing quietly |
 | `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` | the webhook fails closed without the secret: bounces stop being recorded and the sending domain's reputation degrades quietly |
 | `ADMIN_ALERT_EMAIL` | where the alerts go |
 | `PAYFAST_SANDBOX` must not be `"true"` | real payments would go to the sandbox |
@@ -213,6 +213,10 @@ GOOGLE_CALLBACK_URL=https://<your-render-url>/api/auth/google/callback
 IMAGEKIT_PUBLIC_KEY=
 IMAGEKIT_PRIVATE_KEY=
 IMAGEKIT_URL_ENDPOINT=https://ik.imagekit.io/l4on8rrpx
+# Leave BLANK. Defaults to https://api.imagekit.io. It exists only so file
+# deletion can be driven against a local stub in development; set here, nothing
+# would ever be deleted.
+IMAGEKIT_API_BASE=
 
 RESEND_API_KEY=
 RESEND_FROM=noreply@yourdomain.co.za

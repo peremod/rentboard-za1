@@ -22,6 +22,7 @@ import { ServicesModule } from './modules/services/services.module';
 import { SurveysModule } from './modules/surveys/surveys.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { TenanciesModule } from './modules/tenancies/tenancies.module';
+import { StorageModule } from './modules/storage/storage.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SeoModule } from './modules/seo/seo.module';
@@ -75,6 +76,11 @@ import { MessagesModule } from './modules/messages/messages.module';
     SurveysModule,
     AnalyticsModule,
     TenanciesModule,
+    // Listed here as well as being imported by the modules that use it, so the
+    // hourly deletion drain keeps running even if both of those importers
+    // change. A file we promised to delete should not stop being deleted
+    // because of an unrelated refactor.
+    StorageModule,
     ReviewsModule,
     ReportsModule,
     SeoModule,

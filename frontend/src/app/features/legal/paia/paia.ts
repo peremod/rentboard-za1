@@ -136,6 +136,26 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
                 </td>
               </tr>
               <tr>
+                <td><strong>Parties to a tenancy, for lease paperwork</strong></td>
+                <td>
+                  The signed lease and any addendum, move-in inspection or deposit
+                  proof that either party chooses to store, and which of them
+                  uploaded it.
+                </td>
+                <td>
+                  To give both people a copy of what they agreed
+                  (s.11(1)(b), contract). <strong>We store the document and
+                  nothing more</strong> — Umastande does not sign, witness, verify
+                  or execute any agreement, and nothing stored here should be read
+                  as our confirmation of its contents. Only the two parties can
+                  open it; a link expires after five minutes. Unlike a
+                  verification document it is <strong>kept</strong>, because both
+                  parties need it for as long as the agreement can be disputed.
+                  Whoever uploaded it may delete it, which removes the file
+                  itself.
+                </td>
+              </tr>
+              <tr>
                 <td><strong>Previous landlords given as a reference</strong></td>
                 <td>Name, mobile number, and the answer they give about a former tenant.</td>
                 <td>

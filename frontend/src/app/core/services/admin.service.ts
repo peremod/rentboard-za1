@@ -27,7 +27,17 @@ export interface AdminUser {
 
 /** A pending request, as the admin queue sees it — includes the document. */
 export interface PendingVerification extends VerificationRequest {
-  documentPath?: string | null;
+  /**
+   * A signed, expiring URL for the uploaded document, or null when storage is
+   * not configured.
+   *
+   * Was `documentPath` — a bare relative path the screen put straight into an
+   * href, so it resolved against the app's own origin and "Open document ↗"
+   * 404'd for the whole life of the feature. `hasDocument` still says whether
+   * one exists, so a queue with unconfigured storage can say "cannot open it"
+   * rather than implying there is nothing there.
+   */
+  documentUrl?: string | null;
   user: {
     id: string; fullName: string; email: string; createdAt: string;
     role: 'TENANT' | 'LANDLORD' | 'ADMIN';

@@ -34,6 +34,7 @@ import { PortalShell, PortalNavItem } from '../../../shared/components/portal-sh
 import { landlordNav } from '../landlord-nav';
 import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 import { LeasePanel } from '../../../shared/components/lease-panel/lease-panel';
+import { LeaseDocuments } from '../../../shared/components/lease-documents/lease-documents';
 
 /**
  * The yard dashboard.
@@ -55,7 +56,7 @@ import { LeasePanel } from '../../../shared/components/lease-panel/lease-panel';
   standalone: true,
   imports: [
     PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink,
-    ZarCentsPipe, PortalShell, LeasePanel,
+    ZarCentsPipe, PortalShell, LeasePanel, LeaseDocuments,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -435,7 +436,27 @@ import { LeasePanel } from '../../../shared/components/lease-panel/lease-panel';
                       Rent this month
                     </button>
                   }
+                  <!-- On demand, like the rent record above it, and for the same
+                       reason: a yard with six tenancies would otherwise open with
+                       six upload forms nobody asked for. -->
+                  <button type="button" class="link-btn"
+                          [attr.aria-expanded]="showDocs().has(tenancy.id)"
+                          [attr.aria-label]="'Paperwork for ' + tenancy.tenant.fullName"
+                          (click)="toggleDocs(tenancy.id)">
+                    {{ showDocs().has(tenancy.id) ? 'Hide paperwork' : 'Paperwork' }}
+                  </button>
                 </div>
+                @if (showDocs().has(tenancy.id)) {
+                  <!-- headingLevel 2, not 3, and this was wrong first time round.
+                       The yard blocks are rendered by the ngTemplateOutlet near
+                       the TOP of this template, above the reminders and money
+                       sections, and the yard's own name is a <strong> rather than
+                       a heading — so an h3 here landed directly under the page h1
+                       and skipped a level. The drive caught it; reasoning about
+                       the template did not, because the outlet is 140 lines from
+                       the definition. -->
+                  <app-lease-documents [tenancyId]="tenancy.id" [headingLevel]="2"/>
+                }
               }
             </div>
           } @empty {
@@ -457,6 +478,23 @@ export class Yard implements OnInit {
   protected readonly busy = signal(false);
   protected readonly creating = signal(false);
   protected readonly error = signal<string | null>(null);
+  /**
+   * Which tenancies have their paperwork open.
+   *
+   * A Set rather than a single id: a landlord comparing two leases should not
+   * have one close as the other opens.
+   */
+  protected readonly showDocs = signal<Set<string>>(new Set());
+
+  protected toggleDocs(tenancyId: string) {
+    this.showDocs.update((open) => {
+      const next = new Set(open);
+      if (next.has(tenancyId)) next.delete(tenancyId);
+      else next.add(tenancyId);
+      return next;
+    });
+  }
+
   /** Rent periods by tenancy id, fetched on demand rather than with the list. */
   protected readonly rent = signal<Record<string, RentPeriod[]>>({});
 

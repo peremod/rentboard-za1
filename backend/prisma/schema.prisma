@@ -461,6 +461,7 @@ model Tenancy {
   reviews     Review[]
   flags       TenancyFlag[]
   rentPeriods RentPeriod[]
+  documents   LeaseDocument[]
 
   @@index([landlordId, status])
   @@index([tenantId, status])
@@ -1136,9 +1137,20 @@ model VerificationRequest {
   status VerificationStatus @default(pending)
 
   /// Private ImageKit path. Cleared when the request is decided.
-  documentPath      String?
-  /// Set when documentPath is cleared, so the deletion itself is auditable.
-  documentDeletedAt DateTime?
+  documentPath        String?
+  /// When the document stopped being reachable through this API — set as the
+  /// decision clears `documentPath`.
+  ///
+  /// Called `documentDeletedAt` until v1.83.0, which was a false name: nothing
+  /// deleted anything. The bytes stayed on ImageKit while this column, an audit
+  /// event, the privacy policy and the PAIA manual all said they were gone.
+  ///
+  /// It is `withdrawn` now because that is the promise this timestamp can
+  /// actually keep, and it is kept in the same transaction as the decision. The
+  /// stronger claim — that the file itself is gone — lives on
+  /// `FileDeletion.deletedAt`, set from ImageKit's own response. Two promises,
+  /// two columns, neither standing in for the other.
+  documentWithdrawnAt DateTime?
 
   reviewedById String?
   reviewedAt   DateTime?
@@ -1907,4 +1919,179 @@ model ServiceProvider {
 
   @@index([category, active])
   @@map("service_providers")
+}
+
+/// A file that must be removed from ImageKit, kept until it actually is.
+///
+/// ── Why this table exists
+///
+/// It was written because the retention promise was not being kept. Deciding a
+/// verification set `documentDeletedAt`, cleared `documentPath`, and wrote an
+/// audit event reading *"The uploaded document was deleted."* — and nothing
+/// anywhere in this codebase had ever called ImageKit's delete API. `grep` for
+/// it returned nothing; there is no ImageKit SDK in package.json. The row
+/// stopped pointing at the file. The file stayed.
+///
+/// Three live statements said otherwise, one of them statutory: the privacy
+/// policy's ImageKit row ("deleted once reviewed — only the outcome is kept"),
+/// the PAIA manual ("Documents are deleted on decision"), and the line shown to
+/// a tenant at the moment they upload their ID ("deleted as soon as someone has
+/// looked at it"). A promise nobody implemented is worse than no promise: the
+/// person relying on it is the one who uploaded their ID.
+///
+/// ── Why a queue and not a delete call
+///
+/// The bytes live at a third party, so deletion can fail for reasons that have
+/// nothing to do with us — ImageKit down, a network blip, a credential rotated.
+/// A fire-and-forget call would land us back where we started, quietly: the
+/// difference between "deleted" and "we asked once and did not check" is the
+/// whole point.
+///
+/// So the row is written in the SAME transaction that clears the reference, and
+/// nothing marks it done until ImageKit confirms. `deletedAt` is set from the
+/// response, never optimistically. A row that keeps failing stays here, visible
+/// and countable, rather than dissolving into a log line.
+///
+/// ── What the two timestamps mean, because they are different promises
+///
+/// Clearing `documentPath` makes a document unreachable through this API
+/// immediately — that part never depended on ImageKit. `deletedAt` here is the
+/// stronger claim, that the bytes are gone. The audit trail shown to the
+/// subject distinguishes them rather than asserting the stronger one early.
+model FileDeletion {
+  id String @id @default(uuid())
+
+  /// ImageKit filePath, stored exactly as the upload returned it (no leading
+  /// slash — see UploadsService). Not a URL: the delete API resolves a path to
+  /// a fileId, and a URL with transforms in it resolves to nothing.
+  path String
+
+  /// Why it is going, e.g. `verification_decided`, `lease_replaced`,
+  /// `lease_removed`. Free text for a human reading the queue, never parsed.
+  reason String
+
+  /// The verification whose audit trail should learn when this completes. Null
+  /// for files with no trail of their own. Deliberately NOT a foreign key
+  /// relation: the deletion must still happen, and still be recorded, if the
+  /// request row is ever removed.
+  verificationRequestId String?
+
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime?
+  /// The last failure, kept so a stuck row can be diagnosed without replaying
+  /// it. Never contains the file's contents — only ImageKit's own message.
+  lastError     String?
+
+  /// Set ONLY from a successful ImageKit response. While this is null the
+  /// bytes are still there, whatever any other row says.
+  deletedAt DateTime?
+
+  /// True when ImageKit reported the file already absent. Distinguished from a
+  /// deletion we performed, because "it was not there" and "we removed it" are
+  /// different facts and only one of them is reassuring.
+  alreadyGone Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  /// The queue's working order: outstanding rows oldest first.
+  @@index([deletedAt, createdAt])
+  @@map("file_deletions")
+}
+
+/// What kind of paper this is. Narrow on purpose — a long list is a taxonomy
+/// nobody maintains, and the point is to find the lease again, not to file it.
+enum LeaseDocumentKind {
+  /// The lease itself, signed on paper and photographed or scanned.
+  lease
+  /// An addendum or a renewal letter attached to an existing lease.
+  addendum
+  /// The inventory or condition report taken at move-in.
+  inspection
+  /// Proof of the deposit having been paid or refunded. NOT the deposit — see
+  /// the warning below.
+  deposit_receipt
+  other
+}
+
+/// A lease document a landlord has stored against a tenancy.
+///
+/// ── Storage only. Read this before adding to it.
+///
+/// This model holds a FILE and who uploaded it. It does not sign anything,
+/// witness anything, timestamp anything for evidential purposes, or assert that
+/// the parties agreed to what the file says. There is deliberately no
+/// `signedByTenantAt`, no signature image, no hash chain and no certificate,
+/// because each of those would be this product asserting something about the
+/// execution of a legal document — and a half-built e-signature is worse than
+/// none, since it looks like one.
+///
+/// A landlord and a tenant sign on paper, and Mastande keeps the photograph so
+/// neither has to find it in a drawer two years later. That is the whole
+/// feature. If e-signature is ever wanted it is a separate decision with
+/// ECT Act s.13 advice behind it, not an extra column here.
+///
+/// Likewise `deposit_receipt` is PROOF that a deposit moved between the two of
+/// them. Mastande never holds the deposit, never confirms the amount arrived,
+/// and nothing here should be read as an escrow record.
+///
+/// ── Who can see it
+///
+/// Both parties to the tenancy, and nobody else — not other landlords, not
+/// admins. A lease names both people, what they pay and where they live, so the
+/// landlord who owns the room is not the only person with a claim on it. The
+/// tenant can read and download; only the uploader can replace or remove, so
+/// one party cannot quietly delete the other's copy of what was agreed.
+///
+/// ── POPIA
+///
+/// A lease is personal information about both parties under s.1, not special
+/// personal information under s.26 — it is a contract, not an identity
+/// document. So unlike a verification document it is KEPT rather than deleted
+/// on sight: both parties need it for as long as the tenancy can be disputed,
+/// and deleting the only copy of an agreement would be the harm, not the
+/// safeguard.
+///
+/// What that does NOT mean is kept forever. Removal is a real deletion through
+/// FileDeletion — the bytes go from ImageKit, not just the row — and the
+/// retention rule is stated where a person can read it rather than inferred
+/// from behaviour.
+model LeaseDocument {
+  id String @id @default(uuid())
+
+  tenancyId String
+  tenancy   Tenancy @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+
+  /// Who put it there. Either party may upload; only this person may replace or
+  /// remove it. Not a cascade delete: the account going away must not take the
+  /// other party's copy of the agreement with it, so this is an id, and the
+  /// screen falls back to "a former user" when it no longer resolves.
+  uploadedById String
+
+  kind LeaseDocumentKind @default(lease)
+
+  /// ImageKit filePath, no leading slash, like every other stored file here.
+  /// Private: never rendered through a public URL, only through a signed read.
+  path String
+
+  /// What the landlord called it, or the original filename. Shown as-is so a
+  /// yard with four leases is navigable.
+  label String
+
+  /// Bytes, as reported by the upload. Shown to the reader so they know what
+  /// a download will cost them on mobile data, which in this market is the
+  /// difference between opening it and not.
+  sizeBytes Int?
+
+  /// The file's own type, e.g. `application/pdf`, `image/jpeg`. Stored rather
+  /// than guessed from the extension.
+  contentType String?
+
+  /// The landlord's own note. Never shown to the tenant as advice.
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenancyId, createdAt])
+  @@map("lease_documents")
 }

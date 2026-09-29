@@ -79,9 +79,19 @@ import { VerificationService } from '../../../core/services/verification.service
                     </p>
                   }
                 </div>
-              } @else if (req.documentPath) {
+              } @else if (req.documentUrl) {
                 <div class="app-location">
-                  <a [href]="req.documentPath" target="_blank" rel="noopener">Open document ↗</a>
+                  <!-- A signed URL from the API, not the stored path. Linking
+                       the path resolved against our own origin and never opened
+                       anything — see PendingVerification. -->
+                  <a [href]="req.documentUrl" target="_blank" rel="noopener">Open document ↗</a>
+                </div>
+              } @else if (req.hasDocument) {
+                <div class="field-error">
+                  A document was uploaded but cannot be opened — storage is not
+                  configured on this server. Do not reject for this: the person
+                  did their part. Set IMAGEKIT_PRIVATE_KEY and
+                  IMAGEKIT_URL_ENDPOINT and reload.
                 </div>
               } @else {
                 <div class="field-error">Document missing — reject and ask for a resubmission.</div>
@@ -124,7 +134,7 @@ import { VerificationService } from '../../../core/services/verification.service
                 <button type="button" class="btn btn-sm btn-ghost-light" (click)="cancelReject()">Cancel</button>
               } @else {
                 <button type="button" class="btn btn-sm btn-sage"
-                        [disabled]="busy() === req.id || !req.documentPath"
+                        [disabled]="busy() === req.id || !req.hasDocument"
                         (click)="approve(req)">
                   {{ busy() === req.id ? 'Saving…' : 'Approve' }}
                 </button>

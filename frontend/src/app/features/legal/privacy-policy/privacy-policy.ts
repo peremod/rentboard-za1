@@ -118,10 +118,20 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
               </tr>
               <tr>
                 <td><strong>ImageKit</strong><br/>photo and document storage</td>
-                <td>Room photographs, and any identity or supporting document you upload. These go
-                from your browser straight to ImageKit; documents are stored privately, are not
-                publicly viewable, and are deleted once reviewed — only the outcome is kept
-                (POPIA s.26).</td>
+                <td>Room photographs, any identity or supporting document you upload, and any lease
+                or related paperwork stored against a tenancy. These go from your browser straight
+                to ImageKit. Documents are stored privately and are not publicly viewable; opening
+                one uses a link that expires.
+                <br/><br/>
+                <strong>Identity and supporting documents are deleted from storage once reviewed</strong>
+                — only the outcome is kept (POPIA s.26). Deletion is retried until it is confirmed by
+                the storage provider, and we record the outcome rather than assuming it.
+                <br/><br/>
+                <strong>A lease is different and is kept</strong>, because both you and the other
+                party need it for as long as the agreement can be disputed — deleting the only copy
+                of what you agreed would be the harm, not the protection. Only the two parties to
+                the tenancy can open it; we do not read it, and our staff cannot. Whoever uploaded a
+                document can remove it at any time, which deletes the file itself.</td>
                 <td>Outside South Africa</td>
               </tr>
               <tr>

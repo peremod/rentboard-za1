@@ -7,6 +7,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { Tenancy } from '../../../core/models/tenancy.model';
 import { tenantNav } from '../tenant-nav';
+import { LeaseDocuments } from '../../../shared/components/lease-documents/lease-documents';
 
 /**
  * The tenant's side of rent tracking.
@@ -36,7 +37,7 @@ import { tenantNav } from '../tenant-nav';
 @Component({
   selector: 'app-tenant-rent',
   standalone: true,
-  imports: [DatePipe, FormsModule, ZarCentsPipe, PortalShell],
+  imports: [DatePipe, FormsModule, ZarCentsPipe, PortalShell, LeaseDocuments],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems" roleLabel="Tenant" avatarColour="var(--sage)" pageTitle="Rent">
@@ -133,9 +134,21 @@ import { tenantNav } from '../tenant-nav';
                   }
                 </div>
               }
+            } @else if (t.status === 'pending') {
+              <p class="muted">
+                Your move-in is not confirmed yet, so there is no rent record.
+                Anything you and your landlord have signed is below.
+              </p>
             } @else {
               <p class="muted">Loading rent record…</p>
             }
+
+            <!-- The tenant's own copy of the lease. Shown without a toggle,
+                 unlike the landlord's yard: a tenant has one or two tenancies,
+                 not sixteen, and the thing they most often need is the document
+                 that says what they agreed to pay. headingLevel 3 because this
+                 section's own title is the h2. -->
+            <app-lease-documents [tenancyId]="t.id" [headingLevel]="3"/>
           </section>
         }
       }
@@ -161,11 +174,27 @@ export class TenantRent implements OnInit {
   ngOnInit() {
     this.tenancies_.load().subscribe({
       next: (list) => {
-        // A cancelled tenancy never started, so it has no rent to show.
-        const live = list.filter((t) => t.status === 'active' || t.status === 'ended');
+        // A cancelled tenancy never started, so it has nothing to show.
+        //
+        // `pending` is included, which it was not before. A tenant whose
+        // application had been accepted but whose move-in was not yet confirmed
+        // was told "No tenancies yet" — false, and the moment they are most
+        // likely to be looking, because a lease is usually signed BEFORE move-in
+        // and the paperwork panel lives on this page. The rent record itself
+        // still only renders for a tenancy that has started, since there is no
+        // rent to record before that.
+        const live = list.filter(
+          (t) => t.status === 'active' || t.status === 'ended' || t.status === 'pending',
+        );
         this.tenancies.set(live);
         this.loading.set(false);
-        for (const t of live) this.loadPeriods(t.id);
+        // Not for a pending tenancy: rent history returns an empty list, which
+        // is truthy, so the template would take the "no months recorded yet"
+        // branch instead of saying the move-in is not confirmed. Asking at all
+        // would also be a request that can only answer nothing.
+        for (const t of live) {
+          if (t.status !== 'pending') this.loadPeriods(t.id);
+        }
       },
       error: () => this.loading.set(false),
     });

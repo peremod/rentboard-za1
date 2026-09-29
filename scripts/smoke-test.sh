@@ -2372,10 +2372,31 @@ fi
 if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req PATCH "/api/verification/$SASSA_ID/review" '{"status":"approved"}' "$ADMIN_TOKEN"
   check "admin approves the income proof" 200 "$STATUS" "$BODY"
-  if echo "$BODY" | jq -e '.documentPath == null and .documentDeletedAt != null' >/dev/null 2>&1; then
-    green "  PASS  document deleted on decision, deletion timestamped (POPIA s.26)"; PASS=$((PASS+1))
+  # Asserts the promise this response can actually keep: the document is out of
+  # view and the moment is recorded. It used to read `documentDeletedAt != null`
+  # and call that "document deleted (POPIA s.26)" — which was false, because
+  # nothing deleted anything from ImageKit. The column is `documentWithdrawnAt`
+  # now and the bytes are tracked separately.
+  #
+  # This check has ALWAYS been behind ADMIN_TOKEN, so the one assertion in the
+  # suite covering the retention promise had never run. That is how the gap
+  # survived: a skipped check reads exactly like a passing one at a glance.
+  if echo "$BODY" | jq -e '.documentPath == null and .documentWithdrawnAt != null' >/dev/null 2>&1; then
+    green "  PASS  document out of view on decision, timestamped (POPIA s.26)"; PASS=$((PASS+1))
   else
-    red "  FAIL  document survived the decision"; FAIL=$((FAIL+1))
+    red "  FAIL  document still reachable after the decision"; FAIL=$((FAIL+1))
+  fi
+  # And that the trail says the honest thing. Storage deletion is proven
+  # end to end in scripts/storage-drive.mjs, which drives a stub ImageKit and
+  # checks a DELETE actually goes out for the right file.
+  # The submitter's own trail, so the tenant's token — this endpoint is
+  # deliberately not an admin one: the person the document is about is who the
+  # trail is for.
+  req GET "/api/verification/mine/$SASSA_ID/history" "" "$TTOKEN"
+  if echo "$BODY" | jq -e '[.[] | select(.step == "document_withdrawn")] | length > 0' >/dev/null 2>&1; then
+    green "  PASS  the trail records the document withdrawn, not a deletion it cannot yet confirm"; PASS=$((PASS+1))
+  else
+    red "  FAIL  no document_withdrawn step in the trail: $(echo "$BODY" | jq -c '[.[].step]' 2>/dev/null)"; FAIL=$((FAIL+1))
   fi
 
   req GET "/api/verification/badge/$TENANT_ID" "" "$TTOKEN"
