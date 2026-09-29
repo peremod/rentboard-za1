@@ -1,5 +1,9 @@
 # Runbook — the commands, in order
 
+> For the things that are **waiting on you** rather than on a command — tags,
+> the production deploy, ImageKit verification, Meta templates, attorney review —
+> see [OUTSTANDING.md](OUTSTANDING.md).
+
 Nothing to decide, nothing to look up. Development first, then staging.
 
 Every command here was run against this repository before it was written down.

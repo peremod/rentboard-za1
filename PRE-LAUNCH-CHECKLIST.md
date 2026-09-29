@@ -1,5 +1,10 @@
 # Mastande ZA — Pre-Launch Checklist
 
+> **Everything that needs a human, a credential or a production deploy is in
+> [docs/OUTSTANDING.md](docs/OUTSTANDING.md)**, with the exact command for each
+> and how to tell it worked. That file is the one to read before a launch; this
+> one is the record of what was found and fixed.
+
 ## Launch readiness summary (v1.6.0)
 
 **Corrected 26 Aug 2026.** The previous version of this summary claimed
