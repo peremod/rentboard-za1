@@ -2810,6 +2810,50 @@ else
 fi
 
 
+# ── Landlord task inbox and portfolio health (Phase 5a / 5d) ───────────────
+#
+# An aggregation layer, so what is worth asserting here is authorisation and
+# honesty about absent data — the ORDERING is where the value is, and that is
+# checked properly in scripts/inbox-drive.mjs against a landlord with several
+# competing situations at once, which is too much fixture for this suite.
+head_ "Landlord task inbox"
+
+req GET /api/landlord/inbox "" "$LTOKEN"
+check "a landlord can read their own inbox" 200 "$STATUS" "$BODY"
+if echo "$BODY" | jq -e 'has("items") and has("counts")' >/dev/null 2>&1; then
+  green "  PASS  it carries both the list and the per-kind counts"; PASS=$((PASS+1))
+else
+  red "  FAIL  inbox shape: $(echo "$BODY" | head -c 200)"; FAIL=$((FAIL+1))
+fi
+# Every row must carry where its action goes. A template deciding that per kind
+# is a template that gets one wrong the next time a kind is added.
+if echo "$BODY" | jq -e '.items | all(has("actionPath") and has("actionLabel") and has("urgency"))' >/dev/null 2>&1; then
+  green "  PASS  every row carries its own action and its urgency"; PASS=$((PASS+1))
+else
+  red "  FAIL  a row is missing actionPath/actionLabel/urgency"; FAIL=$((FAIL+1))
+fi
+
+req GET /api/landlord/health "" "$LTOKEN"
+check "and their portfolio health" 200 "$STATUS" "$BODY"
+# The point of 5d: a figure with too little behind it is absent, not rounded.
+# Asserted as "if a percentage is quoted, it says what it is from" rather than a
+# fixed expectation, because this landlord's data depends on earlier sections.
+if echo "$BODY" | jq -e '(.paymentReliabilityPct == null) or (.paymentReliabilityFrom >= 3)' >/dev/null 2>&1; then
+  green "  PASS  no payment-reliability figure is quoted from fewer than 3 months"; PASS=$((PASS+1))
+else
+  red "  FAIL  quoted $(echo "$BODY" | jq -c '.paymentReliabilityPct') from $(echo "$BODY" | jq -c '.paymentReliabilityFrom') month(s)"; FAIL=$((FAIL+1))
+fi
+if echo "$BODY" | jq -e '.summary | type == "string" and length > 20' >/dev/null 2>&1; then
+  green "  PASS  and it reads as a sentence, not a row of figures"; PASS=$((PASS+1))
+else
+  red "  FAIL  summary is not a sentence: $(echo "$BODY" | jq -c '.summary')"; FAIL=$((FAIL+1))
+fi
+
+req GET /api/landlord/inbox "" "$TTOKEN"
+check "a tenant cannot open the landlord inbox" 403 "$STATUS" "$BODY"
+req GET /api/landlord/health "" ""
+check "nor can a stranger read portfolio health" 401 "$STATUS" "$BODY"
+
 # ── Landlord survey (Phase 0) ──────────────────────────────────────────────
 #
 # The survey is seeded by prisma/seed.ts, so a database seeded without it
