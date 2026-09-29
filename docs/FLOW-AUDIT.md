@@ -734,9 +734,65 @@ algorithm matches their SDK and the drive recomputes it independently, but only
 a real key proves acceptance — see PRE-LAUNCH-CHECKLIST.
 
 
+### 5.12 Landlord task inbox and portfolio health — ✅ built in v1.84.0 (Phase 5a/5d)
+
+The two questions a landlord opens the app with: what needs doing, and how is it
+going. Both are **pure aggregation** over what Phases 1–4 already record — no new
+tables.
+
+**One list, ordered once.** The rows are unlike each other: an applicant waiting
+nine days, a lease ending in ten, a tenant saying your rent record is wrong.
+Ranking those is a judgement, and it is made server-side. `urgency` comes from
+the API and the screen renders in the order given, because two places sorting the
+same list is two places that can disagree — and the landlord would trust
+whichever they saw first.
+
+The ranking, most pressing first: a **disputed** month (somebody is telling you
+your record is wrong, and every day it stands unread is a day of bad feeling),
+then anything dated, by days remaining and with overdue items negative, then
+**unmarked rent** last — rent admin has no deadline, and putting it above a lease
+ending next week is how people learn to ignore a list.
+
+**Every row is actionable**, carrying its own `actionPath` and `actionLabel`, so
+a new kind needs no template change. Actions carry a fragment where they target a
+section, so the landlord lands on the thing rather than the top of a long page.
+
+**Nothing renders when nothing needs doing.** No empty "Needs you" panel.
+
+❌ **The brief's fourth source does not exist.** It lists "unresolved maintenance
+items (Phase 2 Tier 2)" — there is no maintenance log. Tier 2 was deliberately
+not started (§5.6 — the brief gates it on survey data that does not exist yet).
+Three of four sources are aggregated and the fourth is not faked. When a
+maintenance log lands it adds a `kind` and nothing else changes.
+
+**5d says what it cannot know.** Every figure ships with its denominator, and one
+with too little behind it is `null` rather than a rounded guess — `null`
+occupancy means nothing has been measured, not that nothing is occupied. Payment
+reliability needs three recorded months before it is quoted at all; below that a
+landlord would read "0%" as "my tenants never pay". At small volumes the summary
+gives counts rather than percentages: "two of your three rooms are taken" is the
+same fact as "67% occupancy" without the false precision. `waived` months are
+excluded from both sides — counting them as unpaid makes a kindness look like a
+bad tenant.
+
+The paragraph is built server-side beside the numbers, because its wording
+changes with the data and that logic does not belong spread across a template.
+
+**Verified two ways.** `inbox-drive.mjs` builds a landlord with several competing
+situations at once and checks the ordering between them;
+`inbox-ui-drive.mjs` checks the panel leads the dashboard, that every action
+resolves to a real route rather than a 404, and that no two accessible names are
+identical — "Mark it" three times down a list names nothing. Inverting the
+urgency makes both fail independently; that was checked.
+
+One assertion in the first drive originally had `ok()` on **both** branches, so
+it could not fail. Same shape as a check asserting its own timestamp, and it read
+green until a second reading.
+
+
 ## 6. What "verified" means here
 
-`./scripts/smoke-test.sh` exercises the API against a live server: **432
+`./scripts/smoke-test.sh` exercises the API against a live server: **440
 passing checks, 3 skipped** with a full environment at v1.84.0 — up from 340/14,
 because 92 checks had never run at all (see below), across auth, room lifecycle,
 applications, messaging, alerts, verification, cross-tenant isolation, rent, the
@@ -754,6 +810,8 @@ the fixtures are expensive or the assertions are about a browser:
 | `services-drive.mjs` | directory filtering, number normalisation, off-by-default |
 | `services-ui-drive.mjs` | the `tel:`/`wa.me` links, and that errors are not reported twice |
 | `mobile-drive.mjs` | the five bugs found on a real phone, at 390px |
+| `inbox-drive.mjs` | the task inbox's ORDERING between competing situations, and what the health card refuses to quote |
+| `inbox-ui-drive.mjs` | it leads the dashboard; every row resolves to a real route and is distinctly named |
 | `storage-drive.mjs` | **that deleting really deletes** — it IS an ImageKit stub, so it checks a DELETE arrived, and that a 500 is not recorded as success |
 | `lease-docs-ui-drive.mjs` | both parties see the lease, and nothing on screen claims it was signed here |
 | `a11y-drive.mjs` | 25 pages: heading order, accessible names, contrast at rest, on hover and on focus |
