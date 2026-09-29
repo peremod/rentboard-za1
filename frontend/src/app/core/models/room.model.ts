@@ -102,6 +102,13 @@ export interface PaginatedRooms {
   page: number;
   limit: number;
   hasMore: boolean;
+  /**
+   * Landlords who have passed an identity check AND have a room matching this
+   * search. Counted on the server across the whole result set, not the page —
+   * see the note in rooms.service.ts, where the browser used to compute this
+   * from the loaded rooms and got it wrong twice over.
+   */
+  verifiedLandlords: number;
 }
 
 export interface RelistPayload {

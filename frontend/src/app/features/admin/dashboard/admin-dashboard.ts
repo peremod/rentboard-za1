@@ -7,6 +7,7 @@ import { PaymentsService, RefundDue } from '../../../core/services/payments.serv
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ADMIN_NAV } from '../admin-nav';
+import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 
 /**
  * Admin overview: platform counts, and account support.
@@ -18,7 +19,7 @@ import { ADMIN_NAV } from '../admin-nav';
 @Component({
   selector: 'app-admin-dashboard',
   standalone: true,
-  imports: [RouterLink, DatePipe, LowerCasePipe, FormsModule, PortalShell, ZarCentsPipe],
+  imports: [PluralPipe, RouterLink, DatePipe, LowerCasePipe, FormsModule, PortalShell, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Overview">
@@ -200,7 +201,7 @@ import { ADMIN_NAV } from '../admin-nav';
                 <div class="app-location">{{ u.email }} · {{ u.role | lowercase }}</div>
                 <div class="app-location">
                   Joined {{ u.createdAt | date:'MMM yyyy' }}
-                  @if (u._count) { · {{ u._count.rooms }} room{{ u._count.rooms === 1 ? '' : 's' }} }
+                  @if (u._count) { · {{ u._count.rooms | plural: 'room' }} }
                   @if (u.lastLoginAt) { · last seen {{ u.lastLoginAt | date:'d MMM' }} }
                 </div>
 

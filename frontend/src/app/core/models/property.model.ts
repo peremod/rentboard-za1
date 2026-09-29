@@ -105,3 +105,45 @@ export interface RentPeriod {
   tenantNote?: string | null;
   reminderSentAt?: string | null;
 }
+
+export type ExpenseCategory = 'municipal' | 'water' | 'electricity' | 'maintenance' | 'other';
+
+/** Something the landlord paid for. Hangs off the yard; `room` only when the cost is one room's. */
+export interface Expense {
+  id: string;
+  propertyId: string;
+  roomId?: string | null;
+  room?: { id: string; title: string } | null;
+  category: ExpenseCategory;
+  amountCents: number;
+  /** The day the money went out, not the day it was typed. */
+  incurredOn: string;
+  receiptPath?: string | null;
+  note?: string | null;
+  createdAt: string;
+}
+
+/**
+ * Rent in, expenses out, for one month.
+ *
+ * `rentBasis` is carried from the API and SHOWN, not dropped. It says which
+ * rent months are counted, and a money figure whose rules are invisible is one
+ * someone plans around and is wrong about.
+ */
+export interface ExpenseSummary {
+  month: string;
+  properties: {
+    propertyId: string;
+    name: string;
+    rentCents: number;
+    expenseCents: number;
+    netCents: number;
+  }[];
+  /** Rent on rooms that are in no yard — reported so the rows need not sum to the total silently. */
+  ungroupedRentCents: number;
+  totalRentCents: number;
+  totalExpenseCents: number;
+  netCents: number;
+  byCategory: Partial<Record<ExpenseCategory, number>>;
+  rentBasis: string;
+}

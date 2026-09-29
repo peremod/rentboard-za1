@@ -12,6 +12,7 @@ import { RoomCard } from '../../shared/components/room-card/room-card';
 import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
 import { SkeletonCard } from '../../shared/components/skeleton-card/skeleton-card';
 import { TranslatePipe } from '../../shared/pipes/translate.pipe';
+import { PluralPipe } from '../../shared/pipes/plural.pipe';
 
 /**
  * Home — the public notice board. Hero + search bar + sidebar filters +
@@ -24,7 +25,7 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [FormsModule, RouterLink, RoomCard, SkeletonCard, TranslatePipe, AdSlot],
+  imports: [PluralPipe, FormsModule, RouterLink, RoomCard, SkeletonCard, TranslatePipe, AdSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="hero" [class.hero--splash]="splash()">
@@ -62,8 +63,8 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
              because the only name the button exposed was "Skip to rooms"
              (WCAG 2.5.3, and axe's label-content-name-mismatch). -->
         <button type="button" class="hero-scroll-cue" (click)="scrollToBoard($event)"
-                [attr.aria-label]="'Skip to ' + roomCount() + ' rooms'">
-          <span>{{ roomCount() }} rooms</span>
+                [attr.aria-label]="'Skip to ' + (roomCount() | plural: 'room')">
+          <span>{{ roomCount() | plural: 'room' }}</span>
           <span class="hero-scroll-cue__chevron" aria-hidden="true">⌄</span>
         </button>
       }
@@ -100,7 +101,7 @@ import { TranslatePipe } from '../../shared/pipes/translate.pipe';
                           (mousedown)="chooseSuggestion(s)">
                     <span class="search-suggest__place">{{ s.label }}</span>
                     <span class="search-suggest__count">
-                      {{ s.roomCount }} room{{ s.roomCount === 1 ? '' : 's' }}
+                      {{ s.roomCount | plural: 'room' }}
                     </span>
                   </button>
                 </li>
@@ -641,10 +642,20 @@ export class Home implements OnInit, OnDestroy {
     this.onFilterChange();   // resets page and refetches
   }
 
-  /** Distinct landlords across the loaded rooms — the spec's second hero stat. */
-  landlordCount() {
-    return new Set(this.rooms().map((r) => r.landlordId)).size;
-  }
+  /**
+   * Verified landlords with a room matching this search, from the API.
+   *
+   * It used to be `new Set(loadedRooms.map(r => r.landlordId)).size` under a
+   * label reading "verified landlords", which was wrong twice over: it never
+   * looked at whether anyone was verified, so an unverified landlord counted as
+   * verified; and it counted only the loaded PAGE, so the figure grew as a
+   * visitor scrolled. Reported from a phone, and the scroll half was not the
+   * part reported.
+   *
+   * A trust number that is both false and unstable is worse than no number, and
+   * this one sat in the hero of the landing page.
+   */
+  landlordCount = signal(0);
 
   /** Hero "Browse rooms" jumps to the board rather than navigating away. */
   scrollToBoard(event: Event) {
@@ -749,6 +760,7 @@ export class Home implements OnInit, OnDestroy {
     next: (res) => {
       this.rooms.update((prev) => (append ? [...prev, ...res.data] : res.data));
       this.total.set(res.total);
+      this.landlordCount.set(res.verifiedLandlords ?? 0);
       this.hasMore.set(res.hasMore);
       this.loading.set(false);
       this.loadingMore.set(false);

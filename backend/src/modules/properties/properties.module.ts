@@ -4,6 +4,7 @@ import { RoomsModule } from '../rooms/rooms.module';
 import { PropertiesController } from './properties.controller';
 import { PropertiesService } from './properties.service';
 import { RentService } from './rent.service';
+import { ExpensesService } from './expenses.service';
 
 @Module({
   // Rent reminders go out over WhatsApp — the channel tenants in this market
@@ -12,7 +13,7 @@ import { RentService } from './rent.service';
   // reimplementing — see PropertiesService.relistAll.
   imports: [WhatsappModule, RoomsModule],
   controllers: [PropertiesController],
-  providers: [PropertiesService, RentService],
-  exports: [PropertiesService, RentService],
+  providers: [PropertiesService, RentService, ExpensesService],
+  exports: [PropertiesService, RentService, ExpensesService],
 })
 export class PropertiesModule {}

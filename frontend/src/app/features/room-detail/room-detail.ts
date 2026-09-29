@@ -387,7 +387,14 @@ export class RoomDetail implements OnInit {
   private seo = inject(SeoService);
 
   /** Resolved once in ngOnInit — see the service for why timing matters. */
-  back = signal<{ url: string; label: string }>({ url: '/', label: '← Back to all rooms' });
+  /**
+   * Read straight from the service, not copied in ngOnInit.
+   *
+   * The copy was the bug: ngOnInit runs before NavigationEnd, so it captured
+   * the answer one navigation too early and then never updated. Binding to the
+   * signal means the link is correct as soon as navigation settles.
+   */
+  back = this.history.backTarget;
   private applicationsService = inject(ApplicationsService);
   auth = inject(AuthService);
 
@@ -431,8 +438,6 @@ export class RoomDetail implements OnInit {
   loadingReviews = signal(true);
 
   ngOnInit() {
-    this.back.set(this.history.backTarget());
-
     // The room id arrives as a routed input signal, not via ActivatedRoute.
     this.reviewsService.getRoomReviews(this.id()).subscribe({
       next: (list: Review[]) => {

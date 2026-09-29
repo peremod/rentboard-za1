@@ -1,10 +1,15 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller, Get, Post, Patch, Delete, Body, Param, Query,
+  UseGuards, ParseUUIDPipe, HttpCode, HttpStatus,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { LandlordGuard } from '../../common/guards/landlord.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PropertiesService } from './properties.service';
+import { ExpensesService } from './expenses.service';
+import { CreateExpenseDto, UpdateExpenseDto } from './dto/expense.dto';
 import { RentService } from './rent.service';
 import { CreatePropertyDto, UpdatePropertyDto, AssignRoomsDto } from './dto/property.dto';
 import { MarkRentDto, DisputeRentDto, RentSettingsDto } from './dto/rent.dto';
@@ -25,6 +30,7 @@ export class PropertiesController {
   constructor(
     private properties: PropertiesService,
     private rent: RentService,
+    private expenses: ExpensesService,
   ) {}
 
   @Get('dashboard')
@@ -97,6 +103,61 @@ export class PropertiesController {
   @ApiOperation({ summary: 'Relist every relistable room in this yard' })
   relistAll(@Param('id') id: string, @CurrentUser() user: { id: string }) {
     return this.properties.relistAll(id, user.id);
+  }
+
+  // ── Expenses ─────────────────────────────────────────────────────────────
+
+  @Post('expenses')
+  @ApiOperation({ summary: 'Record something you paid for' })
+  createExpense(@Body() dto: CreateExpenseDto, @CurrentUser() user: { id: string }) {
+    return this.expenses.create(dto, user.id);
+  }
+
+  @Get(':id/expenses')
+  @ApiOperation({ summary: "One yard's expenses, newest spend first" })
+  listExpenses(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.expenses.list(id, user.id);
+  }
+
+  @Patch('expenses/:expenseId')
+  @ApiOperation({ summary: 'Correct an expense, including moving it to another yard' })
+  updateExpense(
+    @Param('expenseId', ParseUUIDPipe) expenseId: string,
+    @Body() dto: UpdateExpenseDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.expenses.update(expenseId, dto, user.id);
+  }
+
+  @Delete('expenses/:expenseId')
+  @ApiOperation({ summary: 'Delete an expense' })
+  removeExpense(@Param('expenseId', ParseUUIDPipe) expenseId: string, @CurrentUser() user: { id: string }) {
+    return this.expenses.remove(expenseId, user.id);
+  }
+
+  /**
+   * Rent in, expenses out, for one month.
+   *
+   * `month` is YYYY-MM and defaults to the current one, so the common call
+   * carries no parameter at all.
+   */
+  @Get('expenses/summary')
+  @ApiOperation({ summary: 'Rent collected minus expenses, per yard and overall' })
+  expenseSummary(@CurrentUser() user: { id: string }, @Query('month') month?: string) {
+    const m = month && /^\d{4}-\d{2}$/.test(month) ? month : new Date().toISOString().slice(0, 7);
+    return this.expenses.monthlySummary(user.id, m);
+  }
+
+  /** A year of one yard's expenses as CSV. Rows, not a tax computation. */
+  @Get(':id/expenses/csv')
+  @ApiOperation({ summary: "A year of one yard's expenses as CSV, for SARS" })
+  expenseCsv(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { id: string },
+    @Query('year') year?: string,
+  ) {
+    const y = year && /^\d{4}$/.test(year) ? Number(year) : new Date().getFullYear();
+    return this.expenses.yearCsv(id, y, user.id);
   }
 
   @Delete('rooms/:roomId')

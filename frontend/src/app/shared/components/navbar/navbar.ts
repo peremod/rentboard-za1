@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { LangSwitcher } from '../lang-switcher/lang-switcher';
@@ -11,7 +12,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [RouterLink, RouterLinkActive, LangSwitcher, TranslatePipe],
+  imports: [NgTemplateOutlet, RouterLink, RouterLinkActive, LangSwitcher, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <nav class="nav">
@@ -32,37 +33,59 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
           <!-- Shown only inside the drawer on small screens, where the
                header copy of the switcher is hidden for space. -->
           <div class="nav-links-lang"><app-lang-switcher/></div>
+
+          <!-- The SAME auth actions as the header, not a second copy of them.
+               At mobile width .nav-actions .btn-ghost is hidden for space,
+               and the rule's own comment said the secondary action "moves into
+               the drawer" — it never did. So on a phone: a returning visitor
+               had no Log in at all, a signed-in landlord had no Dashboard and
+               no Log out, and an admin had nothing whatsoever. Reported from a
+               phone, and the worst of it was not the part reported.
+
+               One ng-template rendered twice rather than duplicated markup:
+               this repo has already paid for the other choice with a nav
+               defined six times that disagreed with itself. -->
+          <div class="nav-links-auth"><ng-container [ngTemplateOutlet]="authActions"/></div>
         </div>
 
         <div class="nav-actions">
           <app-lang-switcher/>
-          @if (auth.isAuthenticated()) {
-            <!-- One dashboard per account. An admin used to get both an Admin
-                 link and a Dashboard button pointing at the tenant view, which
-                 is empty for an account with no tenant profile. -->
-            @if (auth.isAdmin()) {
-              <a class="btn btn-ghost btn-sm" routerLink="/admin/dashboard"
-                 routerLinkActive="active">Admin</a>
-            } @else if (auth.isLandlord()) {
-              <a class="btn btn-ghost btn-sm" routerLink="/landlord/dashboard">{{ 'nav.dashboard' | translate }}</a>
-              <a class="btn btn-primary btn-sm" routerLink="/landlord/rooms/new">+ List a room</a>
-            } @else {
-              <a class="btn btn-ghost btn-sm" routerLink="/tenant/dashboard">{{ 'nav.dashboard' | translate }}</a>
-            }
-            <button type="button" class="btn btn-ghost btn-sm" (click)="logout()">{{ 'nav.logout' | translate }}</button>
-          } @else if (auth.sessionResolved()) {
-            <!-- Only once the startup refresh has settled. Before that the app
-                 does not know whether anyone is signed in, and showing Log in
-                 to someone who is signed in makes every reload flash. -->
-            <a class="btn btn-ghost btn-sm" routerLink="/auth/login">{{ 'nav.login' | translate }}</a>
-            <a class="btn btn-primary btn-sm" routerLink="/auth/register">{{ 'nav.get_started' | translate }}</a>
-          }
+          <ng-container [ngTemplateOutlet]="authActions"/>
         </div>
 
         <button type="button" class="nav-burger" (click)="mobileOpen.set(!mobileOpen())"
                 [attr.aria-expanded]="mobileOpen()" aria-label="Toggle navigation">☰</button>
       </div>
     </nav>
+
+    <ng-template #authActions>
+      @if (auth.isAuthenticated()) {
+        <!-- One dashboard per account. An admin used to get both an Admin link
+             and a Dashboard button pointing at the tenant view, which is empty
+             for an account with no tenant profile. -->
+        @if (auth.isAdmin()) {
+          <a class="btn btn-ghost btn-sm" routerLink="/admin/dashboard" routerLinkActive="active"
+             (click)="mobileOpen.set(false)">Admin</a>
+        } @else if (auth.isLandlord()) {
+          <a class="btn btn-ghost btn-sm" routerLink="/landlord/dashboard"
+             (click)="mobileOpen.set(false)">{{ 'nav.dashboard' | translate }}</a>
+          <a class="btn btn-primary btn-sm" routerLink="/landlord/rooms/new"
+             (click)="mobileOpen.set(false)">+ List a room</a>
+        } @else {
+          <a class="btn btn-ghost btn-sm" routerLink="/tenant/dashboard"
+             (click)="mobileOpen.set(false)">{{ 'nav.dashboard' | translate }}</a>
+        }
+        <button type="button" class="btn btn-ghost btn-sm" (click)="logout()">{{ 'nav.logout' | translate }}</button>
+      } @else if (auth.sessionResolved()) {
+        <!-- Only once the startup refresh has settled. Before that the app does
+             not know whether anyone is signed in, and showing Log in to someone
+             who is signed in makes every reload flash. -->
+        <a class="btn btn-ghost btn-sm" routerLink="/auth/login"
+           (click)="mobileOpen.set(false)">{{ 'nav.login' | translate }}</a>
+        <a class="btn btn-primary btn-sm" routerLink="/auth/register"
+           (click)="mobileOpen.set(false)">{{ 'nav.get_started' | translate }}</a>
+      }
+    </ng-template>
   `,
 })
 export class Navbar {

@@ -1,11 +1,21 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { NgTemplateOutlet } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { PropertiesService } from '../../../core/services/properties.service';
 import {
-  HousemateProfile, Property, RentPeriod, RentStatus, YardGroup,
+  Expense, ExpenseCategory, ExpenseSummary, HousemateProfile, Property,
+  RentPeriod, RentStatus, YardGroup,
 } from '../../../core/models/property.model';
+
+/** Plain English for each category, in a landlord's words not an accountant's. */
+const EXPENSE_LABELS: Record<ExpenseCategory, string> = {
+  municipal: 'Municipal bill',
+  water: 'Water',
+  electricity: 'Electricity',
+  maintenance: 'Repairs',
+  other: 'Something else',
+};
 
 /**
  * Plain English for each profile, in the tenant's terms rather than the
@@ -22,6 +32,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { DialogService } from '../../../core/services/dialog.service';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { landlordNav } from '../landlord-nav';
+import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 
 /**
  * The yard dashboard.
@@ -41,7 +52,7 @@ import { landlordNav } from '../landlord-nav';
 @Component({
   selector: 'app-yard',
   standalone: true,
-  imports: [NgTemplateOutlet, FormsModule, RouterLink, ZarCentsPipe, PortalShell],
+  imports: [PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink, ZarCentsPipe, PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems" roleLabel="Landlord" pageTitle="Your property">
@@ -161,6 +172,42 @@ import { landlordNav } from '../landlord-nav';
         </section>
       }
 
+      <!-- The money picture. Rent tracking already said what came in; without
+           expenses "how am I doing" could only be half answered, and half an
+           answer about money is worse than none.
+
+           The basis line is not decoration. It says which rent months are
+           counted, because a figure whose rules are invisible is one someone
+           plans around and is wrong about. -->
+      @if (summary(); as sum) {
+        <section class="dash-section" id="money">
+          <h2 class="dash-section-title">This month</h2>
+
+          <div class="stat-row">
+            <div class="stat-box">
+              <div class="val">{{ sum.totalRentCents | zarCents: 'exact' }}</div>
+              <div class="lbl">Rent marked paid</div>
+            </div>
+            <div class="stat-box">
+              <div class="val">{{ sum.totalExpenseCents | zarCents: 'exact' }}</div>
+              <div class="lbl">Spent</div>
+            </div>
+            <div class="stat-box">
+              <div class="val" [class.stat-warn]="sum.netCents < 0">{{ sum.netCents | zarCents: 'exact' }}</div>
+              <div class="lbl">Left over</div>
+            </div>
+          </div>
+
+          <p class="muted money-basis">{{ sum.rentBasis }}</p>
+          @if (sum.ungroupedRentCents > 0) {
+            <p class="muted">
+              {{ sum.ungroupedRentCents | zarCents: 'exact' }} of that rent is on rooms not in a yard, so the
+              per-yard rows below add up to less than the total.
+            </p>
+          }
+        </section>
+      }
+
       <ng-template #yardTpl let-group>
         <div class="yard">
           <div class="yard__head">
@@ -241,7 +288,7 @@ import { landlordNav } from '../landlord-nav';
           }
 
           <div class="yard__counts">
-            <span>{{ group.roomCount }} rooms</span>
+            <span>{{ group.roomCount | plural: 'room' }}</span>
             <span class="yard__count--vacant">{{ group.vacant }} vacant</span>
             <span>{{ group.let }} let</span>
             @if (group.draft) { <span>{{ group.draft }} draft</span> }
@@ -249,6 +296,91 @@ import { landlordNav } from '../landlord-nav';
               <span class="yard__count--alert">{{ group.waitingApplicants }} waiting</span>
             }
           </div>
+
+          <!-- Expenses for this yard. Collapsed by default: a landlord opening
+               the dashboard wants vacancies and rent first, and a list of
+               receipts under every yard would bury both. -->
+          @if (group.property) {
+            <div class="yard-expenses">
+              <button type="button" class="link-btn"
+                      (click)="toggleExpenses(group.property.id)">
+                {{ openExpenses() === group.property.id ? '▾' : '▸' }} Money spent
+                @if (yardSpend(group.property.id); as spent) { <span class="muted">— {{ spent | zarCents: 'exact' }} this month</span> }
+              </button>
+
+              @if (openExpenses() === group.property.id) {
+                @if (loadingExpenses()) {
+                  <p class="muted">Loading…</p>
+                } @else {
+                  @if (expenses().length === 0) {
+                    <p class="muted">Nothing recorded yet. Add the municipal bill, a repair, anything you paid for.</p>
+                  } @else {
+                    <ul class="expense-list">
+                      @for (e of expenses(); track e.id) {
+                        <li class="expense">
+                          <div class="expense__main">
+                            <strong>{{ e.amountCents | zarCents: 'exact' }}</strong>
+                            <span class="expense__cat">{{ categoryLabel(e.category) }}</span>
+                            <span class="muted">{{ e.incurredOn | date: 'd MMM' }}</span>
+                          </div>
+                          @if (e.room) { <div class="muted">{{ e.room.title }}</div> }
+                          @if (e.note) { <div class="expense__note">{{ e.note }}</div> }
+                          <button type="button" class="link-btn"
+                                  (click)="deleteExpense(e)">Remove</button>
+                        </li>
+                      }
+                    </ul>
+                  }
+
+                  <form class="expense-form" (ngSubmit)="addExpense(group.property.id)">
+                    <label>
+                      <span>What was it for</span>
+                      <select [(ngModel)]="expenseForm.category" name="category">
+                        <option value="municipal">Municipal bill</option>
+                        <option value="water">Water</option>
+                        <option value="electricity">Electricity</option>
+                        <option value="maintenance">Repairs</option>
+                        <option value="other">Something else</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span>How much, in rand</span>
+                      <input type="number" min="1" step="0.01" [(ngModel)]="expenseForm.rand" name="rand"
+                             placeholder="450.00"/>
+                    </label>
+                    <label>
+                      <span>When you paid it</span>
+                      <input type="date" [(ngModel)]="expenseForm.incurredOn" name="incurredOn" [max]="today"/>
+                    </label>
+                    <label>
+                      <span>Just one room? (optional)</span>
+                      <select [(ngModel)]="expenseForm.roomId" name="roomId">
+                        <option value="">The whole place</option>
+                        @for (room of group.rooms; track room.id) {
+                          <option [value]="room.id">{{ room.title }}</option>
+                        }
+                      </select>
+                    </label>
+                    <label>
+                      <span>Note (optional)</span>
+                      <input type="text" [(ngModel)]="expenseForm.note" name="note"
+                             placeholder="Plumber for the geyser"/>
+                    </label>
+                    @if (expenseError()) { <p class="field-error" role="alert">{{ expenseError() }}</p> }
+                    <div class="expense-form__actions">
+                      <button type="submit" class="btn btn-primary btn-sm" [disabled]="savingExpense()">
+                        {{ savingExpense() ? 'Saving…' : 'Add' }}
+                      </button>
+                      <button type="button" class="link-btn" [disabled]="downloadingCsv()"
+                              (click)="downloadCsv(group.property.id, group.property.name)">
+                        {{ downloadingCsv() ? 'Preparing…' : 'Download this year as CSV' }}
+                      </button>
+                    </div>
+                  </form>
+                }
+              }
+            </div>
+          }
 
           @for (room of group.rooms; track room.id) {
             <div class="yard-room">
@@ -330,6 +462,33 @@ export class Yard implements OnInit {
   protected readonly sharedError = signal<string | null>(null);
   protected readonly relisting = signal<string | null>(null);
 
+  // ── Expenses ──────────────────────────────────────────────────────────────
+  protected readonly summary = signal<ExpenseSummary | null>(null);
+  protected readonly openExpenses = signal<string | null>(null);
+  protected readonly expenses = signal<Expense[]>([]);
+  protected readonly loadingExpenses = signal(false);
+  protected readonly savingExpense = signal(false);
+  protected readonly expenseError = signal<string | null>(null);
+  protected readonly downloadingCsv = signal(false);
+
+  /** Today, so the date field cannot be set in the future. */
+  protected readonly today = new Date().toISOString().slice(0, 10);
+
+  /**
+   * The form takes RAND, and the API takes cents.
+   *
+   * Deliberately not cents in the input. A landlord typing 45000 meaning R450
+   * would file R45 000, and there is no way for the product to tell the
+   * difference afterwards — it is a plausible municipal bill either way.
+   */
+  protected expenseForm: {
+    category: ExpenseCategory;
+    rand: number | null;
+    incurredOn: string;
+    roomId: string;
+    note: string;
+  } = { category: 'municipal', rand: null, incurredOn: this.today, roomId: '', note: '' };
+
   /**
    * The edit form's working copy.
    *
@@ -346,6 +505,7 @@ export class Yard implements OnInit {
   } = { houseRules: '', sharedAmenities: '', currentHousemates: null, housemateProfile: 'unstated' };
 
   ngOnInit() {
+    this.loadSummary();
     this.reload();
   }
 
@@ -563,6 +723,139 @@ export class Yard implements OnInit {
       error: () => {
         this.relisting.set(null);
         this.error.set('Could not relist those rooms. Check your connection and try again.');
+      },
+    });
+  }
+
+  /** What this yard has spent this month, from the summary already loaded. */
+  protected yardSpend(propertyId: string): number | null {
+    const row = this.summary()?.properties.find((p) => p.propertyId === propertyId);
+    return row && row.expenseCents > 0 ? row.expenseCents : null;
+  }
+
+  protected categoryLabel(c: ExpenseCategory): string {
+    return EXPENSE_LABELS[c] ?? c;
+  }
+
+  protected toggleExpenses(propertyId: string) {
+    if (this.openExpenses() === propertyId) {
+      this.openExpenses.set(null);
+      return;
+    }
+    this.openExpenses.set(propertyId);
+    this.expenseError.set(null);
+    this.expenses.set([]);
+    this.loadingExpenses.set(true);
+    this.properties.listExpenses(propertyId).subscribe({
+      next: (list) => {
+        this.expenses.set(list);
+        this.loadingExpenses.set(false);
+      },
+      error: () => {
+        this.loadingExpenses.set(false);
+        this.expenseError.set('Could not load what you have spent. Try again.');
+      },
+    });
+  }
+
+  protected addExpense(propertyId: string) {
+    if (this.savingExpense()) return;
+    const rand = Number(this.expenseForm.rand);
+    if (!rand || rand <= 0) {
+      // Caught here as well as in the API, because a form that posts and comes
+      // back with a 400 teaches people the button is unreliable.
+      this.expenseError.set('Enter how much you paid, in rand.');
+      return;
+    }
+
+    this.savingExpense.set(true);
+    this.expenseError.set(null);
+    this.properties
+      .createExpense({
+        propertyId,
+        // Rounded, not truncated: R450.555 typed by accident should not quietly
+        // become R450.55 in one place and R450.56 in a total.
+        amountCents: Math.round(rand * 100),
+        category: this.expenseForm.category,
+        incurredOn: this.expenseForm.incurredOn,
+        ...(this.expenseForm.roomId ? { roomId: this.expenseForm.roomId } : {}),
+        ...(this.expenseForm.note.trim() ? { note: this.expenseForm.note.trim() } : {}),
+      })
+      .subscribe({
+        next: (created) => {
+          this.savingExpense.set(false);
+          this.expenses.update((list) => [created, ...list]);
+          this.expenseForm = {
+            category: 'municipal', rand: null, incurredOn: this.today, roomId: '', note: '',
+          };
+          this.loadSummary();
+        },
+        error: (err) => {
+          this.savingExpense.set(false);
+          this.expenseError.set(
+            err?.status === 403
+              ? 'That room is not in this yard.'
+              : 'That did not save. Check your connection and try again.',
+          );
+        },
+      });
+  }
+
+  protected async deleteExpense(expense: Expense) {
+    const confirmed = await this.dialogs.confirm(
+      'Remove this expense?',
+      `${(expense.amountCents / 100).toFixed(2)} rand, ${this.categoryLabel(expense.category)}. This only removes your record of it — it does not undo the payment.`,
+      'Remove it',
+      'Keep it',
+    );
+    if (!confirmed) return;
+
+    this.properties.deleteExpense(expense.id).subscribe({
+      next: () => {
+        this.expenses.update((list) => list.filter((e) => e.id !== expense.id));
+        this.loadSummary();
+      },
+      error: () => this.expenseError.set('Could not remove that. Try again.'),
+    });
+  }
+
+  private loadSummary() {
+    this.properties.expenseSummary().subscribe({
+      next: (s) => this.summary.set(s),
+      // Silent: the money card is additional context, and a dashboard that
+      // shows an error banner because one panel failed is worse than one that
+      // shows the rest.
+      error: () => {},
+    });
+  }
+
+  /**
+   * The CSV, as a file the browser saves.
+   *
+   * Built from the response rather than linking to the endpoint, because the
+   * endpoint needs the bearer token and a plain <a href> carries no header.
+   */
+  protected downloadCsv(propertyId: string, name: string) {
+    this.downloadingCsv.set(true);
+    const year = new Date().getFullYear();
+    this.properties.expenseCsv(propertyId, year).subscribe({
+      next: (res) => {
+        this.downloadingCsv.set(false);
+        if (!res.count) {
+          this.expenseError.set(`Nothing recorded for ${name} in ${year} yet.`);
+          return;
+        }
+        const blob = new Blob([res.csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = res.filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => {
+        this.downloadingCsv.set(false);
+        this.expenseError.set('Could not build the file. Try again.');
       },
     });
   }
