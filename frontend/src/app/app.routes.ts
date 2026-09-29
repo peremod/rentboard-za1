@@ -62,6 +62,26 @@ const CONTENT_ROUTES: Routes = [
     title: 'Room to rent — Mastande',
   },
   {
+    /**
+     * A landlord's public storefront (Phase 5b).
+     *
+     * PLURAL, and a separate top-level route, because the brief's `/landlord/
+     * [slug]` cannot work: `/landlord` is the authed portal, guarded by
+     * authGuard + landlordGuard and carrying `seo: { noIndex: true }`. A public
+     * page under it would be unreachable to visitors and told not to be
+     * indexed — the opposite of the point — and `dashboard`, `yard`,
+     * `verification` and `services` would every one of them be a valid slug
+     * shadowing a real screen.
+     *
+     * No noIndex here: this is a deliberate SEO surface. The component sets
+     * title, description, canonical and JSON-LD once the data is in, the same
+     * way a room page does.
+     */
+    path: 'landlords/:slug',
+    loadComponent: () => import('./features/storefront/storefront').then((m) => m.Storefront),
+    title: 'Landlord on Mastande',
+  },
+  {
     path: 'auth',
     data: { seo: { noIndex: true } },
     loadChildren: () => import('./features/auth/auth.routes').then((m) => m.AUTH_ROUTES),
@@ -184,6 +204,9 @@ export const serverRoutes: ServerRoute[] = [
    */
   { path: '', renderMode: RenderMode.Server },
   { path: 'rooms/:id', renderMode: RenderMode.Server },
+  // Server-rendered, not prerendered: the slug set changes whenever a landlord
+  // publishes, and a build-time list would go stale the moment one did.
+  { path: 'landlords/:slug', renderMode: RenderMode.Server },
   { path: 'legal/**', renderMode: RenderMode.Prerender },
   { path: 'how-it-works', renderMode: RenderMode.Prerender },
   { path: 'pricing', renderMode: RenderMode.Prerender },

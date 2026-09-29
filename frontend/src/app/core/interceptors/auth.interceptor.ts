@@ -18,7 +18,10 @@ const isSessionEndpoint = (url: string) => SESSION_ENDPOINTS.some((p) => url.inc
  *
  * Anything not on this list is still dropped during SSR — see below.
  */
-const SSR_PUBLIC_PREFIXES = ['/rooms', '/reviews', '/places', '/ads'];
+// '/storefronts' added for Phase 5b. Without it the server render would skip the
+// fetch and the page would be delivered to a crawler reading "Loading…", which
+// is exactly the defect verify-build.sh checks for on room pages.
+const SSR_PUBLIC_PREFIXES = ['/rooms', '/reviews', '/places', '/ads', '/storefronts'];
 
 const isPublicRead = (req: { url: string; method: string }) => {
   if (req.method !== 'GET') return false;

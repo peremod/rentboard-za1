@@ -563,6 +563,70 @@ else
     else
       bad "a missing room answers 200 — soft 404 on the site's main URL shape"
     fi
+
+    # ── Landlord storefronts (Phase 5b) ───────────────────────────────────
+    #
+    # Checked here rather than in a browser drive because canonical and robots
+    # depend on the request's HOST. The dev server is not the canonical host, so
+    # it correctly serves noindex for everything — asserting otherwise there
+    # fails for the environment, and ng serve rejects a foreign Host with a 403.
+    # This server is the built one and can be asked as the real site.
+    # Read a slug out of the sitemap rather than from a dedicated endpoint: the
+    # stronger check, because it proves the page is BOTH published and actually
+    # advertised to crawlers.
+    #
+    # NO Host override. This server (4111) is the DEVELOPMENT build, whose
+    # siteUrl is localhost — so localhost is its canonical host and the default
+    # request is the indexable case. Sending the production hostname here asked a
+    # dev build about a site it is not, and it correctly answered with no sitemap
+    # at all: the first version of this check skipped silently for that reason,
+    # while three storefronts sat in the real sitemap.
+    SF_SLUG=$(curl -s --max-time 20 "http://localhost:4111/sitemap.xml" \
+      | sed -n 's#.*<loc>[^<]*/landlords/\([a-z0-9-]*\)</loc>.*#\1#p' | head -1)
+    if [ -n "$SF_SLUG" ]; then
+      SF_BODY=$(curl -s --max-time 25 "http://localhost:4111/landlords/$SF_SLUG")
+      # Robots and canonical are NOT asserted on this server, and that is not an
+      # oversight. No local host is the canonical host, so server.ts serves
+      # `noindex, nofollow` and omits the canonical for EVERY page here — a room
+      # page, the known-good SEO surface, behaves identically. Asserting them
+      # would fail for the environment. The production build could be asked as
+      # the real site, but it points at api.umastande.co.za, which does not
+      # resolve off production, so the page would render its not-found branch and
+      # have no canonical either way.
+      #
+      # What IS checkable locally is the static fact that would actually regress:
+      # that the storefront route carries no route-level noIndex, unlike the
+      # /landlord portal it is named after. Checked below, from the routes file.
+      if echo "$SF_BODY" | grep -q '"@type":"RealEstateAgent"'; then
+        ok "with its JSON-LD in the served HTML"
+      else
+        note "no RealEstateAgent JSON-LD found — check applySeo in storefront.ts"
+      fi
+      if echo "$SF_BODY" | grep -q 'Loading…'; then
+        bad "a storefront server-renders 'Loading…' — a crawler is served an empty page"
+      else
+        ok "and its content, not a loading state"
+      fi
+
+      # The static fact, from the routes file. This is the realistic regression:
+      # someone adds noIndex to the storefront route, or moves it under
+      # /landlord, and the SEO surface silently disappears — which no local
+      # request could tell us, since every local host is non-canonical anyway.
+      SF_ROUTE_BLOCK=$(sed -n "/path: 'landlords\/:slug'/,/}/p" "$ROOT/frontend/src/app/app.routes.ts")
+      if printf '%s' "$SF_ROUTE_BLOCK" | grep -q 'noIndex'; then
+        bad "the storefront route declares noIndex — it is the SEO surface, it must not"
+      else
+        ok "the storefront route carries no noIndex, unlike the /landlord portal"
+      fi
+      if grep -qE "path: 'landlords/:slug', renderMode: RenderMode.Server" "$ROOT/frontend/src/app/app.routes.ts"; then
+        ok "and is server-rendered, so a crawler gets content rather than a shell"
+      else
+        bad "the storefront is not RenderMode.Server — its SEO value depends on it"
+      fi
+    else
+      note "SKIP storefront checks — no published storefront in the sitemap"
+      note "(publish one, or run scripts/storefront-drive.mjs first, then re-run)"
+    fi
   else
     note "SKIP room page checks — no API on ${API_URL:-http://localhost:3000}"
   fi

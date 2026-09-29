@@ -154,6 +154,31 @@ model LandlordProfile {
   ratingCount    Int                     @default(0)
   whatsappConfig LandlordWhatsappConfig?
 
+  // ── Public storefront (Phase 5b) ─────────────────────────────────────────
+  //
+  // A real, indexable page per landlord. Not only a retention feature: it is an
+  // SEO surface, so it carries a stable human-readable URL rather than a uuid.
+
+  /// The storefront's URL segment, e.g. `thabo-mokoena`. Unique across all
+  /// landlords, and STABLE once set — it is in the sitemap and in whatever
+  /// people have shared, so regenerating it on a name change would 404 every
+  /// link that ever pointed at it. Null until the landlord has a storefront.
+  slug String? @unique
+
+  /// The landlord's own words about themselves. Optional; nothing is invented
+  /// on their behalf, because a bio written by the platform is a claim the
+  /// platform is making about a person.
+  bio String?
+
+  /// ImageKit path for a logo or photo. Public, unlike a verification
+  /// document — it is on a page whose whole purpose is being seen.
+  logoPath String?
+
+  /// Whether the storefront is published. Off by default: a page about someone
+  /// that they have not looked at should not be indexable, and the same
+  /// reasoning as Survey.active and ServiceProvider.active.
+  storefrontLive Boolean @default(false)
+
   @@map("landlord_profiles")
 }
 

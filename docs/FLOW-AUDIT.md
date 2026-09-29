@@ -790,9 +790,66 @@ it could not fail. Same shape as a check asserting its own timestamp, and it rea
 green until a second reading.
 
 
+### 5.13 Landlord storefront — ✅ built in v1.84.0 (Phase 5b/5h)
+
+A public, indexable page per landlord, carrying the badges 5h asks for.
+
+⚠️ **It lives at `/landlords/:slug`, and the brief said `/landlord/[slug]`.**
+That route cannot work. `/landlord` is the authed portal: guarded by `authGuard` +
+`landlordGuard`, and carrying `seo: { noIndex: true }`. A public page under it
+would be unreachable to visitors and told not to be indexed — the opposite of the
+point — and `dashboard`, `yard`, `verification` and `services` would every one of
+them be a valid slug shadowing a real screen. So: a separate public top-level
+route, plural.
+
+**Off until its owner turns it on.** The slug is minted when the landlord first
+opens the settings screen, so there is a URL to show them; `storefrontLive` stays
+false until they press the switch. A page about a person, indexable by Google, is
+not something to create on their behalf — and nothing reaches the sitemap before
+they publish.
+
+**The slug is stable and not editable.** It is in the sitemap and in whatever
+anyone has shared; changing it would 404 every link that pointed at the page, and
+the landlord who renamed it would be the last to find out. A rename needs a
+redirect table, which is a bigger thing than 5b. Collisions resolve by counting —
+`thabo-mokoena`, `thabo-mokoena-2` — so the second one is still a URL a person can
+read out, which is the whole reason for not using the id.
+
+**Hidden and never-existed are indistinguishable.** Both answer 404 with the same
+message, never 403. A distinguishable refusal would let anyone enumerate which
+landlords exist and which have hidden their page, and that is information about a
+person.
+
+**Nothing on the page is a claim the landlord made.** Badges are computed from
+usage and each carries its own `basis` string, so the page says why rather than
+showing a shiny thing. The response time is a **median** — one application left
+over a long weekend must not define someone — and is absent below three answered
+applications: a tenant is using this to decide whether to bother applying, and one
+fast reply is not a habit. The bio is labelled as their own words, unchecked by us, in the copy.
+
+**SEO, treated as such.** Server-rendered, `RealEstateAgent` JSON-LD with the
+rooms as `makesOffer`, in the sitemap at priority 0.6 — below a room page, which
+is what people search for, above the marketing pages. `/storefronts` is added to
+`SSR_PUBLIC_PREFIXES`, without which the server render would skip the fetch and
+deliver "Loading…" to a crawler.
+
+No hreflang cluster, for the same reason room pages have none: the bio is never
+translated, so localised URLs would serve identical text.
+
+**What could not be verified locally, and why it is asserted differently.**
+Canonical and `robots` depend on the request's host, and **no local host is the
+canonical host** — the built dev server serves `noindex, nofollow` and omits the
+canonical for *every* page on it, a room page included. The production build could
+be asked as the real site, but it points at `api.umastande.co.za`, which does not
+resolve off production. So `verify-build.sh` asserts the **static** fact that
+would actually regress — that the storefront route carries no `noIndex` and is
+`RenderMode.Server` — and adding `noIndex` to that route makes the suite red,
+which was checked.
+
+
 ## 6. What "verified" means here
 
-`./scripts/smoke-test.sh` exercises the API against a live server: **440
+`./scripts/smoke-test.sh` exercises the API against a live server: **453
 passing checks, 3 skipped** with a full environment at v1.84.0 — up from 340/14,
 because 92 checks had never run at all (see below), across auth, room lifecycle,
 applications, messaging, alerts, verification, cross-tenant isolation, rent, the
@@ -812,6 +869,8 @@ the fixtures are expensive or the assertions are about a browser:
 | `mobile-drive.mjs` | the five bugs found on a real phone, at 390px |
 | `inbox-drive.mjs` | the task inbox's ORDERING between competing situations, and what the health card refuses to quote |
 | `inbox-ui-drive.mjs` | it leads the dashboard; every row resolves to a real route and is distinctly named |
+| `storefront-drive.mjs` | published only when asked; hidden is indistinguishable from nonexistent; slug collisions; the sitemap entry |
+| `storefront-ui-drive.mjs` | that a crawler is served CONTENT, not "Loading…", plus the JSON-LD in the raw HTML |
 | `storage-drive.mjs` | **that deleting really deletes** — it IS an ImageKit stub, so it checks a DELETE arrived, and that a 500 is not recorded as success |
 | `lease-docs-ui-drive.mjs` | both parties see the lease, and nothing on screen claims it was signed here |
 | `a11y-drive.mjs` | 25 pages: heading order, accessible names, contrast at rest, on hover and on focus |

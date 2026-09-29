@@ -36,6 +36,17 @@ export const LANDLORD_ROUTES: Routes = [
   // where they were copied into the Terms as a binding subscription table.
   // Deleted rather than re-hidden. Nothing here recurs; see /pricing.
   {
+    /**
+     * The landlord's own view of their PUBLIC page. The public page itself is at
+     * /landlords/:slug, outside this guarded, noIndex'd portal — see
+     * app.routes.ts for why the brief's /landlord/[slug] could not work.
+     */
+    path: 'public-page',
+    loadComponent: () =>
+      import('./storefront-settings/storefront-settings').then((m) => m.StorefrontSettings),
+    title: 'Your public page — Mastande',
+  },
+  {
     path: 'services',
     loadComponent: () => import('./services/services').then((m) => m.LandlordServices),
     title: 'Who to call — Mastande',
