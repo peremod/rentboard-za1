@@ -36,6 +36,11 @@ export const LANDLORD_ROUTES: Routes = [
   // where they were copied into the Terms as a binding subscription table.
   // Deleted rather than re-hidden. Nothing here recurs; see /pricing.
   {
+    path: 'services',
+    loadComponent: () => import('./services/services').then((m) => m.LandlordServices),
+    title: 'Who to call — Mastande',
+  },
+  {
     path: 'yard',
     loadComponent: () => import('./yard/yard').then((m) => m.Yard),
     title: 'Your property — Mastande',

@@ -46,6 +46,11 @@ export const ADMIN_ROUTES: Routes = [
     title: 'Survey results — Mastande',
   },
   {
+    path: 'services',
+    loadComponent: () => import('./services/services').then((m) => m.AdminServices),
+    title: 'Who to call — Mastande admin',
+  },
+  {
     path: 'analytics',
     loadComponent: () => import('./analytics/admin-analytics').then((m) => m.AdminAnalytics),
     title: 'Usage — Mastande admin',
