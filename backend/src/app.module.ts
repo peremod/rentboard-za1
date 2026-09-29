@@ -25,6 +25,7 @@ import { TenanciesModule } from './modules/tenancies/tenancies.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { LandlordInboxModule } from './modules/landlord-inbox/landlord-inbox.module';
 import { StorefrontModule } from './modules/storefront/storefront.module';
+import { LandlordNotesModule } from './modules/landlord-notes/landlord-notes.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SeoModule } from './modules/seo/seo.module';
@@ -85,6 +86,7 @@ import { MessagesModule } from './modules/messages/messages.module';
     StorageModule,
     LandlordInboxModule,
     StorefrontModule,
+    LandlordNotesModule,
     ReviewsModule,
     ReportsModule,
     SeoModule,

@@ -5,6 +5,7 @@ import { VerificationService } from '../../../core/services/verification.service
 import { BadgeBasis } from '../../../core/models/verification.model';
 import { ApplicationsService } from '../../../core/services/applications.service';
 import { Application } from '../../../core/models/application.model';
+import { TenantNotes } from '../../../shared/components/tenant-notes/tenant-notes';
 import { MessageThread } from '../../../shared/components/message-thread/message-thread';
 import { ReviewList } from '../../../shared/components/review-list/review-list';
 import { ReviewsService } from '../../../core/services/reviews.service';
@@ -20,7 +21,7 @@ import { TenantReferences } from '../../../core/models/review.model';
 @Component({
   selector: 'app-applicants',
   standalone: true,
-  imports: [DatePipe, RouterLink, MessageThread, ReviewList],
+  imports: [DatePipe, RouterLink, MessageThread, ReviewList, TenantNotes],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="applicants">
@@ -76,6 +77,15 @@ import { TenantReferences } from '../../../core/models/review.model';
 
             @if (openId() === app.id) {
               <div class="applicant-card__body">
+                <!-- The landlord's own private notes (Phase 5e). Here because
+                     this is where they actually look at a person — and only
+                     inside the expanded card, so a list of six applicants is not
+                     six open text areas. -->
+                @if (app.tenant?.id) {
+                  <app-tenant-notes
+                    [tenantId]="app.tenant!.id"
+                    [tenantName]="app.tenant?.fullName ?? 'this person'"/>
+                }
                 @if (app.tenant?.tenantProfile?.hasPassport) {
                   <!-- What the badge rests on. Passed checks and their dates,
                        nothing else: the API deliberately never returns a

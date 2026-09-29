@@ -2810,6 +2810,52 @@ else
 fi
 
 
+# ── Private tenant notes and the calendar (Phase 5e / 5f) ──────────────────
+#
+# The privacy boundary is the feature. Cross-landlord isolation and the
+# can-only-note-someone-you-have-dealt-with rule are checked properly in
+# scripts/notes-calendar-drive.mjs, which needs two landlords and an admin.
+head_ "Private notes and calendar"
+
+# A note about someone this landlord has never dealt with must be refused —
+# otherwise this endpoint is a way to keep a private file on any id you can guess.
+req POST "/api/landlord/notes/tenant/$TENANT_ID" '{"body":"testing the boundary"}' "$LTOKEN"
+if [[ "$STATUS" == "403" || "$STATUS" == "201" ]]; then
+  if [[ "$STATUS" == "403" ]]; then
+    green "  PASS  a note about someone you have not dealt with is refused  (403)"; PASS=$((PASS+1))
+  else
+    green "  PASS  a note about your own applicant is written  (201)"; PASS=$((PASS+1))
+  fi
+else
+  red "  FAIL  note write returned $STATUS: $(echo "$BODY" | head -c 200)"; FAIL=$((FAIL+1))
+fi
+
+req GET /api/landlord/notes "" "$LTOKEN"
+check "a landlord reads their own notes, grouped by person" 200 "$STATUS" "$BODY"
+req GET /api/landlord/notes "" "$TTOKEN"
+check "a tenant has no notes endpoint" 403 "$STATUS" "$BODY"
+req GET /api/landlord/notes "" ""
+check "nor does a stranger" 401 "$STATUS" "$BODY"
+
+req GET /api/landlord/calendar "" "$LTOKEN"
+check "the calendar answers" 200 "$STATUS" "$BODY"
+# Days, not timestamps. "Rent is due on the 1st" rendered as an instant shows a
+# South African landlord the 31st.
+if echo "$BODY" | jq -e 'all(.date | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))' >/dev/null 2>&1; then
+  green "  PASS  every date is a plain day, not a timestamp"; PASS=$((PASS+1))
+else
+  red "  FAIL  a calendar date is not YYYY-MM-DD: $(echo "$BODY" | jq -c '[.[].date] | .[0:3]')"; FAIL=$((FAIL+1))
+fi
+# Any rent entry must disclaim collection — a calendar row that looks like a bill
+# is exactly where someone would assume we take the money.
+if echo "$BODY" | jq -e '[.[] | select(.kind == "rent_due")] | all(.detail | test("does not collect"))' >/dev/null 2>&1; then
+  green "  PASS  and rent entries say Mastande does not collect it"; PASS=$((PASS+1))
+else
+  red "  FAIL  a rent entry does not disclaim collection"; FAIL=$((FAIL+1))
+fi
+req GET /api/landlord/calendar "" "$TTOKEN"
+check "a tenant cannot open the landlord calendar" 403 "$STATUS" "$BODY"
+
 # ── Landlord public storefront (Phase 5b / 5h) ─────────────────────────────
 #
 # The public page is an SEO surface, so what matters here is that it does not

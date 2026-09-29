@@ -847,9 +847,82 @@ would actually regress — that the storefront route carries no `noIndex` and is
 which was checked.
 
 
+### 5.14 Private tenant notes and the calendar — ✅ built in v1.84.0 (Phase 5e/5f)
+
+**5e — notes.** `LandlordNote`: an author, a person it is about, free text.
+Keyed on the **tenant**, not a tenancy, because the value is remembering what you
+wrote about someone two years ago when their application comes round again.
+
+Every read is scoped by the author **in the WHERE clause**, not fetched and then
+checked. A permission check after the fact is one refactor from being dropped; a
+query that cannot return the row is not. `LandlordGuard` admits `ADMIN`, so an
+admin passes the guard — and gets `[]`, because the query scopes to the caller.
+That is the property the drive asserts: no *data*, whatever the status code.
+
+A note can only be written about someone who has **applied to one of your rooms
+or rented from you**. Without that limit the endpoint is a way to keep a private
+file on any account id you can guess.
+
+❌ **No score, no stars, no flag, nothing structured.** A private rating collected
+across landlords is a shadow credit score assembled from opinions, which is
+exactly what Phase 1 rejected the bureau check to avoid. Nothing here feeds
+reviews, the Tenant Passport, or Phase 1's landlord-reference flow — that flow is
+a separate, *consented* exchange where a previous landlord knowingly answers a
+specific question. This model must never be wired into it.
+
+**POPIA.** Both foreign keys cascade. The author's account going takes their
+notes; **the tenant's account going takes them too**, because they are about a
+person with a s.24 right to erasure — without that cascade, deleting a tenant
+would leave notes about somebody who asked to be forgotten. A tenant cannot read
+notes about themselves through the API: the s.23 right of access is against the
+landlord, and self-service would turn a memory aid into a channel for arguing
+with it. That path is admin-assisted and logged.
+
+The screen says all of this in the copy, every time — only you can see these, the
+tenant cannot, it is not a rating. A landlord who believes otherwise writes
+differently, or writes nothing useful.
+
+**5f — the calendar.** Rent dates, lease endings, notice deadlines and the day a
+room frees up, grouped by month.
+
+⚠️ **Dates are days, not instants.** Every entry is a plain `YYYY-MM-DD` built in
+UTC, and the browser parses it by **splitting the string**. `new Date('2026-10-01')`
+parses as UTC midnight then renders in local time, so a landlord east of
+Greenwich sees the 30th of September. Handing the API's deliberate day-string to
+the `Date` constructor is how the off-by-one-day calendar gets reintroduced.
+
+Rent dates are **generated** from live tenancies rather than stored — there is no
+`RentSchedule` table. Storing them means a row per tenancy per month that goes
+stale the moment a tenancy ends, plus a job to clean it up. Every rent entry
+carries "Mastande does not collect rent", because a calendar row that looks like a
+bill is exactly where someone would assume otherwise.
+
+❌ **No inspection category** — the brief lists it "(if built)" and it is not.
+An empty category is a heading with nothing under it.
+
+❌ **No .ics feed, and that is a decision rather than a missing afternoon.** A
+subscribable feed is a URL that answers with no session, because Google Calendar
+fetches it server-side with no cookies. That means a long-lived capability token
+in a URL exposing tenancy dates and tenant names to anyone the link reaches — and
+calendar URLs get pasted into shared calendars routinely. Doing it properly needs
+a revocable per-landlord token, a way to see and rotate it, and a decision about
+what the feed may contain. The brief marks it a stretch and says to check the
+effort first; this is that check.
+
+### 5.15 Phase 5g was already built
+
+`ReferralCode` and `Referral` exist, with rewards on a **qualifying action**
+rather than signup — *"Signups are not rewarded on their own — that is how
+referral schemes fill with fake accounts"*, in `referrals.service.ts`. A
+`ReferralPanel` is on the landlord dashboard. Checked against the brief before
+building anything: unique code per landlord ✓, trackable through signup ✓, both
+parties rewarded on the referred landlord's first completed action ✓. Nothing to
+do.
+
+
 ## 6. What "verified" means here
 
-`./scripts/smoke-test.sh` exercises the API against a live server: **453
+`./scripts/smoke-test.sh` exercises the API against a live server: **461
 passing checks, 3 skipped** with a full environment at v1.84.0 — up from 340/14,
 because 92 checks had never run at all (see below), across auth, room lifecycle,
 applications, messaging, alerts, verification, cross-tenant isolation, rent, the
@@ -871,6 +944,7 @@ the fixtures are expensive or the assertions are about a browser:
 | `inbox-ui-drive.mjs` | it leads the dashboard; every row resolves to a real route and is distinctly named |
 | `storefront-drive.mjs` | published only when asked; hidden is indistinguishable from nonexistent; slug collisions; the sitemap entry |
 | `storefront-ui-drive.mjs` | that a crawler is served CONTENT, not "Loading…", plus the JSON-LD in the raw HTML |
+| `notes-calendar-drive.mjs` | that a private note is private — from another landlord, the tenant AND an admin — and that calendar dates are days, not instants |
 | `storage-drive.mjs` | **that deleting really deletes** — it IS an ImageKit stub, so it checks a DELETE arrived, and that a 500 is not recorded as success |
 | `lease-docs-ui-drive.mjs` | both parties see the lease, and nothing on screen claims it was signed here |
 | `a11y-drive.mjs` | 25 pages: heading order, accessible names, contrast at rest, on hover and on focus |
