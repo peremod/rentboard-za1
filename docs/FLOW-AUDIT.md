@@ -736,8 +736,9 @@ a real key proves acceptance — see PRE-LAUNCH-CHECKLIST.
 
 ## 6. What "verified" means here
 
-`./scripts/smoke-test.sh` exercises the API against a live server: **340
-passing checks, 14 skipped** with ImageKit configured at v1.83.0, across auth, room lifecycle,
+`./scripts/smoke-test.sh` exercises the API against a live server: **432
+passing checks, 3 skipped** with a full environment at v1.84.0 — up from 340/14,
+because 92 checks had never run at all (see below), across auth, room lifecycle,
 applications, messaging, alerts, verification, cross-tenant isolation, rent, the
 WhatsApp bot, refunds and the listing wizard's validation. The skips are loud and
 named; each states what to set to include it.
@@ -777,6 +778,14 @@ way in this codebase:
   no file deleted anywhere. It was also behind `ADMIN_TOKEN` and had never run.
   When a check is about something leaving our control, it has to observe the
   thing leaving: see §5.11.
+- **Ninety-two checks had never run once.** Seven sections were gated on
+  `ADMIN_TOKEN`, which nobody ever set, and more on `WHATSAPP_APP_SECRET`,
+  `RESEND_WEBHOOK_SECRET` and an unseeded survey. `skipped: 14` gave a reader no
+  way to know that the one assertion about a tenant's identity document was among
+  them. Two changes: the suite now **derives** `ADMIN_TOKEN` from
+  `ADMIN_EMAIL`/`ADMIN_PASSWORD` when it can, and the summary **names** every
+  skip instead of counting them, then lists exactly what to set for a release
+  run. A skip you can read is a decision; a skip you can only count is a hole.
 - **A check can fail for its own reasons and blame the product.** A phase-drive
   assertion reported "the new yard is not on the screen" for a working feature,
   because its loose selector matched "Delete yard" and then the rent-reminder

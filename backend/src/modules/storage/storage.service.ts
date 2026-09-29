@@ -150,6 +150,44 @@ export class StorageService {
   }
 
   /**
+   * Per-request ceiling on a storage call.
+   *
+   * Because `drainNow` is awaited inside an admin decision: a storage provider
+   * that accepts the connection and never answers would otherwise hang that
+   * request forever. Eight seconds is generous for two small API calls, and a
+   * timeout is a retryable failure like any other — the hourly pass picks it up.
+   */
+  private static readonly HTTP_TIMEOUT_MS = 8_000;
+
+  /**
+   * Work the queue right now, and never let it break the caller.
+   *
+   * ── Why this exists rather than just the cron
+   *
+   * The privacy policy says documents are "deleted once reviewed" and the tenant
+   * upload screen says "as soon as someone has looked at it". An hourly drain
+   * makes both of those mean "within the hour", which is a weaker promise than
+   * the words. So a decision drains immediately and the cron becomes the retry
+   * net rather than the mechanism.
+   *
+   * Awaited, not fired and forgotten: the audit trail the subject reads should
+   * say the bytes are gone by the time the decision returns, and an unawaited
+   * promise makes that a race. An admin decision is not latency-critical, and
+   * HTTP_TIMEOUT_MS bounds the wait.
+   *
+   * Swallows everything. A storage fault must never fail a decision that has
+   * already committed — the queue row is durable, so the work is not lost.
+   */
+  async drainNow(limit = 5) {
+    try {
+      return await this.drain(limit);
+    } catch (e) {
+      this.log.error(`immediate deletion pass failed, leaving it to the hourly retry: ${String(e)}`);
+      return null;
+    }
+  }
+
+  /**
    * Try one file. Returns what happened; does not throw for a storage fault.
    *
    * Two calls, because ImageKit deletes by fileId and we store a path: resolve
@@ -180,7 +218,7 @@ export class StorageService {
       const query = `filePath="/${path.replace(/^\/+/, '')}"`;
       const res = await fetch(
         `${this.apiBase}/v1/files?searchQuery=${encodeURIComponent(query)}`,
-        { headers: { Authorization: auth } },
+        { headers: { Authorization: auth }, signal: AbortSignal.timeout(StorageService.HTTP_TIMEOUT_MS) },
       );
       if (!res.ok) {
         return {
@@ -204,15 +242,23 @@ export class StorageService {
       const res = await fetch(`${this.apiBase}/v1/files/${encodeURIComponent(fileId)}`, {
         method: 'DELETE',
         headers: { Authorization: auth },
+        signal: AbortSignal.timeout(StorageService.HTTP_TIMEOUT_MS),
       });
       // 204 is the documented success. 404 means someone else got there first,
       // which is the outcome we wanted either way.
+      // Drain the body before returning, even when we do not need it. An
+      // unconsumed response holds its keep-alive connection open in undici, and
+      // a pool of those stalls the next request — which showed up as this
+      // service hanging rather than as anything that looked like a leak.
+      await res.text().catch(() => undefined);
       if (res.status === 204 || res.status === 200) return { state: 'deleted' };
       if (res.status === 404) return { state: 'already_gone' };
       return {
         state: 'failed',
         retryable: res.status >= 500 || res.status === 429,
-        error: `delete failed: ${res.status} ${(await res.text()).slice(0, 300)}`,
+        // Status only: the body is already consumed above, and reading it twice
+        // throws "Body is unusable".
+        error: `delete failed: ${res.status}`,
       };
     } catch (e) {
       return { state: 'failed', retryable: true, error: `delete error: ${String(e).slice(0, 300)}` };

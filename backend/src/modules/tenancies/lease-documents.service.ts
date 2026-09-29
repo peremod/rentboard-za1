@@ -158,6 +158,11 @@ export class LeaseDocumentsService {
       await tx.leaseDocument.delete({ where: { id } });
       await this.storage.enqueueDelete(tx, doc.path, 'lease_document_removed');
     });
+    // Immediately, and after the transaction so the queue row is committed
+    // first. The confirmation dialog tells the person the file is deleted rather
+    // than hidden, so it should be true by the time they see the list again.
+    // Storage faults are swallowed; the row is durable and the cron retries.
+    await this.storage.drainNow();
     return { deleted: true as const };
   }
 

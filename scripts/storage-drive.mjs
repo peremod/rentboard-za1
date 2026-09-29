@@ -88,6 +88,17 @@ const stub = http.createServer((req, res) => {
   res.writeHead(404);
   res.end();
 });
+// A clear message, because the stack trace for this is unreadable and the cause
+// is almost always another copy of a stub left running from an earlier run.
+stub.on('error', (e) => {
+  if (e.code === 'EADDRINUSE') {
+    console.log(`  ❌ something is already listening on 127.0.0.1:${STUB_PORT} — this drive needs that port for its ImageKit stub.`);
+    console.log('     ↳ stop it and re-run. A stub left over from an earlier run is the usual cause.');
+  } else {
+    console.log(`  ❌ could not start the stub: ${e.message}`);
+  }
+  process.exit(1);
+});
 await new Promise((r) => stub.listen(STUB_PORT, '127.0.0.1', r));
 
 // ── Guard: is the API even pointed at us? ──────────────────────────────────
@@ -260,12 +271,22 @@ const before = seen.deletes.length;
 const rm = await apiCall(API, 'DELETE', `/api/tenancies/documents/${docId}`, undefined, T);
 rm.status === 200 ? ok('the uploader removes it') : bad(`remove: ${rm.status} ${JSON.stringify(rm.body).slice(0, 160)}`);
 
-// Removal enqueues; the drain is what talks to storage. Triggered through the
-// API rather than waiting for the hourly cron.
+// The removal itself deletes the bytes — it does not merely enqueue and wait for
+// the hourly cron. That changed deliberately: the privacy policy says documents
+// are "deleted once reviewed" and the tenant upload screen says "as soon as
+// someone has looked at it", and an hourly drain made both of those mean "within
+// the hour". So the DELETE should already have arrived by the time the request
+// returned, with no drain call of our own.
+const heardImmediately = seen.deletes.length > before;
+heardImmediately
+  ? ok('the DELETE goes out with the removal, not at the top of the hour')
+  : bad('nothing reached storage during the removal — deletion is waiting on the cron');
+
+// The endpoint still exists and is still admin-only, as the retry path.
 const drain1 = await apiCall(API, 'POST', '/api/admin/storage/drain', {}, AT);
 drain1.status === 200 || drain1.status === 201
-  ? ok('the deletion queue can be drained on demand')
-  : bad(`drain answered ${drain1.status} ${JSON.stringify(drain1.body).slice(0, 160)} — this drive cannot prove deletion`);
+  ? ok('and the queue can still be drained on demand, as the retry path')
+  : bad(`drain answered ${drain1.status} ${JSON.stringify(drain1.body).slice(0, 160)}`);
 
 const heard = seen.deletes.length > before;
 heard
@@ -291,17 +312,27 @@ files.set(SECOND, 'file-addendum-1');
 const add2 = await apiCall(API, 'POST', `/api/tenancies/${tcy.id}/documents`, {
   path: SECOND, label: 'Addendum', kind: 'addendum',
 }, T);
-await apiCall(API, 'DELETE', `/api/tenancies/documents/${add2.body?.id}`, undefined, T);
 
+// The stub is set to fail BEFORE the removal, not after. It used to be after,
+// which stopped working the moment removal began deleting immediately: the queue
+// was already empty by the time the mode changed, every later drain reported
+// attempted:0, and three assertions failed for the wrong reason.
 mode = 'delete500';
-const drain2 = await apiCall(API, 'POST', '/api/admin/storage/drain', {}, AT);
-const r2 = drain2.body || {};
-r2.failed >= 1 && r2.deleted === 0
-  ? ok(`a storage failure is reported as a failure (deleted ${r2.deleted}, failed ${r2.failed})`)
-  : bad(`drain reported ${JSON.stringify(r2)} when storage was returning 500`);
+const rm2 = await apiCall(API, 'DELETE', `/api/tenancies/documents/${add2.body?.id}`, undefined, T);
+rm2.status === 200
+  ? ok('a removal still succeeds when storage refuses — the row is durable')
+  : bad(`remove with failing storage: ${rm2.status} ${JSON.stringify(rm2.body).slice(0, 160)}`);
 files.has(SECOND)
   ? ok('and the file is still there, so "deleted" would have been a lie')
   : bad('the stub lost the file despite refusing to delete it');
+
+const st2 = await apiCall(API, 'GET', '/api/admin/storage/status', undefined, AT);
+(st2.body?.outstanding ?? 0) >= 1
+  ? ok(`the failure is left outstanding and visible (${st2.body.outstanding} waiting)`)
+  : bad(`nothing outstanding after a failed deletion: ${JSON.stringify(st2.body).slice(0, 200)}`);
+/50\d|delete failed/i.test(String(st2.body?.oldestError ?? ''))
+  ? ok('with the storage provider\u2019s own error recorded against it')
+  : bad(`no usable error recorded: ${JSON.stringify(st2.body?.oldestError)}`);
 
 mode = 'ok';
 const drain3 = await apiCall(API, 'POST', '/api/admin/storage/drain', {}, AT);
@@ -332,6 +363,7 @@ if (sub.status >= 300) {
 
   // The whole reason any of this exists. An admin decides, and the ID document
   // must actually leave storage — not merely stop being pointed at.
+  const beforeDecision = seen.deletes.length;
   const dec = await apiCall(API, 'PATCH', `/api/verification/${sub.body.id}/review`, { status: 'approved' }, AT);
   dec.status === 200
     ? ok('an admin approves it')
@@ -343,29 +375,25 @@ if (sub.status >= 300) {
     ? ok('and the moment is recorded as a withdrawal, which is what it is')
     : bad(`no documentWithdrawnAt: ${JSON.stringify(dec.body).slice(0, 200)}`);
 
+  // Both steps, by the time the decision returns. They are written at different
+  // moments and mean different things — withdrawn in the decision's own
+  // transaction, deleted only from the storage provider's response — and the
+  // deletion is attempted straight away rather than on the hourly pass, because
+  // "deleted once reviewed" should not mean "within the hour".
   const hist1 = await apiCall(API, 'GET', `/api/verification/mine/${sub.body.id}/history`, undefined, tn2.token);
   const steps1 = (hist1.body || []).map((e) => e.step);
   steps1.includes('document_withdrawn')
-    ? ok('the trail says withdrawn and queued, not deleted')
+    ? ok('the trail records the document being withdrawn')
     : bad(`trail steps: ${steps1.join(', ')}`);
-  !steps1.includes('document_deleted')
-    ? ok('and does NOT yet claim the bytes are gone — they are not')
-    : bad('the trail claims a deletion before the drain has run: the original bug');
-
-  const beforeId = seen.deletes.length;
-  await apiCall(API, 'POST', '/api/admin/storage/drain', {}, AT);
-  seen.deletes.length > beforeId
-    ? ok(`the ID document is really deleted from storage (${seen.deletes.at(-1)})`)
+  steps1.includes('document_deleted')
+    ? ok('and the confirmed deletion, by the time the decision returns')
+    : bad(`no confirmed deletion on the trail: ${steps1.join(', ')}`);
+  seen.deletes.length > beforeDecision
+    ? ok(`a DELETE reached storage for the ID document (${seen.deletes.at(-1)})`)
     : bad('the ID document was never deleted — this is exactly the defect this script exists for');
   !files.has(ID_PATH)
     ? ok('the file is gone')
     : bad('storage still holds the identity document');
-
-  const hist2 = await apiCall(API, 'GET', `/api/verification/mine/${sub.body.id}/history`, undefined, tn2.token);
-  const steps2 = (hist2.body || []).map((e) => e.step);
-  steps2.includes('document_deleted')
-    ? ok('and only NOW does the trail say it was deleted')
-    : bad(`trail never recorded the deletion: ${steps2.join(', ')}`);
 }
 
 // ── The promise is checkable ──────────────────────────────────────────────

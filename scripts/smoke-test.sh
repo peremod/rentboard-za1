@@ -57,6 +57,40 @@ TENANT_EMAIL="tenant+${STAMP}@mastande.test"
 PASSWORD="TestPass123"
 
 PASS=0; FAIL=0; SKIP=0
+# Every skip's reason, so the summary can NAME them rather than count them.
+#
+# Counting was how the retention defect survived: the one assertion covering
+# "uploaded documents are deleted" sat behind ADMIN_TOKEN, nobody set it, and a
+# line reading "skipped: 14" gave a reader no way to know that the check about
+# someone's identity document was one of the fourteen.
+SKIP_REASONS=()
+# Use in place of a bare `grey` + counter: it prints, counts AND records, so the
+# summary can name what did not run.
+skipped() { grey "  SKIP  $1"; SKIP=$((SKIP+1)); SKIP_REASONS+=("$1"); }
+
+# ── Derive ADMIN_TOKEN, so the admin sections actually run ─────────────────
+#
+# Seven sections of this suite are gated on ADMIN_TOKEN, and in practice nobody
+# ever set it: ~69 checks never ran. That is how the retention defect survived —
+# the one assertion covering "documents are deleted" was inside one of them, and
+# a skipped check reads exactly like a passing one when you are scanning output.
+#
+# So: if ADMIN_EMAIL and ADMIN_PASSWORD are set (the same pair scripts/db:seed
+# and a11y-drive.mjs already use), log in and derive the token. No credentials
+# are hardcoded here — an unset pair still skips, loudly, as before.
+if [[ -z "${ADMIN_TOKEN:-}" && -n "${ADMIN_EMAIL:-}" && -n "${ADMIN_PASSWORD:-}" ]]; then
+  ADMIN_LOGIN=$(curl -s --max-time 15 -X POST "$API/api/auth/login"     -H 'Content-Type: application/json'     -d "$(jq -nc --arg e "$ADMIN_EMAIL" --arg p "$ADMIN_PASSWORD" '{email:$e,password:$p}')" || true)
+  ADMIN_TOKEN=$(echo "$ADMIN_LOGIN" | jq -r '.accessToken // .access_token // empty' 2>/dev/null || true)
+  if [[ -n "$ADMIN_TOKEN" ]]; then
+    printf '\033[90m%s\033[0m\n' "  ADMIN_TOKEN derived from ADMIN_EMAIL — the admin sections will run."
+    export ADMIN_TOKEN
+  else
+    # Named rather than silent: a wrong password here silently removes 69
+    # checks, which is the failure mode this block exists to end.
+    printf '\033[33m%s\033[0m\n' "⚠ ADMIN_EMAIL is set but signing in failed — the admin sections will SKIP. Check the password, or that the admin is seeded."
+  fi
+fi
+
 COOKIE_JAR=$(mktemp)
 trap 'rm -f "$COOKIE_JAR"' EXIT
 
@@ -226,12 +260,15 @@ if [[ "$STATUS" == "200" ]]; then
   if [[ "$HAS_SIG" == "true" && "$PUBKEY" != "null" && -n "$PUBKEY" ]]; then
     green "  PASS  ImageKit auth returns a signed token  (200)"; PASS=$((PASS+1))
     grey  "        publicKey ${PUBKEY:0:12}... - credentials are live"
+    # Remembered because the retention check further down cannot mean anything
+    # without storage: a server that cannot reach ImageKit cannot delete from it.
+    STORAGE_LIVE=1
   else
     red "  FAIL  ImageKit auth returned 200 but payload incomplete"; FAIL=$((FAIL+1))
     grey "        $(echo "$BODY" | head -c 300)"
   fi
 elif [[ "$STATUS" == "503" ]]; then
-  grey "  SKIP  ImageKit not configured - set IMAGEKIT_* in backend/.env"; SKIP=$((SKIP+1))
+  skipped "ImageKit not configured - set IMAGEKIT_* in backend/.env"
 else
   check "ImageKit auth endpoint" 200 "$STATUS" "$BODY"
 fi
@@ -261,7 +298,7 @@ if [[ -n "$ROOM_ID" ]]; then
     # Not an ImageKit problem: this script creates rooms through the API and
     # never uploads a photo, so there is no heroImagePath to publish with.
     # Section 2b is what actually verifies the ImageKit credentials.
-    grey  "  SKIP  publish blocked — no cover photo on an API-created room (expected)"; SKIP=$((SKIP+1))
+    skipped "publish blocked — no cover photo on an API-created room (expected)"
     # force-publish via a direct field update so the rest of the flow can run
     req PATCH "/api/rooms/$ROOM_ID" '{"heroImagePath":"/smoke-test-placeholder.jpg"}' "$LTOKEN"
     req POST "/api/rooms/$ROOM_ID/publish" "" "$LTOKEN"
@@ -330,7 +367,7 @@ if [[ -n "$APP_ID" ]]; then
   MSGS=$(echo "$BODY" | jq -r 'if type=="array" then length else (.data|length) end' 2>/dev/null || echo "?")
   grey "        messages in thread: $MSGS"
 else
-  grey "  SKIP  no application created — messaging not exercised"; SKIP=$((SKIP+1))
+  skipped "no application created — messaging not exercised"
 fi
 
 # ── 6. Security spot-checks ────────────────────────────────────────────────
@@ -775,7 +812,7 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
     '{"isActive":false,"reason":"probe"}' "$ADMIN_TOKEN"
   check "suspending an unknown user returns 404" 404 "$STATUS" "$BODY"
 else
-  grey "  SKIP  authorised admin paths — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
+  skipped "authorised admin paths — set ADMIN_TOKEN to include them"
 fi
 
 
@@ -869,7 +906,7 @@ for path in "/how-it-works" "/pricing" "/advertise"; do
     green "  PASS  $path renders  (200)"; PASS=$((PASS+1))
   elif [[ "$CODE" =~ ^0+$ ]]; then
     # curl reports 000 (sometimes repeated on retries) when it cannot connect.
-    grey "  SKIP  $path — frontend not running at $FE"; SKIP=$((SKIP+1))
+    skipped "$path — frontend not running at $FE"
   else
     red "  FAIL  $path returned $CODE"; FAIL=$((FAIL+1))
   fi
@@ -881,7 +918,7 @@ done
 for path in "/admin/dashboard" "/admin/advertising"; do
   CODE=$(curl -s -o /dev/null -w '%{http_code}' "$FE$path" 2>/dev/null || echo "000")
   if [[ "$CODE" =~ ^0+$ ]]; then
-    grey "  SKIP  $path — frontend not running at $FE"; SKIP=$((SKIP+1))
+    skipped "$path — frontend not running at $FE"
   elif [[ "$CODE" == "200" ]]; then
     # Angular serves the app shell for client-rendered routes; adminGuard then
     # redirects in the browser. Either shape is acceptable, so this only fails
@@ -1130,7 +1167,7 @@ LOGGED=$(echo "$BODY" | jq -r 'length')
 if [[ "$LOGGED" -gt 0 ]]; then
   green "  PASS  emails are being logged ($LOGGED entries)"; PASS=$((PASS+1))
 else
-  grey  "  SKIP  no email log entries yet for this account"; SKIP=$((SKIP+1))
+  skipped "no email log entries yet for this account"
 fi
 
 req GET /api/notifications/my-emails
@@ -1174,7 +1211,7 @@ if [[ -z "${RESEND_WEBHOOK_SECRET:-}" ]]; then
     400) green "  PASS  webhook refuses an unsigned event — signature required  (400)"; PASS=$((PASS+1)) ;;
     *)   red "  FAIL  unsigned webhook returned $STATUS; 400 or 503 expected, never 200"; FAIL=$((FAIL+1)) ;;
   esac
-  grey "  SKIP  signature verification — set RESEND_WEBHOOK_SECRET to the API's own to include it"; SKIP=$((SKIP+1))
+  skipped "signature verification — set RESEND_WEBHOOK_SECRET to the API's own to include it"
 else
   req POST /api/notifications/webhook/resend "$WEBHOOK_BODY"
   if [[ "$STATUS" == "400" ]]; then
@@ -1242,7 +1279,7 @@ if [[ "$STATUS" == "201" ]]; then
     red "  FAIL  identity request status is '$VR_STATUS', expected pending_payment"; FAIL=$((FAIL+1))
   fi
 else
-  grey "  SKIP  landlord already has an identity request from an earlier section"; SKIP=$((SKIP+1))
+  skipped "landlord already has an identity request from an earlier section"
   PAY_VR=""
 fi
 
@@ -1260,7 +1297,7 @@ if [[ -n "$PAY_VR" ]]; then
       red "  FAIL  form incomplete (signature=$HAS_SIG amount=$AMOUNT)"; FAIL=$((FAIL+1))
     fi
   elif [[ "$STATUS" == "400" ]]; then
-    grey "  SKIP  PayFast not configured on this server"; SKIP=$((SKIP+1))
+    skipped "PayFast not configured on this server"
   else
     check "start verification payment" 201 "$STATUS" "$BODY"
   fi
@@ -1440,7 +1477,7 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
     fi
   fi
 else
-  grey "  SKIP  admin ad management — set ADMIN_TOKEN to include it"; SKIP=$((SKIP+1))
+  skipped "admin ad management — set ADMIN_TOKEN to include it"
 fi
 
 # Demo campaigns, if seeded with SEED_DEMO_ADS=true. These exercise the serving
@@ -1508,10 +1545,10 @@ if [[ "$DEMO_COUNT" -gt 0 ]]; then
   if [[ "$(echo "$BODY" | jq -r 'length')" -gt 0 ]]; then
     green "  PASS  room_detail placement also serves"; PASS=$((PASS+1))
   else
-    grey "  SKIP  no room_detail campaign seeded"; SKIP=$((SKIP+1))
+    skipped "no room_detail campaign seeded"
   fi
 else
-  grey "  SKIP  no active campaigns — seed with SEED_DEMO_ADS=true npx ts-node prisma/seed.ts"; SKIP=$((SKIP+1))
+  skipped "no active campaigns — seed with SEED_DEMO_ADS=true npx ts-node prisma/seed.ts"
 fi
 
 
@@ -1618,7 +1655,7 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
     red "  FAIL  requested 7 days, got $PERIOD"; FAIL=$((FAIL+1))
   fi
 else
-  grey "  SKIP  admin KPIs — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
+  skipped "admin KPIs — set ADMIN_TOKEN to include them"
 fi
 
 
@@ -1695,7 +1732,7 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   if [[ "$LAUNCH" -gt 0 ]]; then
     green "  PASS  launch codes seeded ($LAUNCH)"; PASS=$((PASS+1))
   else
-    grey "  SKIP  no launch codes — seed with SEED_LAUNCH_CODES=true"; SKIP=$((SKIP+1))
+    skipped "no launch codes — seed with SEED_LAUNCH_CODES=true"
   fi
 fi
 
@@ -1756,7 +1793,7 @@ check "place suggestions are public" 200 "$STATUS" "$BODY"
 if echo "$BODY" | jq -e 'any(.[]?; .name == "Sandton")' >/dev/null 2>&1; then
   green "  PASS  suburb suggestion found"; PASS=$((PASS+1))
 else
-  grey "  SKIP  places not seeded — run npx ts-node prisma/seed.ts"; SKIP=$((SKIP+1))
+  skipped "places not seeded — run npx ts-node prisma/seed.ts"
 fi
 
 req GET "/api/places/resolve?q=sandton"
@@ -1764,7 +1801,7 @@ RESOLVED_CITY=$(echo "$BODY" | jq -r '.city // empty')
 if [[ "$RESOLVED_CITY" == "Johannesburg" ]]; then
   green "  PASS  Sandton resolves to Johannesburg"; PASS=$((PASS+1))
 elif [[ -z "$RESOLVED_CITY" ]]; then
-  grey "  SKIP  places not seeded"; SKIP=$((SKIP+1))
+  skipped "places not seeded"
 else
   red "  FAIL  Sandton resolved to '$RESOLVED_CITY'"; FAIL=$((FAIL+1))
 fi
@@ -1775,7 +1812,7 @@ ALIAS=$(echo "$BODY" | jq -r '.name // empty')
 if [[ "$ALIAS" == "Johannesburg" ]]; then
   green "  PASS  alias 'joburg' resolves"; PASS=$((PASS+1))
 elif [[ -z "$ALIAS" ]]; then
-  grey "  SKIP  places not seeded"; SKIP=$((SKIP+1))
+  skipped "places not seeded"
 else
   red "  FAIL  'joburg' resolved to '$ALIAS'"; FAIL=$((FAIL+1))
 fi
@@ -1970,7 +2007,7 @@ if [[ "$TOTAL_SERVED" -gt 0 ]]; then
     green "  PASS  house ads do not displace paid campaigns"; PASS=$((PASS+1))
   fi
 else
-  grey "  SKIP  no campaigns seeded"; SKIP=$((SKIP+1))
+  skipped "no campaigns seeded"
 fi
 
 # Requesting an ad must record eligibility, which is what the rate card is
@@ -2416,14 +2453,38 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
     red "  FAIL  Passport not granted: $BODY"; FAIL=$((FAIL+1))
   fi
 
+  # Three steps, not two, and the order matters. `document_withdrawn` is written
+  # in the decision's own transaction; `document_deleted` only once the storage
+  # provider confirms the bytes are gone. Requiring BOTH is what makes this
+  # assertion mean something — the version that only asked for a timestamp we set
+  # ourselves passed for the entire period during which nothing was ever deleted.
   req GET "/api/verification/mine/$SASSA_ID/history" "" "$TTOKEN"
-  if echo "$BODY" | jq -e 'map(.step)|(index("approved") != null and index("document_deleted") != null)' >/dev/null 2>&1; then
-    green "  PASS  the decision and the deletion are both on the trail"; PASS=$((PASS+1))
+  TRAIL_STEPS=$(echo "$BODY" | jq -c 'map(.step)' 2>/dev/null)
+  # Always true, and true in the decision's own transaction.
+  if echo "$BODY" | jq -e 'map(.step)|(index("approved") != null and index("document_withdrawn") != null)' >/dev/null 2>&1; then
+    green "  PASS  the decision and the document's withdrawal are both on the trail"; PASS=$((PASS+1))
   else
-    red "  FAIL  trail is missing the decision or the deletion"; FAIL=$((FAIL+1))
+    red "  FAIL  trail is missing the decision or the withdrawal — got: $TRAIL_STEPS"; FAIL=$((FAIL+1))
+  fi
+  # And the stronger claim, only where storage exists to make it of.
+  if [[ -n "${STORAGE_LIVE:-}" ]]; then
+    if echo "$BODY" | jq -e 'map(.step)|index("document_deleted") != null' >/dev/null 2>&1; then
+      green "  PASS  and the file's deletion is CONFIRMED on it, not assumed"; PASS=$((PASS+1))
+    else
+      red "  FAIL  no confirmed deletion on the trail — got: $TRAIL_STEPS"; FAIL=$((FAIL+1))
+      grey "        the privacy policy, the PAIA manual and the tenant upload screen all say this file is deleted"
+      # Names the cause instead of leaving it to be guessed. Credentials being
+      # present does not mean the management API is REACHABLE — and the queue
+      # already records exactly why the attempt failed.
+      req GET /api/admin/storage/status "" "$ADMIN_TOKEN"
+      grey "        storage queue says: $(echo "$BODY" | jq -r '"outstanding=\(.outstanding) stuck=\(.stuck) lastError=\(.oldestError // "none")"' 2>/dev/null)"
+    fi
+  else
+    skipped "confirmed deletion — ImageKit is not configured, so nothing CAN be deleted here"
+    grey "        that is not a pass: on a server in this state the retention promise is not being kept"
   fi
 else
-  grey "  SKIP  Passport review steps — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
+  skipped "Passport review steps — set ADMIN_TOKEN to include them"
 fi
 
 # -- 43. Post-tenancy dispute flags ----------------------------------------
@@ -2455,7 +2516,7 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
     red "  FAIL  visibility counter drifted: $BODY"; FAIL=$((FAIL+1))
   fi
 else
-  grey "  SKIP  flag queue checks — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
+  skipped "flag queue checks — set ADMIN_TOKEN to include them"
 fi
 
 # -- 44. WhatsApp webhook signature -----------------------------------------
@@ -2495,7 +2556,7 @@ if [[ -n "${WHATSAPP_APP_SECRET:-}" ]]; then
     red "  FAIL  tampered WhatsApp body returned $WA_STATUS, expected 403"; FAIL=$((FAIL+1))
   fi
 else
-  grey "  SKIP  signed-delivery checks — set WHATSAPP_APP_SECRET to the API's own to include them"; SKIP=$((SKIP+1))
+  skipped "signed-delivery checks — set WHATSAPP_APP_SECRET to the API's own to include them"
 fi
 
 # -- 45. Yards (multi-room properties) --------------------------------------
@@ -2605,7 +2666,7 @@ if [[ -n "$YARD_ID" && -n "$ROOM_ID" ]]; then
     red "  FAIL  deleting a yard destroyed its room ($STATUS)"; FAIL=$((FAIL+1))
   fi
 else
-  grey "  SKIP  yard room assignment — no room to move"; SKIP=$((SKIP+1))
+  skipped "yard room assignment — no room to move"
 fi
 
 # -- 46. Rent tracking -------------------------------------------------------
@@ -2642,7 +2703,7 @@ if [[ -n "$TEN_ID" ]]; then
   req GET "/api/properties/rent/$TEN_ID" "" "$TTOKEN"
   check "a tenant can read their own rent record" 200 "$STATUS" "$BODY"
 else
-  grey "  SKIP  tenant rent record — no tenancy was created earlier"; SKIP=$((SKIP+1))
+  skipped "tenant rent record — no tenancy was created earlier"
 fi
 
 if [[ -n "${ADMIN_TOKEN:-}" ]]; then
@@ -2651,7 +2712,7 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req POST /api/properties/rent/run-reminders "" "$LTOKEN"
   check "a landlord cannot trigger the reminder pass" 403 "$STATUS" "$BODY"
 else
-  grey "  SKIP  reminder pass — set ADMIN_TOKEN to include it"; SKIP=$((SKIP+1))
+  skipped "reminder pass — set ADMIN_TOKEN to include it"
 fi
 
 # -- 47. WhatsApp-first listing creation ------------------------------------
@@ -2690,7 +2751,7 @@ if [[ -n "${WHATSAPP_APP_SECRET:-}" ]]; then
     red "  FAIL  a draft appeared from an unverified number: $(echo "$BODY" | jq -c 'length')"; FAIL=$((FAIL+1))
   fi
 else
-  grey "  SKIP  inbound bot message — set WHATSAPP_APP_SECRET to include it"; SKIP=$((SKIP+1))
+  skipped "inbound bot message — set WHATSAPP_APP_SECRET to include it"
 fi
 
 # -- 48. The refund promise -------------------------------------------------
@@ -2742,10 +2803,10 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
       red "  FAIL  a free check created a refund obligation"; FAIL=$((FAIL+1))
     fi
   else
-    grey "  SKIP  tenant already has a SASSA check from an earlier section"; SKIP=$((SKIP+1))
+    skipped "tenant already has a SASSA check from an earlier section"
   fi
 else
-  grey "  SKIP  refunds queue contents — set ADMIN_TOKEN to include them"; SKIP=$((SKIP+1))
+  skipped "refunds queue contents — set ADMIN_TOKEN to include them"
 fi
 
 
@@ -2761,7 +2822,7 @@ check "GET /surveys/prompt as a landlord" 200 "$STATUS" "$BODY"
 SURVEY_SLUG=$(echo "$BODY" | jq -r '.slug // empty')
 
 if [[ -z "$SURVEY_SLUG" ]]; then
-  grey "  SKIP  no active survey seeded — run npx ts-node prisma/seed-survey.ts --apply"; SKIP=$((SKIP+1))
+  skipped "no active survey seeded — run npx ts-node prisma/seed-survey.ts --apply"
 else
   SURVEY_MICRO=$(echo "$BODY" | jq -r '.microQuestion.id // empty')
   if [[ -n "$SURVEY_MICRO" ]]; then
@@ -2816,19 +2877,34 @@ else
       red "  FAIL  results are not segmented — a table segmented by nothing looks like agreement"; FAIL=$((FAIL+1))
     fi
   else
-    grey "  SKIP  survey aggregate — set ADMIN_TOKEN to include it"; SKIP=$((SKIP+1))
+    skipped "survey aggregate — set ADMIN_TOKEN to include it"
   fi
 fi
 
 # ── Summary ────────────────────────────────────────────────────────────────
 printf '\n\033[1m═══ Summary ═══\033[0m\n'
 green "  passed:  $PASS"
-[[ $SKIP -gt 0 ]] && grey "  skipped: $SKIP"
+if [[ $SKIP -gt 0 ]]; then
+  grey "  skipped: $SKIP"
+  # Named, not counted. See SKIP_REASONS where it is declared.
+  for r in "${SKIP_REASONS[@]}"; do grey "     · $r"; done
+fi
 if [[ $FAIL -gt 0 ]]; then
   red "  FAILED:  $FAIL"
   printf '\nFix the failures above, then re-run. Paste the output if you want help.\n'
   exit 1
 fi
 printf '\n'
-green "All checks passed — the core MVP flow works end to end."
+if [[ $SKIP -gt 0 ]]; then
+  green "Everything that ran passed."
+  grey  "That is not the same as verified — $SKIP check(s) did not run. Each is named above."
+  grey  "For a release run, set these so nothing worth checking is skipped:"
+  grey  "  ADMIN_EMAIL, ADMIN_PASSWORD   the seven admin sections (~70 checks, incl. document retention)"
+  grey  "  IMAGEKIT_*                    that an uploaded document is really deleted"
+  grey  "  WHATSAPP_APP_SECRET           signed webhook delivery"
+  grey  "  RESEND_WEBHOOK_SECRET         email webhook signature verification"
+  grey  "  and seed with SEED_LAUNCH_CODES=true, plus prisma/seed-survey.ts --apply"
+else
+  green "All checks passed — the core MVP flow works end to end."
+fi
 printf 'Next: click the same flow in the UI at %s\n' "$FE"

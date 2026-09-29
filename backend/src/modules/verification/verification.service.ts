@@ -397,6 +397,21 @@ export class VerificationService {
     });
 
     this.logger.log(`Verification ${dto.status}: ${id} by admin ${reviewerId}`);
+
+    // Delete the bytes NOW, not at the top of the hour.
+    //
+    // The privacy policy says documents are "deleted once reviewed" and the
+    // tenant upload screen says "as soon as someone has looked at it". Leaving
+    // it to the hourly pass would make both of those mean "within the hour",
+    // which is a weaker promise than the words. Awaited so the trail the subject
+    // reads already says the file is gone by the time this returns.
+    //
+    // After the transaction, deliberately: the queue row must be committed
+    // before anything tries to work it. drainNow swallows storage faults, so a
+    // provider outage cannot fail a decision that has already been made — the
+    // row is durable and the cron retries.
+    if (request.documentPath) await this.storage.drainNow();
+
     return updated;
   }
 
