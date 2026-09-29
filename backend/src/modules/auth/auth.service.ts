@@ -12,7 +12,9 @@ import { LoginDto } from './dto/login.dto';
 /** Shape of the JWT payload stored inside every (short-lived) access token. */
 export interface JwtPayload {
   sub: string;
-  email: string;
+  /** Null for a phone-only account (Phase 7g). Never used as an identifier —
+   *  `sub` is. Carried only so a client can show who is signed in. */
+  email: string | null;
   role: string;
   fullName: string;
 }
@@ -23,7 +25,9 @@ export interface AuthResponse {
   refreshToken: string;
   user: {
     id: string;
-    email: string;
+    /** Null for a phone-only account (Phase 7g). The client shows the phone
+     *  number instead — see the sign-in screens. */
+    email: string | null;
     role: string;
     fullName: string;
     avatarPath?: string | null;

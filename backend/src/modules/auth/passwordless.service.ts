@@ -54,13 +54,19 @@ export class PasswordlessService {
         },
       });
 
-      this.notifications
-        .sendMagicLinkEmail(user.email, {
-          fullName: user.fullName,
-          token,
-          ttlMinutes: MAGIC_LINK_TTL_MINUTES,
-        })
-        .catch(() => {});
+      // A magic LINK needs somewhere to send it. A phone-only account has no
+      // address, and the response is deliberately identical either way so this
+      // cannot be used to discover which addresses exist. Their equivalent is the
+      // one-time code on /auth/phone/request-code.
+      if (user.email) {
+        this.notifications
+          .sendMagicLinkEmail(user.email, {
+            fullName: user.fullName,
+            token,
+            ttlMinutes: MAGIC_LINK_TTL_MINUTES,
+          })
+          .catch(() => {});
+      }
     } else if (!user && intendedRole) {
       // No account: invite them to register rather than leaving them waiting
       // for an email that will never come.

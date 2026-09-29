@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
+import { NoticeRouter } from '../notifications/notice-router.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AlertsService } from '../alerts/alerts.service';
@@ -82,6 +83,7 @@ export class RoomsService {
     private notifications: NotificationsService,
     private alerts: AlertsService,
     private referrals: ReferralsService,
+    private notice: NoticeRouter,
   ) {}
 
   /** Public notice-board search — only ever returns status = 'active' rooms. */
@@ -388,7 +390,7 @@ export class RoomsService {
 
     const stillOpen = await this.prisma.application.findMany({
       where: { roomId: id, cycle: room.relistCount, archivedAt: null, status: { in: ['pending', 'viewed', 'shortlisted'] } },
-      include: { tenant: { select: { email: true, fullName: true } } },
+      include: { tenant: { select: { id: true, email: true, fullName: true, phone: true, phoneVerified: true } } },
     });
 
     const [, updated] = await this.prisma.$transaction([
@@ -402,11 +404,18 @@ export class RoomsService {
     this.notifySavers(id, 'removed').catch(() => {});
 
     for (const application of stillOpen) {
-      this.notifications
-        .sendRoomUnavailableEmail(application.tenant.email, {
+      // Through the router, so a tenant with no email still learns the room is
+      // gone rather than waiting on a reply that will never come.
+      this.notice
+        .deliver(application.tenant, {
+          kind: 'room_unavailable',
+          title: `"${room.title}" is no longer available`,
+          body: 'Your application for it has closed. There are other rooms nearby.',
+          link: '/tenant/dashboard',
+        }, (email) => this.notifications.sendRoomUnavailableEmail(email, {
           tenantName: application.tenant.fullName,
           roomTitle: room.title,
-        })
+        }))
         .catch(() => {});
     }
 
@@ -429,7 +438,7 @@ export class RoomsService {
         archivedAt: null,
         status: { in: ['pending', 'viewed', 'shortlisted'] },
       },
-      include: { tenant: { select: { email: true, fullName: true } } },
+      include: { tenant: { select: { id: true, email: true, fullName: true, phone: true, phoneVerified: true } } },
     });
 
     const [, updated] = await this.prisma.$transaction([
@@ -444,11 +453,18 @@ export class RoomsService {
 
     // Best-effort: a failed email must not roll back the letting.
     for (const application of stillOpen) {
-      this.notifications
-        .sendRoomUnavailableEmail(application.tenant.email, {
+      // Through the router, so a tenant with no email still learns the room is
+      // gone rather than waiting on a reply that will never come.
+      this.notice
+        .deliver(application.tenant, {
+          kind: 'room_unavailable',
+          title: `"${room.title}" is no longer available`,
+          body: 'Your application for it has closed. There are other rooms nearby.',
+          link: '/tenant/dashboard',
+        }, (email) => this.notifications.sendRoomUnavailableEmail(email, {
           tenantName: application.tenant.fullName,
           roomTitle: room.title,
-        })
+        }))
         .catch(() => {});
     }
 
@@ -630,19 +646,24 @@ export class RoomsService {
           archivedAt: null,
           status: { in: ['pending', 'viewed', 'shortlisted'] },
         },
-        include: { tenant: { select: { email: true, fullName: true } } },
+        include: { tenant: { select: { id: true, email: true, fullName: true, phone: true, phoneVerified: true } } },
       });
       if (open.length === 0) return;
 
       for (const application of open) {
-        this.notifications
-          .sendRentChangedEmail(application.tenant.email, {
+        this.notice
+          .deliver(application.tenant, {
+            kind: 'rent_changed',
+            title: `The rent on "${room.title}" changed while you were applying`,
+            body: 'Open your application to see the new amount before you decide.',
+            link: '/tenant/dashboard',
+          }, (email) => this.notifications.sendRentChangedEmail(email, {
             tenantName: application.tenant.fullName,
             roomTitle: room.title,
             roomId,
             oldRentCents,
             newRentCents,
-          })
+          }))
           .catch(() => {});
       }
 
@@ -664,7 +685,7 @@ export class RoomsService {
 
       const saves = await this.prisma.savedRoom.findMany({
         where: { roomId, notifiedUnavailableAt: null },
-        include: { tenant: { select: { email: true, fullName: true } } },
+        include: { tenant: { select: { id: true, email: true, fullName: true, phone: true, phoneVerified: true } } },
       });
       if (saves.length === 0) return;
 
@@ -674,13 +695,18 @@ export class RoomsService {
       });
 
       for (const save of saves) {
-        this.notifications
-          .sendSavedRoomGoneEmail(save.tenant.email, {
+        this.notice
+          .deliver(save.tenant, {
+            kind: 'saved_room_gone',
+            title: `A room you saved in ${room.locationDisplay} is gone`,
+            body: room.title,
+            link: '/tenant/saved',
+          }, (email) => this.notifications.sendSavedRoomGoneEmail(email, {
             tenantName: save.tenant.fullName,
             roomTitle: room.title,
             locationDisplay: room.locationDisplay,
             reason,
-          })
+          }))
           .catch(() => {});
       }
 

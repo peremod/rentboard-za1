@@ -55,11 +55,46 @@ enum PlanTier {
 /// Core user account — shared by tenants, landlords, and admins.
 model User {
   id             String   @id @default(uuid())
-  email          String   @unique
+  /// Optional since v1.85.0 (Phase 7g).
+  ///
+  /// Many township landlords are WhatsApp-first and do not use email at all.
+  /// Requiring one meant either turning them away or inventing an address on
+  /// their behalf, and an invented address is one nobody reads — so a password
+  /// reset or a "you have an applicant" notice would go nowhere and look
+  /// delivered.
+  ///
+  /// A database CHECK constraint enforces that email OR phone is present; see
+  /// the migration. Nullable here, guaranteed non-empty as a pair there, because
+  /// "at least one of two columns" is not something Prisma can express and is
+  /// far too important to leave to whichever code path happens to run.
+  email          String?  @unique
   passwordHash   String?
   role           UserRole @default(TENANT)
   fullName       String
   avatarPath     String?
+  /// A login identifier since v1.85.0 (Phase 7g) — but NOT `@unique` here, and
+  /// that is deliberate.
+  ///
+  /// Uniqueness is enforced by a PARTIAL unique index, on verified numbers only:
+  ///
+  ///     CREATE UNIQUE INDEX ... ON users(phone) WHERE "phoneVerified" = true;
+  ///
+  /// Why not a plain `@unique`: this column has never been unique, so duplicates
+  /// already exist — the dev database had forty accounts sharing one number, and
+  /// production may well have people who mistyped, or a household sharing a
+  /// handset. A full unique index would fail to create, and the only way to make
+  /// it succeed would be to null out other people's saved numbers, which is
+  /// destroying user data to satisfy a constraint.
+  ///
+  /// Verified numbers are the ones that matter: `requestCode` only ever finds a
+  /// user with `phoneVerified: true`, so two unverified duplicates cannot make a
+  /// login ambiguous. Two VERIFIED duplicates could, and the partial index makes
+  /// that impossible.
+  ///
+  /// ⚠️ Prisma cannot express a partial unique index, so it will report this
+  /// index as drift on `migrate dev` and offer to remove it. Do not let it. This
+  /// repository applies hand-written migrations with `migrate deploy`, where the
+  /// extra index is left alone.
   phone          String?
   isVerified     Boolean  @default(false)
   isActive       Boolean  @default(true)
@@ -102,6 +137,9 @@ model User {
   /// account removes them — they are about a person with a s.24 right to
   /// erasure. No endpoint reads this side.
   notesAbout          LandlordNote[]  @relation("NotesAbout")
+  /// In-app notices. The channel that works when there is no email address and
+  /// WhatsApp is outside its 24-hour window — see the Notice model.
+  notices             Notice[]
   reportsFiled        Report[]        @relation("ReportsFiled")
   reportsAgainst      Report[]        @relation("ReportsAgainst")
   flagsRaised         TenancyFlag[]   @relation("FlagsRaised")
@@ -339,6 +377,18 @@ model AuthToken {
   /// For email-change requests: the address being moved to, confirmed by the
   /// token before it is written to the account.
   newEmail  String?
+
+  /// Wrong guesses against THIS token.
+  ///
+  /// Added because the service had a `MAX_ATTEMPTS = 5` constant that nothing
+  /// ever read — it described an intention and counted nothing, and its own
+  /// header says so. There was nowhere to count: this column is that somewhere.
+  ///
+  /// Per-token and therefore per-account, which the existing @Throttle is not —
+  /// that is per IP, so ten guesses per IP per fifteen minutes. A distributed
+  /// attacker gets more than one IP; the person whose account it is gets one
+  /// budget of guesses regardless.
+  attempts  Int       @default(0)
 
   expiresAt DateTime
   usedAt    DateTime?
@@ -2189,4 +2239,66 @@ model LandlordNote {
   /// One landlord's notes about one tenant, newest first.
   @@index([landlordId, tenantId, createdAt])
   @@map("landlord_notes")
+}
+
+/// Something the app needs to tell someone, held where it cannot go missing.
+///
+/// ── Why this exists at all
+///
+/// Email stopped being required in v1.85.0 (Phase 7g), because many township
+/// landlords are WhatsApp-first and do not use one. That immediately created a
+/// way to lose a person's applications silently: every notification in this
+/// codebase was `sendSomethingEmail(user.email, …)`, and for an account with no
+/// address that is a send to nowhere.
+///
+/// WhatsApp is the obvious substitute and is NOT sufficient on its own. Every
+/// outbound message here is free-form `type: 'text'`, which Meta permits only
+/// inside the 24-hour customer service window; a business-initiated message
+/// outside it is rejected with error 131047 unless an approved template exists,
+/// and the templates are not approved yet. A fallback that fails whenever the
+/// person has not messaged recently is not a fallback.
+///
+/// So: a row here is written for anyone who cannot be emailed. It is the channel
+/// that works regardless of Meta, the hour, or a template queue.
+///
+/// ── The WhatsApp attempt is recorded, not assumed
+///
+/// `whatsappSentAt` is set only when the send returns success, and
+/// `whatsappError` holds the reason when it does not. The same rule as
+/// FileDeletion: a delivery nobody confirmed is not a delivery, and the codebase
+/// has already been bitten once by a column whose name asserted something that
+/// never happened.
+model Notice {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Machine name, e.g. `new_application`, `shortlisted`, `room_unavailable`.
+  /// Mirrors the email template names so the two channels stay recognisably the
+  /// same event.
+  kind String
+
+  /// What it says, in the plain English the rest of the portal uses.
+  title String
+  body  String?
+
+  /// Where to go about it, as an in-app path. Never an absolute URL: this is
+  /// rendered inside the app, and a hardcoded host is how a staging link ends up
+  /// in a production notice.
+  link String?
+
+  readAt DateTime?
+
+  /// Set ONLY from a successful WhatsApp send. Null means it was not delivered
+  /// that way — which is the normal case outside the 24-hour window.
+  whatsappSentAt DateTime?
+  /// Why the WhatsApp attempt failed, when it did. Meta's own message.
+  whatsappError  String?
+
+  createdAt DateTime @default(now())
+
+  /// The unread list, newest first.
+  @@index([userId, readAt, createdAt])
+  @@map("notices")
 }

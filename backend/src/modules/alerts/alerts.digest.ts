@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { NoticeRouter } from '../notifications/notice-router.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -21,6 +22,7 @@ export class AlertsDigest {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsService,
+    private notice: NoticeRouter,
   ) {}
 
   @Cron('0 7 * * *', { timeZone: 'Africa/Johannesburg' })
@@ -29,7 +31,7 @@ export class AlertsDigest {
 
     const searches = await this.prisma.savedSearch.findMany({
       where: { isActive: true, frequency: 'daily', notifyEmail: true },
-      include: { tenant: { select: { email: true, fullName: true } } },
+      include: { tenant: { select: { id: true, email: true, fullName: true, phone: true, phoneVerified: true } } },
     });
 
     if (searches.length === 0) return;
@@ -65,11 +67,16 @@ export class AlertsDigest {
       if (matches.length === 0) continue;
 
       try {
-        await this.notifications.sendDailyDigestEmail(search.tenant.email, {
+        await this.notice.deliver(search.tenant, {
+          kind: 'saved_search_digest',
+          title: `${matches.length} new ${matches.length === 1 ? 'room' : 'rooms'} for "${search.name}"`,
+          body: matches.map((m) => m.title).slice(0, 5).join('\n'),
+          link: '/tenant/alerts',
+        }, (email) => this.notifications.sendDailyDigestEmail(email, {
           tenantName: search.tenant.fullName,
           searchName: search.name,
           rooms: matches,
-        });
+        }));
         sent++;
       } catch (err) {
         this.logger.error(`Digest failed for search ${search.id}`, err as Error);
