@@ -131,6 +131,24 @@ export class SeoController {
     });
 
     /**
+     * Published landlord storefronts (Phase 5b).
+     *
+     * Included because a public page absent from the sitemap is a retention
+     * feature wearing an SEO costume. Only `storefrontLive` ones, so a page
+     * nobody has chosen to publish is never advertised to a crawler — the same
+     * rule the public read enforces, applied here so the two cannot disagree.
+     *
+     * Priority 0.6: below a room page, which is what someone is actually
+     * searching for, and above the static marketing pages, because a storefront
+     * carries a real person's name and their live listings.
+     */
+    const storefronts = await this.prisma.landlordProfile.findMany({
+      where: { storefrontLive: true, slug: { not: null }, user: { isActive: true } },
+      select: { slug: true, user: { select: { updatedAt: true } } },
+      take: 20000,
+    });
+
+    /**
      * Every entry here must resolve to a real route with a 200. The previous
      * list included '/rooms', which had no route and fell through to the
      * not-found page — a soft 404 advertised to Google in our own sitemap.
@@ -194,6 +212,13 @@ export class SeoController {
       ...rooms.map(
         (r) =>
           `  <url><loc>${this.site}/rooms/${r.id}</loc><lastmod>${r.updatedAt.toISOString().split('T')[0]}</lastmod><changefreq>weekly</changefreq><priority>0.8</priority></url>`,
+      ),
+      // No hreflang cluster: a storefront's bio is the landlord's own words and
+      // is never translated, so the localised URLs would serve identical text —
+      // the same reasoning that keeps room pages out of the cluster.
+      ...storefronts.map(
+        (p) =>
+          `  <url><loc>${this.site}/landlords/${p.slug}</loc><lastmod>${p.user.updatedAt.toISOString().split('T')[0]}</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>`,
       ),
       '</urlset>',
     ].join('\n');

@@ -85,7 +85,7 @@ const PUBLIC_PAGES = [
  */
 const LANDLORD_PAGES = [
   '/landlord/dashboard', '/landlord/yard', '/landlord/verification',
-  '/landlord/services', '/account/settings',
+  '/landlord/services', '/landlord/public-page', '/account/settings',
 ];
 const TENANT_PAGES = ['/tenant/dashboard', '/tenant/rent', '/tenant/passport'];
 const ADMIN_PAGES = [

@@ -42,6 +42,7 @@ export function landlordNav(badges: LandlordNavBadges = {}): PortalNavItem[] {
     { label: 'Verification', icon: '🪪', route: '/landlord/verification' },
     // A reason to open the app with no vacancy and no rent due: something is
     // broken and you need a number.
+    { label: 'Your public page', icon: '🪧', route: '/landlord/public-page' },
     { label: 'Who to call', icon: '🔧', route: '/landlord/services' },
     { label: 'Settings', icon: '⚙️', route: '/account/settings' },
     // No Billing entry. It pointed at /landlord/upgrade, which has been

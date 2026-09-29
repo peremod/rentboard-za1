@@ -2810,6 +2810,67 @@ else
 fi
 
 
+# ── Landlord public storefront (Phase 5b / 5h) ─────────────────────────────
+#
+# The public page is an SEO surface, so what matters here is that it does not
+# exist until its owner publishes it, and that a hidden one is indistinguishable
+# from one that never existed. Slug collisions and the sitemap entry are checked
+# properly in scripts/storefront-drive.mjs.
+head_ "Landlord public storefront"
+
+req GET /api/landlord/storefront "" "$LTOKEN"
+check "a landlord can open their storefront settings" 200 "$STATUS" "$BODY"
+SF_SLUG=$(echo "$BODY" | jq -r '.slug // empty')
+if [[ -n "$SF_SLUG" ]] && echo "$SF_SLUG" | grep -qE '^[a-z0-9]+(-[a-z0-9]+)*$'; then
+  green "  PASS  a readable slug is minted, not a uuid  ($SF_SLUG)"; PASS=$((PASS+1))
+else
+  red "  FAIL  slug is missing or not readable: $SF_SLUG"; FAIL=$((FAIL+1))
+fi
+if echo "$BODY" | jq -e '.storefrontLive == false' >/dev/null 2>&1; then
+  green "  PASS  and it is OFF — no page about a person is published for them"; PASS=$((PASS+1))
+else
+  red "  FAIL  storefrontLive is not false before anyone published it"; FAIL=$((FAIL+1))
+fi
+
+# Unpublished and never-existed must be indistinguishable, or anyone can
+# enumerate which landlords exist and which have hidden their page.
+req GET "/api/storefronts/$SF_SLUG" "" ""
+check "an unpublished storefront answers 404 to the public" 404 "$STATUS" "$BODY"
+HIDDEN_MSG=$(echo "$BODY" | jq -c '.message' 2>/dev/null)
+req GET "/api/storefronts/no-such-landlord-anywhere" "" ""
+check "and so does a slug that never existed" 404 "$STATUS" "$BODY"
+if [[ "$HIDDEN_MSG" == "$(echo "$BODY" | jq -c '.message' 2>/dev/null)" ]]; then
+  green "  PASS  with the same message, so the two cannot be told apart"; PASS=$((PASS+1))
+else
+  red "  FAIL  hidden and nonexistent storefronts are distinguishable"; FAIL=$((FAIL+1))
+fi
+
+req PATCH /api/landlord/storefront '{"bio":"I have let rooms in this yard for eleven years.","storefrontLive":true}' "$LTOKEN"
+check "the landlord publishes it themselves" 200 "$STATUS" "$BODY"
+req GET "/api/storefronts/$SF_SLUG" "" ""
+check "and the public page answers without a token" 200 "$STATUS" "$BODY"
+if echo "$BODY" | jq -e '.badges | all(.basis | length > 10)' >/dev/null 2>&1; then
+  green "  PASS  every badge says what it was awarded FROM"; PASS=$((PASS+1))
+else
+  red "  FAIL  a badge with no stated basis: $(echo "$BODY" | jq -c '.badges')"; FAIL=$((FAIL+1))
+fi
+# The trust page must not quote a response time it has not earned.
+if echo "$BODY" | jq -e '(.typicalResponseHours == null) or (.responseFrom >= 3)' >/dev/null 2>&1; then
+  green "  PASS  no response time quoted from fewer than 3 answered applications"; PASS=$((PASS+1))
+else
+  red "  FAIL  quoted $(echo "$BODY" | jq -c '.typicalResponseHours')h from $(echo "$BODY" | jq -c '.responseFrom')"; FAIL=$((FAIL+1))
+fi
+if echo "$BODY" | grep -q "$LANDLORD_EMAIL"; then
+  red "  FAIL  the public storefront carries the landlord's email address"; FAIL=$((FAIL+1))
+else
+  green "  PASS  and no email address is on the public page"; PASS=$((PASS+1))
+fi
+
+req GET /api/landlord/storefront "" "$TTOKEN"
+check "a tenant has no storefront settings" 403 "$STATUS" "$BODY"
+req PATCH /api/landlord/storefront '{"bio":"x"}' ""
+check "and a stranger cannot edit one" 401 "$STATUS" "$BODY"
+
 # ── Landlord task inbox and portfolio health (Phase 5a / 5d) ───────────────
 #
 # An aggregation layer, so what is worth asserting here is authorisation and
