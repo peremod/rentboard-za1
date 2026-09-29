@@ -1834,3 +1834,77 @@ model Expense {
   @@index([propertyId, incurredOn])
   @@map("expenses")
 }
+
+/// The trades a landlord in this market actually calls.
+///
+/// Short on purpose. A long list would be a taxonomy nobody maintains; these
+/// are the five that come up when a room is let and something breaks.
+enum ServiceCategory {
+  plumber
+  electrician
+  locksmith
+  cleaner
+  other
+}
+
+/// Someone a landlord can phone when something breaks.
+///
+/// ── Admin-curated, deliberately
+///
+/// There is no landlord-facing way to add one, and that is the whole design. An
+/// open directory of tradespeople is a directory of whoever registered fastest,
+/// and recommending a stranger to someone's tenants is a reputational risk this
+/// platform would be taking on with no way to manage it. An admin adds a name
+/// or it is not here.
+///
+/// ── No booking, no payment, no money
+///
+/// The product's job ends at "here is the number". Tap to call or to open
+/// WhatsApp, and the landlord and the plumber arrange it between themselves.
+/// Taking a booking would make Mastande a party to the job; taking a payment
+/// would put it in the money, which Phase 4 is explicitly scoped to avoid.
+///
+/// ── sponsoredUntil
+///
+/// Unused in v1 and present anyway, because it costs one nullable column now
+/// and a migration later. A paid placement in a directory landlords open when
+/// something is broken is a plausible revenue line that charges an ADVERTISER,
+/// not a landlord — so it does not touch "free to list, free to apply". Nothing
+/// reads it yet, and the ordering code says so where it would be read.
+model ServiceProvider {
+  id String @id @default(uuid())
+
+  category ServiceCategory
+  name     String
+
+  /// E.164, so `tel:` and `wa.me` links can be built without guessing.
+  /// Stored normalised because a number typed as 082 123 4567 and the same
+  /// number as +27821234567 are one tradesperson, and a directory that lists
+  /// them twice is a directory nobody trusts.
+  phone String
+
+  /// Whether this number is on WhatsApp. Not assumed from the number: most
+  /// South African mobiles are, and a wa.me link to one that is not lands the
+  /// landlord on an error page blaming them.
+  whatsapp Boolean @default(true)
+
+  /// Suburbs or towns they cover, in the landlord's words — "Tembisa",
+  /// "Soweto", "Johannesburg South". Free text rather than a Place relation:
+  /// a plumber's coverage is not a gazetteer entry and does not need to be.
+  areas String[]
+
+  note String?
+
+  /// Off by default. A half-entered provider that is live by accident is worse
+  /// than one nobody can find — the same reasoning as Survey.active.
+  active Boolean @default(false)
+
+  /// See the note above. Nothing reads this yet.
+  sponsoredUntil DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category, active])
+  @@map("service_providers")
+}

@@ -56,8 +56,21 @@ const HOUSEMATE_SENTENCE: Record<'professionals' | 'students' | 'mixed' | 'coupl
           @if (allPhotos().length > 1) {
             <div class="gallery__side">
               @for (path of sidePhotos(); track $index; let i = $index) {
-                <button type="button" class="gallery__thumb" (click)="openLightbox(i + 1)">
-                  <img [ngSrc]="path" [alt]="r.title" width="200" height="140"/>
+                <!-- Named per photo, not by the room.
+                     The accessibility drive found these with no accessible name
+                     at all once a room had more than one picture — and the
+                     obvious fix, leaning on the img alt, would have given four
+                     buttons the identical name "Room title", which is ambiguous
+                     to anyone navigating by control. "Photo 2 of 5" says which
+                     one this opens.
+
+                     Invisible until the data existed: a room with a single
+                     cover photo renders no thumbnails, so nothing had ever
+                     audited this. The same shape as the room card and the empty
+                     admin queue before it. -->
+                <button type="button" class="gallery__thumb" (click)="openLightbox(i + 1)"
+                        [attr.aria-label]="'Photo ' + (i + 2) + ' of ' + allPhotos().length">
+                  <img [ngSrc]="path" [alt]="''" width="200" height="140"/>
                   <!-- The overflow count sits on the last visible thumb rather
                        than adding another row nobody scrolls. -->
                   @if (i === 3 && hiddenCount() > 0) {

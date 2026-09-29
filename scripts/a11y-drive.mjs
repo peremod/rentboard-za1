@@ -83,7 +83,10 @@ const PUBLIC_PAGES = [
  * The accounts are registered over the API and signed in through the form,
  * using the same helper as scripts/phase-drive.mjs.
  */
-const LANDLORD_PAGES = ['/landlord/dashboard', '/landlord/yard', '/landlord/verification', '/account/settings'];
+const LANDLORD_PAGES = [
+  '/landlord/dashboard', '/landlord/yard', '/landlord/verification',
+  '/landlord/services', '/account/settings',
+];
 const TENANT_PAGES = ['/tenant/dashboard', '/tenant/rent', '/tenant/passport'];
 const ADMIN_PAGES = [
   '/admin/dashboard',
@@ -92,6 +95,7 @@ const ADMIN_PAGES = [
   '/admin/disputes',
   '/admin/advertising',
   '/admin/referrals',
+  '/admin/services',
   '/admin/surveys',
   '/admin/analytics',
 ];
