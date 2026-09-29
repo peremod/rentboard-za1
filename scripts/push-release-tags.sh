@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Recreate and push the Mastande release tags v1.75.2 … v1.82.0.
+# Recreate and push the Mastande release tags v1.75.2 … v1.83.0.
 #
 # These tags were created inside an ephemeral cloud container whose
 # credentials are refused for refs/tags/* (HTTP 403), so they never reached
@@ -149,6 +149,52 @@ to \"start the API and re-run\" for the one skip whose remedy is the opposite.
 Verified: 334 API checks, 25 accessibility pages, six browser drives,
 verify-build.sh both ways. Six migrations apply clean in sequence."
 
+tag_if_missing "v1.83.0" "9bbffa75f5a359189f45b264439897e68010af3c" "2026-09-29 04:32:59 +0000" "v1.83.0 — files are actually deleted now, and Phase 4e
+
+The headline is not the feature. While building lease document storage, the
+retention pattern it was told to follow turned out never to have deleted
+anything.
+
+Nothing here had ever deleted a stored file. Deciding a verification cleared
+documentPath, stamped a column called documentDeletedAt, and wrote an audit
+event reading \"The uploaded document was deleted. Only this outcome is kept —
+POPIA s.26.\" There is no ImageKit SDK in package.json and no call to its delete
+API anywhere. The reference went; the ID photograph stayed.
+
+Three live statements said otherwise, one of them statutory — the privacy
+policy, the PAIA manual, and the line shown to a tenant at the moment they
+upload their ID.
+
+It survived because the one check covering it asserted our own timestamp rather
+than the file's absence, and sat behind ADMIN_TOKEN so it had never run. And
+because the admin queue linked to a bare storage path that resolved against our
+own origin: every private upload was write-only.
+
+Now: FileDeletion is a durable queue whose row commits with the change that
+orphans the file. deletedAt comes from the storage provider's response, never
+optimistically. documentDeletedAt is renamed documentWithdrawnAt by a
+hand-written RENAME COLUMN, because Prisma's generated DROP + ADD would have
+discarded it on every request ever decided. The trail records withdrawal and
+deletion as two facts. GET /admin/storage/status makes the promise checkable.
+
+Phase 4e — lease documents, storage only. Both parties keep the signed lease.
+Either may upload; only the uploader may remove their own. No admin route.
+
+No e-signature, held by tests: no field may match /sign|witness|execut|notar/,
+POST .../sign must 404, and the panel must never say \"is signed\", \"legally
+binding\" or \"verified by\". A lease is KEPT, unlike an identity document — a
+contract both parties need for as long as it can be disputed.
+
+No fee of any kind was added. Listing is free, applying is free.
+
+Verified: storage-drive.mjs IS an ImageKit stub, so it checks a DELETE arrived
+for the right file and that a 500 is not recorded as a deletion. Reverting the
+fix makes it fail and exit 1. 340 smoke checks, 25 accessibility pages, nine
+drives, verify-build both port states, three migrations clean from empty.
+
+Not settled: whether ImageKit ACCEPTS our signatures. No credentials in the
+build container — confirm on staging with a real key before launch."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -156,7 +202,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[012])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-3])[.]'"
 else
   echo "Nothing to push."
 fi
