@@ -36,7 +36,11 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
           <h2>For Tenants</h2>
           <ul>
             <li><a routerLink="/">Browse rooms</a></li>
-            <li><a routerLink="/tenant/dashboard">My applications</a></li>
+            <!-- Phase 7a: this said "My applications" and opened the dashboard
+                 root, so the one thing it named was the one thing the person
+                 then had to go looking for. The portal nav already points at
+                 the section; the footer does now too. -->
+            <li><a routerLink="/tenant/dashboard" fragment="your-applications">My applications</a></li>
             <li><a routerLink="/auth/register">Create account</a></li>
           </ul>
         </div>
@@ -60,6 +64,20 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
             <li><a routerLink="/legal/disclaimer">{{ 'footer.disclaimer' | translate }}</a></li>
             <li><a routerLink="/legal/cookies">{{ 'footer.cookies' | translate }}</a></li>
             <li><a routerLink="/legal/paia">{{ 'footer.paia' | translate }}</a></li>
+            <!-- Phase 6's page, missing from here until the Phase 7a audit
+                 looked: a tenant who read it once while deciding on a room had
+                 no way back to it.
+
+                 English in every locale, deliberately. The other five labels in
+                 this column are among the 46 translated keys; af.json and
+                 zu.json hold exactly those 46 and nothing else, so adding a key
+                 means adding a translation to both. "Onderverhuring" is sound
+                 Afrikaans and I am not confident enough of the isiZulu to put
+                 it in front of a person deciding where to live — this project
+                 already holds eight locales back for that reason rather than
+                 shipping guesses. It reads as English here, which is what every
+                 other untranslated string in the app does. -->
+            <li><a routerLink="/legal/sublet">Sub-letting</a></li>
           </ul>
         </div>
       </div>

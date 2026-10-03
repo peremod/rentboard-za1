@@ -332,6 +332,28 @@ if [ -f "$ROOT/backend/dist/main.js" ]; then
   fi
 fi
 
+# ── 2b. Nav links, reachability and labels ────────────────────────────────
+#
+# Static, and it belongs in the gate rather than in a drive: a dead nav link is
+# not something a browser run notices — the router simply renders nothing and
+# the person is left on a blank screen. scripts/nav-audit.mjs resolves every
+# internal link as a FULL path (the previous check compared first segments, so
+# /landlord/billing "resolved" because `landlord` exists), checks every guarded
+# screen is reachable from some nav, and compares each nav label against the
+# heading of the page or section it opens.
+step "Nav integrity"
+if node "$ROOT/scripts/nav-audit.mjs" > /tmp/nav.log 2>&1; then
+  ok "$(grep -c '^    ·' /tmp/nav.log) nav links resolve, every guarded screen is reachable"
+  WARNS=$(grep -c '⚠' /tmp/nav.log || true)
+  if [ "${WARNS:-0}" -gt 0 ]; then
+    note "$WARNS nav label(s) disagree with the page they open — see /tmp/nav.log"
+  fi
+else
+  bad "a dead nav link, an unreachable screen, or a fragment no page declares"
+  grep -E '✗' /tmp/nav.log | head -10
+  note "Full output: node scripts/nav-audit.mjs"
+fi
+
 # ── 8b. Every @Throttle is actually guarded ───────────────────────────────
 #
 # Static, because the failure it catches is invisible at runtime: a @Throttle on

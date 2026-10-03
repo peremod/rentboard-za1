@@ -3,6 +3,8 @@ import { PortalNavItem } from '../../shared/components/portal-shell/portal-shell
 /** Counts shown as badges. A screen that does not know one leaves it out. */
 export interface LandlordNavBadges {
   applicants?: number;
+  /** Rooms started and never published — Phase 7a. */
+  drafts?: number;
   /** Unread in-app notices — Phase 7g. */
   notices?: number;
 }
@@ -29,13 +31,27 @@ export function landlordNav(badges: LandlordNavBadges = {}): PortalNavItem[] {
     // These two name sections of the dashboard, not pages of their own.
     // Without the fragment they navigate to the dashboard root, which from the
     // dashboard is indistinguishable from a click that did nothing.
-    { label: 'My Rooms', icon: '🏠', route: '/landlord/dashboard', fragment: 'active-listings' },
-    // Applicants are listed per room, under Active listings, which is where
-    // you act on them. The badge is the number that matters.
-    {
-      label: 'Applicants', icon: '👥', route: '/landlord/dashboard',
-      fragment: 'active-listings', badge: badges.applicants,
-    },
+    // Named after the section it jumps to, exactly — Phase 7a.
+    //
+    // It said "My Rooms" and landed on a section headed "Active listings",
+    // which is two names for one place; worse, a landlord whose rooms are all
+    // drafts clicked "My Rooms" and read "No rooms listed yet" while holding
+    // three of them. The two names are now one, and Drafts has its own entry
+    // below so the other case is reachable rather than inferred.
+    { label: 'Active listings', icon: '🏠', route: '/landlord/dashboard', fragment: 'active-listings', badge: badges.applicants },
+    { label: 'Drafts', icon: '📝', route: '/landlord/dashboard', fragment: 'drafts', badge: badges.drafts },
+    // ⚠️ There was an "Applicants" item here pointing at #active-listings, and
+    // it was a promise the dashboard cannot keep: there is no applicants
+    // screen, and no section by that name — applicants are listed per room
+    // under Active listings, which is where you act on them. A nav label naming
+    // a destination that does not exist is the same defect as /landlord/billing
+    // was, one layer up: the link resolves and still takes you somewhere you
+    // did not ask for.
+    //
+    // So the applicants COUNT moved onto Active listings (above), where they
+    // are, and this slot now points at the section that exists for the things
+    // waiting on a landlord — applications first among them.
+    { label: 'Needs you', icon: '👀', route: '/landlord/dashboard', fragment: 'needs-attention' },
     // No messages screen exists. Threads live inside an application, reached
     // from that application. `disabled` renders it greyed with a "Soon" chip,
     // which is the truth; listing it as a destination was not.

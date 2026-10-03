@@ -14,5 +14,10 @@ export const ADMIN_NAV: PortalNavItem[] = [
   // An admin had no way to reach their own settings from any admin screen:
   // the shell has no user menu, and /account/settings was only ever linked
   // from the landlord and tenant sidebars.
+  // Phase 7a. An admin is a user: the notice router can write to them like
+  // anybody else, and until this line there was nowhere for them to read one.
+  // It also removes the odd exception the nav audit had to carry for
+  // /account/notices.
+  { label: 'Notices', icon: '🔔', route: '/account/notices' },
   { label: 'Settings', icon: '⚙️', route: '/account/settings' },
 ];
