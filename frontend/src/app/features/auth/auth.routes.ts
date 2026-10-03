@@ -13,6 +13,13 @@ export const AUTH_ROUTES: Routes = [
     title: 'Create Your Free Account — Mastande',
   },
   {
+    // Phase 7g part two. A separate path rather than a mode on 'register',
+    // because the two forms have different shapes — see the component.
+    path: 'register-phone',
+    loadComponent: () => import('./register-phone/register-phone').then((m) => m.RegisterPhone),
+    title: 'Sign up with your phone number — Mastande',
+  },
+  {
     path: 'magic',
     loadComponent: () => import('./magic/magic-link').then((m) => m.MagicLink),
     title: 'Signing in — Mastande',

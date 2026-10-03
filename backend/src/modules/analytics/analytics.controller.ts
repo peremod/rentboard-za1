@@ -1,6 +1,6 @@
 import { Controller, Post, Get, Body, Query, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { AnalyticsService } from './analytics.service';
@@ -18,6 +18,7 @@ export class AnalyticsController {
    * funnel leads to a wrong product decision.
    */
   @Post('event')
+  @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 60, ttl: 60 * 1000 } })
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiExcludeEndpoint()

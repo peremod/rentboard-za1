@@ -132,7 +132,7 @@ configuration problem, not a routing one.
 
 ## 5. Staging migrations — before any deploy
 
-Sixteen migrations are in the repo. How many are unapplied on staging depends on
+Twenty migrations are in the repo. How many are unapplied on staging depends on
 when it was last migrated, so **ask rather than assume**:
 
 ```bash
@@ -166,6 +166,8 @@ Full context: `docs/RUNBOOK.md` § Staging.
 | `20260929023500_rename_document_deleted_to_withdrawn` | **Renames** a column. Hand-written `RENAME COLUMN`, not Prisma's generated DROP+ADD — the value survives. Tested on a scratch database. |
 | `20260928161204_drop_stripe_remnants` | **Destructive.** Drops `renters_passports`, `room_boosts` and two `landlord_profiles` columns. Export first if you want those rows: `SELECT count(*) FROM renters_passports;` etc. |
 | `20260929064000_landlord_storefront` | Adds four nullable/defaulted columns + a unique index. Additive. |
+| `20260929090000_phone_login_identity` | Makes `users.email` nullable, adds an email-or-phone CHECK, and a **partial** unique index on verified phones. Prisma reports that index as drift on `migrate dev` — do not let it remove it. |
+| `20261003080000_phone_signup` | Creates `phone_signups`. Purely additive: no existing column, index or constraint is touched, so no downtime window is needed. |
 
 **If skipped:** the API 500s on whichever endpoint needs a missing column.
 
@@ -195,7 +197,7 @@ outside it is rejected with error 131047 and no template.
 
 | What | Needs | Blocks |
 |---|---|---|
-| `sendOtp` | An **authentication** template | Phone login for anyone outside the 24-hour window |
+| `sendOtp` | An **authentication** template | Phone login for anyone outside the 24-hour window — **and phone sign-UP for everybody** |
 | Survey outreach | A **utility** template | The WhatsApp delivery variant of the Phase 0 survey |
 | Rent reminders (4a) | A **utility** template | Reminders to tenants who have not messaged in 24h |
 
@@ -208,6 +210,14 @@ the WhatsApp service.
 **If skipped:** rent reminders and notification fallbacks silently fail for
 anyone who has not messaged in 24 hours — the worst kind of failure, because the
 landlord believes the tenant was reminded.
+
+⚠️ **Sign-up is the worst case of this, and it is worth being explicit.** A
+person signing up by phone has by definition never messaged us, so they are
+*always* outside the 24-hour window. The three-step flow in v1.85.1 is correct
+and proven end to end, but until the authentication template is approved, the
+code can only be delivered to a number that happens to have messaged the
+business in the last day. **Phone sign-up is effectively waiting on this
+template** — not on code.
 
 This is why v1.85.0's notification fallback writes an **in-app notice** first and
 treats WhatsApp as a best-effort improvement on top: a fallback that only works
@@ -288,37 +298,83 @@ Nothing is broken either way — the refusal is explicit and tells them what to 
 
 ## Decisions blocking later phases
 
-Neither is mine to make — both briefs say to flag rather than decide.
+Both were answered on 2026-10-03. Kept here with what is left of each, because
+one sub-question is still open.
 
-### Phase 6 — the `UserRole` question
+### Phase 6 — the `UserRole` question → **Option A**
 
-A tenant subletting a room in their own leased house fits neither `TENANT` nor
-`LANDLORD`. `LandlordProfile` exists only for `LANDLORD`, and `Room.landlordId`
-points at one.
+A `TENANT` may create listings, with a `listerType` field (`owner_landlord` |
+`sublessor`) on the listing, reusing the existing Room/Property/verification
+machinery rather than generalising "Landlord" into "Room Provider". Not built
+yet — Phase 6 has not started.
 
-- **Option A** (recommended, smaller blast radius): let a `TENANT` create
-  listings, with a `listerType` field (`owner_landlord` | `sublessor`) on the
-  listing. Reuses most of the existing Room/Property/verification machinery.
-- **Option B** (cleaner long-term, much larger): generalise "Landlord" into
-  "Room Provider", with ownership/sublet status as an attribute. Touches guards,
-  dashboards and copy throughout.
+**Still open, and genuinely a judgement call:** should sublet listings share the
+same search surface as backroom rentals, or sit in a distinct category? Students
+and young professionals versus the informal backroom core are different segments,
+and mixing them without a clear filter could dilute both.
 
-**Also needed:** should sublet listings share the same search surface as
-backroom rentals, or be a distinct category/filter? Different segment — students
-and young professionals versus the informal backroom core market — and mixing
-them without a clear filter could dilute both.
+My default if nobody says otherwise: **the same surface, with an explicit,
+visible filter** — splitting the board halves the inventory each half shows,
+which is the worse failure at launch volumes. Say if you want it split.
 
-### Phase 7g — phone/WhatsApp signup
+### Phase 7g — phone/WhatsApp signup → **built**
 
-Making email optional touches `User` (email uniqueness and nullability, phone
-uniqueness), every auth guard, the email service, and every flow that assumes
-`user.email` exists.
+Email is optional, phone is an alternative login identifier (unique among
+*verified* numbers, by partial index), and the database requires at least one of
+the two. Signing in by phone shipped in v1.85.0; signing **up** by phone — the
+three-step flow with the person's own acceptance of the terms — in v1.85.1.
 
-- **Recommended:** email becomes optional, phone becomes an alternative unique
-  login identifier, and at least one of the two is required at signup.
+The in-app notice channel is readable too, as of the same release — it had been
+write-only since v1.85.0, which meant a phone-only landlord's notifications were
+recorded faithfully and shown to nobody.
 
-Say the word on either and it gets built. Nothing is being written to the schema
-for these until then.
+What is left of 7g is listed as its own items rather than as a decision:
+assisted sign-up mode, account recovery for a phone-only account, and adding an
+email later.
+
+---
+
+## 12. Rate limiting: now real, and what a person still has to decide
+
+**What was wrong.** Nothing in the API was rate limited. Nineteen `@Throttle`
+decorators across eight controllers did nothing, because `ThrottlerGuard` was
+never registered anywhere, and the root throttler was named `global` while every
+decorator keys `default`. `/auth/login` had no decorator at all, so password
+guessing was unmetered. Found by probing a route marked `limit: 5` eight times
+and getting eight `200`s — not by reading the decorator, which looked right.
+
+**What is live now.** The guard sits beside every `@Throttle`,
+`scripts/throttle-lint.mjs` fails the build if one is ever added without it, and
+both the smoke suite and `phone-signup-drive.mjs` prove a real `429` and that
+the window refills. Login is capped at 30 per 15 minutes per IP and register at
+60 per hour.
+
+⚠️ **Running the suites repeatedly now matters.** Every limit is per IP and the
+test suites share one, so the smoke suite three times inside an hour will start
+seeing `429`s on register — which looks like a broken suite and is the limiter
+working. Space the runs, or raise the register limit temporarily while you are
+hammering it.
+
+**Three things for a person, none blocking:**
+
+1. **There is still no per-ACCOUNT login lockout.** The new limit is per IP, so a
+   slow distributed spray against one known email remains possible. The fix is a
+   failed-attempt counter on `User` with a cooldown; it was left out of this
+   change rather than bundled into a release about phone sign-up.
+2. **Counts are in memory, per instance.** Two instances behind a load balancer
+   means roughly double every limit. If the API is scaled past one instance,
+   point the throttler at Redis (`@nest-lab/throttler-storage-redis`) or accept
+   the multiplier knowingly.
+3. **The numbers assume carrier NAT, and one assumes a sign-up drive.** Mobile
+   carriers here put very large numbers of subscribers behind one address, so the
+   auth limits were set at 15/30 per 15 minutes rather than the 5/10 originally
+   written — tight enough to stop a single host, loose enough not to lock out a
+   township sharing an IP. Register is 60 an hour for a sharper reason: an agent
+   helping a row of landlords join at a community event is a growth channel, not
+   an attack, and ten an hour refuses the eleventh person in the queue.
+   Worth revisiting once there is real traffic to measure: watch for a spike of
+   `429`s on `/auth/login` or `/auth/phone/request-code`, which would mean a
+   legitimate shared address is being throttled.
 
 ---
 
@@ -352,11 +408,22 @@ gets built accordingly.
 ADMIN_EMAIL=<seeded admin> ADMIN_PASSWORD=<their password> \
   WHATSAPP_APP_SECRET=<the API's own> \
   RESEND_WEBHOOK_SECRET=<the API's own> \
-  ./scripts/smoke-test.sh          # 461 checks, 3 skip
+  ./scripts/smoke-test.sh          # 464 passed, 8 skipped without the three
+                                   # secrets above; set them and five of those
+                                   # become checks, leaving 3 named skips
 
 # What the production build actually serves. Run it BOTH ways:
 ./scripts/verify-build.sh          # with an API on :3000
 # then stop the API and run it again — the hanging-API check needs 3000 free
+
+# The drives. Each needs the API on :3000; the UI ones also need :4200, and the
+# phone ones need DATABASE_URL and the API's own JWT_SECRET, because a code is
+# only ever sent over WhatsApp and reading it back means reading the database.
+node scripts/phone-signup-drive.mjs      # 29 checks, 0 skip
+node scripts/phone-signup-ui-drive.mjs   # 11 checks — the consent box is the point
+node scripts/otp-drive.mjs               # phone sign-in hardening
+node scripts/notices-drive.mjs           # 9 checks — the in-app notice channel
+node scripts/throttle-lint.mjs           # every @Throttle is actually guarded
 ```
 
 The suite prints the release invocation itself whenever anything skipped. Ninety

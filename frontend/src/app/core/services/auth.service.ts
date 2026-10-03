@@ -220,6 +220,43 @@ export class AuthService {
       .pipe(tap((res) => this.setSession(res)));
   }
 
+  // ── Signing UP by phone — Phase 7g part two ────────────────────────────
+  //
+  // Three calls, not two. The ticket from step two is held in the component for
+  // the few minutes step three takes; it is not stored, because it is worth
+  // nothing after that and a credential in localStorage outlives the tab.
+
+  /** Step one. Same reply whether or not the number already has an account. */
+  requestSignupCode(phone: string) {
+    return this.http.post<{ message: string }>(`${this.api}/auth/phone/signup/request-code`, { phone });
+  }
+
+  /** Step two. Returns a short-lived ticket proving the number. */
+  verifySignupCode(phone: string, code: string) {
+    return this.http.post<{
+      ticket: string; phone: string; expiresInMinutes: number; message: string;
+    }>(`${this.api}/auth/phone/signup/verify`, { phone, code });
+  }
+
+  /**
+   * Step three. Creates the account and signs them straight in.
+   *
+   * `acceptTerms` is passed through from a checkbox the person ticks. It is
+   * never defaulted here — the API rejects anything but true, and the point of
+   * the control is that it came from them.
+   */
+  completePhoneSignup(data: {
+    ticket: string;
+    fullName: string;
+    role: 'TENANT' | 'LANDLORD';
+    acceptTerms: boolean;
+    referralCode?: string;
+  }) {
+    return this.http
+      .post<AuthResponse>(`${this.api}/auth/phone/signup/complete`, data)
+      .pipe(tap((res) => this.setSession(res)));
+  }
+
   /** Passwordless sign-in. Always resolves the same way, account or not. */
   requestMagicLink(email: string, role?: 'TENANT' | 'LANDLORD') {
     return this.http.post<{ message: string }>(`${this.api}/auth/magic-link`, { email, role });

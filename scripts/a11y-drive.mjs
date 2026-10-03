@@ -67,6 +67,14 @@ const PUBLIC_PAGES = [
   '/legal/terms',
   '/legal/privacy',
   '/legal/paia',
+  // Phase 7g. Added with the page itself, because it is a form a person fills
+  // in on a phone with one hand — label association and target size are the
+  // whole experience, not a detail.
+  //
+  // ⚠️ The REST of /auth is still unaudited: /login, /register,
+  // /forgot-password and /reset-password have never been through this drive,
+  // and they share this page's card markup. Named rather than quietly left out.
+  '/auth/register-phone',
 ];
 
 /**
@@ -86,6 +94,10 @@ const PUBLIC_PAGES = [
 const LANDLORD_PAGES = [
   '/landlord/dashboard', '/landlord/yard', '/landlord/verification',
   '/landlord/services', '/landlord/public-page', '/account/settings',
+  // Phase 7g. For an account with no email address this screen is the only
+  // place a notification can be read, so it is not a page that may quietly
+  // regress.
+  '/account/notices',
 ];
 const TENANT_PAGES = ['/tenant/dashboard', '/tenant/rent', '/tenant/passport'];
 const ADMIN_PAGES = [

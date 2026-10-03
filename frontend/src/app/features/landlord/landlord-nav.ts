@@ -3,6 +3,8 @@ import { PortalNavItem } from '../../shared/components/portal-shell/portal-shell
 /** Counts shown as badges. A screen that does not know one leaves it out. */
 export interface LandlordNavBadges {
   applicants?: number;
+  /** Unread in-app notices — Phase 7g. */
+  notices?: number;
 }
 
 /**
@@ -44,6 +46,9 @@ export function landlordNav(badges: LandlordNavBadges = {}): PortalNavItem[] {
     // broken and you need a number.
     { label: 'Your public page', icon: '🪧', route: '/landlord/public-page' },
     { label: 'Who to call', icon: '🔧', route: '/landlord/services' },
+    // Phase 7g. Not optional furniture: for a landlord with no email address
+    // this screen is the only place a notification can be read at all.
+    { label: 'Notices', icon: '🔔', route: '/account/notices', badge: badges.notices },
     { label: 'Settings', icon: '⚙️', route: '/account/settings' },
     // No Billing entry. It pointed at /landlord/upgrade, which has been
     // deleted — there are no paid plans to bill for, so a landlord has no

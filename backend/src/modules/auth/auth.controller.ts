@@ -15,9 +15,12 @@ import {
 import { AccountRecoveryService } from './account-recovery.service';
 import { PasswordlessService } from './passwordless.service';
 import { PhoneOtpService } from './phone-otp.service';
-import { PhoneCodeDto, VerifyPhoneDto, ConfirmNumberDto } from './dto/phone-otp.dto';
+import { PhoneSignupService } from './phone-signup.service';
+import {
+  PhoneCodeDto, VerifyPhoneDto, ConfirmNumberDto, CompletePhoneSignupDto,
+} from './dto/phone-otp.dto';
 import { MagicLinkDto, VerifyMagicLinkDto } from './dto/passwordless.dto';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -34,9 +37,30 @@ export class AuthController {
     private recovery: AccountRecoveryService,
     private passwordless: PasswordlessService,
     private phoneOtp: PhoneOtpService,
+    private phoneSignup: PhoneSignupService,
     private authService: AuthService, private config: ConfigService) {}
 
   @Post('register')
+  // Sixty an hour from one address.
+  //
+  // This was ten, which is what "far more than a person needs" looks like until
+  // you ask who shares an address here. Three cases break it, and all three are
+  // ways this product is meant to grow: a community sign-up drive where an agent
+  // helps a row of landlords join on one wifi; a building or a café behind one
+  // connection; and carrier NAT, which puts very large numbers of subscribers
+  // behind a single IP. Refusing the eleventh person at a launch event is a
+  // worse outcome than the thing the limit prevents.
+  //
+  // Sixty still stops a script cold — it is one a minute, sustained — and
+  // account farming has better controls behind this anyway: referral rewards
+  // fire on a qualifying action rather than on signup, and a phone sign-up costs
+  // a code to a real handset.
+  //
+  // (The test suites register several accounts per run from one address, which
+  // is what made me look at this number properly. That is not the reason for
+  // the change, but it is how the question got asked.)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 60, ttl: 60 * 60 * 1000 } })
   @ApiOperation({ summary: 'Create a new account (tenant or landlord)' })
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.register(dto);
@@ -44,6 +68,23 @@ export class AuthController {
   }
 
   @Post('login')
+  // There was no limit here at all — not an inert one, none. Password guessing
+  // against this endpoint was unmetered, which makes it the most exposed route
+  // in the API: /auth/phone/verify at least faces a six-digit code with a
+  // per-account cap behind it.
+  //
+  // Thirty per fifteen minutes, for the carrier-NAT reason in app.module.ts: a
+  // household, a café or a whole carrier shares one address, and a person who
+  // has forgotten which of their two passwords it is uses three on their own.
+  // Thirty is still two orders of magnitude short of a useful password spray,
+  // and the control that would actually stop one is per-account, which does not
+  // exist yet and is written down rather than implied.
+  //
+  // ⚠️ This is a per-IP control and there is still no per-ACCOUNT lockout, so a
+  // slow distributed spray against one address remains possible. Recorded in
+  // docs/OUTSTANDING.md rather than left implied by the presence of a limit.
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Email + password login' })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.login(dto);
@@ -135,7 +176,8 @@ export class AuthController {
   // send mail, so they are the obvious target for enumeration and spam.
 
   @Post('magic-link')
-  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 15, ttl: 15 * 60 * 1000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Request a passwordless sign-in link',
@@ -146,7 +188,8 @@ export class AuthController {
   }
 
   @Post('magic-link/verify')
-  @Throttle({ default: { limit: 10, ttl: 15 * 60 * 1000 } })
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: 15 * 60 * 1000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Exchange a sign-in link for a session' })
   async verifyMagicLink(@Body() dto: VerifyMagicLinkDto, @Res({ passthrough: true }) res: Response) {
@@ -158,9 +201,9 @@ export class AuthController {
   }
 
   @Post('phone/verify-number')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, ThrottlerGuard)
   @ApiBearerAuth()
-  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @Throttle({ default: { limit: 15, ttl: 15 * 60 * 1000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a code to verify the number on your account' })
   requestPhoneVerification(@CurrentUser() user: { id: string }) {
@@ -168,15 +211,15 @@ export class AuthController {
   }
 
   @Post('phone/confirm-number')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, ThrottlerGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  // Every other OTP route carries an explicit limit; this one did not, so it
-  // fell back to the global 150 per 15 minutes while its siblings sit at 5-10.
-  // It is authenticated, so this was never wide open, but it is the one code-
-  // guessing endpoint that was an order of magnitude more permissive than the
-  // rest for no stated reason. Matched to phone/verify.
-  @Throttle({ default: { limit: 10, ttl: 15 * 60 * 1000 } })
+  // Every other OTP route carried an explicit limit and this one did not, which
+  // was the reason it was added — on the understanding that it was falling back
+  // to a global 150 per 15 minutes. It was not: no limit of any kind was in
+  // force anywhere, because ThrottlerGuard was never registered (see
+  // app.module.ts). The decorator is real now, and matched to phone/verify.
+  @Throttle({ default: { limit: 30, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Confirm the code and enable WhatsApp sign-in' })
   confirmPhoneVerification(
     @Body() dto: ConfirmNumberDto,
@@ -186,7 +229,8 @@ export class AuthController {
   }
 
   @Post('phone/request-code')
-  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 15, ttl: 15 * 60 * 1000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send a sign-in code over WhatsApp' })
   requestPhoneCode(@Body() dto: PhoneCodeDto) {
@@ -194,7 +238,8 @@ export class AuthController {
   }
 
   @Post('phone/verify')
-  @Throttle({ default: { limit: 10, ttl: 15 * 60 * 1000 } })
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: 15 * 60 * 1000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Exchange a phone code for a session' })
   async verifyPhoneCode(@Body() dto: VerifyPhoneDto, @Res({ passthrough: true }) res: Response) {
@@ -205,8 +250,64 @@ export class AuthController {
     return body;
   }
 
+  /**
+   * Phone SIGN-UP, step one — Phase 7g part two.
+   *
+   * Separate from phone/request-code, which only ever finds an existing verified
+   * account. This one is for a number that has none, and it creates no account:
+   * see PhoneSignupService.
+   */
+  @Post('phone/signup/request-code')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 15, ttl: 15 * 60 * 1000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Start a sign-up with a code over WhatsApp' })
+  requestSignupCode(@Body() dto: PhoneCodeDto) {
+    return this.phoneSignup.requestCode(dto.phone);
+  }
+
+  /** Step two: the code, for a short-lived ticket proving the number. */
+  @Post('phone/signup/verify')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: 15 * 60 * 1000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm the sign-up code' })
+  verifySignupCode(@Body() dto: VerifyPhoneDto) {
+    return this.phoneSignup.verify(dto.phone, dto.code);
+  }
+
+  /**
+   * Step three: the account, and a session.
+   *
+   * Tighter than the steps before it. Those cost a WhatsApp message; this one
+   * creates a user, and five accounts a quarter of an hour from one address is
+   * already far more than anybody signing up for themselves needs.
+   */
+  @Post('phone/signup/complete')
+  @UseGuards(ThrottlerGuard)
+  // Twenty an hour. Tighter per hour than the steps before it, but not as tight
+  // as it first looked right to make it: this route cannot be reached without a
+  // ticket, and a ticket costs a code to a real handset that answered it. The
+  // account-creation rate is therefore already bounded by the limits on
+  // request-code and by the per-number caps in the service, and a very low
+  // number here only locks out the test suites that exercise the refusals.
+  @Throttle({ default: { limit: 20, ttl: 60 * 60 * 1000 } })
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create the account for a proven number' })
+  async completeSignup(
+    @Body() dto: CompletePhoneSignupDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const user = await this.phoneSignup.complete(dto);
+    const result = await this.authService.issueSessionFor(user);
+    this.setRefreshCookie(res, result.refreshToken);
+    const { refreshToken, ...body } = result;
+    return body;
+  }
+
   @Post('forgot-password')
-  @Throttle({ default: { limit: 5, ttl: 15 * 60 * 1000 } })
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 15, ttl: 15 * 60 * 1000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request a reset link. Always reports success, existing account or not.' })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -214,7 +315,8 @@ export class AuthController {
   }
 
   @Post('reset-password')
-  @Throttle({ default: { limit: 10, ttl: 15 * 60 * 1000 } })
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 30, ttl: 15 * 60 * 1000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Set a new password using a reset token' })
   resetPassword(@Body() dto: ResetPasswordDto) {

@@ -654,6 +654,17 @@
 
   &:hover:not(:disabled) { border-color: var(--terra); color: var(--terra); }
   &:disabled { opacity: .5; cursor: not-allowed; }
+
+  // The class is also used on a LINK (the phone sign-up route on the register
+  // card), where the button styling above does almost nothing: an anchor is
+  // inline, so width, padding and centring all fail quietly and it renders as
+  // underlined text in the middle of the card.
+  &:any-link {
+    display: block;
+    box-sizing: border-box;
+    text-align: center;
+    text-decoration: none;
+  }
 }
 .auth__fine {
   font-size: .75rem; color: var(--slate); text-align: center;

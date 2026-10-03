@@ -98,8 +98,10 @@ model User {
   phone          String?
   isVerified     Boolean  @default(false)
   isActive       Boolean  @default(true)
-  /// 'email', 'magic_link', 'google', 'facebook'. Kept as a string rather than
-  /// an enum so adding a provider does not need a migration.
+  /// 'email', 'magic_link', 'google', 'facebook', 'phone'. Kept as a string
+  /// rather than an enum so adding a provider does not need a migration —
+  /// 'phone' arrived in v1.85.1 and needed no schema change, which is the
+  /// decision paying off.
   authProvider   String   @default("email")
   authProviderId String?
 
@@ -140,6 +142,9 @@ model User {
   /// In-app notices. The channel that works when there is no email address and
   /// WhatsApp is outside its 24-hour window — see the Notice model.
   notices             Notice[]
+  /// The sign-up this account came from, when it was created by phone. Holds the
+  /// evidence that this person accepted the terms themselves — see PhoneSignup.
+  phoneSignup         PhoneSignup?
   reportsFiled        Report[]        @relation("ReportsFiled")
   reportsAgainst      Report[]        @relation("ReportsAgainst")
   flagsRaised         TenancyFlag[]   @relation("FlagsRaised")
@@ -2301,4 +2306,76 @@ model Notice {
   /// The unread list, newest first.
   @@index([userId, readAt, createdAt])
   @@map("notices")
+}
+
+/**
+ * A sign-up in progress, by phone number, before any account exists — Phase 7g.
+ *
+ * ── Why this is not just a User row with phoneVerified: false
+ *
+ * That was the obvious shape and it is wrong. Creating the User first means
+ * anybody who can type a number into a public endpoint creates an account for
+ * somebody else's handset: a row with their number on it, countable in "users",
+ * reachable by the deletion and notification machinery, and sitting in the way
+ * when the real owner later tries to sign up. A sign-up attempt is not a person
+ * agreeing to anything, so it does not get to be a person here.
+ *
+ * So the number is proven FIRST, in this table, and the User is created only at
+ * the final step, by the person themselves, with their own acceptance of the
+ * terms. Rows that never get that far are deleted (see the cron in
+ * PhoneSignupService) — POPIA minimisation: an abandoned attempt leaves us
+ * holding the mobile number of someone who never joined.
+ *
+ * ── It is also the consent record
+ *
+ * `consentAcceptedAt` with `userId` is the evidence that this account's owner
+ * ticked the box themselves, which is the one thing an assisted sign-up must
+ * never be able to fake. Kept for as long as the account exists and cascaded
+ * away with it, because a deleted account has no consent left to evidence.
+ */
+model PhoneSignup {
+  id String @id @default(uuid())
+
+  /// Canonical +27… form, from normaliseSaMobile. Not unique: one row per code
+  /// REQUESTED — the same shape as AuthToken, so the rate limits are a count of
+  /// rows in a window rather than a counter that resets when somebody starts
+  /// over. A number may also be signed up again after an account is deleted.
+  phone String
+
+  /// HMAC of the six-digit code, keyed with the server secret — same scheme as
+  /// AuthToken, for the same reason (a read-only database leak must not hand out
+  /// live codes). Cleared once the number is proven, so a used code is gone
+  /// rather than merely marked.
+  codeHash  String?
+  expiresAt DateTime
+
+  /// Wrong guesses against this code. Capped in the service. The column exists
+  /// because AuthToken.attempts had to be added for exactly this, and the cap
+  /// was a comment for three releases without it.
+  attempts Int @default(0)
+
+  /// Set when a correct code is entered. From here the number is proven and the
+  /// only thing left is who this person is.
+  verifiedAt DateTime?
+
+  /// A short-lived bearer of "this number is proven", so the last step does not
+  /// have to take the code again (and so the code is not sitting in a form while
+  /// someone types their name). Hashed, like every other token here.
+  ticketHash      String?   @unique
+  ticketExpiresAt DateTime?
+
+  /// When the person accepted the Terms, Privacy Policy and POPIA processing,
+  /// by their own tick. Null on every row that never completed.
+  consentAcceptedAt DateTime?
+
+  /// The account this became. Null while in flight; set once, with the consent.
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The live-row lookup: newest unconsumed attempt for a number.
+  @@index([phone, userId, createdAt])
+  @@map("phone_signups")
 }

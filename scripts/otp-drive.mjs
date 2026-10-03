@@ -23,22 +23,13 @@
  * Needs the API on :3000 and a DATABASE_URL, because a code is only ever sent
  * over WhatsApp — reading it back requires the database.
  */
-import { execSync } from 'node:child_process';
 import crypto from 'node:crypto';
-import { registerUser, apiCall } from './lib/drive-session.mjs';
+import { registerUser, apiCall, dbQuery as q } from './lib/drive-session.mjs';
 
 const API = 'http://localhost:3000';
 let fail = 0;
 const ok = (m) => console.log('  ✅ ' + m);
 const bad = (m) => { console.log('  ❌ ' + m); fail++; };
-
-const DB = process.env.DATABASE_URL
-  ?? 'postgresql://rentboard:rentboard@localhost:5432/rentboard_dev';
-
-/** One row, one column, straight out of Postgres. */
-function q(sql) {
-  return execSync(`psql "${DB}" -tAc ${JSON.stringify(sql)}`, { encoding: 'utf8' }).trim();
-}
 
 /**
  * A number unique to this run.
@@ -146,10 +137,18 @@ const partial = q(`SELECT indexdef FROM pg_indexes WHERE indexname = 'users_phon
 // SECOND run once a crash had left the row behind — the index was right and the
 // drive was not idempotent.
 const phoneOnly = q(`INSERT INTO users (id,"fullName",role,phone,"phoneVerified","createdAt","updatedAt") VALUES (gen_random_uuid(),'Phone Only','LANDLORD','+2782999${SUFFIX}',true,now(),now()) RETURNING id`);
-phoneOnly.length > 10
+// Asserted as a UUID rather than as "longer than ten characters", which is
+// what it was. That check passed on `"<uuid>\nINSERT 0 1"` — the psql command
+// tag the old local `q()` left attached — and the DELETE below then matched
+// nothing, because these id columns are TEXT. The drive reported cleaning up
+// after itself and had never once done so. See dbQuery in lib/drive-session.
+/^[0-9a-f-]{36}$/.test(phoneOnly)
   ? ok('a landlord with a phone and no email can exist')
-  : bad('a phone-only account was rejected');
+  : bad(`a phone-only account was rejected (got ${JSON.stringify(phoneOnly)})`);
 q(`DELETE FROM users WHERE id = '${phoneOnly}'`);
+q(`SELECT count(*) FROM users WHERE id = '${phoneOnly}'`) === '0'
+  ? ok('and the drive cleans up after itself, which it only appeared to before')
+  : bad('the throwaway account is still there — the cleanup matched nothing');
 
 console.log(fail ? `\n❌ ${fail} failure(s)` : '\n✅ wrong codes are counted per account, one code lives at a time, and a phone-only account is reachable');
 process.exit(fail ? 1 : 0);

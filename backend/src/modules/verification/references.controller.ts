@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Body, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -26,6 +26,7 @@ export class ReferencesController {
   constructor(private references: ReferencesService) {}
 
   @Get('respond/:token')
+  @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 20, ttl: 15 * 60 * 1000 } })
   @ApiOperation({
     summary: 'What the referee sees before answering. No account needed.',
@@ -37,6 +38,7 @@ export class ReferencesController {
 
   @Post('respond/:token')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: "The referee's answer. Spends the token." })
   respond(@Param('token') token: string, @Body() dto: RespondToReferenceDto) {

@@ -3,10 +3,12 @@ import { JwtModule, JwtModuleOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
+import { PhoneSignupAdminController } from './phone-signup-admin.controller';
 import { AuthService } from './auth.service';
 import { AccountRecoveryService } from './account-recovery.service';
 import { PasswordlessService } from './passwordless.service';
 import { PhoneOtpService } from './phone-otp.service';
+import { PhoneSignupService } from './phone-signup.service';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { ReferralsModule } from '../referrals/referrals.module';
 import { NotificationsModule } from '../notifications/notifications.module';
@@ -32,8 +34,16 @@ import { GoogleStrategy } from './strategies/google.strategy';
       }),
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, AccountRecoveryService, PasswordlessService, PhoneOtpService, JwtStrategy, GoogleStrategy],
+  controllers: [AuthController, PhoneSignupAdminController],
+  providers: [
+    AuthService,
+    AccountRecoveryService,
+    PasswordlessService,
+    PhoneOtpService,
+    PhoneSignupService,
+    JwtStrategy,
+    GoogleStrategy,
+  ],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

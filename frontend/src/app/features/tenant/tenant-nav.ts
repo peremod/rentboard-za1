@@ -5,6 +5,8 @@ export interface TenantNavBadges {
   applications?: number;
   saved?: number;
   alerts?: number;
+  /** Unread in-app notices — Phase 7g. */
+  notices?: number;
 }
 
 /**
@@ -28,6 +30,9 @@ export function tenantNav(badges: TenantNavBadges = {}): PortalNavItem[] {
     { label: 'Browse rooms', icon: '🔍', route: '/' },
     { label: 'Rent', icon: '🧾', route: '/tenant/rent' },
     { label: "Renter's Passport", icon: '🪪', route: '/tenant/passport' },
+    // Phase 7g. Not optional furniture: for an account with no email address
+    // this screen is the only place a notification can be read at all.
+    { label: 'Notices', icon: '🔔', route: '/account/notices', badge: badges.notices },
     { label: 'Settings', icon: '⚙️', route: '/account/settings' },
     {
       label: 'Saved Rooms', icon: '♥', route: '/tenant/dashboard',

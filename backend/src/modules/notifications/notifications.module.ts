@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
+import { NoticesController } from './notices.controller';
 import { NoticeRouter } from './notice-router.service';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
 
@@ -11,7 +12,7 @@ import { WhatsappModule } from '../whatsapp/whatsapp.module';
  */
 @Module({
   imports: [WhatsappModule],
-  controllers: [NotificationsController],
+  controllers: [NotificationsController, NoticesController],
   providers: [NotificationsService, NoticeRouter],
   exports: [NotificationsService, NoticeRouter],
 })
