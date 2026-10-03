@@ -449,7 +449,7 @@ node scripts/phone-signup-drive.mjs      # 30 checks, 0 skip
 node scripts/phone-signup-ui-drive.mjs   # 12 checks — the consent box is the point
 node scripts/otp-drive.mjs               # phone sign-in hardening
 node scripts/notices-drive.mjs           # 10 checks — the in-app notice channel
-node scripts/sublet-drive.mjs            # 38 checks — Phase 6, incl. the guard split
+node scripts/sublet-drive.mjs            # 39 checks — Phase 6, incl. the guard split
 node scripts/sublet-ui-drive.mjs         # 13 checks — what an applicant is actually told
 node scripts/throttle-lint.mjs           # every @Throttle is actually guarded
 ```
