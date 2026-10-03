@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { SA_PROVINCES, AMENITIES } from '../../../core/models/room.model';
 import { AnalyticsService } from '../../../core/services/analytics.service';
@@ -21,15 +21,50 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
 @Component({
   selector: 'app-create-room',
   standalone: true,
-  imports: [ReactiveFormsModule, PhotoUpload],
+  imports: [ReactiveFormsModule, RouterLink, PhotoUpload],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="wizard">
+      <!-- The page's H1, and it had none — found by adding this screen to the
+           accessibility drive for Phase 6. Every step of the wizard opened with
+           an H2, so the heading outline of the most important form in the
+           landlord portal started at level two and the page never said what it
+           was. It has been like that since the wizard shipped; nothing audited
+           it, because the drive covered the dashboard and not the forms.
+
+           It names the flow, so a sub-lessor and an owner are not told they are
+           doing the same thing. -->
+      <h1 class="wizard__title">
+        {{ isSublet() ? 'Sublet a room in your place' : 'List a room' }}
+      </h1>
+
       <div class="wizard__steps">
         @for (s of [1,2,3,4]; track s) {
           <div class="wizard__step" [class.active]="step() === s" [class.done]="step() > s">{{ s }}</div>
         }
       </div>
+
+      <!-- Which flow this is. A sub-lessor who thinks they are listing as an
+           owner would tick a box that says something untrue about who they are
+           to every applicant, so the wizard says it plainly and links to what
+           applicants will be told. -->
+      @if (isSublet()) {
+        <div class="sublet-banner">
+          <p><strong>🔑 You are listing a room in a place you rent.</strong></p>
+          <p>
+            Applicants are told this plainly, and told that we have not confirmed
+            you are allowed to sublet. You can upload your lease and your
+            landlord's written consent afterwards, from your dashboard — it is
+            <strong>free</strong>, and listings that have been checked get taken
+            far more seriously.
+          </p>
+          <p>
+            Check your own lease first: most require the owner's written consent,
+            and you are the one who loses their home if it is cancelled.
+            <a routerLink="/legal/sublet" target="_blank">What applicants are told →</a>
+          </p>
+        </div>
+      }
 
       @if (step() === 1) {
         <form [formGroup]="basicsForm">
@@ -124,6 +159,78 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
               <span class="check-row__hint">Cats or dogs are welcome in the house.</span>
             </span>
           </label>
+          <!-- The household — Phase 6.
+               Only for a sublet, and that is not gatekeeping: somebody taking a
+               room in a house the lister LIVES IN is choosing housemates as
+               much as a room, which is the one thing every listing on every
+               competitor leaves out. An owner letting a backroom often knows
+               none of this, and asking them would produce guesses.
+
+               Every select can be left on "Rather not say" — and that is a
+               real stored value, never rendered to a tenant, rather than a
+               default masquerading as an answer. -->
+          @if (isSublet()) {
+            <h3 class="amenities__heading">Who lives in the house?</h3>
+            <p class="field-hint">
+              This is what people ask first when they are moving in with
+              strangers, and it is the main reason somebody picks your room over
+              another at the same price. Leave anything blank if you would rather
+              not say — nothing is shown unless you answer it.
+            </p>
+
+            <div class="form-row">
+              <label for="hh-profile">The people here are</label>
+              <select id="hh-profile" formControlName="housemateProfile">
+                <option value="unstated">Rather not say</option>
+                <option value="professionals">Mostly working people</option>
+                <option value="students">Mostly students</option>
+                <option value="mixed">A mix of people</option>
+                <option value="couples">Mostly couples</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label for="hh-schedule">Hours people keep</label>
+              <select id="hh-schedule" formControlName="householdSchedule">
+                <option value="unstated">Rather not say</option>
+                <option value="weekday_working">Out at work or college on weekdays</option>
+                <option value="shift_work">Somebody works shifts</option>
+                <option value="mostly_home">Somebody is usually home</option>
+                <option value="varied">Everybody keeps different hours</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label for="hh-clean">How tidy the house is kept</label>
+              <select id="hh-clean" formControlName="householdCleanliness">
+                <option value="unstated">Rather not say</option>
+                <option value="very_tidy">Very tidy — there is a cleaning rota</option>
+                <option value="tidy_enough">Tidy enough</option>
+                <option value="relaxed">Relaxed</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label for="hh-social">Sociable or quiet</label>
+              <select id="hh-social" formControlName="householdSocial">
+                <option value="unstated">Rather not say</option>
+                <option value="social">Sociable — people eat together, visitors are normal</option>
+                <option value="quiet">Quiet — friendly, but people keep to themselves</option>
+                <option value="balanced">In between</option>
+              </select>
+            </div>
+
+            <div class="form-row">
+              <label for="hh-rules">House rules, in your own words</label>
+              <textarea id="hh-rules" formControlName="houseRules" rows="3"
+                        placeholder="e.g. Gate locked at 9. No visitors after 10 on weeknights. Kitchen cleaned the same day."></textarea>
+              <p class="field-hint">
+                The specific ones that matter here. Tenants read these closely, and
+                saying them up front saves an argument in month two.
+              </p>
+            </div>
+          }
+
           @if (creatingDraft()) { <p class="muted">Saving draft…</p> }
           @if (createError()) { <p class="error">{{ createError() }}</p> }
           
@@ -224,6 +331,22 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
 
     .wizard { max-width: 520px; margin: 2rem auto; padding: 0 1.25rem; font-family: sans-serif; }
     .wizard__steps { display: flex; gap: .5rem; margin-bottom: 2rem; }
+    /* The sublet banner. Amber and bordered, like the notice an applicant sees
+       on the room page — the two should look like the same fact stated to the
+       two sides of it. */
+    .sublet-banner {
+      border: 1.5px solid #C9792B;
+      border-left-width: 5px;
+      background: #FDF6EC;
+      border-radius: var(--r8, 8px);
+      padding: .85rem 1rem;
+      margin-bottom: 1.25rem;
+      font-size: .88rem;
+      line-height: 1.55;
+    }
+    .sublet-banner p { margin: 0 0 .5rem; }
+    .sublet-banner p:last-child { margin-bottom: 0; }
+    .wizard__title { font-size: 1.3rem; font-weight: 700; margin: 0 0 1rem; }
     .wizard__step { flex: 1; height: 4px; background: #DDD5C8; border-radius: 4px; }
     .wizard__step.active, .wizard__step.done { background: var(--terra); }
     h2 { font-size: 1.2rem; margin-bottom: 1rem; }
@@ -258,6 +381,21 @@ export class CreateRoom implements OnInit {
   private dialogs = inject(DialogService);
 
   provinces = SA_PROVINCES;
+
+  /**
+   * Is this the sublet flow — Phase 6.
+   *
+   * From route DATA (`{ listerType: 'sublessor' }` on the /tenant/sublet
+   * routes), not from the signed-in role. A landlord who owns a yard can also
+   * rent a flat and sublet its spare room, and asking "what is your role" would
+   * give that person the wrong wizard. The route they chose says which kind of
+   * listing they are making; the API then re-decides it from the account's role
+   * and never trusts this (RoomsService.create).
+   */
+  readonly isSublet = signal(
+    this.route.snapshot.data['listerType'] === 'sublessor',
+  );
+
   step = signal(1);
   roomId = signal<string | null>(null);
   photos = signal<UploadedPhoto[]>([]);
@@ -425,6 +563,21 @@ export class CreateRoom implements OnInit {
           availableFrom: room.availableFrom ? room.availableFrom.split('T')[0] : '',
         });
 
+        // Phase 6. The flow is known from the route for a new listing and from
+        // the ROOM when resuming one, so /tenant/sublet/:id/edit and
+        // /landlord/rooms/:id/edit both show the right wizard for what the
+        // listing actually is.
+        if (room.listerType === 'sublessor') this.isSublet.set(true);
+        if (room.property) {
+          this.preferencesForm.patchValue({
+            housemateProfile: room.property.housemateProfile ?? 'unstated',
+            householdSchedule: room.property.householdSchedule ?? 'unstated',
+            householdCleanliness: room.property.householdCleanliness ?? 'unstated',
+            householdSocial: room.property.householdSocial ?? 'unstated',
+            houseRules: room.property.houseRules ?? '',
+          });
+        }
+
         // Preferences were not restored at all, so editing a listing silently
         // reset couples/pets/SASSA to false and housemates to 0 on save.
         this.amenities.set(room.amenities ?? []);
@@ -478,7 +631,49 @@ export class CreateRoom implements OnInit {
     dssAccepted: [false],
     guarantorAccepted: [false],
     petsAllowed: [false],
+    // ── The household — Phase 6, sublet listings only ───────────────────
+    //
+    // In the same form group as the other preferences rather than a group of
+    // their own, because step 3 is one form and one save; and sent to the API
+    // as a nested `household` block, because they are stored on the PROPERTY
+    // (four rooms at one address have one household — see the ListerType and
+    // Property comments in schema.prisma). The split happens in
+    // householdPayload() so there is exactly one place that knows it.
+    housemateProfile: ['unstated'],
+    householdSchedule: ['unstated'],
+    householdCleanliness: ['unstated'],
+    householdSocial: ['unstated'],
+    houseRules: [''],
   });
+
+  /**
+   * The household fields, shaped for the API — or undefined when nothing was
+   * said.
+   *
+   * Returns undefined rather than a block of `unstated`s for an owner listing,
+   * so an ordinary backroom listing sends exactly what it always did and no
+   * Property is created behind the landlord's back.
+   */
+  private householdPayload() {
+    if (!this.isSublet()) return undefined;
+    const p = this.preferencesForm.getRawValue();
+    const rules = (p.houseRules ?? '').trim();
+    const said =
+      p.housemateProfile !== 'unstated' || p.householdSchedule !== 'unstated' ||
+      p.householdCleanliness !== 'unstated' || p.householdSocial !== 'unstated' ||
+      !!rules;
+    if (!said) return undefined;
+    return {
+      housemateProfile: p.housemateProfile ?? 'unstated',
+      householdSchedule: p.householdSchedule ?? 'unstated',
+      householdCleanliness: p.householdCleanliness ?? 'unstated',
+      householdSocial: p.householdSocial ?? 'unstated',
+      // The lister's own count of who is already there, which for a sublet is
+      // the same number they entered as housemates.
+      currentHousemates: p.housematesCount ?? 0,
+      houseRules: rules || undefined,
+    };
+  }
 
   onPhotosChange(photos: UploadedPhoto[]) {
     this.photos.set(photos);
@@ -524,6 +719,17 @@ export class CreateRoom implements OnInit {
       locationDisplay: pricing.locationDisplay,
       availableFrom: pricing.availableFrom,
       ...prefs,
+      // The household fields live in the same form group but are stored on the
+      // property, so they go as their own block — and the flat copies in
+      // `...prefs` would be unknown fields on Room. Stripped explicitly rather
+      // than left to the API's whitelist to reject, because a 400 here reads to
+      // the lister as "your listing could not be saved".
+      housemateProfile: undefined,
+      householdSchedule: undefined,
+      householdCleanliness: undefined,
+      householdSocial: undefined,
+      houseRules: undefined,
+      household: this.householdPayload(),
       amenities: this.amenities(),
     } as any).subscribe({
       next: () => {
@@ -565,6 +771,11 @@ export class CreateRoom implements OnInit {
       guarantorAccepted: prefs.guarantorAccepted ?? false,
       petsAllowed: prefs.petsAllowed ?? false,
       amenities,
+      // Phase 6. Sent, and then re-decided server-side from the account's role:
+      // a TENANT account can only ever hold a sublet listing, whatever arrives
+      // here. See the DTO comment for why it overrides rather than refuses.
+      listerType: this.isSublet() ? 'sublessor' : 'owner_landlord',
+      household: this.householdPayload(),
     } as any).subscribe({
       next: (room) => {
         this.roomId.set(room.id);

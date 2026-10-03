@@ -6,6 +6,7 @@ import { AlertsService } from '../alerts/alerts.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { RoomFiltersDto } from './dto/room-filters.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
+import { UserRole } from '@prisma/client';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { RelistDto } from './dto/relist.dto';
 import { sanitizeText } from '../../common/utils/sanitize.util';
@@ -69,6 +70,14 @@ const PUBLIC_ROOM_DETAIL = {
         sharedAmenities: true,
         currentHousemates: true,
         housemateProfile: true,
+        // Phase 6. Compatibility matters most for a sublet, where somebody is
+        // choosing housemates rather than only a room — but a landlord-owned
+        // shared house has a household too, so these are shown wherever they
+        // have been stated and nowhere they have not (`unstated` renders as
+        // nothing, as `housemateProfile` already does).
+        householdSchedule: true,
+        householdCleanliness: true,
+        householdSocial: true,
       },
     },
   },
@@ -91,8 +100,30 @@ export class RoomsService {
     const {
       search, roomType, province, city, maxRentCents, minRentCents,
       billsIncluded, couplesAllowed, dssAccepted, guarantorAccepted, petsAllowed, availableNow,
+      listerType, housemateProfile, householdSchedule, householdCleanliness, householdSocial,
       sortBy = 'newest', page = 1, limit = 12,
     } = filters;
+
+    /**
+     * The household filters — Phase 6.
+     *
+     * One nested `property` clause rather than four, because four separate
+     * `property: { … }` keys in the same object literal would silently keep only
+     * the last one. Prisma would not complain and the board would quietly ignore
+     * three of the four filters a person had set.
+     *
+     * ⚠️ Any of these excludes every listing with no Property and every listing
+     * whose household is `unstated` — which is most of them today. That is
+     * inherent (an unstated household can neither match nor be ruled out), but
+     * it means these controls can take the board from two hundred rooms to five
+     * while looking like an ordinary narrowing, so the UI says so next to them.
+     */
+    const household = {
+      ...(housemateProfile && { housemateProfile }),
+      ...(householdSchedule && { householdSchedule }),
+      ...(householdCleanliness && { householdCleanliness }),
+      ...(householdSocial && { householdSocial }),
+    };
 
     const where: any = {
       status: 'active',
@@ -106,6 +137,8 @@ export class RoomsService {
       ...(petsAllowed && { petsAllowed: true }),
       ...(maxRentCents && { rentCents: { lte: maxRentCents } }),
       ...(minRentCents && { rentCents: { gte: minRentCents } }),
+      ...(listerType && { listerType }),
+      ...(Object.keys(household).length > 0 && { property: { is: household } }),
       // 'Available now' means within a fortnight, not strictly today. Someone
       // searching on the 25th counts a room free on the 1st as immediate, and
       // a same-day filter would return almost nothing on most days.
@@ -214,24 +247,143 @@ export class RoomsService {
     return room;
   }
 
-  async create(dto: CreateRoomDto, landlordId: string) {
+  async create(dto: CreateRoomDto, lister: { id: string; role: UserRole }) {
     // Billing paused — no per-landlord room-count limit while on the
     // temporary unlimited free tier. See file header comment.
+    const { household, listerType, ...room } = dto;
+
+    /**
+     * A tenant account can only ever hold a sublet listing — Phase 6, Option A.
+     *
+     * Overridden rather than refused. A client that omits the field, or sends
+     * the default, is not attacking anything and should not get an error about
+     * a concept it never mentioned; and the one thing that must not happen is a
+     * tenant account holding a listing that presents as an owner's. An owner
+     * listing can only come from an account whose role says owner.
+     *
+     * ADMIN is left as whatever was asked for: an admin creating a listing is
+     * doing it on somebody's behalf in a support capacity, and silently
+     * relabelling it would hide what they did.
+     */
+    const resolvedListerType =
+      lister.role === 'TENANT' ? 'sublessor' : (listerType ?? 'owner_landlord');
+
+    const propertyId = await this.householdProperty(lister.id, resolvedListerType, {
+      locationDisplay: room.locationDisplay,
+      city: room.city,
+      province: room.province,
+    }, household);
+
     return this.prisma.room.create({
       data: {
-        ...dto,
-        title: sanitizeText(dto.title),
-        description: dto.description ? sanitizeText(dto.description) : dto.description,
-        availableFrom: new Date(dto.availableFrom),
-        landlordId,
+        ...room,
+        listerType: resolvedListerType,
+        ...(propertyId ? { propertyId } : {}),
+        title: sanitizeText(room.title),
+        description: room.description ? sanitizeText(room.description) : room.description,
+        availableFrom: new Date(room.availableFrom),
+        landlordId: lister.id,
         status: 'draft',
       },
     });
   }
 
+  /**
+   * The Property that holds this listing's household facts — Phase 6.
+   *
+   * Household facts live on Property, not Room, and that decision predates this
+   * phase: four rooms at one address share one kitchen, one set of rules and one
+   * group of housemates, and held per room a lister types them four times and
+   * the copies drift in front of tenants deciding where to live.
+   *
+   * A sub-lessor, though, has no yard screen and must not be made to create one
+   * before they can list a room. So the Property is created for them, from the
+   * listing, and they never see the word.
+   *
+   * ⚠️ Rooms are grouped by `locationDisplay`, which is a HEURISTIC and not an
+   * identity. Two rooms a sub-lessor describes as "Observatory, Cape Town" are
+   * assumed to be the same house; if they are not, the household facts of the
+   * second overwrite the first. That is the right trade for the common case —
+   * one person subletting rooms in the one place they live — and it is written
+   * down here rather than left to be discovered. If sub-lessors with two houses
+   * turn out to be common, this wants a real address on Room, which is a
+   * migration rather than a tweak.
+   *
+   * Returns null when there is nothing to store and no grouping to do, so an
+   * owner-let listing with no household block behaves exactly as it did before.
+   */
+  private async householdProperty(
+    listerId: string,
+    listerType: 'owner_landlord' | 'sublessor',
+    place: { locationDisplay: string; city: string; province: string },
+    household?: CreateRoomDto['household'],
+  ): Promise<string | null> {
+    const hasHousehold = household && Object.values(household).some((v) => v !== undefined);
+    if (!hasHousehold) return null;
+    // An owner's listing can carry household facts too, but it is grouped by
+    // the yard the landlord chose — never auto-grouped behind their back.
+    if (listerType !== 'sublessor') return null;
+
+    const name = place.locationDisplay.slice(0, 120);
+    const existing = await this.prisma.property.findFirst({
+      where: { landlordId: listerId, name },
+      select: { id: true },
+    });
+
+    const data = {
+      ...(household.housemateProfile ? { housemateProfile: household.housemateProfile } : {}),
+      ...(household.householdSchedule ? { householdSchedule: household.householdSchedule } : {}),
+      ...(household.householdCleanliness ? { householdCleanliness: household.householdCleanliness } : {}),
+      ...(household.householdSocial ? { householdSocial: household.householdSocial } : {}),
+      ...(household.currentHousemates !== undefined ? { currentHousemates: household.currentHousemates } : {}),
+      ...(household.houseRules !== undefined
+        ? { houseRules: household.houseRules ? sanitizeText(household.houseRules) : null }
+        : {}),
+    };
+
+    if (existing) {
+      await this.prisma.property.update({ where: { id: existing.id }, data });
+      return existing.id;
+    }
+    const created = await this.prisma.property.create({
+      data: {
+        landlordId: listerId,
+        name,
+        city: place.city,
+        province: place.province,
+        sharedAmenities: [],
+        ...data,
+      },
+      select: { id: true },
+    });
+    return created.id;
+  }
+
   async update(id: string, dto: UpdateRoomDto, landlordId: string) {
     const before = await this.assertOwner(id, landlordId);
     this.assertPhotoLimit(dto.imagePaths);
+
+    /**
+     * The household block and `listerType` are pulled out before the spread.
+     *
+     * `listerType` is not editable at all after creation: flipping an owner
+     * listing to a sublet, or back, would change what every applicant who
+     * already applied was told about who they are dealing with. Someone who
+     * picked the wrong one creates the listing again — a draft costs nothing.
+     */
+    const { household, listerType: _ignored, ...roomDto } = dto;
+    if (household) {
+      await this.householdProperty(
+        landlordId,
+        before.listerType,
+        {
+          locationDisplay: roomDto.locationDisplay ?? before.locationDisplay,
+          city: roomDto.city ?? before.city,
+          province: roomDto.province ?? before.province,
+        },
+        household,
+      );
+    }
 
     // Someone with an open application has effectively made an offer at the
     // old rent. Changing it silently means they could be accepted into a
@@ -247,10 +399,10 @@ export class RoomsService {
     return this.prisma.room.update({
       where: { id },
       data: {
-        ...dto,
-        ...(dto.title && { title: sanitizeText(dto.title) }),
-        ...(dto.description && { description: sanitizeText(dto.description) }),
-        ...(dto.availableFrom && { availableFrom: new Date(dto.availableFrom) }),
+        ...roomDto,
+        ...(roomDto.title && { title: sanitizeText(roomDto.title) }),
+        ...(roomDto.description && { description: sanitizeText(roomDto.description) }),
+        ...(roomDto.availableFrom && { availableFrom: new Date(roomDto.availableFrom) }),
       },
     });
   }

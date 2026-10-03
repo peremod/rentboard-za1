@@ -24,5 +24,34 @@ export const TENANT_ROUTES: Routes = [
     loadComponent: () => import('./rent/rent').then((m) => m.TenantRent),
     title: 'Rent — Mastande',
   },
+  // ── Sub-letting — Phase 6, Option A ──────────────────────────────────────
+  //
+  // The same wizard and the same applicants screen the landlord portal uses,
+  // reached from here with `listerType: 'sublessor'` in route data. Reuse
+  // rather than a second copy: a parallel wizard would be the copy that misses
+  // the next fix, which is the mistake this codebase has already paid for with
+  // the portal nav defined six times.
+  //
+  // Under /tenant rather than /landlord because of the guards — a TENANT
+  // account cannot pass landlordGuard, and relaxing that guard to let them
+  // through would open the yard, rent tracking and the storefront with it.
+  {
+    path: 'sublet/new',
+    loadComponent: () => import('../landlord/create-room/create-room').then((m) => m.CreateRoom),
+    title: 'Sublet a room — Mastande',
+    data: { listerType: 'sublessor' },
+  },
+  {
+    path: 'sublet/:roomId/edit',
+    loadComponent: () => import('../landlord/create-room/create-room').then((m) => m.CreateRoom),
+    title: 'Your sublet listing — Mastande',
+    data: { listerType: 'sublessor' },
+  },
+  {
+    path: 'sublet/:roomId/applicants',
+    loadComponent: () => import('../landlord/applicants/applicants').then((m) => m.Applicants),
+    title: 'Applicants — Mastande',
+    data: { listerType: 'sublessor' },
+  },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];

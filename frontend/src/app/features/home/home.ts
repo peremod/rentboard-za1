@@ -187,6 +187,66 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
           </label>
         </div>
 
+        <!-- Sub-letting and household — Phase 6.
+             The positioning decision was to keep sublets on the SAME board with
+             an explicit filter rather than in their own category: splitting the
+             board halves the inventory each half can show, and at launch
+             volumes a thin board is what loses both segments.
+
+             ⚠️ The three household selects EXCLUDE every listing that has not
+             said, which is most of them today — so the note below is not
+             decoration. A filter that silently takes the board from two hundred
+             rooms to five teaches people the site is broken. -->
+        <div class="filter-group">
+          <label class="filter-label" for="filter-lister">Who is letting it</label>
+          <select id="filter-lister" class="filter-select"
+                  [(ngModel)]="listerType" (ngModelChange)="onFilterChange()">
+            <option value="">Anyone</option>
+            <option value="owner_landlord">The owner</option>
+            <option value="sublessor">A tenant subletting</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <div class="filter-label">The household</div>
+          <select class="filter-select" aria-label="Who lives there"
+                  [(ngModel)]="housemateProfile" (ngModelChange)="onFilterChange()">
+            <option value="">Anyone</option>
+            <option value="professionals">Mostly working people</option>
+            <option value="students">Mostly students</option>
+            <option value="mixed">A mix of people</option>
+            <option value="couples">Mostly couples</option>
+          </select>
+          <select class="filter-select" aria-label="Hours they keep"
+                  [(ngModel)]="householdSchedule" (ngModelChange)="onFilterChange()">
+            <option value="">Any hours</option>
+            <option value="weekday_working">Out on weekdays</option>
+            <option value="shift_work">Shift work in the house</option>
+            <option value="mostly_home">Somebody usually home</option>
+            <option value="varied">Varied hours</option>
+          </select>
+          <select class="filter-select" aria-label="How tidy"
+                  [(ngModel)]="householdCleanliness" (ngModelChange)="onFilterChange()">
+            <option value="">Any</option>
+            <option value="very_tidy">Very tidy</option>
+            <option value="tidy_enough">Tidy enough</option>
+            <option value="relaxed">Relaxed</option>
+          </select>
+          <select class="filter-select" aria-label="Sociable or quiet"
+                  [(ngModel)]="householdSocial" (ngModelChange)="onFilterChange()">
+            <option value="">Any</option>
+            <option value="social">Sociable</option>
+            <option value="quiet">Quiet</option>
+            <option value="balanced">In between</option>
+          </select>
+          @if (householdFilterOn()) {
+            <p class="filter-note">
+              Showing only rooms whose household has been described. Most listings
+              have not said yet, so this hides a lot of them.
+            </p>
+          }
+        </div>
+
         <div class="filter-group">
           <label class="filter-label" for="filter-housemates">Housemates</label>
           <select id="filter-housemates" class="filter-select"
@@ -454,6 +514,13 @@ export class Home implements OnInit, OnDestroy {
    */
   maxRentCents = '';
   housemates = '';
+  // Phase 6. Empty string means "no preference" throughout, which is what the
+  // API treats as absent — these are never sent as empty.
+  listerType = '';
+  housemateProfile = '';
+  householdSchedule = '';
+  householdCleanliness = '';
+  householdSocial = '';
   sortBy: 'newest' | 'price_asc' | 'price_desc' | 'featured' = 'newest';
 
   /** Province pills use short labels; the API needs the full name. */
@@ -623,7 +690,20 @@ export class Home implements OnInit, OnDestroy {
       this.province, this.roomType, this.maxRentCents, this.housemates,
       this.billsIncluded, this.availableNow, this.couplesAllowed,
       this.dssAccepted, this.guarantorAccepted, this.petsAllowed,
+      // Phase 6. Counted, because each of these really does narrow the board —
+      // which is exactly what the absent `studentsWelcome` filter did not, and
+      // why it was removed rather than left counted.
+      this.listerType, this.housemateProfile, this.householdSchedule,
+      this.householdCleanliness, this.householdSocial,
     ].filter(Boolean).length;
+  }
+
+  /** Is any household filter on — the note under the selects depends on it. */
+  householdFilterOn(): boolean {
+    return !!(
+      this.housemateProfile || this.householdSchedule ||
+      this.householdCleanliness || this.householdSocial
+    );
   }
 
   clearFilters() {
@@ -638,6 +718,11 @@ export class Home implements OnInit, OnDestroy {
     this.dssAccepted = false;
     this.guarantorAccepted = false;
     this.petsAllowed = false;
+    this.listerType = '';
+    this.housemateProfile = '';
+    this.householdSchedule = '';
+    this.householdCleanliness = '';
+    this.householdSocial = '';
     this.sortBy = 'newest';
     this.onFilterChange();   // resets page and refetches
   }
@@ -753,6 +838,11 @@ export class Home implements OnInit, OnDestroy {
       guarantorAccepted: this.guarantorAccepted || undefined,
       petsAllowed: this.petsAllowed || undefined,
       maxRentCents: this.maxRentCents ? +this.maxRentCents : undefined,
+      listerType: (this.listerType as any) || undefined,
+      housemateProfile: (this.housemateProfile as any) || undefined,
+      householdSchedule: (this.householdSchedule as any) || undefined,
+      householdCleanliness: (this.householdCleanliness as any) || undefined,
+      householdSocial: (this.householdSocial as any) || undefined,
       sortBy: this.sortBy,
       page: this.page,
       limit: 12,

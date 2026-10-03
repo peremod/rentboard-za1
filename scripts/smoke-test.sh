@@ -286,8 +286,20 @@ req POST /api/rooms "$ROOM_JSON" "$LTOKEN"
 check "landlord creates room (draft)" 201 "$STATUS" "$BODY"
 ROOM_ID=$(echo "$BODY" | jq -r '.id // empty')
 
+# ⚠️ This check used to assert 403 — "tenant CANNOT create room" — and that was
+# correct until Phase 6. Option A is precisely that a TENANT may hold a listing,
+# so the old assertion now encodes a rule the product deliberately dropped.
+# Rewritten rather than deleted: what still has to be true is that the listing
+# they get is a SUBLET, whatever they asked for, because a tenant account
+# presenting a listing as an owner's is the one outcome that must be impossible.
 req POST /api/rooms "$ROOM_JSON" "$TTOKEN"
-check "tenant CANNOT create room" 403 "$STATUS" "$BODY"
+check "a tenant CAN create a listing now (Phase 6 Option A)" 201 "$STATUS" "$BODY"
+TENANT_ROOM=$(echo "$BODY" | jq -r '.id // empty')
+if [[ "$(echo "$BODY" | jq -r '.listerType')" == "sublessor" ]]; then
+  green "  PASS  and it is forced to sublessor — a tenant cannot list as an owner"; PASS=$((PASS+1))
+else
+  red "  FAIL  a tenant's listing came back as $(echo "$BODY" | jq -r '.listerType')"; FAIL=$((FAIL+1))
+fi
 
 if [[ -n "$ROOM_ID" ]]; then
   # publish requires a hero image; without ImageKit this is expected to 400
@@ -440,8 +452,17 @@ grey "        active/draft rooms: $MY_COUNT"
 req GET /api/rooms/my-rooms/archived "" "$LTOKEN"
 check "archived rooms loads" 200 "$STATUS" "$BODY"
 
+# Also a Phase 6 change: my-rooms carries ListerGuard, so a tenant reaches it —
+# they have listings of their own to manage. The property that still matters is
+# ISOLATION, which the 403 was only ever a proxy for: a tenant must not see a
+# landlord's rooms. That is asserted directly now.
 req GET /api/rooms/my-rooms "" "$TTOKEN"
-check "tenant CANNOT load landlord rooms" 403 "$STATUS" "$BODY"
+check "a tenant can load their own listings" 200 "$STATUS" "$BODY"
+if [[ -n "$ROOM_ID" ]] && echo "$BODY" | jq -e --arg id "$ROOM_ID" 'map(.id) | index($id) == null' >/dev/null 2>&1; then
+  green "  PASS  and a landlord's room is not among them"; PASS=$((PASS+1))
+else
+  red "  FAIL  a tenant's my-rooms included a landlord's listing"; FAIL=$((FAIL+1))
+fi
 
 if [[ -n "$ROOM_ID" ]]; then
   req GET "/api/applications/room/$ROOM_ID" "" "$LTOKEN"
@@ -2151,6 +2172,64 @@ check "sign-up refuses acceptTerms: false" 400 "$STATUS" "$BODY"
 req POST /api/auth/phone/signup/complete '{"ticket":"not-a-real-ticket-at-all-x","fullName":"Nobody","role":"TENANT"}'
 check "sign-up refuses a request with no acceptTerms at all" 400 "$STATUS" "$BODY"
 
+# Sub-letting — Phase 6. The flow end to end is scripts/sublet-drive.mjs; what
+# belongs here is that a TENANT may hold a listing, that they cannot claim to be
+# an owner, and that the board's new filters are wired to something.
+req POST /api/rooms "$(jq -nc --arg d "$(date -u -d '+10 days' +%Y-%m-%d)" '{
+  roomType:"shared_house",
+  title:"Smoke sublet room in a shared house",
+  description:"A clean room in a house I rent myself, close to transport and shops. Available now.",
+  rentCents:320000, province:"Gauteng", city:"Johannesburg",
+  locationDisplay:"Yeoville, Johannesburg", availableFrom:$d,
+  listerType:"owner_landlord"
+}')" "$TTOKEN"
+check "a tenant account can create a listing (Phase 6 Option A)" 201 "$STATUS" "$BODY"
+SUBLET_ROOM=$(echo "$BODY" | jq -r '.id // empty')
+
+if [[ "$(echo "$BODY" | jq -r '.listerType')" == "sublessor" ]]; then
+  green "  PASS  a tenant asking for owner_landlord is overridden to sublessor"; PASS=$((PASS+1))
+else
+  red "  FAIL  a tenant created a listing presenting as an owner's: $(echo "$BODY" | jq -r '.listerType')"; FAIL=$((FAIL+1))
+fi
+
+# An owner's listing is unchanged by any of this.
+req GET "/api/rooms?limit=1&listerType=owner_landlord"
+check "the board filters on listerType" 200 "$STATUS" "$BODY"
+
+req GET "/api/rooms?limit=1&householdSocial=quiet"
+check "the board filters on the household" 200 "$STATUS" "$BODY"
+
+req GET "/api/rooms?limit=1&listerType=not-a-thing"
+check "a bogus listerType is rejected rather than ignored" 400 "$STATUS" "$BODY"
+
+# A sublet check is about a listing, and is free.
+req POST /api/verification '{"type":"sublet_right","documentPath":"verification/smoke-lease.jpg"}' "$TTOKEN"
+check "a sublet check with no listing named is refused" 400 "$STATUS" "$BODY"
+
+if [[ -n "$SUBLET_ROOM" ]]; then
+  req POST /api/verification "{\"type\":\"sublet_right\",\"documentPath\":\"verification/smoke-lease.jpg\",\"roomId\":\"$SUBLET_ROOM\"}" "$TTOKEN"
+  check "a sublet check against their own listing is accepted" 201 "$STATUS" "$BODY"
+fi
+
+req GET /api/verification/types "" "$TTOKEN"
+if [[ "$(echo "$BODY" | jq -r '[.[] | select(.type=="sublet_right")] | first | .requiresPayment')" == "false" ]]; then
+  green "  PASS  the sublet-right check carries no fee"; PASS=$((PASS+1))
+else
+  red "  FAIL  the sublet-right check is not free, or is not offered to a sub-lessor"; FAIL=$((FAIL+1))
+fi
+
+# Cleared before leaving this section, deliberately.
+#
+# `sublet_right` is offered only to somebody who HOLDS a sublet listing, so
+# leaving this one behind changes what section 42 sees and breaks its exact
+# list of a tenant's verification types — a check failing three hundred lines
+# away because of state this section left lying about. The listing has served
+# its purpose here; the full lifecycle is scripts/sublet-drive.mjs.
+if [[ -n "$SUBLET_ROOM" ]]; then
+  req DELETE "/api/rooms/$SUBLET_ROOM/permanent" "" "$TTOKEN"
+  check "the smoke sublet listing is cleaned up" 200 "$STATUS" "$BODY"
+fi
+
 # In-app notices — Phase 7g. The channel that works when there is no email
 # address, and which nothing could READ until v1.85.1. Isolation between
 # accounts is driven properly in scripts/notices-drive.mjs; what belongs here is
@@ -2250,10 +2329,21 @@ if [[ -n "$CLEAN_ROOM" ]]; then
   req GET "/api/rooms/$CLEAN_ROOM" "" "$LTOKEN"
   check "the deleted room is gone entirely" 404 "$STATUS" "$BODY"
 
-  # A tenant is stopped by LandlordGuard before ownership is ever checked, so
-  # 403 is the correct answer here — 404 would mean the guard had been skipped.
+  # This asserted 403, on the reasoning that LandlordGuard stopped a tenant
+  # before ownership was ever checked. Since Phase 6 a tenant passes the guard
+  # — they can hold listings — and fails on ownership instead, which answers
+  # 404. That is the better answer anyway: a miss rather than a refusal does not
+  # confirm to a stranger that the room id they tried is real. What is being
+  # checked is unchanged — they cannot delete somebody else's listing — so the
+  # expectation moves rather than the check going away.
   req DELETE "/api/rooms/$CLEAN_ROOM/permanent" "" "$TTOKEN"
-  check "tenant CANNOT hard-delete (blocked by role)" 403 "$STATUS" "$BODY"
+  check "a tenant cannot hard-delete a landlord's room (a miss, not a refusal)" 404 "$STATUS" "$BODY"
+  if [[ -n "$TENANT_ROOM" ]]; then
+    # And the guard is not simply absent: their OWN listing deletes, which is
+    # what distinguishes "ownership refused" from "nothing is enforced".
+    req DELETE "/api/rooms/$TENANT_ROOM/permanent" "" "$TTOKEN"
+    check "…while their own listing deletes, so the check is ownership and not role" 200 "$STATUS" "$BODY"
+  fi
 
   # A different landlord gets past the guard and must then fail on ownership.
   if [[ -n "${OTHER_LTOKEN:-}" ]]; then

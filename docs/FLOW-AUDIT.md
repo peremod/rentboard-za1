@@ -1032,6 +1032,71 @@ eleventh person in that queue.
 | Counters are in memory, per instance. Two instances behind a load balancer roughly doubles every limit | Low until the API scales past one instance |
 
 
+### 5.18 Tenant sub-letting and shared-lease listings — ✅ built in v1.86.0 (Phase 6, Option A)
+
+**The decision.** `UserRole` keeps its three values; a `TENANT` may hold a
+listing whose `listerType` is `sublessor`. Option B — generalising "Landlord"
+into "Room Provider" — is cleaner long-term and touches every guard, dashboard
+and string in the product. Option A was signed off on 2026-10-03.
+
+⚠️ **Consequence to know:** `Room.landlordId` now sometimes points at a
+`TENANT`. The column name is wrong and is left alone deliberately — renaming it
+means rewriting every query, index and DTO that mentions it for no behavioural
+gain, and a half-done rename is worse than a known misnomer. Read it as "the
+account that holds this listing".
+
+**The guard split, which is where the risk was.** Fifty-two endpoints carried
+`LandlordGuard`. Widening it to admit tenants would have opened the yard, rent
+tracking, expenses, the paid identity badge, the storefront and
+listing-by-WhatsApp in a single edit, and the reviewer of that diff would have
+had to notice all fifty-two call sites to catch it. So:
+
+| Guard | On what | Admits |
+|---|---|---|
+| `ListerGuard` (new) | rooms (17), applications' lister side (8), tenant references (2) | LANDLORD, TENANT, ADMIN |
+| `LandlordGuard` | yard + rent + expenses (10), inbox (2), notes (2), storefront (2), payments (2), WhatsApp listing (5) | LANDLORD, ADMIN |
+
+Neither guard decides ownership: every service scopes its query by
+`landlordId`, which is why a sub-lessor passing `ListerGuard` still gets a miss
+on somebody else's room. The drive checks both halves — a sub-lessor can run
+their listing, and gets 403 on all five owner surfaces.
+
+**The sub-letting check.** A new `VerificationType.sublet_right`, with a
+`roomId` on `VerificationRequest`, because the right to sublet comes from one
+lease over one address: being allowed to sublet in Yeoville says nothing about
+Soweto. Approval stamps `Room.subletCheckedAt`; a later rejection **clears** it,
+because a badge an admin has just disagreed with must not stay up. It is a date,
+not a boolean, so the page can say "checked on 14 March" rather than "may
+sublet" — the head landlord can withdraw consent the next day and nothing tells
+us. **No fee:** a sub-lessor is listing a room, listing is free here, and
+charging them would be a landlord listing fee by another name.
+
+**What an applicant is told.** A `Sublet` badge on the card, and on the room page
+a notice above the fold (measured at 522px of a 900px phone viewport) saying the
+room is let by a tenant, that Mastande does not confirm or guarantee the right to
+sublet, and that it is the applicant who can lose the room and the deposit.
+Checked listings show the date and what the check did not cover; unchecked ones
+say so and say what to ask for. `/legal/sublet` is a new page written from
+scratch — addressed to the applicant, not to our liability.
+
+**Positioning: the same board, with an explicit filter.** Splitting the board
+halves the inventory each half can show, and at launch volumes a thin board is
+what loses both segments. Filters: "Who is letting it", plus four household
+filters (who lives there, hours, tidiness, sociable or quiet) stored once on
+`Property`.
+
+### Gaps
+
+| Gap | Severity |
+|---|---|
+| 🔴 `/legal/sublet` is **not attorney-reviewed.** It characterises the effect of a head lease on a sub-tenant and summarises the Rental Housing Act on deposits. `docs/OUTSTANDING.md` §8 names the three sections to ask about | **Blocking for launch** |
+| Household filters exclude every listing that has not described itself, which is most of them. Inherent — an `unstated` household can neither match nor be ruled out — and the board says so beside the controls rather than silently returning five rooms | Low, stated |
+| Rooms are grouped into a household by `locationDisplay`, a heuristic rather than an identity. Two rooms a sub-lessor describes as "Observatory, Cape Town" are assumed to be one house; if they are not, the second's household facts overwrite the first's. Right for the common case (one person, one place); wants a real address on `Room` if sub-lessors with two houses turn out to be common | Low |
+| A sub-lessor has no inbox, no private tenant notes, no calendar and no storefront — all four are owner-shaped (rent periods, yards, a public landlord page). Deliberate for v1; each would need its own thinking for somebody who is not the owner | Medium |
+| `listerType` cannot be changed after creation: flipping a listing would change what every applicant who already applied was told about who they are dealing with. Somebody who picked wrong creates the listing again — a draft costs nothing | By design |
+| Shared-bill splitting between co-tenants is **not** built, as the brief says. `Expense` stays a record of a cost with no `paidBy` or `sharePercent`, so a future split can be its own table pointing at it | Deferred, unblocked |
+
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

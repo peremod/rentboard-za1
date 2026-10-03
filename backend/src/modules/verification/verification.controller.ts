@@ -31,7 +31,7 @@ export class VerificationController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'The checks this account can submit, with guidance for each' })
   availableTypes(@CurrentUser() user: Caller) {
-    return this.verificationService.availableTypes(user.role);
+    return this.verificationService.availableTypes(user.id, user.role);
   }
 
   @Get('mine')

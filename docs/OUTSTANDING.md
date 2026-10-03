@@ -246,15 +246,25 @@ What changed and why it matters:
 - **PAIA manual** — a new row for lease paperwork, stating that Mastande stores
   the document and does **not** sign, witness, verify or execute any agreement.
 
-Also still unreviewed from earlier phases:
+And, as of v1.86.0, the one that most needs a lawyer's eye:
 
-- The sub-letting disclaimer (Phase 6) — a distinct risk from the landlord
-  disclaimer, because the applicant carries real exposure if a sub-lessor's right
-  to sublet turns out to be invalid. **Do not let this be copied from the
-  existing landlord disclaimer.**
+- 🔴 **The sub-letting page** (`/legal/sublet`, Phase 6) — **written, live, and
+  not reviewed.** It is not a copy of the landlord disclaimer; it is a new page
+  addressed to the applicant, telling them what can go wrong when the person
+  letting them a room is a tenant, what to ask for before paying a deposit, and
+  exactly what the platform did and did not check. It states that we do not
+  confirm or guarantee a sub-lessor's right to sublet.
+
+  Why it needs an attorney rather than a careful writer: it characterises the
+  effect of a head lease on a sub-tenant and points at the Rental Housing Act
+  50 of 1999 on deposits. Both are summarised in plain English from the same
+  statutes the rest of the site relies on, and neither should ship to the
+  public on my reading of them. Ask specifically about §2 ("What can go
+  wrong"), §5 ("Your deposit") and the wording of the banner.
 
 Files: `frontend/src/app/features/legal/privacy-policy/privacy-policy.ts`,
-`frontend/src/app/features/legal/paia/paia.ts`.
+`frontend/src/app/features/legal/paia/paia.ts`,
+`frontend/src/app/features/legal/sublet/sublet.ts`.
 
 ---
 
@@ -307,21 +317,27 @@ Nothing is broken either way — the refusal is explicit and tells them what to 
 Both were answered on 2026-10-03. Kept here with what is left of each, because
 one sub-question is still open.
 
-### Phase 6 — the `UserRole` question → **Option A**
+### Phase 6 — the `UserRole` question → **Option A, built in v1.86.0**
 
-A `TENANT` may create listings, with a `listerType` field (`owner_landlord` |
-`sublessor`) on the listing, reusing the existing Room/Property/verification
-machinery rather than generalising "Landlord" into "Room Provider". Not built
-yet — Phase 6 has not started.
+A `TENANT` may hold listings, with `listerType` (`owner_landlord` | `sublessor`)
+on the listing. `UserRole` keeps its three values and `LandlordProfile` stays
+landlord-only.
 
-**Still open, and genuinely a judgement call:** should sublet listings share the
-same search surface as backroom rentals, or sit in a distinct category? Students
-and young professionals versus the informal backroom core are different segments,
-and mixing them without a clear filter could dilute both.
+The part worth knowing: the fifty-two endpoints a lister needs were behind
+`LandlordGuard`, and widening that guard would also have opened the yard, rent
+tracking, expenses, the paid identity badge, the storefront and
+listing-by-WhatsApp — in one edit, invisibly. So there is a second guard
+(`ListerGuard`) on what a lister does, `LandlordGuard` stays on what an owner
+does, and the drive checks both halves: a sub-lessor can run their listing and
+still gets 403 on all five owner surfaces.
 
-My default if nobody says otherwise: **the same surface, with an explicit,
-visible filter** — splitting the board halves the inventory each half shows,
-which is the worse failure at launch volumes. Say if you want it split.
+**The positioning sub-question was mine to call and I called it: the same board,
+with an explicit filter.** Splitting the board halves the inventory each half can
+show, and at launch volumes a thin board is what loses both segments. The filter
+("Who is letting it": anyone / the owner / a tenant subletting) is how somebody
+who only wants one kind says so, and every sublet carries a badge on the card and
+a notice on the room page. Say if you would rather it were split — it is a filter
+default and a query, not a rewrite.
 
 ### Phase 7g — phone/WhatsApp signup → **built**
 
@@ -377,7 +393,9 @@ hammering it.
    written — tight enough to stop a single host, loose enough not to lock out a
    township sharing an IP. Register is 60 an hour for a sharper reason: an agent
    helping a row of landlords join at a community event is a growth channel, not
-   an attack, and ten an hour refuses the eleventh person in the queue.
+   an attack, and ten an hour refuses the eleventh person in the queue. Scam
+   reports went 5 → 20 an hour and advertising enquiries 3 → 15, both because a
+   suppressed report or a suppressed lead costs more than the spam does.
    Worth revisiting once there is real traffic to measure: watch for a spike of
    `429`s on `/auth/login` or `/auth/phone/request-code`, which would mean a
    legitimate shared address is being throttled.
@@ -429,6 +447,8 @@ node scripts/phone-signup-drive.mjs      # 30 checks, 0 skip
 node scripts/phone-signup-ui-drive.mjs   # 12 checks — the consent box is the point
 node scripts/otp-drive.mjs               # phone sign-in hardening
 node scripts/notices-drive.mjs           # 10 checks — the in-app notice channel
+node scripts/sublet-drive.mjs            # 38 checks — Phase 6, incl. the guard split
+node scripts/sublet-ui-drive.mjs         # 13 checks — what an applicant is actually told
 node scripts/throttle-lint.mjs           # every @Throttle is actually guarded
 ```
 

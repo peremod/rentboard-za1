@@ -17,7 +17,10 @@ export type VerificationType =
   | 'sassa_grant'
   | 'employer_confirmation'
   | 'bank_statement'
-  | 'landlord_reference';
+  | 'landlord_reference'
+  // Sub-letting (Phase 6). About one LISTING rather than about the person —
+  // see `aboutAListing` and `roomId` below.
+  | 'sublet_right';
 
 export type VerificationStatus =
   /** Document uploaded, R149 fee not yet paid. Landlord identity only. */
@@ -80,6 +83,15 @@ export interface VerificationTypeInfo {
   needsDocument: boolean;
   provesIncome: boolean;
   requiresPayment: boolean;
+  /**
+   * True only for `sublet_right` — Phase 6.
+   *
+   * The right to sublet comes from one lease over one address, so a check of it
+   * belongs to a listing and not to a person: the submission carries a
+   * `roomId`, the approval stamps that room, and the screen shows one card per
+   * sub-let listing rather than one card for the type.
+   */
+  aboutAListing?: boolean;
 }
 
 /**
@@ -104,6 +116,8 @@ export interface VerificationRequest {
    *  documentDeletedAt while nothing was being deleted. */
   documentWithdrawnAt?: string | null;
   createdAt: string;
+  /** Set only for `sublet_right`: which listing this check is about. */
+  roomId?: string | null;
   events?: VerificationEvent[];
   reference?: LandlordReferenceSummary | null;
 }

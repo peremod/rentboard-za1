@@ -101,15 +101,24 @@ export class AdsController {
   }
 
   /**
-   * Public enquiry form. Rate limited hard — an open contact form that sends
-   * mail is the obvious target for spam.
+   * Public enquiry form. Rate limited — an open contact form that sends mail is
+   * the obvious target for spam.
    *
    * (This comment sat above `@Get('rates')` and described this route, which is
    * how a reader ends up believing the rate card is the thing being protected.)
+   *
+   * Fifteen an hour, raised from three once the limit became real (the guard
+   * had never been registered, so this decorator had done nothing since it was
+   * written — see app.module.ts). Three per hour PER IP is the wrong number
+   * here for two reasons: mobile carriers in this market put very large numbers
+   * of subscribers behind one address, and an advertising enquiry is a LEAD.
+   * The asymmetry runs the other way from a scam report — a spam enquiry costs
+   * somebody a minute in an inbox, a suppressed one is revenue that never
+   * arrives and nobody ever hears about.
    */
   @Post('enquiries')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 3, ttl: 60 * 60 * 1000 } })
+  @Throttle({ default: { limit: 15, ttl: 60 * 60 * 1000 } })
   @ApiOperation({ summary: 'Enquire about advertising on the board' })
   createEnquiry(@Body() dto: CreateAdEnquiryDto) {
     return this.adsService.createEnquiry(dto);

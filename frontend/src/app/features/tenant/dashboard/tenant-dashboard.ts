@@ -222,6 +222,67 @@ import { tenantNav } from '../tenant-nav';
         }
       </section>
 
+      <!-- ── Rooms you are letting out — Phase 6 ──────────────────────────
+           Without this section a tenant can create a sublet listing and then
+           never find it again: the landlord dashboard is where "my rooms"
+           lives, and a TENANT account cannot open it. So the listings, their
+           status, and the two things a lister does with them — edit, read
+           applicants — are here.
+
+           It renders the CTA even with no listings, because this is the only
+           place in the tenant portal that says sub-letting exists. -->
+      <section class="dash-section" id="your-sublets">
+        <h2 class="dash-section-title">
+          Rooms you are letting out
+          @if (sublets().length > 0) { <span class="dash-count">({{ sublets().length }})</span> }
+        </h2>
+
+        @if (loadingSublets()) {
+          <p class="muted">Loading your listings…</p>
+        } @else if (sublets().length === 0) {
+          <p class="muted">
+            Renting a place with a spare room? You can let it out here. Listing is
+            free, and so is the check on your lease and your landlord's consent —
+            listings that have been checked get taken far more seriously.
+          </p>
+          <a class="btn btn-outline" routerLink="/tenant/sublet/new">Sublet a room</a>
+        } @else {
+          <ul class="sublet-list">
+            @for (room of sublets(); track room.id) {
+              <li class="sublet-row">
+                <div class="sublet-row__main">
+                  <strong>{{ room.title }}</strong>
+                  <span class="sublet-row__meta">
+                    {{ room.locationDisplay }} · {{ room.status }}
+                    @if (room.applicationCount > 0) {
+                      · {{ room.applicationCount }}
+                      {{ room.applicationCount === 1 ? 'applicant' : 'applicants' }}
+                    }
+                  </span>
+                  <!-- The one status a sub-lessor should act on, said plainly
+                       rather than as a missing badge. Free, and it is what an
+                       applicant looks for. -->
+                  @if (room.subletCheckedAt) {
+                    <span class="sublet-row__checked">
+                      ✓ Lease and consent checked
+                    </span>
+                  } @else {
+                    <a class="sublet-row__todo" routerLink="/tenant/passport">
+                      Upload your lease and consent — free, and applicants look for it →
+                    </a>
+                  }
+                </div>
+                <div class="sublet-row__actions">
+                  <a class="btn btn-sm btn-ghost" [routerLink]="['/tenant/sublet', room.id, 'edit']">Edit</a>
+                  <a class="btn btn-sm btn-ghost" [routerLink]="['/tenant/sublet', room.id, 'applicants']">Applicants</a>
+                </div>
+              </li>
+            }
+          </ul>
+          <a class="btn btn-outline" routerLink="/tenant/sublet/new">List another room</a>
+        }
+      </section>
+
       <section class="dash-section" id="saved-rooms">
         <h2 class="dash-section-title">
           Saved rooms
@@ -249,7 +310,20 @@ import { tenantNav } from '../tenant-nav';
       </section>
     </app-portal-shell>
   `,
-  // Layout comes from the global spec + responsive layers.
+  styles: `
+    .sublet-list { list-style: none; margin: 0 0 1rem; padding: 0; }
+    .sublet-row {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      gap: 1rem; flex-wrap: wrap;
+      padding: .8rem 0; border-bottom: 1px solid var(--border);
+    }
+    .sublet-row__main { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+    .sublet-row__meta { font-size: .78rem; color: var(--slate); }
+    .sublet-row__checked { font-size: .78rem; color: #2F6B3A; font-weight: 600; }
+    .sublet-row__todo { font-size: .78rem; }
+    .sublet-row__actions { display: flex; gap: .4rem; flex-shrink: 0; }
+  `,
+  // The rest of the layout comes from the global spec + responsive layers.
 })
 export class TenantDashboard implements OnInit {
   auth = inject(AuthService);
@@ -387,7 +461,28 @@ export class TenantDashboard implements OnInit {
     });
   }
 
+  /**
+   * The listings this tenant is letting out — Phase 6.
+   *
+   * `/rooms/my-rooms` is the same endpoint the landlord dashboard uses; a
+   * TENANT reaches it now because it carries ListerGuard rather than
+   * LandlordGuard. Filtered to sublets here anyway: an ADMIN account landing on
+   * a tenant dashboard would otherwise see every listing they hold.
+   */
+  sublets = signal<Room[]>([]);
+  loadingSublets = signal(true);
+
   ngOnInit() {
+    this.roomsService.getLandlordRooms().subscribe({
+      next: (rooms) => {
+        this.sublets.set(rooms.filter((r) => r.listerType === 'sublessor'));
+        this.loadingSublets.set(false);
+      },
+      // Silent: a tenant with no listings is the common case and an error here
+      // must not take the applications list down with it.
+      error: () => this.loadingSublets.set(false),
+    });
+
     this.applicationsService.getMyApplications().subscribe({
       next: (apps) => { this.applications.set(apps); this.loading.set(false); },
       error: () => this.loading.set(false),

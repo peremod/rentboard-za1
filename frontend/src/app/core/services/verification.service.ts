@@ -61,9 +61,19 @@ export class VerificationService {
       .pipe(tap((list) => this.types.set(list)));
   }
 
-  submit(type: VerificationType, documentPath?: string, reference?: ReferenceSubmission) {
+  /**
+   * `roomId` is for `sublet_right` only — Phase 6. The API rejects it on every
+   * other type and requires it on that one, because the right to sublet is a
+   * fact about one address rather than about the person.
+   */
+  submit(
+    type: VerificationType,
+    documentPath?: string,
+    reference?: ReferenceSubmission,
+    roomId?: string,
+  ) {
     return this.http
-      .post<VerificationRequest>(`${this.api}/verification`, { type, documentPath, reference })
+      .post<VerificationRequest>(`${this.api}/verification`, { type, documentPath, reference, roomId })
       .pipe(tap((created) => this.requests.update((l) => [created, ...l])));
   }
 

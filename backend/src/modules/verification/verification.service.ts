@@ -60,9 +60,20 @@ export class VerificationService {
     private storage: StorageService,
   ) {}
 
-  /** The types this person may submit, with the guidance shown beside each. */
-  availableTypes(role: UserRole) {
-    return typesFor(role).map((type) => ({
+  /**
+   * The types this person may submit, with the guidance shown beside each.
+   *
+   * Takes the user id as well as the role since Phase 6, because one type —
+   * `sublet_right` — is about a LISTING rather than about the person, and
+   * offering it to the overwhelming majority who hold no sublet listing would
+   * be offering a check they cannot complete. The listings are counted here
+   * rather than guessed at from the role: a landlord can be a sub-lessor too.
+   */
+  async availableTypes(userId: string, role: UserRole) {
+    const subletListings = await this.prisma.room.count({
+      where: { landlordId: userId, listerType: 'sublessor' },
+    });
+    return typesFor(role, subletListings > 0).map((type) => ({
       type,
       ...VERIFICATION_RULES[type],
       requiresPayment: requiresPayment(type, role),
@@ -181,8 +192,46 @@ export class VerificationService {
       );
     }
 
+    /**
+     * A check about a listing has to name one, and it has to be theirs.
+     *
+     * Checked here rather than trusted from the client for the obvious reason,
+     * and scoped to `listerType: sublessor` for a less obvious one: approving
+     * this stamps `subletCheckedAt` on the room, and an owner listing carrying
+     * "right to sublet checked" would be a badge that means nothing attached to
+     * a listing it does not apply to.
+     */
+    let roomId: string | null = null;
+    if (rule.aboutAListing) {
+      if (!dto.roomId) {
+        throw new BadRequestException(
+          'Say which listing this is about — the right to sublet comes from one lease over one address.',
+        );
+      }
+      const room = await this.prisma.room.findFirst({
+        where: { id: dto.roomId, landlordId: user.id, listerType: 'sublessor' },
+        select: { id: true },
+      });
+      // One message for "not yours", "does not exist" and "not a sublet": which
+      // it is would tell somebody whether a room id they guessed is real.
+      if (!room) {
+        throw new BadRequestException('That is not one of your sub-let listings.');
+      }
+      roomId = room.id;
+    } else if (dto.roomId) {
+      throw new BadRequestException(`${rule.label} is about you, not about a listing.`);
+    }
+
     const existing = await this.prisma.verificationRequest.findFirst({
-      where: { userId: user.id, type: dto.type, status: { in: ['pending', 'pending_payment'] } },
+      where: {
+        userId: user.id,
+        type: dto.type,
+        status: { in: ['pending', 'pending_payment'] },
+        // Per listing for a listing check. A sub-lessor with two houses has two
+        // separate rights to prove, and the one-at-a-time rule applied across
+        // them would make the second unprovable while the first is in the queue.
+        ...(rule.aboutAListing ? { roomId } : {}),
+      },
     });
     if (existing) {
       throw new BadRequestException(
@@ -197,6 +246,7 @@ export class VerificationService {
         data: {
           userId: user.id,
           type: dto.type,
+          roomId,
           documentPath: dto.documentPath ?? null,
           // The fee waits for payment before review; everything else goes
           // straight to the queue.
@@ -266,6 +316,19 @@ export class VerificationService {
         },
         reference: true,
         events: { orderBy: { createdAt: 'asc' } },
+        /**
+         * The listing a sublet-right check is about — Phase 6.
+         *
+         * A reviewer being asked "may this person sublet?" cannot answer it
+         * without knowing which address the lease should name, so the queue
+         * carries the room. Four fields and no more: the title and where it is,
+         * so the documents can be matched against the listing, plus the status
+         * so a reviewer can see they are being asked about a live listing or a
+         * draft.
+         */
+        room: {
+          select: { id: true, title: true, locationDisplay: true, status: true },
+        },
       },
       orderBy: { createdAt: 'asc' },
     });
@@ -376,6 +439,27 @@ export class VerificationService {
             `We could not verify this, so the R${VERIFICATION_FEE_RANDS.toFixed(0)} fee is being refunded in full.`,
           );
         }
+      }
+
+      /**
+       * The sub-letting outcome, which lives on the ROOM — Phase 6.
+       *
+       * Approval stamps the date. A rejection CLEARS a date a previous review
+       * may have set, and that asymmetry is deliberate: the listing's claim
+       * rests on the most recent review, so leaving "consent checked on 14
+       * March" showing while an admin has just refused the evidence would put a
+       * badge in front of applicants that the admin disagreed with. The audit
+       * trail keeps both reviews either way.
+       *
+       * `updateMany` with the owner in the WHERE, so a room that changed hands
+       * or was deleted between submission and review is a no-op rather than a
+       * stamp on somebody else's listing.
+       */
+      if (request.type === 'sublet_right' && request.roomId) {
+        await tx.room.updateMany({
+          where: { id: request.roomId, landlordId: request.userId, listerType: 'sublessor' },
+          data: { subletCheckedAt: dto.status === 'approved' ? new Date() : null },
+        });
       }
 
       if (dto.status === 'approved') {

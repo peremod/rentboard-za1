@@ -40,6 +40,13 @@ export class RoomsService {
     if (filters.dssAccepted) params = params.set('dssAccepted', 'true');
     if (filters.guarantorAccepted) params = params.set('guarantorAccepted', 'true');
     if (filters.petsAllowed) params = params.set('petsAllowed', 'true');
+    // Phase 6. Sent only when set — an empty value would be a validation error
+    // on the enum rather than "no preference".
+    if (filters.listerType) params = params.set('listerType', filters.listerType);
+    if (filters.housemateProfile) params = params.set('housemateProfile', filters.housemateProfile);
+    if (filters.householdSchedule) params = params.set('householdSchedule', filters.householdSchedule);
+    if (filters.householdCleanliness) params = params.set('householdCleanliness', filters.householdCleanliness);
+    if (filters.householdSocial) params = params.set('householdSocial', filters.householdSocial);
 
     const req$ = this.http.get<PaginatedRooms>(`${this.api}/rooms`, { params }).pipe(shareReplay(1));
     this.cache.set(key, req$);

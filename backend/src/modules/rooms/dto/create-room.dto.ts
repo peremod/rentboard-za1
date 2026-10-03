@@ -1,4 +1,5 @@
-import { IsString, IsEnum, IsInt, Min, IsOptional, IsBoolean, IsDateString, MaxLength, MinLength, IsIn, IsArray, ArrayMaxSize } from 'class-validator';
+import { IsString, IsEnum, IsInt, Min, IsOptional, IsBoolean, IsDateString, MaxLength, MinLength, IsIn, IsArray, ArrayMaxSize, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SA_PROVINCES } from './room-filters.dto';
 
@@ -9,6 +10,47 @@ import { SA_PROVINCES } from './room-filters.dto';
  * for the same stated limit, not just a UI-level suggestion.
  */
 const MAX_GALLERY_PHOTOS = 19;
+
+/**
+ * What the household is like, for a shared house — Phase 6.
+ *
+ * Sent with the LISTING and stored on the Property, which is where household
+ * facts live (four rooms at one address have one household; asked four times,
+ * the four answers disagree in front of the person choosing). The listing flow
+ * is simply the only place that asks for them, because a sub-lessor has no yard
+ * screen and should not be made to create one.
+ *
+ * Every field is optional and every enum has an `unstated` value that is never
+ * rendered. Saying nothing has to stay possible: a default would put a claim
+ * about the people somebody would live with in front of them that nobody made.
+ */
+export class HouseholdDto {
+  @ApiPropertyOptional({ enum: ['professionals', 'students', 'mixed', 'couples', 'unstated'] })
+  @IsOptional() @IsEnum(['professionals', 'students', 'mixed', 'couples', 'unstated'])
+  housemateProfile?: 'professionals' | 'students' | 'mixed' | 'couples' | 'unstated';
+
+  @ApiPropertyOptional({ enum: ['weekday_working', 'shift_work', 'mostly_home', 'varied', 'unstated'] })
+  @IsOptional() @IsEnum(['weekday_working', 'shift_work', 'mostly_home', 'varied', 'unstated'])
+  householdSchedule?: 'weekday_working' | 'shift_work' | 'mostly_home' | 'varied' | 'unstated';
+
+  @ApiPropertyOptional({ enum: ['very_tidy', 'tidy_enough', 'relaxed', 'unstated'] })
+  @IsOptional() @IsEnum(['very_tidy', 'tidy_enough', 'relaxed', 'unstated'])
+  householdCleanliness?: 'very_tidy' | 'tidy_enough' | 'relaxed' | 'unstated';
+
+  @ApiPropertyOptional({ enum: ['social', 'quiet', 'balanced', 'unstated'] })
+  @IsOptional() @IsEnum(['social', 'quiet', 'balanced', 'unstated'])
+  householdSocial?: 'social' | 'quiet' | 'balanced' | 'unstated';
+
+  @ApiPropertyOptional({ description: 'How many people already live at the address.' })
+  @IsOptional() @IsInt() @Min(0)
+  currentHousemates?: number;
+
+  @ApiPropertyOptional({
+    description: 'House rules in your own words — the specific ones that matter here, not a checklist.',
+  })
+  @IsOptional() @IsString() @MaxLength(1000)
+  houseRules?: string;
+}
 
 export class CreateRoomDto {
   @ApiProperty({ enum: ['shared_house', 'en_suite', 'studio', 'private'] })
@@ -54,4 +96,24 @@ export class CreateRoomDto {
   @ApiPropertyOptional({ description: `Gallery photo paths, max ${MAX_GALLERY_PHOTOS} (20 total with the cover)`, type: [String] })
   @IsOptional() @IsArray() @ArrayMaxSize(MAX_GALLERY_PHOTOS) @IsString({ each: true })
   imagePaths?: string[];
+
+  /**
+   * Owner-let or sublet — Phase 6.
+   *
+   * ⚠️ Accepted from the client but NOT trusted: a `TENANT` account may only
+   * hold a `sublessor` listing, and RoomsService.create overrides this rather
+   * than refusing it. Refusing would mean a confusing error for a client that
+   * simply forgot the field; overriding means the only person who can create an
+   * owner listing is someone whose account says they are one.
+   */
+  @ApiPropertyOptional({
+    enum: ['owner_landlord', 'sublessor'],
+    description: 'Defaults to owner_landlord. A tenant account is always sublessor.',
+  })
+  @IsOptional() @IsEnum(['owner_landlord', 'sublessor'])
+  listerType?: 'owner_landlord' | 'sublessor';
+
+  @ApiPropertyOptional({ type: HouseholdDto, description: 'What the household is like. Stored on the property.' })
+  @IsOptional() @ValidateNested() @Type(() => HouseholdDto)
+  household?: HouseholdDto;
 }

@@ -1,4 +1,18 @@
 export type RoomType = 'shared_house' | 'en_suite' | 'studio' | 'private';
+
+/**
+ * Who is letting the room out — Phase 6.
+ *
+ * A fact about the LISTING, not about the account: the same person can own a
+ * yard and sublet a room in the flat they rent. See the ListerType comment in
+ * schema.prisma for the whole of Option A.
+ */
+export type ListerType = 'owner_landlord' | 'sublessor';
+
+export type HousemateProfile = 'professionals' | 'students' | 'mixed' | 'couples' | 'unstated';
+export type HouseholdSchedule = 'weekday_working' | 'shift_work' | 'mostly_home' | 'varied' | 'unstated';
+export type HouseholdCleanliness = 'very_tidy' | 'tidy_enough' | 'relaxed' | 'unstated';
+export type HouseholdSocial = 'social' | 'quiet' | 'balanced' | 'unstated';
 export type RoomStatus = 'draft' | 'active' | 'reserved' | 'let' | 'paused' | 'deleted';
 
 export const SA_PROVINCES = [
@@ -18,7 +32,11 @@ export interface RoomSharedLiving {
   houseRules?: string | null;
   sharedAmenities?: string[];
   currentHousemates?: number | null;
-  housemateProfile?: 'professionals' | 'students' | 'mixed' | 'couples' | 'unstated';
+  housemateProfile?: HousemateProfile;
+  /** Phase 6 — compatibility. `unstated` is never rendered. */
+  householdSchedule?: HouseholdSchedule;
+  householdCleanliness?: HouseholdCleanliness;
+  householdSocial?: HouseholdSocial;
 }
 
 export interface RoomLandlord {
@@ -65,6 +83,18 @@ export interface Room {
   heroImagePath?: string | null;
   imagePaths: string[];
 
+  /** Phase 6. Absent on older cached responses, so read it as owner-let. */
+  listerType?: ListerType;
+  /**
+   * When an admin checked THIS sub-lessor's lease and consent to sublet.
+   *
+   * A date, not a boolean, and the room page says "checked on 14 March" rather
+   * than "verified": the head landlord can withdraw consent the next day and
+   * nothing tells us. Null means nobody has checked, which is the common case
+   * and must read as such rather than as a failure.
+   */
+  subletCheckedAt?: string | null;
+
   isFeatured: boolean;
   featuredUntil?: string | null;
   viewCount: number;
@@ -91,6 +121,19 @@ export interface RoomFilters {
   dssAccepted?: boolean;
   guarantorAccepted?: boolean;
   petsAllowed?: boolean;
+  /** Phase 6 — who is letting the room out. */
+  listerType?: ListerType;
+  /**
+   * Household compatibility — Phase 6.
+   *
+   * ⚠️ Each of these excludes every listing whose household is `unstated`,
+   * which is most of them. Narrowing, not ranking: there is no "prefer" here,
+   * and the board says so beside the controls.
+   */
+  housemateProfile?: Exclude<HousemateProfile, 'unstated'>;
+  householdSchedule?: Exclude<HouseholdSchedule, 'unstated'>;
+  householdCleanliness?: Exclude<HouseholdCleanliness, 'unstated'>;
+  householdSocial?: Exclude<HouseholdSocial, 'unstated'>;
   sortBy?: 'newest' | 'price_asc' | 'price_desc' | 'featured';
   page?: number;
   limit?: number;

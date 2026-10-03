@@ -3,12 +3,13 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { LandlordGuard } from '../../common/guards/landlord.guard';
+import { ListerGuard } from '../../common/guards/lister.guard';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RoomsService } from './rooms.service';
 import { RoomFiltersDto } from './dto/room-filters.dto';
 import { CreateRoomDto } from './dto/create-room.dto';
+import { UserRole } from '@prisma/client';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { UpdatePhotosDto } from './dto/update-photos.dto';
 import { RelistDto } from './dto/relist.dto';
@@ -20,7 +21,7 @@ export class RoomsController {
 
   // ── Landlord dashboard — MUST be declared before ':id' or 'my-rooms' would match as an id ──
   @Get('my-rooms')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Active + draft rooms for the authenticated landlord' })
   myRooms(@CurrentUser() user: { id: string }) {
@@ -28,7 +29,7 @@ export class RoomsController {
   }
 
   @Get('my-rooms/archived')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Let (archived) rooms — for one-click relist' })
   archivedRooms(@CurrentUser() user: { id: string }) {
@@ -60,22 +61,25 @@ export class RoomsController {
 
   // ── Landlord: CRUD + lifecycle ──
   @Post()
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create a room listing (starts as draft)' })
-  create(@Body() dto: CreateRoomDto, @CurrentUser() user: { id: string }) {
-    return this.roomsService.create(dto, user.id);
+  // The role comes through because a TENANT account may only hold a `sublessor`
+  // listing — see RoomsService.create. The guard says who may try; the role says
+  // what they are allowed to claim.
+  create(@Body() dto: CreateRoomDto, @CurrentUser() user: { id: string; role: UserRole }) {
+    return this.roomsService.create(dto, user);
   }
 
   @Patch(':id')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateRoomDto, @CurrentUser() user: { id: string }) {
     return this.roomsService.update(id, dto, user.id);
   }
 
   @Patch(':id/photos')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Replace a room gallery — first path becomes the cover' })
   updatePhotos(
@@ -87,7 +91,7 @@ export class RoomsController {
   }
 
   @Post(':id/publish')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   publish(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
@@ -95,7 +99,7 @@ export class RoomsController {
   }
 
   @Post(':id/reserve')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   reserve(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
@@ -103,7 +107,7 @@ export class RoomsController {
   }
 
   @Post(':id/unpause')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resume a paused listing, keeping its applications' })
@@ -112,7 +116,7 @@ export class RoomsController {
   }
 
   @Post(':id/unreserve')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reserved back to active, when a prospect falls through' })
@@ -121,7 +125,7 @@ export class RoomsController {
   }
 
   @Post(':id/pause')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Take a listing off the board without closing applications' })
@@ -130,7 +134,7 @@ export class RoomsController {
   }
 
   @Post(':id/remove')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Remove a published listing; open applicants are closed and told' })
@@ -139,7 +143,7 @@ export class RoomsController {
   }
 
   @Post(':id/let')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   markLet(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
@@ -147,7 +151,7 @@ export class RoomsController {
   }
 
   @Post(':id/undo-let')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   undoLet(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
@@ -155,7 +159,7 @@ export class RoomsController {
   }
 
   @Delete(':id/permanent')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Delete a listing outright',
@@ -166,7 +170,7 @@ export class RoomsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Discard a draft listing (drafts only)' })
   discardDraft(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
@@ -174,7 +178,7 @@ export class RoomsController {
   }
 
   @Post(':id/relist')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'One-click relist — restores an archived room to active' })
