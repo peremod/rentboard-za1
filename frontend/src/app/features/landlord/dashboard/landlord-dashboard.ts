@@ -228,7 +228,11 @@ import { SurveyService } from '../../../core/services/survey';
         </section>
       }
 
-      <section class="dash-section">
+      <!-- Phase 7a: an id, so the nav can point here by name. A draft is a
+           room the landlord believes they listed; with no way to reach this
+           section except scrolling, "I posted my room and it is not showing"
+           is the support question it produces. -->
+      <section class="dash-section" id="drafts">
         <h2 class="dash-section-title">
           Drafts
           @if (draftRooms().length > 0) { <span class="dash-count">({{ draftRooms().length }})</span> }
@@ -326,6 +330,7 @@ export class LandlordDashboard implements OnInit {
   readonly navItems = computed<PortalNavItem[]>(() =>
     landlordNav({
       applicants: this.totalApplicants(),
+      drafts: this.draftRooms().length,
       // Phase 7g. The badge is how the notices screen gets found at all, and
       // for a landlord with no email address it is the only indication that
       // anything happened — WhatsApp refuses free-form text outside its

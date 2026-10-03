@@ -457,6 +457,8 @@ node scripts/notices-drive.mjs           # 9 checks — the in-app notice channe
 node scripts/sublet-drive.mjs            # 38 checks — Phase 6, incl. the guard split
 node scripts/sublet-ui-drive.mjs         # 13 checks — what an applicant is actually told
 node scripts/throttle-lint.mjs           # every @Throttle is actually guarded
+node scripts/nav-audit.mjs               # Phase 7a: dead nav links, unreachable
+                                         # screens, two names for one place
 ```
 
 The suite prints the release invocation itself whenever anything skipped. Ninety

@@ -1097,6 +1097,65 @@ filters (who lives there, hours, tidiness, sociable or quiet) stored once on
 | Shared-bill splitting between co-tenants is **not** built, as the brief says. `Expense` stays a record of a cost with no `paidBy` or `sharePercent`, so a future split can be its own table pointing at it | Deferred, unblocked |
 
 
+### 5.19 Nav-link integrity — ✅ audited and fixed in v1.86.1 (Phase 7a)
+
+The brief asks for the full list of mismatches found, **including ones already
+fixed**, so there is a record of what was wrong. Here it is.
+
+#### What the brief asked about, answered
+
+| Named in the brief | Finding |
+|---|---|
+| `/landlord/billing` | **Gone.** Zero references anywhere in the frontend. It was removed with the paused subscription pages; `landlord-nav.ts` carries a comment where the entry was, saying it pointed at `/landlord/upgrade` and that restoring it means restoring a real page first. |
+| `/landlord/my-rooms` | **Gone as a route.** The nav entry now points at the dashboard's `#active-listings` section, which is where a landlord's rooms are. Its LABEL was still wrong — see below. |
+| `/landlord/upgrade` | **Deleted.** Two comments mention it, both explaining the deletion: it offered Pro at R349/mo and Agency at R1,499/mo with no payment provider behind them. |
+| a `messages` route, either portal | **Does not exist, and is not linked.** Message threads live inside an application (`message-thread` component), reached from that application. Both portal navs carry a `disabled: true` "Messages" entry that renders greyed with a "Soon" chip — which is the truth; listing it as a destination was not. |
+| `verification` reachable from the landlord nav | **Yes** — "Verification" → `/landlord/verification`. |
+| `passport` reachable from the tenant nav | **Yes** — "Renter's Passport" → `/tenant/passport`. ⚠️ My own audit script reported this one as unreachable at first, because its label is written with double quotes (it contains an apostrophe) and the parser only matched single-quoted labels. The finding was the tool's, not the product's. |
+
+#### What the audit found that the brief did not name
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | 🔴 **`route-audit.mjs` could not see dead links at all.** It compared only the FIRST SEGMENT of each link against the known areas, so `/landlord/billing` and `/landlord/my-rooms` would both have passed — the audit printed "every internal routerLink resolves to a declared route" while pointing at routes that never existed. | Replaced by `scripts/nav-audit.mjs`, which parses the route tree with brace matching and resolves every link as a full path, parameters included. The old section now says where the real check lives rather than making a weaker one. |
+| 2 | **"My Rooms" opened a section headed "Active listings"** — two names for one place. Worse: a landlord whose rooms are all drafts clicked "My Rooms" and read "No rooms listed yet" while holding three of them. | One name: the nav says **Active listings**, exactly as the section does. **Drafts** got an `id` and its own nav entry with a count, so the other case is reachable rather than inferred. |
+| 3 | **"Applicants" in the landlord nav pointed at `#active-listings`** — a label naming a destination that does not exist. There is no applicants screen and no section by that name; applicants are listed per room. | The applicants count moved onto **Active listings**, where they are. The slot now holds **Needs you** → `#needs-attention`, which is a real section, exactly named, and surfaces waiting applications first. |
+| 4 | **The footer's "My applications" opened the tenant dashboard root** — the one thing it named was the one thing the person then had to go looking for. | Points at `#your-applications`, as the portal nav already did. |
+| 5 | **`/legal/sublet` was in no nav surface.** Phase 6 shipped it reachable only from a sublet room page and the listing wizard, so a tenant who read it while deciding had no way back. | Added to the footer's legal column. English in every locale, deliberately — see the comment there. |
+| 6 | **The admin nav had no Notices entry**, so an admin — who is a user the notice router can write to — had nowhere to read one. | Added. It also removed the one odd exception the reachability check had to carry. |
+| 7 | **The listing wizard had no `h1`** (found in Phase 6 by adding it to the accessibility drive, fixed there). | Noted here because it is the same class: the most-used form in the portal never said what it was. |
+
+#### What the audit now checks, every release
+
+`scripts/nav-audit.mjs`, wired into `verify-build.sh`:
+
+1. **Full-path resolution** of all 111 internal links — `routerLink`, `[routerLink]` arrays, `navigate([...])` and `navigateByUrl`.
+2. **The nav surfaces, enumerated** — navbar (desktop and mobile drawer are one template), footer, and the portal strip for each of the three roles. Printed as a list, because the brief asks for the list and not just a verdict.
+3. **Reachability** — every guarded screen is in a nav, or is on a list of exceptions each stating where it is reached from instead.
+4. **One name per thing** — every nav label against the heading of the page or section it opens, with light stemming so "Verifications" and "Verification queue" are not reported as two names.
+
+Each of the four was falsified before being trusted: a `/landlord/billing` entry fails it, removing the passport entry fails it, a fragment no page declares fails it, and renaming "Rent" to "Money" warns.
+
+#### Deliberate exceptions, with reasons
+
+Public landing pages whose `h1` is a headline rather than the page's name are
+allowed by route, not by area: `how-it-works`, `pricing`, `advertise`,
+`admin/dashboard` ("Admin" enters an area, "Overview" is a screen),
+`landlord/dashboard` (the footer calls it a portal from outside) and
+`admin/analytics` ("Usage" in a nav strip, "How the site is used" on the page —
+one word in two grammatical forms). Nobody clicking "Pricing" is confused to
+land on "Free to list. Free to apply."; the defect the brief is about is an
+in-product destination known by two names.
+
+### Gaps
+
+| Gap | Severity |
+|---|---|
+| The reachability exception list is hand-maintained. A new screen reached only from a page body has to be added to it, which is the point — but it means the check is as honest as the reasons in it | Low, by design |
+| Label comparison reads the first `<h1>` or `pageTitle` it finds per component, and section headings by proximity to an `id`. It cannot read a heading built from a signal, so a page whose title is computed is skipped rather than guessed at | Low |
+| Nothing checks the nav against what a given ROLE can see: `landlordNav()` is compared as a list, not as rendered for a landlord with no rooms. The portal strip is covered by the accessibility drive at 412px, which is where it is a scrolling strip | Medium — 7b–7f territory |
+
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

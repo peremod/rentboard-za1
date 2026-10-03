@@ -109,33 +109,27 @@ for (const [area, expected] of Object.entries(PRIVATE_AREAS)) {
   }
 }
 
-// ── 3. Internal links point somewhere real ────────────────────────────────
+// ── 3. Internal links ─────────────────────────────────────────────────────
+//
+// ⚠️ This section used to check internal links and could not see the thing it
+// was named after. It compared only the FIRST SEGMENT of each link against the
+// set of known areas:
+//
+//     for (const m of src.matchAll(/routerLink="\/([a-z0-9-]+)/g))
+//       if (!known.has(m[1])) …
+//
+// So `/landlord/billing` and `/landlord/my-rooms` — two links to routes that
+// have never existed, named in the Phase 7a brief — both passed, because
+// `landlord` is a real area. This audit printed "every internal routerLink
+// resolves to a declared route" while two of them did not.
+//
+// The real check lives in scripts/nav-audit.mjs, which parses the route tree
+// with brace matching and matches every link as a FULL path, parameters
+// included, along with the nav surfaces, reachability and labels. It is not
+// duplicated here: two implementations of the same check is how one of them
+// quietly becomes the wrong one.
 console.log('\n── Internal links ──────────────────────────────────────────');
-
-const known = new Set();
-for (const r of routes) {
-  if (r.path) known.add(r.path.split('/')[0]);
-}
-// top-level areas declared in app.routes
-for (const m of appRoutes.matchAll(/path:\s*'([^']*)'/g)) {
-  if (m[1]) known.add(m[1].split('/')[0]);
-}
-
-const linkProblems = new Set();
-for (const file of walk(FE)) {
-  const src = readFileSync(file, 'utf8');
-  for (const m of src.matchAll(/routerLink="\/([a-z0-9-]+)/g)) {
-    if (!known.has(m[1])) linkProblems.add(`${m[1]} (in ${file.replace(FE + '/', '')})`);
-  }
-  for (const m of src.matchAll(/routerLink="\['\/([a-z0-9-]+)'/g)) {
-    if (!known.has(m[1])) linkProblems.add(`${m[1]} (in ${file.replace(FE + '/', '')})`);
-  }
-}
-if (linkProblems.size) {
-  [...linkProblems].forEach((p) => fail(`routerLink to unknown route: ${p}`));
-} else {
-  ok('every internal routerLink resolves to a declared route');
-}
+note('checked by scripts/nav-audit.mjs — full paths, nav surfaces, reachability');
 
 // ── 4. Backend endpoints and their guards ─────────────────────────────────
 console.log('\n── API endpoints ───────────────────────────────────────────');
