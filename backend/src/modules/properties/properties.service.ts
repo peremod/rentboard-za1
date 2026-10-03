@@ -113,8 +113,34 @@ export class PropertiesService {
    * landlord tidying up their dashboard must not be able to destroy six live
    * listings and their applications by removing a label.
    */
-  async remove(id: string, landlordId: string) {
+  async remove(id: string, landlordId: string, ungroupRooms = false) {
     await this.assertOwned(id, landlordId);
+
+    /**
+     * With rooms still attached, the caller has to say so — Phase 7b.
+     *
+     * The brief: delete a property "only with zero active rooms, or with an
+     * explicit choice about what happens to rooms still attached — never
+     * silently". Deleting has never destroyed a listing (SetNull, above), but
+     * "it is safe" and "the landlord knows what will happen" are different
+     * claims, and only the second one is about the person.
+     *
+     * So the refusal names the number and says what will happen to them, and
+     * the only way past it is a caller that passes `ungroupRooms`. The UI puts
+     * that sentence in front of the landlord before it sets the flag — but the
+     * rule lives here, where it cannot be skipped by a second UI, a script, or
+     * somebody with a curl command.
+     */
+    const attached = await this.prisma.room.count({ where: { propertyId: id } });
+    if (attached > 0 && !ungroupRooms) {
+      throw new BadRequestException(
+        `This property still has ${attached} ${attached === 1 ? 'room' : 'rooms'} grouped under it. ` +
+        'Deleting it will NOT delete those listings — they stay exactly as they are, ' +
+        'still live, with their applications, and simply stop being grouped. ' +
+        'Confirm that and we will go ahead.',
+      );
+    }
+
     const { count } = await this.prisma.room.updateMany({
       where: { propertyId: id },
       data: { propertyId: null },

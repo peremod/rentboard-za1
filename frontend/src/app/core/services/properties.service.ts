@@ -21,6 +21,8 @@ export class PropertiesService {
   }
 
   create(body: {
+    /** Private to the landlord — see Property.addressLine. */
+    addressLine?: string;
     name: string; suburb?: string; city: string; province: string;
     houseRules?: string; sharedAmenities?: string[];
     currentHousemates?: number; housemateProfile?: HousemateProfile;
@@ -37,6 +39,8 @@ export class PropertiesService {
    * rename form.
    */
   update(id: string, body: {
+    /** Private to the landlord — see Property.addressLine. */
+    addressLine?: string;
     name?: string; suburb?: string; city?: string; province?: string;
     houseRules?: string; sharedAmenities?: string[];
     currentHousemates?: number; housemateProfile?: HousemateProfile;
@@ -54,8 +58,19 @@ export class PropertiesService {
     return this.http.post<RelistAllResult>(`${this.api}/properties/${id}/relist-all`, {});
   }
 
-  remove(id: string) {
-    return this.http.delete<{ deleted: true; roomsUngrouped: number }>(`${this.api}/properties/${id}`);
+  /**
+   * Delete a property.
+   *
+   * `ungroupRooms` is not a convenience flag — the API REFUSES the call while
+   * rooms are attached and the caller has not passed it, and the refusal says
+   * how many there are and what will happen to them. Phase 7b: never silently.
+   * The confirmation dialog is what earns the true.
+   */
+  remove(id: string, ungroupRooms = false) {
+    const query = ungroupRooms ? '?ungroupRooms=true' : '';
+    return this.http.delete<{ deleted: true; roomsUngrouped: number }>(
+      `${this.api}/properties/${id}${query}`,
+    );
   }
 
   assignRooms(id: string, roomIds: string[]) {

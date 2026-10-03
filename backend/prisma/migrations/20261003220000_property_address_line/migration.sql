@@ -1,0 +1,12 @@
+-- Phase 7b: a street address on a property, for the landlord's eyes only.
+--
+-- Optional, and that is the point. The yard screen has never collected a street
+-- address — the board shows the suburb, not the street, for the tenant's safety
+-- — and nothing on this platform needs one: no viewings, no deposits, no
+-- deliveries. What a landlord with four yards DOES need is to tell them apart
+-- in a list, which "Ext 7 back rooms" alone does not always do.
+--
+-- So: nullable, never in a public payload, and the form that writes it says
+-- plainly that nobody else sees it. POPIA s.10 — the purpose is exactly that
+-- one, which is why it can stay blank.
+ALTER TABLE "properties" ADD COLUMN "addressLine" TEXT;

@@ -1156,6 +1156,52 @@ in-product destination known by two names.
 | Nothing checks the nav against what a given ROLE can see: `landlordNav()` is compared as a list, not as rendered for a landlord with no rooms. The portal strip is covered by the accessibility drive at 412px, which is where it is a scrolling strip | Medium — 7b–7f territory |
 
 
+### 5.20 Properties: grouping rooms at one address — ✅ rebuilt in v1.87.0 (Phase 7b)
+
+**The diagnosis, which was right.** Grouping existed and nobody used it. It was
+reachable only from inside the yard screen, below the rent tracking and the
+expenses, behind a button reading "+ Group rooms into a yard" — so the concept
+was something a landlord found while doing something else, if they scrolled far
+enough, under a word that appeared nowhere else in the product.
+
+**What changed.**
+
+| Before | Now |
+|---|---|
+| One screen, `/landlord/yard`, nav label "My property" | A list at `/landlord/properties` ("My properties" in the nav) and a detail view at `/landlord/properties/:propertyId`. `/landlord/yard` redirects — it is in landlords' bookmarks |
+| Grouping discovered by scrolling | A card per property: the landlord's own name for it, the address under it, a photo borrowed from one of its rooms, and "2 rooms — 1 vacant — 1 let" |
+| Nothing taught the concept | An empty state with one sentence and one button, and a line saying grouping is optional when they already have rooms |
+| Rooms created one at a time, grouping never mentioned | The wizard asks, in the brief's words, "Is this room at an address where you already have a room listed?", with the existing places as cards — and only when there is at least one |
+| Adding a second room meant retyping the suburb | "+ Add a room to this property" carries `?propertyId=` into the wizard, pre-selects it and fills in province, city and location |
+| "Delete yard" with a generic warning | A refusal from the API unless the caller confirms, naming the count and saying the listings are NOT deleted; the dialog says what is lost (the grouping, the house rules, the shared facilities) and what is not |
+| No way to ungroup one room | "Take out of this property" per room, with a confirmation that names what survives: the photos, the applications, the tenant |
+
+**The private address line.** The brief asks for the full address on the card.
+The yard screen had deliberately never collected a street address — the board
+shows the suburb and not the street, for the tenant's safety, and the platform
+has no function that needs one. So `Property.addressLine` is **optional, free
+text, and never leaves the landlord's own screens**: not in
+`PUBLIC_ROOM_DETAIL`, not on the board, and the field says so where it is typed.
+POPIA s.10 — the purpose is "so a landlord can tell their own properties apart",
+which is why it can be left blank and why nothing else reads it. A future
+feature needing a verified address is a different field with its own consent.
+
+**Structure is not forced on anybody.** A landlord with one address never has to
+create a property: rooms without one are a card of their own, listings behave
+exactly as before, the picker is not shown to somebody with no properties, and
+"No — somewhere new" is a real answer. The brief is explicit, and it matters
+most for the person this product is for.
+
+### Gaps
+
+| Gap | Severity |
+|---|---|
+| The detail view is the old yard screen scoped by a route parameter, so it carries rent, expenses, lease documents and notes as well as the property's own details. That is the right content for the screen, but it is a 900-line component doing several jobs | Medium — a split is 7d territory |
+| The card's photo is borrowed from the first room at the address that has one. A property with no photographed rooms shows an icon. A real property photo would be a second upload flow and a second thing to delete under POPIA | Low, by choice |
+| `Property.addressLine` is not validated or geocoded — it is a note to self. Nothing matches it against the room's `locationDisplay`, so a landlord can type an address in one place and a suburb in another and the two can disagree | Low |
+| A landlord with two properties in the same suburb still sees two identical "where" lines unless they filled the address in. The address is the fix and it is optional, so the ambiguity is theirs to resolve | Low |
+
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

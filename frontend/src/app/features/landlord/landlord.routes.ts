@@ -19,6 +19,35 @@ export const LANDLORD_ROUTES: Routes = [
     title: 'Continue Your Listing — Mastande',
   },
   {
+    /**
+     * My properties — Phase 7b.
+     *
+     * The list screen is new; the detail screen is the yard screen, scoped to
+     * one property by its parameter. That reuse is deliberate: everything a
+     * landlord does with a property — its rooms, their rent, the expenses
+     * against the address, the lease documents, the tenants' notes — is already
+     * built there, per property, and a second component rendering the same
+     * things would be the copy that misses the next fix.
+     */
+    path: 'properties',
+    loadComponent: () => import('./properties/properties').then((m) => m.Properties),
+    title: 'My properties — Mastande',
+  },
+  {
+    path: 'properties/:propertyId',
+    loadComponent: () => import('./yard/yard').then((m) => m.Yard),
+    title: 'Property — Mastande',
+  },
+  {
+    // Where the nav pointed until Phase 7b. Kept as a redirect rather than
+    // deleted: it is in a landlord's history and their bookmarks, and a 404 on
+    // a URL that worked yesterday is the kind of thing people do not report,
+    // they just stop using the screen.
+    path: 'yard',
+    redirectTo: 'properties',
+    pathMatch: 'full',
+  },
+  {
     path: 'rooms/:roomId/applicants',
     loadComponent: () => import('./applicants/applicants').then((m) => m.Applicants),
     title: 'Applicants — Mastande',
@@ -50,11 +79,6 @@ export const LANDLORD_ROUTES: Routes = [
     path: 'services',
     loadComponent: () => import('./services/services').then((m) => m.LandlordServices),
     title: 'Who to call — Mastande',
-  },
-  {
-    path: 'yard',
-    loadComponent: () => import('./yard/yard').then((m) => m.Yard),
-    title: 'Your property — Mastande',
   },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];

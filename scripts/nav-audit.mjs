@@ -131,11 +131,23 @@ const routes = new Set();
 /** component path → full route path, for the label pass. */
 const componentOf = new Map();
 
+/**
+ * Paths that only redirect somewhere else — Phase 7b.
+ *
+ * They are valid link targets (so they belong in `routes`) and they are not
+ * screens, so "is it reachable from a nav" is a question about the place they
+ * point at, not about them. /landlord/yard became one of these when the nav
+ * moved to /landlord/properties, and the audit immediately asked for a nav
+ * entry for a URL that exists only to forward old bookmarks.
+ */
+const redirects = new Set();
+
 for (const r of topLevel) {
   if (r.path === '**' || r.path === ':lang') continue;
   if (r.component || r.redirect !== null) {
     routes.add(r.path);
     if (r.component) componentOf.set(r.path, r.component);
+    if (!r.component && r.redirect !== null) redirects.add(r.path);
   }
   if (!r.childFile) continue;
 
@@ -147,6 +159,7 @@ for (const r of topLevel) {
     const full = [r.path, child.path].filter(Boolean).join('/');
     routes.add(full);
     if (child.component) componentOf.set(full, child.component);
+    else if (child.redirect !== null) redirects.add(full);
   }
 }
 
@@ -340,6 +353,7 @@ const NOT_IN_NAV = {
   'tenant/sublet/:roomId/edit': 'opened from that listing in the dashboard section',
   'tenant/sublet/:roomId/applicants': 'opened from that listing in the dashboard section',
   'admin/users/:id': 'opened from a row in the admin user list',
+  'landlord/properties/:propertyId': 'opened by tapping a property card on /landlord/properties',
 };
 
 const guardedAreas = ['landlord', 'tenant', 'admin', 'account'];
@@ -350,6 +364,7 @@ for (const route of routeList) {
   if (route === area || route.endsWith("/''")) continue;
   if (navTargets.has(route)) continue;
   if (NOT_IN_NAV[route]) continue;
+  if (redirects.has(route)) continue;
   unreachable.push(route);
 }
 

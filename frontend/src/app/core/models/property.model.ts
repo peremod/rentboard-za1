@@ -17,6 +17,15 @@ export interface Property {
   suburb?: string | null;
   city: string;
   province: string;
+  /**
+   * A street address, for the landlord's eyes only — Phase 7b.
+   *
+   * Optional, and never shown to anybody else: the board shows the suburb and
+   * not the street, for the tenant's safety, and nothing on this platform needs
+   * a street address. It exists so a landlord with four yards can tell them
+   * apart in a list, which is the whole purpose and the reason it can be blank.
+   */
+  addressLine?: string | null;
 
   // ── What the whole address shares ────────────────────────────────────────
   //

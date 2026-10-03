@@ -74,10 +74,15 @@ export class PropertiesController {
   @ApiOperation({
     summary: 'Delete a yard. Its rooms survive.',
     description:
-      'A yard is a label, not an owner. Deleting one ungroups its rooms and removes nothing — a landlord tidying their dashboard must not be able to destroy six live listings and their applications.',
+      'A yard is a label, not an owner. Deleting one ungroups its rooms and removes nothing — a landlord tidying their dashboard must not be able to destroy six live listings and their applications. ' +
+      'With rooms still attached the call is REFUSED unless ungroupRooms=true, and the refusal says how many there are and what will happen to them (Phase 7b: never silently).',
   })
-  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
-    return this.properties.remove(id, user.id);
+  remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: { id: string },
+    @Query('ungroupRooms') ungroupRooms?: string,
+  ) {
+    return this.properties.remove(id, user.id, ungroupRooms === 'true');
   }
 
   @Post(':id/rooms')

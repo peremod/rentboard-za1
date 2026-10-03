@@ -1,4 +1,4 @@
-import { IsString, IsEnum, IsInt, Min, IsOptional, IsBoolean, IsDateString, MaxLength, MinLength, IsIn, IsArray, ArrayMaxSize, ValidateNested } from 'class-validator';
+import { IsString, IsEnum, IsInt, Min, IsOptional, IsBoolean, IsDateString, MaxLength, MinLength, IsIn, IsArray, ArrayMaxSize, ValidateNested, IsUUID } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SA_PROVINCES } from './room-filters.dto';
@@ -116,4 +116,17 @@ export class CreateRoomDto {
   @ApiPropertyOptional({ type: HouseholdDto, description: 'What the household is like. Stored on the property.' })
   @IsOptional() @ValidateNested() @Type(() => HouseholdDto)
   household?: HouseholdDto;
+
+  /**
+   * Group this room under one of the lister's own properties — Phase 7b.
+   *
+   * Set by the wizard's property picker, and by "+ Add a room to this property"
+   * on the property detail screen. Validated against the caller's own
+   * properties in RoomsService.create: a property id that is not theirs is a
+   * refusal, not a silent ignore, because a landlord told "saved" while their
+   * room went somewhere else would have no way to notice.
+   */
+  @ApiPropertyOptional({ description: "One of your own properties, to group this room under." })
+  @IsOptional() @IsUUID()
+  propertyId?: string;
 }

@@ -2172,6 +2172,49 @@ check "sign-up refuses acceptTerms: false" 400 "$STATUS" "$BODY"
 req POST /api/auth/phone/signup/complete '{"ticket":"not-a-real-ticket-at-all-x","fullName":"Nobody","role":"TENANT"}'
 check "sign-up refuses a request with no acceptTerms at all" 400 "$STATUS" "$BODY"
 
+# Properties — Phase 7b. The full flow is scripts/properties-drive.mjs; what
+# belongs here is the rule that cannot be allowed to regress quietly: deleting a
+# property with rooms in it is REFUSED unless the caller confirms, and the
+# refusal says what will happen to the listings.
+req POST /api/properties '{"name":"Smoke yard","addressLine":"12 Smoke Street","city":"Johannesburg","province":"Gauteng"}' "$LTOKEN"
+check "a landlord can create a property" 201 "$STATUS" "$BODY"
+SMOKE_PROP=$(echo "$BODY" | jq -r '.id // empty')
+
+if [[ "$(echo "$BODY" | jq -r '.addressLine')" == "12 Smoke Street" ]]; then
+  green "  PASS  the private address line is stored and returned to its owner"; PASS=$((PASS+1))
+else
+  red "  FAIL  addressLine did not round-trip: $(echo "$BODY" | jq -r '.addressLine')"; FAIL=$((FAIL+1))
+fi
+
+if [[ -n "$SMOKE_PROP" && -n "$ROOM_ID" ]]; then
+  req POST "/api/properties/$SMOKE_PROP/rooms" "{\"roomIds\":[\"$ROOM_ID\"]}" "$LTOKEN"
+  check "a room can be grouped under it" 200 "$STATUS" "$BODY"
+
+  req DELETE "/api/properties/$SMOKE_PROP" "" "$LTOKEN"
+  check "deleting it with a room inside is refused" 400 "$STATUS" "$BODY"
+  if echo "$BODY" | jq -r '.message' | grep -qi "NOT delete"; then
+    green "  PASS  and the refusal says the listing will NOT be deleted"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the refusal does not say what happens to the rooms"; FAIL=$((FAIL+1))
+  fi
+
+  req DELETE "/api/properties/$SMOKE_PROP?ungroupRooms=true" "" "$LTOKEN"
+  check "with the confirmation it goes ahead" 200 "$STATUS" "$BODY"
+
+  req GET "/api/rooms/$ROOM_ID" "" "$LTOKEN"
+  check "and the room it held is still there" 200 "$STATUS" "$BODY"
+fi
+
+# A property id that is not yours cannot be attached to a room.
+req POST /api/rooms "$(jq -nc --arg d "$(date -u -d '+10 days' +%Y-%m-%d)" '{
+  roomType:"shared_house", title:"Room with somebody elses property",
+  description:"A clean room in a shared house, close to transport and the shops. Available now.",
+  rentCents:300000, province:"Gauteng", city:"Johannesburg",
+  locationDisplay:"Tembisa, Johannesburg", availableFrom:$d,
+  propertyId:"00000000-0000-4000-8000-000000000000"
+}')" "$LTOKEN"
+check "a property id that is not yours is refused, not ignored" 400 "$STATUS" "$BODY"
+
 # Sub-letting — Phase 6. The flow end to end is scripts/sublet-drive.mjs; what
 # belongs here is that a TENANT may hold a listing, that they cannot claim to be
 # an owner, and that the board's new filters are wired to something.
@@ -2816,9 +2859,15 @@ if [[ -n "$YARD_ID" && -n "$ROOM_ID" ]]; then
   req POST "/api/properties/$YARD_ID/rooms" "{\"roomIds\":[\"$ROOM_ID\",\"00000000-0000-4000-8000-000000000000\"]}" "$LTOKEN"
   check "a batch containing a room that is not yours is refused whole" 400 "$STATUS" "$BODY"
 
-  # Deleting the yard must not delete the room.
+  # Deleting the property must not delete the room — and since Phase 7b it must
+  # not even be possible to ask for it without being told so. This check used to
+  # expect 200 here, which encoded the old behaviour: the call went through and
+  # the landlord found out afterwards what had happened to their rooms.
   req DELETE "/api/properties/$YARD_ID" "" "$LTOKEN"
-  check "the yard is deleted" 200 "$STATUS" "$BODY"
+  check "deleting a property with rooms in it is refused first" 400 "$STATUS" "$BODY"
+
+  req DELETE "/api/properties/$YARD_ID?ungroupRooms=true" "" "$LTOKEN"
+  check "and goes ahead once the caller confirms" 200 "$STATUS" "$BODY"
   req GET "/api/rooms/$ROOM_ID"
   if [[ "$STATUS" == "200" ]]; then
     green "  PASS  its room survived — a yard is a label, not an owner"; PASS=$((PASS+1))
