@@ -67,6 +67,14 @@ const PUBLIC_PAGES = [
   '/legal/terms',
   '/legal/privacy',
   '/legal/paia',
+  // Phase 7g. Added with the page itself, because it is a form a person fills
+  // in on a phone with one hand — label association and target size are the
+  // whole experience, not a detail.
+  //
+  // ⚠️ The REST of /auth is still unaudited: /login, /register,
+  // /forgot-password and /reset-password have never been through this drive,
+  // and they share this page's card markup. Named rather than quietly left out.
+  '/auth/register-phone',
 ];
 
 /**

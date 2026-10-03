@@ -332,6 +332,21 @@ if [ -f "$ROOT/backend/dist/main.js" ]; then
   fi
 fi
 
+# ── 8b. Every @Throttle is actually guarded ───────────────────────────────
+#
+# Static, because the failure it catches is invisible at runtime: a @Throttle on
+# a route with no ThrottlerGuard in scope does nothing, and the route answers
+# 200 for ever. Nineteen decorators shipped that way across eight controllers.
+# scripts/throttle-lint.mjs has the detail and the two failure modes.
+step "Rate limiting"
+if node "$ROOT/scripts/throttle-lint.mjs" > /tmp/throttle.log 2>&1; then
+  ok "$(tail -1 /tmp/throttle.log | sed 's/^✅ //')"
+else
+  bad "a rate limit that does nothing"
+  cat /tmp/throttle.log
+  note "Fix the route named above: an unguarded @Throttle is a comment, not a limit."
+fi
+
 # ── 9. What the SERVER actually answers, per URL ──────────────────────────
 #
 # Every check above reads files on disk. These boot the server and ask it,

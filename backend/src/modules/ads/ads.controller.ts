@@ -10,7 +10,7 @@ import {
   CreateCampaignDto, ReviewCampaignDto, CreateAdvertiserDto,
   CreateAdEnquiryDto, UpdateEnquiryDto,
 } from './dto/ads.dto';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 
 @ApiTags('ads')
@@ -93,10 +93,6 @@ export class AdsController {
     return `${this.siteOrigin()}${target.startsWith('/') ? '' : '/'}${target}`;
   }
 
-  /**
-   * Public enquiry form. Rate limited hard — an open contact form that sends
-   * mail is the obvious target for spam.
-   */
   @Get('rates')
   @Header('Cache-Control', 'public, max-age=3600')
   @ApiOperation({ summary: 'Rate card: monthly price by placement and targeting reach' })
@@ -104,7 +100,15 @@ export class AdsController {
     return this.adsService.getRateCard();
   }
 
+  /**
+   * Public enquiry form. Rate limited hard — an open contact form that sends
+   * mail is the obvious target for spam.
+   *
+   * (This comment sat above `@Get('rates')` and described this route, which is
+   * how a reader ends up believing the rate card is the thing being protected.)
+   */
   @Post('enquiries')
+  @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 3, ttl: 60 * 60 * 1000 } })
   @ApiOperation({ summary: 'Enquire about advertising on the board' })
   createEnquiry(@Body() dto: CreateAdEnquiryDto) {

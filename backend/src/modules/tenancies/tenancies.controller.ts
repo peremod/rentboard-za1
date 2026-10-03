@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -129,6 +129,7 @@ export class TenanciesController {
   @HttpCode(HttpStatus.CREATED)
   // Harder than the global limit: this writes a mark against another person's
   // account, and there is no legitimate reason to do it in bulk.
+  @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60 * 60 * 1000 } })
   @ApiOperation({
     summary: 'Report a problem with the other party, after the tenancy ended',

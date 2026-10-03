@@ -920,6 +920,84 @@ parties rewarded on the referred landlord's first completed action ✓. Nothing 
 do.
 
 
+### 5.16 Signing up with a phone number — ✅ built in v1.85.1 (Phase 7g)
+
+**The gap it closes.** Phone sign-IN shipped in v1.85.0, which meant a
+WhatsApp-first landlord could sign in only if somebody had already created their
+account with an email address. The people the feature exists for could not get
+through the front door on their own.
+
+**The state machine.** A `PhoneSignup` row, not a `User`:
+
+```
+(nothing)
+   │  POST /auth/phone/signup/request-code     code sent, row created
+   ▼
+awaiting code ──── 5 wrong guesses ──▶ burned (codeHash cleared)
+   │  POST /auth/phone/signup/verify           code correct
+   ▼
+proven (ticket, 20 min) ──── ticket expires ──▶ dead, nothing created
+   │  POST /auth/phone/signup/complete         + acceptTerms: true
+   ▼
+consumed → User created, phoneVerified: true, consentAcceptedAt set
+```
+
+**Why no `User` until the last step.** A row with `phoneVerified: false` would
+be an account on somebody else's handset, created by anybody who can type a
+number into a public endpoint: countable in "users", reachable by the
+notification and deletion machinery, and in the way when the real owner tries to
+sign up. A sign-up attempt is not a person agreeing to anything.
+
+**The consent is the control.** `acceptTerms` must be literally `true`
+(`@Equals(true)` plus a service check), and the moment is recorded against the
+row that proved the number. This is what makes *assisted* sign-up safe — an
+agent or a family member can do every other part, and the acceptance still has
+to come from the person holding the handset. The UI drive asserts the box
+arrives unticked and the button is dead until it is ticked, which the API cannot
+prove.
+
+**Retention.** Abandoned attempts are the mobile number of someone who never
+joined, so they are pruned after 24 hours. Completed rows are kept as that
+account's consent record and cascade away with the account (POPIA s.24).
+`GET /admin/phone-signups/status` reports `overdue` so the promise is checkable,
+and `POST .../prune` runs it on demand — the same pattern as the file-deletion
+queue, for the same reason: "it is on a cron" is not evidence.
+
+### Gaps
+
+| Gap | Severity |
+|---|---|
+| 🔴 A new number has by definition never messaged us, so it is **always** outside Meta's 24-hour window. Until the authentication template is approved (`docs/OUTSTANDING.md` §7), a sign-up code can only reach a number that happens to have messaged the business in the last day. The flow is proven end to end; the pipe is half-connected | **Blocking for launch of this flow** |
+| A phone-only account cannot pay the verification fee — PayFast requires `email_address`. Refused explicitly with an instruction to add one, rather than given a placeholder | Medium, by decision |
+| No assisted sign-up mode yet (an agent-led flow with its own audit trail), no account recovery for a phone-only account, no "add an email later" screen, and no `/notices` screen for the in-app channel | Medium — each is listed in `docs/OUTSTANDING.md` |
+
+### 5.17 Rate limiting existed only as decoration — ✅ fixed in v1.85.1
+
+Nineteen `@Throttle` decorators across eight controllers had never limited
+anything, and `/auth/login` carried no decorator at all. `ThrottlerGuard` was
+never registered anywhere, and the root throttler was named `global` while every
+decorator keys `default` — a key matching no configured throttler is silently
+ignored. Eight requests to a route marked `limit: 5` all returned `200`.
+
+The guard is now paired with every `@Throttle` **per route, not globally**: the
+SSR server calls this API for every server-rendered page from one address, so a
+global per-IP guard would throttle the whole site under load.
+
+The limits were also re-pitched for this market. Mobile carriers here put very
+large numbers of subscribers behind one address, so 5 per 15 minutes can be a
+neighbourhood's budget: auth requests are 15 per 15 minutes, verifications 30,
+`/auth/login` 15, register 10 per hour, and public scam reporting 20 per hour
+(raised from 5 — a false report costs an admin a minute, a suppressed one leaves
+a scam listing up).
+
+### Gaps
+
+| Gap | Severity |
+|---|---|
+| No per-ACCOUNT login lockout. The new limit is per IP, so a slow distributed spray against one known email is still possible | Medium — `docs/OUTSTANDING.md` §12 |
+| Counters are in memory, per instance. Two instances behind a load balancer roughly doubles every limit | Low until the API scales past one instance |
+
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

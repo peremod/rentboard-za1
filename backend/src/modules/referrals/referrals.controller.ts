@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -19,6 +19,7 @@ export class ReferralsController {
    * an id or email.
    */
   @Get('validate')
+  @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 20, ttl: 60 * 1000 } })
   @ApiOperation({ summary: 'Check a referral code before signing up' })
   validate(@Query('code') code: string) {

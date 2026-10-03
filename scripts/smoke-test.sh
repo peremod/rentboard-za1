@@ -2117,6 +2117,55 @@ check "rejects a wrong code" 400 "$STATUS" "$BODY"
 req POST /api/auth/phone/verify '{"phone":"0821234567","code":"123"}'
 check "rejects a short code" 400 "$STATUS" "$BODY"
 
+# Phone SIGN-UP — Phase 7g part two. The three steps, and the refusals that
+# matter more than the happy path: the full flow needs a code read out of the
+# database, which is what scripts/phone-signup-drive.mjs is for.
+SIGNUP_PHONE="08212$(( RANDOM % 90000 + 10000 ))"
+req POST /api/auth/phone/signup/request-code "{\"phone\":\"$SIGNUP_PHONE\"}"
+check "sign-up code request accepted" 200 "$STATUS" "$BODY"
+SIGNUP_MSG=$(echo "$BODY" | jq -r '.message')
+
+# The same number sign-in uses above, which by now HAS an account.
+req POST /api/auth/phone/signup/request-code '{"phone":"0821234567"}'
+if [[ "$(echo "$BODY" | jq -r '.message')" == "$SIGNUP_MSG" ]]; then
+  green "  PASS  sign-up says the same thing whether or not the number is taken"; PASS=$((PASS+1))
+else
+  red "  FAIL  sign-up reveals that a number already has an account"; FAIL=$((FAIL+1))
+fi
+
+req POST /api/auth/phone/signup/request-code '{"phone":"12345"}'
+check "sign-up rejects a malformed number" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/phone/signup/verify "{\"phone\":\"$SIGNUP_PHONE\",\"code\":\"000000\"}"
+check "sign-up rejects a wrong code" 400 "$STATUS" "$BODY"
+
+# No ticket, no account — whatever else the request carries.
+req POST /api/auth/phone/signup/complete '{"ticket":"not-a-real-ticket-at-all-x","fullName":"Nobody","role":"TENANT","acceptTerms":true}'
+check "sign-up refuses a bogus ticket" 400 "$STATUS" "$BODY"
+
+# The consent check, from the outside. The DTO must refuse both shapes: false,
+# and absent. Absent is the one a missed checkbox binding actually ships as.
+req POST /api/auth/phone/signup/complete '{"ticket":"not-a-real-ticket-at-all-x","fullName":"Nobody","role":"TENANT","acceptTerms":false}'
+check "sign-up refuses acceptTerms: false" 400 "$STATUS" "$BODY"
+
+req POST /api/auth/phone/signup/complete '{"ticket":"not-a-real-ticket-at-all-x","fullName":"Nobody","role":"TENANT"}'
+check "sign-up refuses a request with no acceptTerms at all" 400 "$STATUS" "$BODY"
+
+# Rate limiting exists at all — the thing nineteen @Throttle decorators only
+# looked like they were doing. Probed on referrals/validate because its window
+# is one minute, so this cannot poison a later check for a quarter of an hour.
+LIMIT_HIT=""
+for i in $(seq 1 26); do
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+    "$API/api/referrals/validate?code=SMOKE$RANDOM" || true)
+  if [[ "$CODE" == "429" ]]; then LIMIT_HIT="$i"; break; fi
+done
+if [[ -n "$LIMIT_HIT" ]]; then
+  green "  PASS  the rate limiter refuses (429 on request $LIMIT_HIT of a 20-per-minute route)"; PASS=$((PASS+1))
+else
+  red "  FAIL  26 requests to a 20-per-minute route all accepted — the throttle is decoration"; FAIL=$((FAIL+1))
+fi
+
 
 # -- 38. Withdraw then re-apply, and permanent delete -----------------------
 head_ "38. Re-apply & permanent delete"

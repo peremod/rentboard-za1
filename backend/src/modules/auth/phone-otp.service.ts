@@ -30,19 +30,22 @@ const MAX_ATTEMPTS = 5;
 const MAX_CODES_PER_DAY = 10;
 
 /*
- * There was a `MAX_ATTEMPTS = 5` here that nothing ever read — the file
- * contains no attempt counting at all. It described an intention rather than
- * a control, which is the worst kind of constant to leave lying around: it
- * reads like the protection exists.
+ * ── A note on what guards this, kept because both halves were wrong once
  *
- * What actually limits code guessing is the per-route @Throttle in
- * auth.controller.ts (10 per 15 minutes on both phone/verify and, as of this
- * change, phone/confirm-number) against a six-digit space.
+ * The constant above went three releases being read by nothing: it described an
+ * intention and counted no guesses. The reason was the lookup shape, not a
+ * missed wiring — see verifyCode.
  *
- * A genuine per-code cap would be better, since throttling is per IP and this
- * is not, but it needs somewhere to count: AuthToken has no attempts column,
- * so it is a schema migration rather than a constant. Left undone deliberately
- * rather than left looking done.
+ * The comment that replaced it then claimed the per-route @Throttle in
+ * auth.controller.ts was "what actually limits code guessing". That was also
+ * untrue: ThrottlerGuard had never been registered, so no limit anywhere in the
+ * API was in force (app.module.ts has the detail). For that whole period the
+ * only thing standing between a six-digit code and an attacker was a constant
+ * nothing read.
+ *
+ * Both are now real: the attempts column caps guesses per account, and the
+ * throttle caps requests per address. Neither is load-bearing on its own, which
+ * is the point of having both.
  */
 
 /**

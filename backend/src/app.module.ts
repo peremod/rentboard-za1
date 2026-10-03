@@ -58,8 +58,51 @@ import { MessagesModule } from './modules/messages/messages.module';
       envFilePath: '.env',
       cache: true,
     }),
+    /**
+     * Rate limiting.
+     *
+     * ⚠️ Two things were wrong here for every release up to v1.85.1, and the
+     * second one hid the first:
+     *
+     *   1. The throttler was named 'global', while all nineteen `@Throttle`
+     *      decorators in the codebase key on 'default'. A key that matches no
+     *      configured throttler is ignored, so every per-route limit resolved
+     *      back to this bucket.
+     *   2. ThrottlerGuard was never registered — not here as an APP_GUARD, not
+     *      on a controller. So nothing was limited at all: not this bucket, not
+     *      the decorators, and not /auth/login, which had no decorator either.
+     *
+     * Both were found by probing the route rather than reading the decorator:
+     * eight requests in a row to a route marked `limit: 5` all returned 200.
+     * Comments elsewhere in this codebase asserted that "the per-route
+     * @Throttle is what actually limits code guessing" — it was not; it was
+     * nothing. The per-account caps in PhoneOtpService were doing all of the
+     * work on their own.
+     *
+     * ── Why this bucket is a backstop and not a security control
+     *
+     * It is per IP, and in this market per IP means almost nothing:
+     *
+     *   • Mobile carriers here put very large numbers of subscribers behind
+     *     carrier-grade NAT, so one address can be a township's worth of
+     *     people. A limit tight enough to stop an attacker locks out a
+     *     neighbourhood.
+     *   • The SSR server calls this API for every server-rendered page, from
+     *     one address, for all visitors at once. A tight per-IP limit here
+     *     throttles the whole site under load, which is why the guard is applied
+     *     per controller (below) rather than globally.
+     *
+     * So this number is set to stop a single runaway client, and the real
+     * controls are the per-route decorators on sensitive actions plus the
+     * per-account and per-number caps in the services.
+     *
+     * ⚠️ Storage is in-memory, so each instance keeps its own counts: two
+     * instances behind a load balancer means roughly double every limit here.
+     * Fine for a backstop; it is noted in docs/OUTSTANDING.md because it is NOT
+     * fine as the only defence.
+     */
     ThrottlerModule.forRoot([
-      { name: 'global', ttl: 15 * 60 * 1000, limit: 150 },
+      { name: 'default', ttl: 15 * 60 * 1000, limit: 1000 },
     ]),
     // Required for @Cron in AlertsDigest to run at all.
     ScheduleModule.forRoot(),

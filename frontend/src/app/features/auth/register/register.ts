@@ -75,6 +75,17 @@ import { ReferralsService } from '../../../core/services/referrals.service';
           </button>
         </form>
 
+        <div class="auth__divider"><span>or</span></div>
+
+        <!-- Phase 7g. Many landlords here are WhatsApp-first and have never had
+             an email address; before this they could only join if somebody
+             invented one for them, and then never received a single notice. The
+             link is this prominent because the people who need it are the least
+             likely to go looking. -->
+        <a class="auth__magic" routerLink="/auth/register-phone">
+          💬 No email address? Sign up with your phone number
+        </a>
+
         <p class="auth__fine">
           By registering you agree to our
           <a routerLink="/legal/terms">Terms</a> and
