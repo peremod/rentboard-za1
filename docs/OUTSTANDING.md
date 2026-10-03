@@ -445,11 +445,16 @@ ADMIN_EMAIL=<seeded admin> ADMIN_PASSWORD=<their password> \
 # The drives. Each needs the API on :3000; the UI ones also need :4200, and the
 # phone ones need DATABASE_URL and the API's own JWT_SECRET, because a code is
 # only ever sent over WhatsApp and reading it back means reading the database.
-node scripts/phone-signup-drive.mjs      # 30 checks, 0 skip
-node scripts/phone-signup-ui-drive.mjs   # 12 checks — the consent box is the point
+#
+# ⚠️ Counting them: `grep -c '^  ✅'`, with the two leading spaces. A bare
+# `grep -c '✅'` also counts each drive's final summary line and reports one
+# check more than there is — which is exactly how these numbers were wrong
+# twice, in both directions, before anybody looked at a log carefully.
+node scripts/phone-signup-drive.mjs      # 29 checks, 0 skip
+node scripts/phone-signup-ui-drive.mjs   # 11 checks — the consent box is the point
 node scripts/otp-drive.mjs               # phone sign-in hardening
-node scripts/notices-drive.mjs           # 10 checks — the in-app notice channel
-node scripts/sublet-drive.mjs            # 39 checks — Phase 6, incl. the guard split
+node scripts/notices-drive.mjs           # 9 checks — the in-app notice channel
+node scripts/sublet-drive.mjs            # 38 checks — Phase 6, incl. the guard split
 node scripts/sublet-ui-drive.mjs         # 13 checks — what an applicant is actually told
 node scripts/throttle-lint.mjs           # every @Throttle is actually guarded
 ```
