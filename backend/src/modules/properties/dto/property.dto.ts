@@ -54,6 +54,14 @@ export class CreatePropertyDto extends SharedLivingDto {
   @IsOptional() @IsString() @MaxLength(120)
   suburb?: string;
 
+  @ApiPropertyOptional({
+    example: '1423 Vilakazi Street',
+    description:
+      "Optional, and visible to nobody but the landlord — Phase 7b. It exists so somebody with four yards can tell them apart in a list; the board still shows the suburb and never the street. Not returned in any public payload.",
+  })
+  @IsOptional() @IsString() @MaxLength(200)
+  addressLine?: string;
+
   @ApiProperty({ example: 'Johannesburg' })
   @IsString() @MinLength(2) @MaxLength(120)
   city!: string;
@@ -69,6 +77,10 @@ export class UpdatePropertyDto extends SharedLivingDto {
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(120)
   suburb?: string;
+
+  /** Private to the landlord — see CreatePropertyDto.addressLine. */
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(200)
+  addressLine?: string;
 
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(2) @MaxLength(120)
   city?: string;

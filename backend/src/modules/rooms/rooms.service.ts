@@ -250,7 +250,7 @@ export class RoomsService {
   async create(dto: CreateRoomDto, lister: { id: string; role: UserRole }) {
     // Billing paused — no per-landlord room-count limit while on the
     // temporary unlimited free tier. See file header comment.
-    const { household, listerType, ...room } = dto;
+    const { household, listerType, propertyId: requestedPropertyId, ...room } = dto;
 
     /**
      * A tenant account can only ever hold a sublet listing — Phase 6, Option A.
@@ -268,11 +268,37 @@ export class RoomsService {
     const resolvedListerType =
       lister.role === 'TENANT' ? 'sublessor' : (listerType ?? 'owner_landlord');
 
-    const propertyId = await this.householdProperty(lister.id, resolvedListerType, {
-      locationDisplay: room.locationDisplay,
-      city: room.city,
-      province: room.province,
-    }, household);
+    /**
+     * The property this room is grouped under — Phase 7b.
+     *
+     * An explicit choice from the wizard's picker wins, and is checked against
+     * the caller's own properties: a stranger's id is a refusal rather than a
+     * silent ignore, because a landlord told "saved" while their room went
+     * somewhere else would never find out.
+     *
+     * Without one, a sublet listing may still get a property created for it to
+     * hold the household facts (see householdProperty) — an owner listing gets
+     * nothing, because an owner groups rooms deliberately and must not have a
+     * property appear behind their back.
+     */
+    let propertyId: string | null = null;
+    if (requestedPropertyId) {
+      const own = await this.prisma.property.findFirst({
+        where: { id: requestedPropertyId, landlordId: lister.id },
+        select: { id: true },
+      });
+      if (!own) throw new BadRequestException('That is not one of your properties.');
+      propertyId = own.id;
+      // The household block, when one came with it, belongs to that property
+      // rather than to a new one keyed on the location text.
+      if (household) await this.updateHousehold(own.id, household);
+    } else {
+      propertyId = await this.householdProperty(lister.id, resolvedListerType, {
+        locationDisplay: room.locationDisplay,
+        city: room.city,
+        province: room.province,
+      }, household);
+    }
 
     return this.prisma.room.create({
       data: {
@@ -330,19 +356,8 @@ export class RoomsService {
       select: { id: true },
     });
 
-    const data = {
-      ...(household.housemateProfile ? { housemateProfile: household.housemateProfile } : {}),
-      ...(household.householdSchedule ? { householdSchedule: household.householdSchedule } : {}),
-      ...(household.householdCleanliness ? { householdCleanliness: household.householdCleanliness } : {}),
-      ...(household.householdSocial ? { householdSocial: household.householdSocial } : {}),
-      ...(household.currentHousemates !== undefined ? { currentHousemates: household.currentHousemates } : {}),
-      ...(household.houseRules !== undefined
-        ? { houseRules: household.houseRules ? sanitizeText(household.houseRules) : null }
-        : {}),
-    };
-
     if (existing) {
-      await this.prisma.property.update({ where: { id: existing.id }, data });
+      await this.updateHousehold(existing.id, household);
       return existing.id;
     }
     const created = await this.prisma.property.create({
@@ -352,11 +367,42 @@ export class RoomsService {
         city: place.city,
         province: place.province,
         sharedAmenities: [],
-        ...data,
+        ...this.householdData(household),
       },
       select: { id: true },
     });
     return created.id;
+  }
+
+  /**
+   * The household block, as Property columns.
+   *
+   * One copy, used by both paths that can receive it — the auto-created
+   * property for a sublet and an explicitly chosen one from the wizard's
+   * picker. It was two copies for about ten minutes, which in this codebase is
+   * how long it takes for somebody to add a field to one of them.
+   *
+   * Every key is omitted unless it was sent: a partial update must not clear
+   * what the landlord set on another screen.
+   */
+  private householdData(household: NonNullable<CreateRoomDto['household']>) {
+    return {
+      ...(household.housemateProfile ? { housemateProfile: household.housemateProfile } : {}),
+      ...(household.householdSchedule ? { householdSchedule: household.householdSchedule } : {}),
+      ...(household.householdCleanliness ? { householdCleanliness: household.householdCleanliness } : {}),
+      ...(household.householdSocial ? { householdSocial: household.householdSocial } : {}),
+      ...(household.currentHousemates !== undefined ? { currentHousemates: household.currentHousemates } : {}),
+      ...(household.houseRules !== undefined
+        ? { houseRules: household.houseRules ? sanitizeText(household.houseRules) : null }
+        : {}),
+    };
+  }
+
+  private updateHousehold(propertyId: string, household: NonNullable<CreateRoomDto['household']>) {
+    return this.prisma.property.update({
+      where: { id: propertyId },
+      data: this.householdData(household),
+    });
   }
 
   async update(id: string, dto: UpdateRoomDto, landlordId: string) {

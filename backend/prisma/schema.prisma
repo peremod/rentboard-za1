@@ -1696,6 +1696,29 @@ model Property {
   city     String
   province String
 
+  /// A street address, for the landlord's eyes only — Phase 7b.
+  ///
+  /// ── Why this is optional and private, when the brief asked for "full address"
+  ///
+  /// The Phase 7b brief wants the property card to show the full address under
+  /// the nickname, and the reason is sound: "Ext 7 back rooms" and "the other Ext
+  /// 7 place" are not distinguishable in a list. But the yard screen has
+  /// deliberately never collected a street address, with a stated reason — the
+  /// board shows the suburb and not the street, for the tenant's safety, and the
+  /// platform has no function that needs one. It does not arrange viewings, hold
+  /// deposits or deliver anything.
+  ///
+  /// So this is the smallest thing that serves the purpose: OPTIONAL, free text,
+  /// and never leaving the landlord's own screens. It is not in PUBLIC_ROOM_DETAIL
+  /// or in any public payload, and the form says so where the landlord types it.
+  /// POPIA s.10 (minimality): the purpose is "so a landlord can tell their own
+  /// properties apart", which is why it can be left blank and why nothing else
+  /// reads it.
+  ///
+  /// ⚠️ If a future feature needs a verified address — a municipal check, say —
+  /// that is a different field with its own consent, not this one widened.
+  addressLine String?
+
   // ── What the whole address shares ──────────────────────────────────────
   //
   // These are properties of the HOUSE, and they live here rather than on Room

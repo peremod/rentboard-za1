@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { PropertiesService } from '../../../core/services/properties.service';
 import {
   Expense, ExpenseCategory, ExpenseSummary, HousemateProfile, Property,
@@ -64,6 +64,53 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
 
       @if (loading()) {
         <p class="muted">Loading…</p>
+      } @else if (propertyId() && !scoped()) {
+        <!-- A property id that is not this landlord's, or has been deleted.
+             Said as what it is, rather than drawn as an empty screen. -->
+        <div class="empty-state">
+          <h2>That property is not here</h2>
+          <p>It may have been deleted, or it belongs to another account.</p>
+          <a class="btn btn-primary" routerLink="/landlord/properties">Back to my properties</a>
+        </div>
+      } @else if (scoped(); as one) {
+        <!-- ── The property detail view — Phase 7b ────────────────────────
+             Scoped to one property. The landlord-wide sections (totals across
+             everything, "This month", the rent-reminder window) are NOT drawn
+             here: a four-property total shown inside one property is the kind
+             of half-true number this project keeps having to take back out.
+             They live on /landlord/properties. -->
+        <p class="yard-back"><a routerLink="/landlord/properties">← My properties</a></p>
+
+        <div class="yard-totals">
+          <div class="yard-total">
+            <strong>{{ one.roomCount }}</strong><span>{{ one.roomCount === 1 ? 'room' : 'rooms' }}</span>
+          </div>
+          <div class="yard-total" [class.yard-total--good]="one.vacant === 0">
+            <strong>{{ one.vacant }}</strong><span>vacant</span>
+          </div>
+          <div class="yard-total" [class.yard-total--alert]="one.waitingApplicants > 0">
+            <strong>{{ one.waitingApplicants }}</strong><span>waiting</span>
+          </div>
+        </div>
+
+        @if (error()) { <div class="form-error" role="alert">{{ error() }}</div> }
+
+        <!-- Add a room HERE, with this property already chosen — the brief asks
+             for exactly this, and it is where grouping is won or lost: a
+             landlord made to re-type the suburb does not come back to do it. -->
+        <div class="yard-detail-actions">
+          <a class="btn btn-primary" routerLink="/landlord/rooms/new"
+             [queryParams]="{ propertyId: one.property!.id }">
+            + Add a room to this property
+          </a>
+          <button type="button" class="btn btn-outline" (click)="editShared(one.property!)">
+            Edit this property
+          </button>
+        </div>
+
+        <ng-container [ngTemplateOutlet]="yardTpl"
+                      [ngTemplateOutletContext]="{ $implicit: one }"/>
+
       } @else if (dash(); as d) {
         <div class="yard-totals">
           <div class="yard-total">
@@ -125,7 +172,7 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
             </form>
           } @else {
             <button type="button" class="btn btn-outline" (click)="creating.set(true)">
-              + Group rooms into a yard
+              + Group rooms into a property
             </button>
           }
         </div>
@@ -217,7 +264,7 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
           <p class="muted money-basis">{{ sum.rentBasis }}</p>
           @if (sum.ungroupedRentCents > 0) {
             <p class="muted">
-              {{ sum.ungroupedRentCents | zarCents: 'exact' }} of that rent is on rooms not in a yard, so the
+              {{ sum.ungroupedRentCents | zarCents: 'exact' }} of that rent is on rooms not in a property, so the
               per-yard rows below add up to less than the total.
             </p>
           }
@@ -228,7 +275,7 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
         <div class="yard">
           <div class="yard__head">
             <div>
-              <strong>{{ group.property?.name || 'Rooms not in a yard' }}</strong>
+              <strong>{{ group.property?.name || 'Rooms not in a property' }}</strong>
               @if (group.property) {
                 <span class="muted">
                   {{ group.property.suburb ? group.property.suburb + ', ' : '' }}{{ group.property.city }}
@@ -254,7 +301,7 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
                   Shared details
                 </button>
                 <button type="button" class="link-btn" (click)="deleteYard(group.property.id, group.property.name)">
-                  Delete yard
+                  Delete this property
                 </button>
               </div>
             }
@@ -269,6 +316,25 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
 
           @if (editing() === group.property?.id) {
             <form class="yard-shared-form" (ngSubmit)="saveShared(group.property.id)">
+              <!-- Nickname and address, Phase 7b. Editable here and nowhere
+                   else, so there is one place a property is renamed — and
+                   separate from editing an individual room, which the brief
+                   asks for explicitly and which landlords conflate: "edit my
+                   property" and "edit the listing" are different jobs. -->
+              <label>
+                <span>What you call this place</span>
+                <input type="text" [(ngModel)]="form.name" name="name" required maxlength="120"
+                       placeholder="Ext 7 back rooms"/>
+              </label>
+              <label>
+                <span>Street address <span class="muted">(optional)</span></span>
+                <input type="text" [(ngModel)]="form.addressLine" name="addressLine" maxlength="200"
+                       placeholder="1423 Vilakazi Street"/>
+                <span class="field-hint">
+                  Only you see this. It is never on a listing and never sent to an
+                  applicant — it is here so you can tell your own places apart.
+                </span>
+              </label>
               <label>
                 <span>House rules</span>
                 <textarea rows="3" [(ngModel)]="form.houseRules" name="houseRules"
@@ -412,6 +478,22 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
                 </a>
               }
 
+              <!-- Per-room actions — Phase 7b asks for them to be clear and
+                   separately visible. "Edit listing" and "Take out of this
+                   property" are different jobs and landlords conflate them, so
+                   they are two controls with two sets of words — and the one
+                   that sounds destructive destroys nothing, which is why it
+                   says what it does rather than "Remove". -->
+              @if (group.property) {
+                <div class="yard-room__actions">
+                  <a class="link-btn" [routerLink]="['/landlord/rooms', room.id, 'edit']">Edit listing</a>
+                  <button type="button" class="link-btn" [disabled]="busy()"
+                          (click)="removeRoomFromProperty(room.id, room.title)">
+                    Take out of this property
+                  </button>
+                </div>
+              }
+
               <!-- Rent, per live tenancy. The toggle is the whole feature:
                    the landlord is already collecting the money, what they
                    lack is a record of who is behind. -->
@@ -470,10 +552,40 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
 export class Yard implements OnInit {
   private properties = inject(PropertiesService);
   private dialogs = inject(DialogService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
+
+  /**
+   * Which property this screen is about — Phase 7b.
+   *
+   * Null on the old /landlord/yard path (now a redirect) and set on
+   * /landlord/properties/:propertyId, which is how this one screen serves as
+   * the detail view the brief asks for. Reuse, deliberately: the rooms, their
+   * rent, the expenses against the address, the lease documents and the private
+   * notes are all already built here, per property. A second component drawing
+   * the same things would be the copy that misses the next fix — this codebase
+   * has paid for that with the nav defined six times and the shared-living
+   * fields held twice.
+   *
+   * ⚠️ Declared BEFORE anything that reads it. Class fields initialise in
+   * order, so `inject(ActivatedRoute)` has to come first; the first attempt at
+   * this put the signal above the injection and the compiler said `route` did
+   * not exist on the class, which reads like a missing import.
+   */
+  protected readonly propertyId = signal<string | null>(
+    this.route.snapshot.paramMap.get('propertyId'),
+  );
 
   protected readonly navItems: PortalNavItem[] = landlordNav();
 
   protected readonly dash = this.properties.dashboard;
+
+  /** The one group this screen shows when it is scoped to a property. */
+  protected readonly scoped = computed(() => {
+    const id = this.propertyId();
+    if (!id) return null;
+    return this.dash()?.properties.find((g) => g.property?.id === id) ?? null;
+  });
   protected readonly loading = signal(true);
   protected readonly busy = signal(false);
   protected readonly creating = signal(false);
@@ -555,7 +667,12 @@ export class Yard implements OnInit {
     sharedAmenities: string;
     currentHousemates: number | null;
     housemateProfile: HousemateProfile;
-  } = { houseRules: '', sharedAmenities: '', currentHousemates: null, housemateProfile: 'unstated' };
+    name: string;
+    addressLine: string;
+  } = {
+    houseRules: '', sharedAmenities: '', currentHousemates: null,
+    housemateProfile: 'unstated', name: '', addressLine: '',
+  };
 
   ngOnInit() {
     this.loadSummary();
@@ -669,7 +786,7 @@ export class Yard implements OnInit {
         },
         error: (err) => {
           this.busy.set(false);
-          this.error.set(err?.error?.message ?? 'Could not create that yard.');
+          this.error.set(err?.error?.message ?? 'Could not create that property.');
         },
       });
   }
@@ -707,6 +824,8 @@ export class Yard implements OnInit {
       sharedAmenities: (property.sharedAmenities ?? []).join(', '),
       currentHousemates: property.currentHousemates ?? null,
       housemateProfile: property.housemateProfile ?? 'unstated',
+      name: property.name,
+      addressLine: property.addressLine ?? '',
     };
     this.editing.set(property.id);
   }
@@ -723,6 +842,14 @@ export class Yard implements OnInit {
 
     this.properties
       .update(id, {
+        // Phase 7b. The name is required by the API, so it is sent as typed and
+        // only when it is not empty — a blank box must fail the form, not
+        // rename the property to nothing.
+        ...(this.form.name.trim() ? { name: this.form.name.trim() } : {}),
+        // Sent even when empty, unlike the count below: clearing the address is
+        // a thing a landlord may want to do, and an empty string is how they say
+        // "take it off". The column is theirs alone.
+        addressLine: this.form.addressLine.trim(),
         houseRules: this.form.houseRules.trim(),
         sharedAmenities: amenities,
         // Sent only when given. Omitting leaves the stored value alone, which
@@ -847,7 +974,7 @@ export class Yard implements OnInit {
           this.savingExpense.set(false);
           this.expenseError.set(
             err?.status === 403
-              ? 'That room is not in this yard.'
+              ? 'That room is not in this property.'
               : 'That did not save. Check your connection and try again.',
           );
         },
@@ -913,19 +1040,74 @@ export class Yard implements OnInit {
     });
   }
 
+  /**
+   * Delete a property — Phase 7b, and never silently.
+   *
+   * The confirmation names the number of rooms and says what will and will not
+   * happen to them, rather than asking "Are you sure?" and leaving a landlord
+   * to guess whether six live listings and their applications are about to go.
+   * The API refuses the call outright unless `ungroupRooms` is passed, so this
+   * dialog is what earns the flag — the rule is enforced server-side, not here.
+   */
   protected async deleteYard(id: string, name: string) {
+    const group = this.dash()?.properties.find((g) => g.property?.id === id);
+    const rooms = group?.roomCount ?? 0;
+
+    const detail = rooms === 0
+      ? 'It has no rooms grouped under it, so nothing else changes.'
+      : `The ${rooms} ${rooms === 1 ? 'room' : 'rooms'} grouped under it will NOT be deleted. ` +
+        `${rooms === 1 ? 'It stays' : 'They stay'} exactly as ${rooms === 1 ? 'it is' : 'they are'} — ` +
+        'still on the board, still with their applications and tenants — and simply stop being grouped. ' +
+        'What you lose is the grouping itself: the house rules, the shared facilities and the ' +
+        'housemate details you set once for this address.';
+
+    const confirmed = await this.dialogs.confirm(`Delete "${name}"?`, detail);
+    if (!confirmed) return;
+
+    this.busy.set(true);
+    this.properties.remove(id, true).subscribe({
+      next: () => {
+        this.busy.set(false);
+        // On the detail screen the thing this page is about has just gone, so
+        // staying here would show "That property is not here" to somebody who
+        // just deleted it on purpose.
+        if (this.propertyId() === id) {
+          this.router.navigate(['/landlord/properties']);
+          return;
+        }
+        this.reload();
+      },
+      error: (err) => {
+        this.busy.set(false);
+        this.error.set(err?.error?.message ?? 'Could not delete that property.');
+      },
+    });
+  }
+
+  /**
+   * Take a room out of this property — Phase 7b.
+   *
+   * The brief asks for this to be separately visible and unmistakeable, because
+   * "remove" next to a listing reads as "delete my listing". It does not: the
+   * room keeps its photos, its applications and its place on the board, and
+   * only stops being grouped at this address.
+   */
+  protected async removeRoomFromProperty(roomId: string, title: string) {
     const confirmed = await this.dialogs.confirm(
-      `Delete "${name}"?`,
-      'The rooms in it stay exactly as they are — they just stop being grouped. Nothing is removed from the board.',
+      `Take "${title}" out of this property?`,
+      'The listing is NOT deleted. It stays on the board exactly as it is, with its photos, ' +
+      'its applications and its tenant if it has one — it just stops being grouped at this ' +
+      'address, and stops using the house rules and shared facilities set here. ' +
+      'You can group it again at any time.',
     );
     if (!confirmed) return;
 
     this.busy.set(true);
-    this.properties.remove(id).subscribe({
+    this.properties.unassignRoom(roomId).subscribe({
       next: () => { this.busy.set(false); this.reload(); },
       error: (err) => {
         this.busy.set(false);
-        this.error.set(err?.error?.message ?? 'Could not delete that yard.');
+        this.error.set(err?.error?.message ?? 'Could not take that room out of the property.');
       },
     });
   }

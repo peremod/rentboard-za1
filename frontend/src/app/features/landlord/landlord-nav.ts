@@ -56,7 +56,11 @@ export function landlordNav(badges: LandlordNavBadges = {}): PortalNavItem[] {
     // from that application. `disabled` renders it greyed with a "Soon" chip,
     // which is the truth; listing it as a destination was not.
     { label: 'Messages', icon: '💬', route: '/landlord/dashboard', disabled: true },
-    { label: 'My property', icon: '🏘️', route: '/landlord/yard' },
+    // Phase 7b. Was "My property" → /landlord/yard, which was both singular for
+    // a thing a landlord can have several of and a word ("yard") that appeared
+    // nowhere else in the nav. The screen behind it is now a list of properties
+    // with a detail view, and the label says so.
+    { label: 'My properties', icon: '🏘️', route: '/landlord/properties' },
     { label: 'Verification', icon: '🪪', route: '/landlord/verification' },
     // A reason to open the app with no vacancy and no rent due: something is
     // broken and you need a number.

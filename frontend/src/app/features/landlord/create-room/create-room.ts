@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { SA_PROVINCES, AMENITIES } from '../../../core/models/room.model';
+import { PropertiesService } from '../../../core/services/properties.service';
 import { AnalyticsService } from '../../../core/services/analytics.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upload/photo-upload';
@@ -90,6 +91,64 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
       @if (step() === 2) {
         <form [formGroup]="pricingForm">
           <h2>Pricing &amp; location</h2>
+
+          <!-- ── The property picker — Phase 7b ──────────────────────────────
+               The brief's diagnosis, and it reads true: landlords create rooms
+               one at a time without realising there is a grouping concept to
+               opt into, because grouping lived on a different screen, below the
+               rent tracking, behind a button that said "yard".
+
+               So the question is asked HERE, in the landlord's own words, with
+               the places they already have shown as cards they can recognise —
+               a photo and the name they chose, not an address in a dropdown.
+
+               Only shown to somebody who HAS a property. A landlord with one
+               address is never asked: the brief is explicit that structure must
+               not be forced on people who do not need it, and a picker with one
+               option and a "no" is a question that teaches nothing. -->
+          @if (!isSublet() && myProperties().length > 0) {
+            <fieldset class="prop-picker">
+              <legend>Is this room at an address where you already have a room listed?</legend>
+
+              <div class="prop-picker__options">
+                @for (p of myProperties(); track p.id) {
+                  <button type="button" class="prop-picker__card"
+                          [class.is-chosen]="chosenPropertyId() === p.id"
+                          [attr.aria-pressed]="chosenPropertyId() === p.id"
+                          (click)="choosePropertyFor(p)">
+                    @if (p.thumbnail) {
+                      <img class="prop-picker__img" [src]="p.thumbnail" alt="" width="64" height="48"/>
+                    } @else {
+                      <span class="prop-picker__img prop-picker__img--none" aria-hidden="true">🏘️</span>
+                    }
+                    <span class="prop-picker__text">
+                      <strong>{{ p.name }}</strong>
+                      <span class="muted">{{ p.where }} · {{ p.roomCount }} {{ p.roomCount === 1 ? 'room' : 'rooms' }}</span>
+                    </span>
+                  </button>
+                }
+
+                <button type="button" class="prop-picker__card prop-picker__card--no"
+                        [class.is-chosen]="chosenPropertyId() === null && pickerAnswered()"
+                        [attr.aria-pressed]="chosenPropertyId() === null && pickerAnswered()"
+                        (click)="chooseNoProperty()">
+                  <span class="prop-picker__img prop-picker__img--none" aria-hidden="true">＋</span>
+                  <span class="prop-picker__text">
+                    <strong>No — somewhere new</strong>
+                    <span class="muted">You can group it later</span>
+                  </span>
+                </button>
+              </div>
+
+              @if (chosenPropertyId()) {
+                <p class="field-hint">
+                  The province, city and location below have been filled in from that
+                  property. Change them if this room is somewhere else.
+                </p>
+              }
+            </fieldset>
+          }
+
           <div class="form-row"><label>Monthly rent (ZAR)</label><input type="number" formControlName="rent" min="100" placeholder="5500"/></div>
           <div class="form-row"><label>Deposit (ZAR, optional)</label><input type="number" formControlName="deposit" min="0"/></div>
           <label class="check-row">
@@ -379,6 +438,7 @@ export class CreateRoom implements OnInit {
   private route = inject(ActivatedRoute);
   private analytics = inject(AnalyticsService);
   private dialogs = inject(DialogService);
+  private properties = inject(PropertiesService);
 
   provinces = SA_PROVINCES;
 
@@ -392,6 +452,28 @@ export class CreateRoom implements OnInit {
    * listing they are making; the API then re-decides it from the account's role
    * and never trusts this (RoomsService.create).
    */
+  /**
+   * The landlord's existing properties, as recognisable cards — Phase 7b.
+   *
+   * Loaded from the same dashboard call the properties screen uses, flattened
+   * to what a card needs: the name they chose, where it is, how many rooms are
+   * there, and a photo borrowed from one of those rooms. A property photo would
+   * be a second upload flow and a second thing to delete under POPIA; the rooms
+   * at an address already carry pictures of it.
+   *
+   * Failure is silent and the picker simply does not appear: a landlord in the
+   * middle of listing a room must not be stopped by a grouping feature.
+   */
+  readonly myProperties = signal<
+    { id: string; name: string; where: string; roomCount: number; thumbnail: string | null;
+      province: string; city: string; suburb: string | null }[]
+  >([]);
+
+  /** Which property this room is being added to, if any. */
+  readonly chosenPropertyId = signal<string | null>(null);
+  /** Whether the landlord has answered the question at all — "no" is an answer. */
+  readonly pickerAnswered = signal(false);
+
   readonly isSublet = signal(
     this.route.snapshot.data['listerType'] === 'sublessor',
   );
@@ -535,8 +617,60 @@ export class CreateRoom implements OnInit {
     });
   }
 
+  /**
+   * Choose a property: fill in the location from it — Phase 7b.
+   *
+   * The pre-filling is the point. A landlord who has to retype the suburb for
+   * the second room at the same address will not come back to this screen to
+   * group anything, which is the behaviour the brief is trying to change. The
+   * fields stay editable, because the picker is an assumption and not a rule.
+   */
+  choosePropertyFor(p: { id: string; province: string; city: string; suburb: string | null; name: string }) {
+    this.chosenPropertyId.set(p.id);
+    this.pickerAnswered.set(true);
+    this.pricingForm.patchValue({
+      province: p.province,
+      city: p.city,
+      // What the board shows. The suburb when there is one, because that is
+      // what a tenant recognises and it is as precise as this platform goes.
+      locationDisplay: p.suburb ? `${p.suburb}, ${p.city}` : p.city,
+    });
+  }
+
+  chooseNoProperty() {
+    this.chosenPropertyId.set(null);
+    this.pickerAnswered.set(true);
+  }
+
   ngOnInit() {
     this.analytics.track('wizard.started');
+
+    // The picker's cards, and the property this room may already belong to —
+    // Phase 7b. `?propertyId=` arrives from "+ Add a room to this property" on
+    // the property detail screen, which is the flow that makes grouping
+    // effortless rather than a thing to remember.
+    const preset = this.route.snapshot.queryParamMap.get('propertyId');
+    this.properties.loadDashboard().subscribe({
+      next: (d) => {
+        this.myProperties.set(
+          d.properties
+            .filter((g) => !!g.property)
+            .map((g) => ({
+              id: g.property!.id,
+              name: g.property!.name,
+              where: [g.property!.suburb, g.property!.city].filter(Boolean).join(', '),
+              roomCount: g.roomCount,
+              thumbnail: g.rooms.find((r) => r.heroImagePath)?.heroImagePath ?? null,
+              province: g.property!.province,
+              city: g.property!.city,
+              suburb: g.property!.suburb ?? null,
+            })),
+        );
+        const match = this.myProperties().find((p) => p.id === preset);
+        if (match) this.choosePropertyFor(match);
+      },
+      error: () => {},
+    });
 
     const id = this.route.snapshot.paramMap.get('roomId');
     if (!id) return;   // creating a new listing
@@ -776,6 +910,11 @@ export class CreateRoom implements OnInit {
       // here. See the DTO comment for why it overrides rather than refuses.
       listerType: this.isSublet() ? 'sublessor' : 'owner_landlord',
       household: this.householdPayload(),
+      // Phase 7b. Null when the landlord said "somewhere new", or when they
+      // were never asked because they have no properties yet — and the API
+      // validates it against their own, so a wrong id is refused rather than
+      // quietly dropped.
+      propertyId: this.chosenPropertyId() ?? undefined,
     } as any).subscribe({
       next: (room) => {
         this.roomId.set(room.id);

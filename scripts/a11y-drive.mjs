@@ -97,6 +97,9 @@ const PUBLIC_PAGES = [
 const LANDLORD_PAGES = [
   '/landlord/dashboard', '/landlord/yard', '/landlord/verification',
   '/landlord/services', '/landlord/public-page', '/account/settings',
+  // Phase 7b. The list a landlord lands on from the nav, and the detail view
+  // behind a card — both new, both forms, both on a phone.
+  '/landlord/properties',
   // Phase 7g. For an account with no email address this screen is the only
   // place a notification can be read, so it is not a page that may quietly
   // regress.

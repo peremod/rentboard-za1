@@ -459,6 +459,9 @@ node scripts/sublet-ui-drive.mjs         # 13 checks — what an applicant is ac
 node scripts/throttle-lint.mjs           # every @Throttle is actually guarded
 node scripts/nav-audit.mjs               # Phase 7a: dead nav links, unreachable
                                          # screens, two names for one place
+node scripts/properties-drive.mjs        # 22 checks — Phase 7b, incl. "deleting a
+                                         # property cannot delete a listing"
+node scripts/properties-ui-drive.mjs     # 18 checks — can a landlord FIND grouping
 ```
 
 The suite prints the release invocation itself whenever anything skipped. Ninety
