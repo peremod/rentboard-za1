@@ -17,7 +17,7 @@ a number written here.
 
 ## 1. Push the release tags
 
-Fourteen tags exist only in a container that no longer exists. Every tagged
+Sixteen tags exist only in a container that no longer exists. Every tagged
 commit IS on the remote — only the tag objects are missing. Pushing
 `refs/tags/*` is refused (HTTP 403) from the coding session, so this runs from
 your own clone.
@@ -28,21 +28,27 @@ git fetch origin
 bash scripts/push-release-tags.sh
 ```
 
-**Worked when:** it prints `Created 14 tag(s), skipped 0` then pushes without
+**Worked when:** it prints `Created 16 tag(s), skipped 0` then pushes without
 error. Safe to re-run — a tag already on the remote is skipped, never moved.
 
 ```bash
 # Verify
-git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-3])[.]'
+git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-5])[.]'
 ```
 
 **If skipped:** v1.75.2–v1.83.0 have no tags, so there is no way to say which
 commit a given release was, and `git describe` is useless.
 
-> **Note:** v1.84.0 is NOT in the script yet. Phase 5 is unfinished — **5c
+> **Note:** v1.84.0 is NOT in the script. Phase 5 is unfinished — **5c
 > (share/flyer generator) is the only part left**, and it needs device testing
 > nobody in a container can do; see §10. 5e, 5f and 5h are done, and 5g turned
 > out to be already built.
+>
+> **v1.85.0 and v1.85.1 ARE in the script** (Phase 7g parts one and two), which
+> is why the count went from fourteen to sixteen. 7g is not finished either —
+> assisted sign-up, phone-only account recovery and adding an email later are
+> still to come — but each tag marks a release that stands on its own, the same
+> way v1.82.0 covered three parts of Phase 4 without finishing it.
 
 ---
 

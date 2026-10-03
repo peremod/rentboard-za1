@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Recreate and push the Mastande release tags v1.75.2 … v1.83.0.
+# Recreate and push the Mastande release tags v1.75.2 … v1.85.1.
 #
 # These tags were created inside an ephemeral cloud container whose
 # credentials are refused for refs/tags/* (HTTP 403), so they never reached
@@ -195,6 +195,59 @@ drives, verify-build both port states, three migrations clean from empty.
 Not settled: whether ImageKit ACCEPTS our signatures. No credentials in the
 build container — confirm on staging with a real key before launch."
 
+tag_if_missing "v1.85.0" "aca0075a38fc4d105e55918debb05e8014298249" "2026-09-29 10:15:20 +0000" "v1.85.0 — Phase 7g part one: email becomes optional
+
+Email is nullable, phone is an alternative login identifier (unique among
+VERIFIED numbers, by a partial index — the column has never been unique and the
+dev database had forty accounts sharing one number, so a full index could only
+be created by nulling other people\'s saved numbers), and a database CHECK
+requires at least one of the two. Prisma cannot express a partial unique index
+and will offer to drop it on migrate dev: do not let it.
+
+Making the column nullable surfaced 22 notification call sites that assumed an
+address existed — a phone-only landlord would silently have missed their
+applications. One NoticeRouter decides the channel instead of sixteen copies of
+the decision.
+
+Also the OTP hardening: wrong codes counted per account with the code burning at
+five, one live code at a time, a daily cap, and the stored hash an HMAC keyed
+with the server secret rather than a bare digest anybody who could read the
+table could reverse in a second.
+
+Not settled: PayFast requires email_address, so a phone-only landlord is refused
+at checkout with an instruction to add one rather than given a placeholder."
+
+tag_if_missing "v1.85.1" "5151f99a721e74fc82dba37a44c9691f0c58a95a" "2026-10-03 16:12:48 +0000" "v1.85.1 — Phase 7g part two: sign up with a phone number
+
+A person with only a mobile number can create their own account: a code to the
+number, the code for a short-lived ticket, then name, role and the terms. No
+User row exists until that last step, so a sign-up attempt cannot create an
+account on somebody else\'s handset — and acceptTerms must arrive literally
+true, with the moment recorded against the number that was proven. That is what
+makes assisted sign-up safe: the help can reach as far as the handset, the
+acceptance stops at the person.
+
+The in-app notice channel those accounts depend on can now be READ. It had been
+write-only since v1.85.0: a phone-only landlord\'s \"you have a new applicant\"
+went into a table, WhatsApp refused it outside Meta\'s 24-hour window, and
+nobody was told anything by any channel.
+
+And the rate limits that were supposed to protect all of this did not exist.
+Nineteen @Throttle decorators across eight controllers had never limited
+anything, because ThrottlerGuard was never registered and the root throttler was
+named \'global\' while every decorator keys \'default\'. /auth/login had no
+decorator at all, so password guessing was unmetered. Found by sending eight
+requests to a route marked limit: 5 and getting eight 200s. throttle-lint.mjs
+now fails the build if it can happen again.
+
+Verified: 464 smoke checks, 29 phone-signup + 11 UI + 9 notices drive checks,
+19 accessibility pages, verify-build 73/0, production build green. Each new
+check was falsified before being trusted.
+
+Not settled: a new number has never messaged us, so it is always outside Meta\'s
+24-hour window — phone sign-up waits on the authentication template, not on
+code."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -202,7 +255,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-3])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-5])[.]'"
 else
   echo "Nothing to push."
 fi
