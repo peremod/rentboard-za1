@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Recreate and push the Mastande release tags v1.75.2 … v1.85.1.
+# Recreate and push the Mastande release tags v1.75.2 … v1.86.0.
 #
 # These tags were created inside an ephemeral cloud container whose
 # credentials are refused for refs/tags/* (HTTP 403), so they never reached
@@ -248,6 +248,46 @@ Not settled: a new number has never messaged us, so it is always outside Meta\'s
 24-hour window — phone sign-up waits on the authentication template, not on
 code."
 
+tag_if_missing "v1.86.0" "5fdf9ae1d769b8b758e457c225dd483c02cb65be" "2026-10-03 21:19:10 +0000" "v1.86.0 — Phase 6: tenant sub-letting and shared-lease listings
+
+A tenant who rents a place can let out a room in it. Option A: listerType on the
+listing rather than on the account, since the same person can own a yard in one
+place and sublet a room in a flat they rent in another.
+
+The guard split is the substance of it. Fifty-two endpoints carried
+LandlordGuard, and widening that guard would have opened the yard, rent
+tracking, expenses, the paid identity badge, the storefront and WhatsApp listing
+in one invisible edit. A new ListerGuard carries what a LISTER does; LandlordGuard
+keeps what an OWNER does. Asserted both ways, including 403 on all five owner
+surfaces, because a guard split that is only described is a guard split that
+drifts.
+
+The sublet-right check belongs to a LISTING and not to a person: a right to
+sublet in Yeoville says nothing about Soweto. Approval stamps a date, a later
+rejection clears it, and the room page says \"lease and consent checked on 14
+March\" rather than \"may sublet\" — the head landlord can withdraw consent the
+next day and nothing tells us. No fee: listing is free on this platform, and
+charging a sub-lessor to prove their right would be a landlord listing fee
+wearing a different name, on the one check that protects the applicant.
+
+What the applicant gets: a badge on the card and a notice above the fold
+(measured at 522px of a 900px phone) saying who is letting the room, that we do
+not confirm the right to sublet, and that it is they who can lose the room and
+the deposit.
+
+Positioning: the same board with an explicit filter, because splitting it halves
+the inventory each half can show and a thin board is what loses both segments at
+launch.
+
+Verified: 476 smoke checks, 38 sublet drive + 13 UI drive checks, 21
+accessibility pages, production build green. Adding the listing wizard to the
+accessibility drive found that it had never had an h1.
+
+Not settled: /legal/sublet is written from scratch, addressed to the applicant
+rather than to our liability, and NOT attorney-reviewed. It characterises the
+effect of a head lease on a sub-tenant and summarises the Rental Housing Act on
+deposits — docs/OUTSTANDING.md §8 names the sections to ask about."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -255,7 +295,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-5])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-6])[.]'"
 else
   echo "Nothing to push."
 fi
