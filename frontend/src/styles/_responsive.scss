@@ -394,6 +394,21 @@
    component styles are MORE specific under emulated encapsulation, which is
    what silently overrode the whole responsive layer in v0.9.3. */
 .badge-unverified { background: var(--cream2); color: var(--ink2); border: 1px solid var(--border); }
+/* Sublet — Phase 6. Amber, deliberately between the green badges and a warning:
+   a sublet is a legitimate listing with a real extra risk attached, and styling
+   it as either "good" or "danger" would misdescribe it. Global, for the same
+   encapsulation reason as the two above. */
+.badge-sublet { background: rgba(200,144,42,.9); color: #fff; }
+/* The note under the household filters, which says they hide listings that have
+   not described themselves. Smaller than a label, not a muted aside: it is the
+   difference between "no rooms match" and "the board is broken". */
+.filter-note {
+  font-size: .72rem;
+  line-height: 1.45;
+  color: var(--ink2);
+  margin: .45rem 0 0;
+  padding-left: .1rem;
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // FILTER PANEL & AD POLISH

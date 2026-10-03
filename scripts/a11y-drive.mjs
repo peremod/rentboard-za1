@@ -75,6 +75,9 @@ const PUBLIC_PAGES = [
   // /forgot-password and /reset-password have never been through this drive,
   // and they share this page's card markup. Named rather than quietly left out.
   '/auth/register-phone',
+  // Phase 6. The page an applicant reads before deciding whether to pay a
+  // deposit to somebody who may not be allowed to let them the room.
+  '/legal/sublet',
 ];
 
 /**
@@ -99,7 +102,12 @@ const LANDLORD_PAGES = [
   // regress.
   '/account/notices',
 ];
-const TENANT_PAGES = ['/tenant/dashboard', '/tenant/rent', '/tenant/passport'];
+const TENANT_PAGES = [
+  '/tenant/dashboard', '/tenant/rent', '/tenant/passport',
+  // Phase 6. A four-step form filled in on a phone — label association and
+  // target size are the whole experience here, not a detail.
+  '/tenant/sublet/new',
+];
 const ADMIN_PAGES = [
   '/admin/dashboard',
   '/admin/verifications',

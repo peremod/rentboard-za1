@@ -1,14 +1,18 @@
 import {
   IsEnum, IsString, IsOptional, MaxLength, MinLength,
-  ValidateNested, IsISO8601, Matches,
+  ValidateNested, IsISO8601, Matches, IsUUID,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { VerificationType } from '@prisma/client';
 
+// ⚠️ Hand-written rather than derived from the enum, so adding a
+// VerificationType does not silently become submittable before anybody has
+// decided who may submit it. `sublet_right` is here as of Phase 6.
 const TYPES: VerificationType[] = [
   'identity', 'proof_of_address', 'proof_of_ownership',
   'sassa_grant', 'employer_confirmation', 'bank_statement', 'landlord_reference',
+  'sublet_right',
 ];
 
 /**
@@ -69,4 +73,11 @@ export class SubmitVerificationDto {
   })
   @IsOptional() @ValidateNested() @Type(() => LandlordReferenceDto)
   reference?: LandlordReferenceDto;
+
+  @ApiPropertyOptional({
+    description:
+      'Required for, and only valid on, type sublet_right: which of your sub-let listings this is about. The right to sublet comes from one lease over one address, so the check is scoped to the listing rather than to you.',
+  })
+  @IsOptional() @IsUUID()
+  roomId?: string;
 }

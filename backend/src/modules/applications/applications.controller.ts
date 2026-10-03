@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Param, UseGuards, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { LandlordGuard } from '../../common/guards/landlord.guard';
+import { ListerGuard } from '../../common/guards/lister.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ApplicationsService } from './applications.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
@@ -27,7 +27,7 @@ export class ApplicationsController {
 
   // ── Landlord: applicant manager ──
   @Get('room/:roomId')
-  @UseGuards(LandlordGuard)
+  @UseGuards(ListerGuard)
   getForRoom(@Param('roomId', ParseUUIDPipe) roomId: string, @CurrentUser() user: { id: string }) {
     return this.applicationsService.getRoomApplications(roomId, user.id);
   }
@@ -41,21 +41,21 @@ export class ApplicationsController {
   }
 
   @Post(':id/view')
-  @UseGuards(LandlordGuard)
+  @UseGuards(ListerGuard)
   @HttpCode(HttpStatus.OK)
   markViewed(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
     return this.applicationsService.markViewed(id, user.id);
   }
 
   @Post(':id/shortlist')
-  @UseGuards(LandlordGuard)
+  @UseGuards(ListerGuard)
   @HttpCode(HttpStatus.OK)
   shortlist(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
     return this.applicationsService.shortlist(id, user.id);
   }
 
   @Post(':id/undo-accept')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -67,7 +67,7 @@ export class ApplicationsController {
   }
 
   @Post(':id/unshortlist')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Remove an applicant from the shortlist' })
@@ -76,14 +76,14 @@ export class ApplicationsController {
   }
 
   @Post(':id/accept')
-  @UseGuards(LandlordGuard)
+  @UseGuards(ListerGuard)
   @HttpCode(HttpStatus.OK)
   accept(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
     return this.applicationsService.accept(id, user.id);
   }
 
   @Post(':id/reject')
-  @UseGuards(LandlordGuard)
+  @UseGuards(ListerGuard)
   @HttpCode(HttpStatus.OK)
   reject(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectApplicationDto, @CurrentUser() user: { id: string }) {
     return this.applicationsService.reject(id, user.id, dto);

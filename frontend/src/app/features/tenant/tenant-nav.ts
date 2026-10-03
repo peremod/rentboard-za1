@@ -30,6 +30,11 @@ export function tenantNav(badges: TenantNavBadges = {}): PortalNavItem[] {
     { label: 'Browse rooms', icon: '🔍', route: '/' },
     { label: 'Rent', icon: '🧾', route: '/tenant/rent' },
     { label: "Renter's Passport", icon: '🪪', route: '/tenant/passport' },
+    // Phase 6. Points at the dashboard SECTION rather than straight into the
+    // wizard: the section is where a sub-lessor's existing listings and their
+    // applicants are, and a nav item that opens a four-step form is a trap for
+    // somebody who only wanted to look.
+    { label: 'Rooms you let', icon: '🔑', route: '/tenant/dashboard', fragment: 'your-sublets' },
     // Phase 7g. Not optional furniture: for an account with no email address
     // this screen is the only place a notification can be read at all.
     { label: 'Notices', icon: '🔔', route: '/account/notices', badge: badges.notices },

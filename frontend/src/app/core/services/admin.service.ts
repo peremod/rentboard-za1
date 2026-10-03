@@ -45,6 +45,19 @@ export interface PendingVerification extends VerificationRequest {
      *  sees them while deciding rather than afterwards. */
     openFlagCount: number;
   };
+  /**
+   * The listing a sublet-right check is about — Phase 6.
+   *
+   * Present only for that type: the right to sublet comes from one lease over
+   * one address, so a reviewer needs to know which address the documents should
+   * name. Absent on every check that is about the person.
+   */
+  room?: {
+    id: string;
+    title: string;
+    locationDisplay: string;
+    status: string;
+  } | null;
 }
 
 /**

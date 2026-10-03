@@ -28,6 +28,16 @@ export const LEGAL_ROUTES: Routes = [
     data: { seo: { description: 'Which cookies Mastande uses and why. No advertising trackers, no analytics pixels — and rejecting is as easy as accepting.' } },
   },
   {
+    // Phase 6. A page of its own rather than a section of the disclaimer: the
+    // room page links straight here from a sublet listing, and an applicant
+    // deciding whether to pay a deposit should not have to find the relevant
+    // paragraph inside a general disclaimer.
+    path: 'sublet',
+    loadComponent: () => import('./sublet/sublet').then((m) => m.Sublet),
+    title: 'Renting a room from a tenant (sub-letting) — Mastande',
+    data: { seo: { description: 'What sub-letting means, what can go wrong, what to ask for before paying a deposit, and exactly what Mastande does and does not check about a sub-lessor\'s right to sublet.' } },
+  },
+  {
     path: 'paia',
     loadComponent: () => import('./paia/paia').then((m) => m.Paia),
     title: 'PAIA Manual — Mastande',

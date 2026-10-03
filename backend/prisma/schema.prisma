@@ -245,6 +245,78 @@ model TenantProfile {
   @@map("tenant_profiles")
 }
 
+/// Who is letting a room out, and on what footing — Phase 6.
+///
+/// ── Why this is on the LISTING and not on the user
+///
+/// The same person can be both. A landlord who owns a yard in Tembisa may also
+/// rent a flat in town and sublet its spare room; a tenant who sublets one room
+/// this year may buy next year. "Sublessor" is not a kind of person, it is a
+/// description of one letting arrangement, and putting it on `User` would make
+/// the platform ask somebody to choose an identity when what it needs to know is
+/// a fact about this room.
+///
+/// It is also the whole of Option A (the architectural decision the Phase 6
+/// brief required sign-off on, taken 2026-10-03). `UserRole` keeps its three
+/// values, `LandlordProfile` stays landlord-only, and a `TENANT` may hold a
+/// listing whose `listerType` is `sublessor`. Option B — generalising
+/// "Landlord" into "Room Provider" — is cleaner in the long run and touches
+/// every guard, dashboard and string in the product; this does not.
+///
+/// ⚠️ The consequence to know about: `Room.landlordId` now sometimes points at
+/// a `TENANT`. The column name is wrong and is left alone deliberately —
+/// renaming it means rewriting every query, index and DTO that mentions it, for
+/// no behavioural gain, and a half-done rename is worse than a known misnomer.
+/// Read it as "the account that holds this listing".
+enum ListerType {
+  /// The owner, or somebody with the owner's mandate to let. Every listing that
+  /// existed before Phase 6, which is why it is the default.
+  owner_landlord
+  /// A tenant letting out a room in a place they themselves rent. The platform
+  /// does NOT confirm they are allowed to — see the disclaimer on the room page
+  /// and `Room.subletCheckedAt` for what is and is not checked.
+  sublessor
+}
+
+/// How the household runs, for the compatibility filters — Phase 6.
+///
+/// On Property with `housemateProfile`, for the reason given on that block: four
+/// rooms at one address have one household, and asking for these four times
+/// guarantees the four answers disagree in front of the person choosing.
+///
+/// Every one of these has an `unstated` default and `unstated` is never
+/// rendered. A silent default would put a claim about the people someone would
+/// be living with in front of them that nobody ever made.
+enum HouseholdSchedule {
+  /// Out at work or college on weekdays — the house is quiet in the day.
+  weekday_working
+  /// Shifts, so somebody is often sleeping at odd hours. Worth saying: it is
+  /// the single most common source of friction in a shared house here.
+  shift_work
+  /// Somebody is usually home — working from home, studying, or not working.
+  mostly_home
+  varied
+  unstated
+}
+
+enum HouseholdCleanliness {
+  /// Cleaned on a rota, kitchen done the same day.
+  very_tidy
+  /// Tidy enough: dishes get done, nobody is inspecting.
+  tidy_enough
+  relaxed
+  unstated
+}
+
+enum HouseholdSocial {
+  /// People eat together, visitors are normal.
+  social
+  /// Civil but private. Early nights.
+  quiet
+  balanced
+  unstated
+}
+
 /// Room — the core listing entity. Rooms-only MVP (no full-property lets).
 model Room {
   id         String @id @default(uuid())
@@ -285,6 +357,29 @@ model Room {
   propertyId String?
   property   Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
 
+  /// Owner-let or sublet — Phase 6. See the ListerType comment for why this is
+  /// a fact about the listing rather than about the account that holds it.
+  listerType ListerType @default(owner_landlord)
+
+  /// When an admin checked this sub-lessor's right to sublet THIS address, and
+  /// approved it. Null on every owner listing and on every unchecked sublet.
+  ///
+  /// ── Why it is a date and not a boolean
+  ///
+  /// Because what can honestly be shown to an applicant is "a lease and a
+  /// consent to sublet were checked on 14 March", not "this person may
+  /// sublet". The head landlord can withdraw consent the day after and nothing
+  /// tells us. A boolean would read as a guarantee the platform is in no
+  /// position to make, and the applicant — not the platform — carries the loss
+  /// if the right turns out to be invalid.
+  ///
+  /// ── Why it is per ROOM and not per person
+  ///
+  /// The right to sublet is granted by one lease over one address. Somebody
+  /// allowed to sublet in Yeoville is not thereby allowed to sublet in Soweto,
+  /// and a per-user flag would say they were.
+  subletCheckedAt DateTime?
+
   heroImagePath String?
   imagePaths    String[]
 
@@ -307,11 +402,17 @@ model Room {
   reports      Report[]
   expenses     Expense[]
 
+  /// Verification requests about this listing — currently only `sublet_right`.
+  verifications VerificationRequest[]
+
   @@index([status])
   @@index([province, city])
   @@index([rentCents])
   @@index([landlordId])
   @@index([propertyId])
+  /// The board filters on this together with status, and a sublet-only search
+  /// is one of the two headline Phase 6 filters.
+  @@index([status, listerType])
   @@map("rooms")
 }
 
@@ -1144,6 +1245,26 @@ enum VerificationType {
   /// A prior landlord, named and phoned. See the LandlordReference model —
   /// this one is not a document at all.
   landlord_reference
+
+  // ── Sub-letting (v1.86.0, Phase 6) ──
+
+  /// A sub-lessor's right to let out a room in a place they rent: the lease
+  /// itself, plus either a clause permitting subletting or the head landlord's
+  /// written consent.
+  ///
+  /// Distinct from `proof_of_ownership`, and not a variant of it. That check
+  /// asks "do you own this, or hold a mandate from the owner"; this one asks
+  /// "are you allowed to pass on what you rent", which is a different document
+  /// from a different person with a different failure mode — and the person who
+  /// loses if it is wrong is the applicant, not us.
+  ///
+  /// ⚠️ Carries NO FEE, and that is a positioning decision rather than an
+  /// oversight. A sub-lessor is listing a room, and listing is free — charging
+  /// them to prove they may sublet would be a landlord listing fee by another
+  /// name, which is the one thing this product does not do.
+  ///
+  /// Scoped to one listing: see `VerificationRequest.roomId`.
+  sublet_right
 }
 
 /// Who performed a step in a verification's history.
@@ -1238,6 +1359,17 @@ model VerificationRequest {
   /// two columns, neither standing in for the other.
   documentWithdrawnAt DateTime?
 
+  /// The listing this check is about — set only for `sublet_right`, where the
+  /// question is address-specific (one lease, one house). Null for every other
+  /// type, which is about the person.
+  ///
+  /// `SetNull` rather than `Cascade`, for the same reason an Expense survives
+  /// its room: deleting a listing must not erase the record that a document was
+  /// checked and by whom. The row stays as audit; it simply stops evidencing
+  /// anything about a live listing, which is correct, because there is none.
+  roomId String?
+  room   Room?  @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
   reviewedById String?
   reviewedAt   DateTime?
   /// Shown to the landlord on rejection so they know what to fix.
@@ -1254,6 +1386,7 @@ model VerificationRequest {
 
   @@index([userId])
   @@index([status])
+  @@index([roomId])
   @@map("verification_requests")
 }
 
@@ -1593,6 +1726,20 @@ model Property {
   currentHousemates Int?
 
   housemateProfile HousemateProfile @default(unstated)
+
+  // ── Compatibility, for shared houses — Phase 6 ─────────────────────────
+  //
+  // These matter far more for a sublet than for a backroom: somebody taking a
+  // room in a house with four other people is choosing housemates, not just a
+  // room, and this is the part every listing on every competitor leaves out.
+  // They are filterable on the board.
+  //
+  // Set for any house, not only sublets — a landlord-owned shared house has a
+  // household too — but the sublet listing flow is the only place that asks
+  // for them today, because that is where the brief says they belong.
+  householdSchedule    HouseholdSchedule    @default(unstated)
+  householdCleanliness HouseholdCleanliness @default(unstated)
+  householdSocial      HouseholdSocial      @default(unstated)
 
   rooms    Room[]
   expenses Expense[]

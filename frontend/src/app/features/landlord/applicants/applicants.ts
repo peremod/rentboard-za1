@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, input, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { VerificationService } from '../../../core/services/verification.service';
@@ -25,7 +26,11 @@ import { TenantReferences } from '../../../core/models/review.model';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="applicants">
-      <p><a routerLink="/landlord/dashboard">← Back to dashboard</a></p>
+      <!-- Phase 6. A sub-lessor reaches this same screen from
+           /tenant/sublet/:roomId/applicants, and a tenant account cannot open
+           /landlord/dashboard — the link would have been a dead end back to a
+           guard. The route's own data says which portal we are in. -->
+      <p><a [routerLink]="backLink()">← Back to dashboard</a></p>
       <h1>Applicants</h1>
 
       @if (loading()) {
@@ -210,6 +215,21 @@ import { TenantReferences } from '../../../core/models/review.model';
   `],
 })
 export class Applicants implements OnInit {
+  /**
+   * Where "back" goes: the portal this screen was opened from.
+   *
+   * Read from route data rather than from the signed-in role, because the role
+   * is not the question — an ADMIN opening a sub-lessor's applicants in support
+   * belongs back where they came from too.
+   */
+  private route = inject(ActivatedRoute);
+
+  backLink(): string {
+    return this.route.snapshot.data['listerType'] === 'sublessor'
+      ? '/tenant/dashboard'
+      : '/landlord/dashboard';
+  }
+
   private reviewsService = inject(ReviewsService);
   private dialogs = inject(DialogService);
 

@@ -3,6 +3,8 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { VerificationService } from '../../../core/services/verification.service';
 import { UploadsService } from '../../../core/services/uploads.service';
+import { RoomsService } from '../../../core/services/rooms.service';
+import { Room } from '../../../core/models/room.model';
 import { VerificationType } from '../../../core/models/verification.model';
 import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { tenantNav } from '../tenant-nav';
@@ -85,6 +87,60 @@ import { tenantNav } from '../tenant-nav';
       @if (error()) { <div class="form-error">{{ error() }}</div> }
 
       @for (info of verification.types(); track info.type) {
+        <!-- A check about a LISTING gets one card per listing — Phase 6.
+             The sublet-right check is granted by one lease over one address, so a
+             single card per type would have shown the first listing's outcome
+             against all of them, and there would have been no way to say which
+             room an upload was for. Nothing renders when there are no sub-let
+             listings, which is why the type is not even offered then. -->
+        @if (info.aboutAListing) {
+          @for (room of sublets(); track room.id) {
+            <div class="passport-card">
+              <div class="passport-card__head">
+                <strong>{{ info.label }}</strong>
+                @if (statusFor(info.type, room.id); as status) {
+                  <span class="passport-pill" [class]="'passport-pill--' + status">{{ statusLabel(status) }}</span>
+                }
+              </div>
+              <p class="passport-card__guidance">
+                <strong>{{ room.title }}</strong> — {{ room.locationDisplay }}
+              </p>
+              <p class="passport-card__guidance">{{ info.guidance }}</p>
+
+              @if (requestFor(info.type, room.id); as request) {
+                @if (request.status === 'rejected' && request.reviewNote) {
+                  <p class="passport-card__note">What to fix: {{ request.reviewNote }}</p>
+                }
+                @if (request.events?.length) {
+                  <details class="passport-trail">
+                    <summary>What has happened so far</summary>
+                    <ul>
+                      @for (event of request.events; track event.id) {
+                        <li>
+                          <time>{{ event.createdAt | date: 'd MMM, HH:mm' }}</time>
+                          {{ event.detail || event.step }}
+                        </li>
+                      }
+                    </ul>
+                  </details>
+                }
+              } @else {
+                <label class="passport-upload">
+                  <input type="file" accept="image/*,application/pdf" hidden
+                         [disabled]="uploading() !== null"
+                         (change)="onFile($event, info.type, room.id)"/>
+                  <span>
+                    {{ uploadingRoom() === room.id ? 'Uploading…' : 'Choose a photo or scan' }}
+                  </span>
+                </label>
+                <p class="passport-card__guidance">
+                  Free. We never show this document to anyone applying — only the
+                  outcome and the date.
+                </p>
+              }
+            </div>
+          }
+        } @else {
         <div class="passport-card">
           <div class="passport-card__head">
             <strong>{{ info.label }}</strong>
@@ -151,6 +207,7 @@ import { tenantNav } from '../tenant-nav';
             </form>
           }
         </div>
+        }
       }
     </app-portal-shell>
   `,
@@ -158,6 +215,7 @@ import { tenantNav } from '../tenant-nav';
 export class PassportVerify implements OnInit {
   protected readonly verification = inject(VerificationService);
   private uploads = inject(UploadsService);
+  private rooms = inject(RoomsService);
 
   protected readonly navItems: PortalNavItem[] = tenantNav();
 
@@ -170,17 +228,43 @@ export class PassportVerify implements OnInit {
   protected refereePhone = '';
   protected propertyDescription = '';
 
+  /**
+   * The sub-let listings this person holds — Phase 6.
+   *
+   * Loaded here because the listing-scoped check needs one card per listing,
+   * and because the API only offers `sublet_right` at all when there is one.
+   * Failure is silent: a tenant with no listings is the overwhelming majority
+   * and must not see an error about a feature they are not using.
+   */
+  protected readonly sublets = signal<Room[]>([]);
+  protected readonly uploadingRoom = signal<string | null>(null);
+
   ngOnInit() {
     this.verification.loadTypes().subscribe();
     this.verification.load().subscribe();
+    this.rooms.getLandlordRooms().subscribe({
+      next: (rooms) => this.sublets.set(rooms.filter((r) => r.listerType === 'sublessor')),
+      error: () => {},
+    });
   }
 
-  protected requestFor(type: VerificationType) {
-    return this.verification.requests().find((r) => r.type === type) ?? null;
+  /**
+   * Matched on the listing too, for a check that is about one — Phase 6.
+   *
+   * Without the roomId comparison, a sub-lessor with two houses would see the
+   * first house's outcome on both cards, and the second would offer no upload
+   * because a request "already existed" for the type.
+   */
+  protected requestFor(type: VerificationType, roomId?: string) {
+    return (
+      this.verification
+        .requests()
+        .find((r) => r.type === type && (roomId ? r.roomId === roomId : true)) ?? null
+    );
   }
 
-  protected statusFor(type: VerificationType) {
-    return this.requestFor(type)?.status ?? null;
+  protected statusFor(type: VerificationType, roomId?: string) {
+    return this.requestFor(type, roomId)?.status ?? null;
   }
 
   protected statusLabel(status: string) {
@@ -209,7 +293,7 @@ export class PassportVerify implements OnInit {
     }
   }
 
-  protected async onFile(event: Event, type: VerificationType) {
+  protected async onFile(event: Event, type: VerificationType, roomId?: string) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -221,18 +305,21 @@ export class PassportVerify implements OnInit {
     }
 
     this.uploading.set(type);
+    this.uploadingRoom.set(roomId ?? null);
     this.error.set(null);
     try {
       const { path } = await this.uploads.uploadPrivate(file, 'verification');
-      this.verification.submit(type, path).subscribe({
-        next: () => this.uploading.set(null),
+      this.verification.submit(type, path, undefined, roomId).subscribe({
+        next: () => { this.uploading.set(null); this.uploadingRoom.set(null); },
         error: (err) => {
           this.uploading.set(null);
+          this.uploadingRoom.set(null);
           this.error.set(err?.error?.message ?? 'Could not submit that. Please try again.');
         },
       });
     } catch (err) {
       this.uploading.set(null);
+      this.uploadingRoom.set(null);
       this.error.set(
         err instanceof Error ? `Upload failed — ${err.message}` : 'Upload failed. Please try again.',
       );

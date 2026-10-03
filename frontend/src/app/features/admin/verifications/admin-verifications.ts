@@ -57,6 +57,23 @@ import { VerificationService } from '../../../core/services/verification.service
                 account created {{ req.user.createdAt | date:'MMM yyyy' }}
               </div>
 
+              <!-- Which listing a sublet-right check is about — Phase 6.
+                   A reviewer asked "may this person sublet?" cannot answer it
+                   without knowing which address the lease should name, so the
+                   listing is stated before the document link rather than left
+                   for them to find. -->
+              @if (req.room; as room) {
+                <div class="admin-reference">
+                  <strong>About this listing: {{ room.title }}</strong>
+                  <div class="app-location">{{ room.locationDisplay }} · {{ room.status }}</div>
+                  <div class="app-location">
+                    Check the lease names this address, and that the consent is from
+                    the owner or agent — not from the person submitting it. We do not
+                    phone the owner, and the badge says only that documents were seen.
+                  </div>
+                </div>
+              }
+
               @if (req.type === 'landlord_reference') {
                 <!-- Not a document at all. Before this, a reference landed here
                      reading "Document missing — reject", which is the opposite

@@ -2,7 +2,7 @@ import { Controller, Get, Post, Patch, Body, Param, UseGuards, ParseUUIDPipe } f
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { LandlordGuard } from '../../common/guards/landlord.guard';
+import { ListerGuard } from '../../common/guards/lister.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReviewsService } from './reviews.service';
@@ -36,7 +36,7 @@ export class ReviewsController {
   // ── Restricted ───────────────────────────────────────────────────────────
 
   @Get('tenant/:tenantId/references')
-  @UseGuards(JwtAuthGuard, LandlordGuard)
+  @UseGuards(JwtAuthGuard, ListerGuard)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'References for a prospective tenant',

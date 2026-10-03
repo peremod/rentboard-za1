@@ -218,7 +218,7 @@ export class ApplicationsService {
     const tenant = await this.prisma.user.findUniqueOrThrow({ where: { id: application.tenantId } });
     await this.notice.deliver(tenant, {
       kind: 'application_viewed',
-      title: `The landlord has seen your application for "${application.room.title}"`,
+      title: `${this.letterOf(application.room)} has seen your application for "${application.room.title}"`,
       link: '/tenant/dashboard',
     }, (email) => this.notifications.sendApplicationViewedEmail(email, {
       tenantName: tenant.fullName,
@@ -358,7 +358,7 @@ export class ApplicationsService {
     await this.notice.deliver(tenant, {
       kind: 'accepted',
       title: `You got the room — "${application.room.title}"`,
-      body: 'The landlord accepted your application. Open the app to arrange moving in.',
+      body: `${this.letterOf(application.room)} accepted your application. Open the app to arrange moving in.`,
       link: '/tenant/dashboard',
     }, (email) => this.notifications.sendAcceptedEmail(email, {
       tenantName: tenant.fullName,
@@ -405,7 +405,7 @@ export class ApplicationsService {
       kind: 'rejected',
       title: `"${application.room.title}" went to someone else`,
       body: dto.reason
-        ? `The landlord said: ${sanitizeText(dto.reason)}`
+        ? `${this.letterOf(application.room)} said: ${sanitizeText(dto.reason)}`
         : 'There are other rooms in the same area — have a look.',
       link: `/?province=${encodeURIComponent(application.room.province)}`,
     }, (email) => this.notifications.sendRejectionEmail(email, {
@@ -483,6 +483,21 @@ export class ApplicationsService {
         searchUrl: `${this.config.get<string>('frontendUrl')}/?province=${encodeURIComponent(other.room.province)}`,
       }));
     }
+  }
+
+  /**
+   * What to call the person letting the room, to the applicant — Phase 6.
+   *
+   * "The landlord accepted your application" is false on a sublet listing, and
+   * it is false in the way that matters: the whole point of marking sublets is
+   * that an applicant knows they are dealing with a tenant, not an owner. A
+   * notice that calls them the landlord undoes the disclaimer on the room page.
+   *
+   * Plain English rather than "the sub-lessor", which is a word almost nobody
+   * uses about their own housing. The owner case is left exactly as it was.
+   */
+  private letterOf(room: { listerType: string }): string {
+    return room.listerType === 'sublessor' ? 'The person letting the room' : 'The landlord';
   }
 
   private async getOwnedApplication(applicationId: string, landlordId: string) {

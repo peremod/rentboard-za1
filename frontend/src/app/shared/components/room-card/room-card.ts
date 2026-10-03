@@ -57,6 +57,16 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
           @if (isNew()) { <span class="badge badge-new">New</span> }
           @if (availableNow()) { <span class="badge badge-now">⚡ Available now</span> }
           @if (room().status === 'reserved') { <span class="badge badge-reserved">Reserved</span> }
+          <!-- Phase 6. On the CARD and not only on the room page: somebody
+               scanning a board of thirty rooms is deciding which to open, and
+               who is letting a room out changes what they are taking on. The
+               room page carries the full notice. -->
+          @if (room().listerType === 'sublessor') {
+            <span class="badge badge-sublet"
+                  title="A tenant is letting out a room in a place they rent themselves">
+              Sublet
+            </span>
+          }
           <!-- Set only by an approved identity check in the admin queue.
                Nothing else can produce it, which is the point. -->
           @if (room().landlord?.landlordProfile?.idVerified) {

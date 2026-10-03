@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal } from '@angular/core';
-import { NgOptimizedImage } from '@angular/common';
+import { DatePipe, NgOptimizedImage } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { RoomsService } from '../../core/services/rooms.service';
@@ -15,7 +15,9 @@ import { ReviewsService } from '../../core/services/reviews.service';
 import { NavigationHistoryService } from '../../core/services/navigation-history.service';
 import { SeoService } from '../../core/services/seo.service';
 import { Review } from '../../core/models/review.model';
-import { AMENITY_LABELS } from '../../core/models/room.model';
+import {
+  AMENITY_LABELS, HouseholdCleanliness, HouseholdSchedule, HouseholdSocial,
+} from '../../core/models/room.model';
 import { environment } from '@env/environment';
 
 /** Plain English, in a tenant's terms. `unstated` has no entry: it is never shown. */
@@ -28,6 +30,36 @@ const HOUSEMATE_SENTENCE: Record<'professionals' | 'students' | 'mixed' | 'coupl
 
 
 /**
+ * Plain English for the compatibility fields — Phase 6.
+ *
+ * Sentences rather than labels, and `unstated` maps to null everywhere so the
+ * absence of an answer renders as nothing. `Record<..., string | null>` rather
+ * than a partial map, so adding a value to one of these enums is a compile
+ * error here instead of a silently missing line on the page.
+ */
+const SCHEDULE_SENTENCE: Record<HouseholdSchedule, string | null> = {
+  weekday_working: 'Most people are out at work or college on weekdays',
+  shift_work: 'Somebody works shifts, so there is sleeping at odd hours',
+  mostly_home: 'Somebody is usually home during the day',
+  varied: 'Everybody keeps different hours',
+  unstated: null,
+};
+
+const CLEANLINESS_SENTENCE: Record<HouseholdCleanliness, string | null> = {
+  very_tidy: 'Kept very tidy — there is a cleaning rota',
+  tidy_enough: 'Tidy enough: dishes get done, nobody is inspecting',
+  relaxed: 'Relaxed about tidiness',
+  unstated: null,
+};
+
+const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
+  social: 'A sociable house — people eat together and visitors are normal',
+  quiet: 'A quiet house — friendly, but people keep to themselves',
+  balanced: 'Somewhere in between: company when you want it',
+  unstated: null,
+};
+
+/**
  * Room detail — gallery, full description, and the apply flow.
  * `id` is bound automatically from the :id route segment via
  * withComponentInputBinding() in app.config.ts.
@@ -35,7 +67,7 @@ const HOUSEMATE_SENTENCE: Record<'professionals' | 'students' | 'mixed' | 'coupl
 @Component({
   selector: 'app-room-detail',
   standalone: true,
-  imports: [NgOptimizedImage, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot, TranslatePipe],
+  imports: [NgOptimizedImage, DatePipe, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="room-detail">
@@ -103,7 +135,49 @@ const HOUSEMATE_SENTENCE: Record<'professionals' | 'students' | 'mixed' | 'coupl
         <p class="room-detail__price">{{ r.rentCents | zarCents:'monthly' }} @if (r.billsIncluded) { <span class="pill">Bills included</span> }</p>
         <p class="room-detail__location">📍 {{ r.locationDisplay }}</p>
 
+        <!-- Sub-let notice — Phase 6.
+             ABOVE the fold and above the apply box, not in the small print at
+             the bottom. The brief is explicit that this is for the applicant
+             rather than for our liability: somebody who reads only the first
+             screen of this page must still learn that the person letting the
+             room is a tenant and that we have not confirmed they may do it.
+             The applicant carries the loss if that right turns out to be
+             invalid, so they get told before they decide, not after. -->
+        @if (r.listerType === 'sublessor') {
+          <div class="sublet-notice">
+            <p class="sublet-notice__head">🔑 Sublet by a tenant, not the owner</p>
+            <p>
+              The person letting this room rents the place themselves. Most South
+              African leases allow this only with the owner's written consent.
+              <strong>Mastande does not confirm or guarantee that they are allowed
+              to sublet</strong> — and if they are not, it is you who can lose the
+              room and the deposit.
+            </p>
+            @if (r.subletCheckedAt) {
+              <p class="sublet-notice__checked">
+                ✓ Lease and consent to sublet <strong>checked on
+                {{ r.subletCheckedAt | date: 'd MMMM y' }}</strong>. That means we
+                saw documents for this address — not that we phoned the owner, and
+                not that consent still stands today.
+              </p>
+            } @else {
+              <p class="sublet-notice__unchecked">
+                Nothing has been submitted for checking on this listing, so you have
+                only the sub-lessor's word. Ask to see their lease and their
+                landlord's written consent before you pay anything.
+              </p>
+            }
+            <a routerLink="/legal/sublet">What to ask for before you pay →</a>
+          </div>
+        }
+
         <div class="room-detail__flags">
+          @if (r.listerType === 'sublessor') {
+            <span class="pill pill--warn"
+                  title="A tenant is letting out a room in a place they rent themselves">
+              Sublet
+            </span>
+          }
           @if (r.couplesAllowed) { <span class="pill pill--green">Couples welcome</span> }
           @if (r.dssAccepted) {
             <span class="pill pill--green"
@@ -228,6 +302,17 @@ const HOUSEMATE_SENTENCE: Record<'professionals' | 'students' | 'mixed' | 'coupl
               </div>
             }
 
+            <!-- How the household runs — Phase 6. Compatibility matters more
+                 here than anywhere: somebody taking a room in a shared house is
+                 choosing the people as much as the room, and this is the part
+                 every competitor listing leaves out. Nothing renders for what
+                 nobody has said. -->
+            @if (shared.household.length) {
+              <ul class="shared-household">
+                @for (line of shared.household; track line) { <li>{{ line }}</li> }
+              </ul>
+            }
+
             @if (shared.rules) {
               <div class="shared-rules">
                 <h3>House rules</h3>
@@ -336,8 +421,31 @@ const HOUSEMATE_SENTENCE: Record<'professionals' | 'students' | 'mixed' | 'coupl
     .room-detail__flags { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
     .pill { font-size: .72rem; font-weight: 700; background: #F2EDE3; padding: .2rem .6rem; border-radius: 20px; }
     .pill--green { background: rgba(61,112,64,.1); color: #3D7040; }
+    /* Amber, not green: "Sublet" is a fact a tenant must weigh, not a feature
+       of the room. Contrast checked by the accessibility drive. */
+    .pill--warn { background: rgba(200,144,42,.18); color: #6B4710; }
     h2 { font-size: 1rem; margin-bottom: .5rem; }
     .room-detail__description { line-height: 1.7; color: #3A3228; margin-bottom: 2rem; white-space: pre-wrap; }
+    /* The sub-let notice. Deliberately not styled as a soft "info" box: it
+       carries the one fact on this page that can cost somebody their deposit,
+       and an applicant skim-reading on a phone has to see it. */
+    .sublet-notice {
+      border: 1.5px solid #C9792B;
+      border-left-width: 5px;
+      background: #FDF6EC;
+      border-radius: var(--r8);
+      padding: .9rem 1rem;
+      margin: 0 0 1.25rem;
+      line-height: 1.55;
+      font-size: .9rem;
+    }
+    .sublet-notice p { margin: 0 0 .5rem; }
+    .sublet-notice__head { font-weight: 700; font-size: .95rem; }
+    .sublet-notice__checked { color: #2F6B3A; }
+    .sublet-notice__unchecked { color: #7A4A12; }
+    .sublet-notice a { font-weight: 600; }
+    .shared-household { margin: .6rem 0 1rem; padding-left: 1.1rem; line-height: 1.6; }
+    .shared-household li { margin-bottom: .2rem; }
     .room-detail__apply { border-top: 1px solid #DDD5C8; padding-top: 1.5rem; }
     .room-detail__apply textarea { width: 100%; padding: .6rem; border: 1.5px solid #DDD5C8; border-radius: 6px; margin-bottom: .6rem; font-family: inherit; }
     .room-detail__apply button { padding: .6rem 1.2rem; border-radius: 6px; border: none; background: var(--terra); color: #fff; font-weight: 700; cursor: pointer; }
@@ -380,12 +488,29 @@ export class RoomDetail implements OnInit {
       bits.push(HOUSEMATE_SENTENCE[p.housemateProfile]);
     }
 
+    /**
+     * The compatibility lines — Phase 6.
+     *
+     * Each `unstated` is dropped rather than labelled, for the same reason
+     * `housemateProfile` is: it is the absence of an answer, not an answer, and
+     * rendering "cleanliness: not stated" invites a reader to hold it against a
+     * listing whose owner was never asked.
+     */
+    const household = [
+      SCHEDULE_SENTENCE[p.householdSchedule ?? 'unstated'],
+      CLEANLINESS_SENTENCE[p.householdCleanliness ?? 'unstated'],
+      SOCIAL_SENTENCE[p.householdSocial ?? 'unstated'],
+    ].filter((line): line is string => !!line);
+
     const shared = {
       who: bits.join(' — ') || null,
       facilities: p.sharedAmenities ?? [],
       rules: p.houseRules?.trim() || null,
+      household,
     };
-    return shared.who || shared.facilities.length || shared.rules ? shared : null;
+    return shared.who || shared.facilities.length || shared.rules || household.length
+      ? shared
+      : null;
   });
 
   /** Report dialog visibility. Available signed out — see ReportDialog. */
