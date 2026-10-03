@@ -288,6 +288,37 @@ rather than to our liability, and NOT attorney-reviewed. It characterises the
 effect of a head lease on a sub-tenant and summarises the Rental Housing Act on
 deposits — docs/OUTSTANDING.md §8 names the sections to ask about."
 
+tag_if_missing "v1.86.1" "573ebf501fdc5e14d11aa20bec454733ad9ef126" "2026-10-03 21:50:17 +0000" "v1.86.1 — Phase 7a: nav-link integrity
+
+Every nav link checked against the routes as a FULL path, every guarded screen
+checked for being reachable from some nav, and every nav label checked against
+the heading of the page or section it opens.
+
+The audit that was supposed to do the first of those compared only each link's
+FIRST SEGMENT against the set of known areas, so /landlord/billing and
+/landlord/my-rooms — the two dead links the brief names — would both have
+passed, because 'landlord' is a real area. It printed 'every internal routerLink
+resolves to a declared route' while being incapable of checking it. The third
+such control in three releases, after a MAX_ATTEMPTS nothing read and nineteen
+@Throttle decorators with no guard.
+
+Four real mismatches fixed: 'My Rooms' opened a section headed 'Active
+listings', and a landlord whose rooms were all drafts clicked it and read 'No
+rooms listed yet' while holding three; 'Applicants' pointed at a section that
+does not exist, so the count moved to where applicants actually are and the slot
+now holds 'Needs you'; the footer's 'My applications' opened the dashboard root;
+and /legal/sublet, shipped in v1.86.0, was in no nav surface at all. Admins got
+a Notices entry, being users the notice router writes to.
+
+Two bugs in the new tool itself, both of which invented findings, fixed before
+the nav was touched — a proximity regex that mounted AUTH_ROUTES under
+landlords/:slug and reported /auth/login dead, and a label matcher blind to
+double quotes that reported the Renter's Passport unreachable.
+
+Verified: 476 smoke checks, nav audit clean across 60 links and 45 labels, 21
+accessibility pages, production build green. Each of the four nav checks was
+falsified before being trusted."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then

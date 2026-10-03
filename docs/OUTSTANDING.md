@@ -17,7 +17,7 @@ a number written here.
 
 ## 1. Push the release tags
 
-Seventeen tags exist only in a container that no longer exists. Every tagged
+Eighteen tags exist only in a container that no longer exists. Every tagged
 commit IS on the remote — only the tag objects are missing. Pushing
 `refs/tags/*` is refused (HTTP 403) from the coding session, so this runs from
 your own clone.
@@ -28,7 +28,7 @@ git fetch origin
 bash scripts/push-release-tags.sh
 ```
 
-**Worked when:** it prints `Created 17 tag(s), skipped 0` then pushes without
+**Worked when:** it prints `Created 18 tag(s), skipped 0` then pushes without
 error. Safe to re-run — a tag already on the remote is skipped, never moved.
 
 ```bash
