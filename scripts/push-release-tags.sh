@@ -319,6 +319,46 @@ Verified: 476 smoke checks, nav audit clean across 60 links and 45 labels, 21
 accessibility pages, production build green. Each of the four nav checks was
 falsified before being trusted."
 
+tag_if_missing "v1.87.0" "2e55c71d1e7f1d51aba8cc9da4b5749c08cfbf98" "2026-10-03 22:37:25 +0000" "v1.87.0 — Phase 7b: properties a landlord can find
+
+Grouping rooms at one address existed and nobody used it. The brief's diagnosis
+was right: it was reachable only from inside the yard screen, below the rent
+tracking and the expenses, behind a button reading '+ Group rooms into a yard' —
+a concept found while doing something else, under a word used nowhere else in
+the product.
+
+Now: a list at /landlord/properties with a card per property (their own name for
+it, the address under it, a photo borrowed from one of its rooms, '2 rooms — 1
+vacant — 1 let'), a detail view behind each card, and an empty state that
+teaches the idea in one sentence with one button. The listing wizard asks 'Is
+this room at an address where you already have a room listed?' with the existing
+places as recognisable cards, and '+ Add a room to this property' fills the
+location in — a landlord made to retype the suburb does not come back to group
+anything.
+
+The destructive actions were the real work. Deleting a property is refused by the
+API while rooms are attached unless the caller passes ungroupRooms, and the
+refusal names the count and says the listings will NOT be deleted — server-side,
+so no second UI can skip it. Per room, 'Take out of this property' is worded so
+it cannot read as 'delete my listing', and its confirmation names what survives.
+
+Structure is forced on nobody: the picker is hidden from somebody with no
+properties, 'No — somewhere new' is a real answer, ungrouped rooms keep a card of
+their own, and no property is needed to list a room.
+
+The address line the brief wanted on the card is optional and private. This
+screen had deliberately never collected a street — the board shows the suburb for
+the tenant's safety — so it is nullable, in no public payload, and the form says
+so where it is typed.
+
+Verified: 485 smoke checks, 22 + 18 drive checks, 22 accessibility pages, nav
+audit clean, production build green.
+
+Found along the way, about the container rather than the code: tsc -w had
+silently stopped emitting, so the running API was three edits behind and a drive
+caught it. The compiled output is checked for an assertion now rather than the
+watcher being trusted."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -326,7 +366,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-6])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-7])[.]'"
 else
   echo "Nothing to push."
 fi
