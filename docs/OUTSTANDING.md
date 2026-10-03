@@ -324,9 +324,13 @@ Email is optional, phone is an alternative login identifier (unique among
 the two. Signing in by phone shipped in v1.85.0; signing **up** by phone — the
 three-step flow with the person's own acceptance of the terms — in v1.85.1.
 
+The in-app notice channel is readable too, as of the same release — it had been
+write-only since v1.85.0, which meant a phone-only landlord's notifications were
+recorded faithfully and shown to nobody.
+
 What is left of 7g is listed as its own items rather than as a decision:
-assisted sign-up mode, account recovery for a phone-only account, adding an
-email later, and a `/notices` screen for the in-app channel.
+assisted sign-up mode, account recovery for a phone-only account, and adding an
+email later.
 
 ---
 
@@ -342,8 +346,14 @@ and getting eight `200`s — not by reading the decorator, which looked right.
 **What is live now.** The guard sits beside every `@Throttle`,
 `scripts/throttle-lint.mjs` fails the build if one is ever added without it, and
 both the smoke suite and `phone-signup-drive.mjs` prove a real `429` and that
-the window refills. Login is capped at 15 per 15 minutes per IP and register at
-10 per hour.
+the window refills. Login is capped at 30 per 15 minutes per IP and register at
+60 per hour.
+
+⚠️ **Running the suites repeatedly now matters.** Every limit is per IP and the
+test suites share one, so the smoke suite three times inside an hour will start
+seeing `429`s on register — which looks like a broken suite and is the limiter
+working. Space the runs, or raise the register limit temporarily while you are
+hammering it.
 
 **Three things for a person, none blocking:**
 
@@ -355,10 +365,13 @@ the window refills. Login is capped at 15 per 15 minutes per IP and register at
    means roughly double every limit. If the API is scaled past one instance,
    point the throttler at Redis (`@nest-lab/throttler-storage-redis`) or accept
    the multiplier knowingly.
-3. **The numbers assume carrier NAT.** Mobile carriers here put very large
-   numbers of subscribers behind one address, so the auth limits were set at
-   15/30 per 15 minutes rather than the 5/10 originally written — tight enough to
-   stop a single host, loose enough not to lock out a township sharing an IP.
+3. **The numbers assume carrier NAT, and one assumes a sign-up drive.** Mobile
+   carriers here put very large numbers of subscribers behind one address, so the
+   auth limits were set at 15/30 per 15 minutes rather than the 5/10 originally
+   written — tight enough to stop a single host, loose enough not to lock out a
+   township sharing an IP. Register is 60 an hour for a sharper reason: an agent
+   helping a row of landlords join at a community event is a growth channel, not
+   an attack, and ten an hour refuses the eleventh person in the queue.
    Worth revisiting once there is real traffic to measure: watch for a spike of
    `429`s on `/auth/login` or `/auth/phone/request-code`, which would mean a
    legitimate shared address is being throttled.
@@ -395,7 +408,7 @@ gets built accordingly.
 ADMIN_EMAIL=<seeded admin> ADMIN_PASSWORD=<their password> \
   WHATSAPP_APP_SECRET=<the API's own> \
   RESEND_WEBHOOK_SECRET=<the API's own> \
-  ./scripts/smoke-test.sh          # 460 passed, 8 skipped without the three
+  ./scripts/smoke-test.sh          # 464 passed, 8 skipped without the three
                                    # secrets above; set them and five of those
                                    # become checks, leaving 3 named skips
 
@@ -409,6 +422,7 @@ ADMIN_EMAIL=<seeded admin> ADMIN_PASSWORD=<their password> \
 node scripts/phone-signup-drive.mjs      # 29 checks, 0 skip
 node scripts/phone-signup-ui-drive.mjs   # 11 checks — the consent box is the point
 node scripts/otp-drive.mjs               # phone sign-in hardening
+node scripts/notices-drive.mjs           # 9 checks — the in-app notice channel
 node scripts/throttle-lint.mjs           # every @Throttle is actually guarded
 ```
 

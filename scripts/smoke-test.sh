@@ -2151,6 +2151,27 @@ check "sign-up refuses acceptTerms: false" 400 "$STATUS" "$BODY"
 req POST /api/auth/phone/signup/complete '{"ticket":"not-a-real-ticket-at-all-x","fullName":"Nobody","role":"TENANT"}'
 check "sign-up refuses a request with no acceptTerms at all" 400 "$STATUS" "$BODY"
 
+# In-app notices — Phase 7g. The channel that works when there is no email
+# address, and which nothing could READ until v1.85.1. Isolation between
+# accounts is driven properly in scripts/notices-drive.mjs; what belongs here is
+# that the endpoints exist, need a session, and answer the shape the nav badge
+# reads.
+req GET /api/notices "" "$LTOKEN"
+check "a landlord can read their own notices" 200 "$STATUS" "$BODY"
+
+req GET /api/notices
+check "notices need a session" 401 "$STATUS" "$BODY"
+
+req GET /api/notices/unread "" "$LTOKEN"
+if [[ "$(echo "$BODY" | jq -r 'has("count") and has("items")')" == "true" ]]; then
+  green "  PASS  the unread endpoint returns a count and a list in one call"; PASS=$((PASS+1))
+else
+  red "  FAIL  unread response is not {count, items}: $BODY"; FAIL=$((FAIL+1))
+fi
+
+req POST /api/notices/read-all '{}' "$LTOKEN"
+check "mark-all-read is available to the owner" 200 "$STATUS" "$BODY"
+
 # Rate limiting exists at all — the thing nineteen @Throttle decorators only
 # looked like they were doing. Probed on referrals/validate because its window
 # is one minute, so this cannot poison a later check for a quarter of an hour.

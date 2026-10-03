@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { forkJoin, of, catchError } from 'rxjs';
 import { RouterLink } from '@angular/router';
+import { NoticesService } from '../../../core/services/notices';
 import { AuthService } from '../../../core/services/auth.service';
 import { ApplicationsService } from '../../../core/services/applications.service';
 import { Application } from '../../../core/models/application.model';
@@ -261,6 +262,7 @@ export class TenantDashboard implements OnInit {
   loadingSaved = signal(false);
   withdrawing = signal<string | null>(null);
   alerts = inject(AlertsService);
+  notices = inject(NoticesService);
   private dialogs = inject(DialogService);
 
   /** Plain-language summary of a saved search's filters. */
@@ -332,6 +334,10 @@ export class TenantDashboard implements OnInit {
       applications: this.activeApplicationCount(),
       saved: this.savedRooms.count(),
       alerts: this.alerts.searches().length,
+      // Phase 7g. The badge is how the notices screen gets found, and for an
+      // account with no email address it is the only indication that anything
+      // happened at all.
+      notices: this.notices.unreadCount(),
     }),
   );
 
@@ -387,8 +393,9 @@ export class TenantDashboard implements OnInit {
       error: () => this.loading.set(false),
     });
 
-    // Neither of these may break the dashboard if they fail.
+    // None of these may break the dashboard if they fail.
     this.alerts.load().subscribe({ error: () => {} });
+    this.notices.refreshUnread().subscribe({ error: () => {} });
     this.loadSavedRooms();
   }
 

@@ -25,17 +25,13 @@
  * ever goes out over WhatsApp, so reading it back means reading the database.
  */
 import { chromium } from '@playwright/test';
-import { execSync } from 'node:child_process';
 import crypto from 'node:crypto';
+import { dbQuery as q } from './lib/drive-session.mjs';
 
 const API = 'http://localhost:3000', WEB = 'http://localhost:4200';
 let fail = 0;
 const ok = (m) => console.log('  ✅ ' + m);
 const bad = (m) => { console.log('  ❌ ' + m); fail++; };
-
-const DB = process.env.DATABASE_URL
-  ?? 'postgresql://rentboard:rentboard@localhost:5432/rentboard_dev';
-const q = (sql) => execSync(`psql "${DB}" -tAc ${JSON.stringify(sql)}`, { encoding: 'utf8' }).trim();
 
 const S = String(Math.floor(Math.random() * 9000) + 1000);
 const LOCAL = `082129${S}`;

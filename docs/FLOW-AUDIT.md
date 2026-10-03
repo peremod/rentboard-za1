@@ -969,7 +969,36 @@ queue, for the same reason: "it is on a cron" is not evidence.
 |---|---|
 | 🔴 A new number has by definition never messaged us, so it is **always** outside Meta's 24-hour window. Until the authentication template is approved (`docs/OUTSTANDING.md` §7), a sign-up code can only reach a number that happens to have messaged the business in the last day. The flow is proven end to end; the pipe is half-connected | **Blocking for launch of this flow** |
 | A phone-only account cannot pay the verification fee — PayFast requires `email_address`. Refused explicitly with an instruction to add one, rather than given a placeholder | Medium, by decision |
-| No assisted sign-up mode yet (an agent-led flow with its own audit trail), no account recovery for a phone-only account, no "add an email later" screen, and no `/notices` screen for the in-app channel | Medium — each is listed in `docs/OUTSTANDING.md` |
+| No assisted sign-up mode yet (an agent-led flow with its own audit trail), no account recovery for a phone-only account, and no "add an email later" screen | Medium — each is listed in `docs/OUTSTANDING.md` |
+| This path sets `marketingEmails: false` against the column default, because what the person ticked was the Terms, the Privacy Policy and POPIA processing — marketing is a separate consent under s.69 and was not asked for. ⚠️ **The email registration path still takes the `true` default**, and its page only states the Terms passively rather than asking for a tick. Pre-existing, not introduced here, and worth fixing with the same control | Medium |
+
+### 5.16b The notice channel was write-only — ✅ fixed in v1.85.1
+
+`NoticeRouter` has written `Notice` rows since v1.85.0 as the channel that works
+when there is no email address, and **nothing could read them.** Its own comment
+calls the notice "the channel that cannot fail for reasons outside our control",
+which was true of the write and meaningless without a read: a phone-only
+landlord's "you have a new applicant" went into a table, WhatsApp refused it
+outside Meta's 24-hour window, and nobody was told anything by any channel.
+
+Fixed in the same release as phone sign-up, because sign-up is what creates the
+accounts that depend on it. `GET /notices`, `GET /notices/unread` (count plus
+list, so a nav badge is one call), `PATCH /notices/:id/read`,
+`POST /notices/read-all` — every one scoped to the caller in the WHERE clause,
+so another person's notice is a miss rather than a refusal. `/account/notices`
+renders them for both roles, with an unread badge in both sidebars, because a
+screen nobody can find is the same as no screen.
+
+The page shows the **WhatsApp outcome per notice** in plain words. A landlord
+waiting on WhatsApp and getting nothing should be able to see that the message
+was refused rather than conclude that nobody applied.
+
+### Gaps
+
+| Gap | Severity |
+|---|---|
+| The badge is loaded on the two dashboards and refreshed when the notices page opens, not polled. A notice arriving while a landlord sits on another portal screen shows up on their next navigation, not instantly | Low — real-time delivery is a different feature |
+
 
 ### 5.17 Rate limiting existed only as decoration — ✅ fixed in v1.85.1
 
@@ -986,9 +1015,14 @@ global per-IP guard would throttle the whole site under load.
 The limits were also re-pitched for this market. Mobile carriers here put very
 large numbers of subscribers behind one address, so 5 per 15 minutes can be a
 neighbourhood's budget: auth requests are 15 per 15 minutes, verifications 30,
-`/auth/login` 15, register 10 per hour, and public scam reporting 20 per hour
+`/auth/login` 30, register 60 per hour, and public scam reporting 20 per hour
 (raised from 5 — a false report costs an admin a minute, a suppressed one leaves
 a scam listing up).
+
+Register is the one that moved furthest, from 10 an hour to 60, and for a reason
+worth stating: an agent helping a row of landlords join on one wifi at a
+community event is how this product is meant to grow. Ten an hour refuses the
+eleventh person in that queue.
 
 ### Gaps
 

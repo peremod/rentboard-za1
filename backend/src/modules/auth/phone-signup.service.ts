@@ -355,6 +355,14 @@ export class PhoneSignupService {
             role: input.role,
             fullName: input.fullName.trim(),
             lastLoginAt: now,
+            // Opted OUT, against the column default of true.
+            //
+            // What this person ticked was the Terms, the Privacy Policy and
+            // POPIA processing. Marketing is a separate consent under POPIA
+            // s.69 and they were not asked for it. There is also no address to
+            // market to — so the default costs nothing today and would quietly
+            // become an opt-in they never gave the moment they add an email.
+            marketingEmails: false,
             ...(input.role === 'LANDLORD'
               ? { landlordProfile: { create: {} } }
               : { tenantProfile: { create: {} } }),

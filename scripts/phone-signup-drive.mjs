@@ -24,9 +24,8 @@
  * Needs the API on :3000 and a DATABASE_URL: a code only ever goes out over
  * WhatsApp, so reading one back means reading the database.
  */
-import { execSync } from 'node:child_process';
 import crypto from 'node:crypto';
-import { registerUser, apiCall } from './lib/drive-session.mjs';
+import { registerUser, apiCall, dbQuery as q } from './lib/drive-session.mjs';
 
 const API = 'http://localhost:3000';
 let fail = 0;
@@ -35,13 +34,6 @@ const ok = (m) => console.log('  ✅ ' + m);
 const bad = (m) => { console.log('  ❌ ' + m); fail++; };
 /** Named, with its reason and its remedy — never a silent pass. */
 const skip = (what, why) => { skips.push({ what, why }); console.log(`  ⏭️  ${what}\n       ↳ ${why}`); };
-
-const DB = process.env.DATABASE_URL
-  ?? 'postgresql://rentboard:rentboard@localhost:5432/rentboard_dev';
-
-function q(sql) {
-  return execSync(`psql "${DB}" -tAc ${JSON.stringify(sql)}`, { encoding: 'utf8' }).trim();
-}
 
 /**
  * Numbers unique to this run.
@@ -223,6 +215,13 @@ if (!code) {
   consent === 'true'
     ? ok('with the acceptance recorded against the number that was proven')
     : bad('no consent record — nothing evidences that this person agreed');
+
+  // POPIA s.69: marketing is a separate consent and this flow does not ask for
+  // it, so the account must not arrive opted in on the column default.
+  const marketing = q(`SELECT "marketingEmails"::text FROM users WHERE phone='${NEW_E164}'`);
+  marketing === 'false'
+    ? ok('and is NOT opted into marketing, which is a consent nobody asked for here')
+    : bad('the account is opted into marketing on a tick that only covered the Terms');
 
   const profile = q(`SELECT count(*) FROM landlord_profiles lp JOIN users u ON u.id = lp."userId" WHERE u.phone='${NEW_E164}'`);
   profile === '1'

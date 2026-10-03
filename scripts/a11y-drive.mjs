@@ -94,6 +94,10 @@ const PUBLIC_PAGES = [
 const LANDLORD_PAGES = [
   '/landlord/dashboard', '/landlord/yard', '/landlord/verification',
   '/landlord/services', '/landlord/public-page', '/account/settings',
+  // Phase 7g. For an account with no email address this screen is the only
+  // place a notification can be read, so it is not a page that may quietly
+  // regress.
+  '/account/notices',
 ];
 const TENANT_PAGES = ['/tenant/dashboard', '/tenant/rent', '/tenant/passport'];
 const ADMIN_PAGES = [

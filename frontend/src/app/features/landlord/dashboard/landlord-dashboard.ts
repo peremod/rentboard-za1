@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { DatePipe } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { WhatsappDraftsService, WhatsappDraft } from '../../../core/services/whatsapp-drafts.service';
+import { NoticesService } from '../../../core/services/notices';
 import { AuthService } from '../../../core/services/auth.service';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -307,6 +308,7 @@ export class LandlordDashboard implements OnInit {
   private router = inject(Router);
   private dialogs = inject(DialogService);
   private surveys = inject(SurveyService);
+  notices = inject(NoticesService);
 
   /**
    * True for the one render after a room is marked let, which swaps the survey
@@ -320,9 +322,16 @@ export class LandlordDashboard implements OnInit {
 
   billingEnabled = BILLING_ENABLED;
 
-  /** Computed so the Applicants badge tracks the live total. */
+  /** Computed so the Applicants and Notices badges track the live totals. */
   readonly navItems = computed<PortalNavItem[]>(() =>
-    landlordNav({ applicants: this.totalApplicants() }),
+    landlordNav({
+      applicants: this.totalApplicants(),
+      // Phase 7g. The badge is how the notices screen gets found at all, and
+      // for a landlord with no email address it is the only indication that
+      // anything happened — WhatsApp refuses free-form text outside its
+      // 24-hour window, so there may have been no other signal.
+      notices: this.notices.unreadCount(),
+    }),
   );
 
   rooms = signal<Room[]>([]);
@@ -347,6 +356,7 @@ export class LandlordDashboard implements OnInit {
     this.surveys.load().subscribe({ error: () => {} });
 
     this.whatsappDrafts.load().subscribe({ error: () => {} });
+    this.notices.refreshUnread().subscribe({ error: () => {} });
     this.roomsService.getLandlordRooms().subscribe({
       next: (rooms) => { this.rooms.set(rooms); this.loading.set(false); },
       error: () => this.loading.set(false),

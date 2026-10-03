@@ -98,8 +98,10 @@ model User {
   phone          String?
   isVerified     Boolean  @default(false)
   isActive       Boolean  @default(true)
-  /// 'email', 'magic_link', 'google', 'facebook'. Kept as a string rather than
-  /// an enum so adding a provider does not need a migration.
+  /// 'email', 'magic_link', 'google', 'facebook', 'phone'. Kept as a string
+  /// rather than an enum so adding a provider does not need a migration —
+  /// 'phone' arrived in v1.85.1 and needed no schema change, which is the
+  /// decision paying off.
   authProvider   String   @default("email")
   authProviderId String?
 

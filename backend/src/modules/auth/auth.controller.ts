@@ -41,10 +41,26 @@ export class AuthController {
     private authService: AuthService, private config: ConfigService) {}
 
   @Post('register')
-  // Account farming: ten an hour from one address is far more than a person
-  // signing up for themselves, and far less than a script wants.
+  // Sixty an hour from one address.
+  //
+  // This was ten, which is what "far more than a person needs" looks like until
+  // you ask who shares an address here. Three cases break it, and all three are
+  // ways this product is meant to grow: a community sign-up drive where an agent
+  // helps a row of landlords join on one wifi; a building or a café behind one
+  // connection; and carrier NAT, which puts very large numbers of subscribers
+  // behind a single IP. Refusing the eleventh person at a launch event is a
+  // worse outcome than the thing the limit prevents.
+  //
+  // Sixty still stops a script cold — it is one a minute, sustained — and
+  // account farming has better controls behind this anyway: referral rewards
+  // fire on a qualifying action rather than on signup, and a phone sign-up costs
+  // a code to a real handset.
+  //
+  // (The test suites register several accounts per run from one address, which
+  // is what made me look at this number properly. That is not the reason for
+  // the change, but it is how the question got asked.)
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 10, ttl: 60 * 60 * 1000 } })
+  @Throttle({ default: { limit: 60, ttl: 60 * 60 * 1000 } })
   @ApiOperation({ summary: 'Create a new account (tenant or landlord)' })
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.register(dto);
@@ -57,15 +73,18 @@ export class AuthController {
   // in the API: /auth/phone/verify at least faces a six-digit code with a
   // per-account cap behind it.
   //
-  // Fifteen rather than five, for the carrier-NAT reason in app.module.ts: a
-  // household or a café shares one address, and a person who has forgotten which
-  // of their two passwords it is uses three on their own.
+  // Thirty per fifteen minutes, for the carrier-NAT reason in app.module.ts: a
+  // household, a café or a whole carrier shares one address, and a person who
+  // has forgotten which of their two passwords it is uses three on their own.
+  // Thirty is still two orders of magnitude short of a useful password spray,
+  // and the control that would actually stop one is per-account, which does not
+  // exist yet and is written down rather than implied.
   //
   // ⚠️ This is a per-IP control and there is still no per-ACCOUNT lockout, so a
   // slow distributed spray against one address remains possible. Recorded in
   // docs/OUTSTANDING.md rather than left implied by the presence of a limit.
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 15, ttl: 15 * 60 * 1000 } })
+  @Throttle({ default: { limit: 30, ttl: 15 * 60 * 1000 } })
   @ApiOperation({ summary: 'Email + password login' })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.login(dto);

@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 /**
  * Shared plumbing for the browser drives — scripts/phase-drive.mjs and
  * scripts/a11y-drive.mjs.
@@ -113,4 +114,29 @@ export async function signIn(browser, web, email, password, { width = 412, heigh
   }
   await page.waitForTimeout(800);
   return page;
+}
+
+/**
+ * One row, one column, straight out of Postgres.
+ *
+ * Four drives had their own copy of this, which is how the next paragraph
+ * stayed a bug in one of them for a release.
+ *
+ * ⚠️ `psql -tAc` prints the result AND the command tag: an
+ * `INSERT … RETURNING id` comes back as `"<uuid>\nINSERT 0 1\n"`. A plain
+ * `.trim()` therefore yields an id with a newline and `INSERT 0 1` stuck to the
+ * end of it — and because every `id` column here is TEXT rather than `uuid`
+ * (Prisma's `String @id`), Postgres does not reject the malformed value. It
+ * simply matches nothing. So `otp-drive.mjs` had been leaving its throwaway
+ * account behind on every run, silently, and the cleanup it reported doing had
+ * never happened. It only surfaced when a route with a `ParseUUIDPipe` was
+ * handed the same string and said so.
+ *
+ * Hence the first line, explicitly.
+ */
+export function dbQuery(sql) {
+  const url = process.env.DATABASE_URL
+    ?? 'postgresql://rentboard:rentboard@localhost:5432/rentboard_dev';
+  const out = execSync(`psql "${url}" -tAc ${JSON.stringify(sql)}`, { encoding: 'utf8' });
+  return out.trim().split('\n')[0].trim();
 }
