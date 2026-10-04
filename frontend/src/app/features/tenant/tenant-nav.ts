@@ -30,7 +30,10 @@ export function tenantNav(badges: TenantNavBadges = {}): PortalNavItem[] {
     // sub-lessor: a TENANT account that also lets a room has conversations on
     // both sides, and a tenant-only inbox would show them half their messages.
     { label: 'Messages', icon: '💬', route: '/account/messages' },
-    { label: 'Browse rooms', icon: '🔍', route: '/' },
+    // ⚠️ `exact`, because '/' is a prefix of every URL in the app. Without it
+    // this item was marked the current page on all six tenant screens — see
+    // PortalShell.isActive.
+    { label: 'Browse rooms', icon: '🔍', route: '/', exact: true },
     { label: 'Rent', icon: '🧾', route: '/tenant/rent' },
     { label: "Renter's Passport", icon: '🪪', route: '/tenant/passport' },
     // Phase 6. Points at the dashboard SECTION rather than straight into the
