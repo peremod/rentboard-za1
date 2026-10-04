@@ -773,6 +773,50 @@ first falsification could not fire — the DTO's MinLength refuses a blank meeti
 place before the service's fallback runs — and that is recorded rather than
 counted as a pass."
 
+tag_if_missing "v1.98.0" "f515ba39fc8a9d9114cb6ad7f9aa5d9c4a2f253c" "2026-10-04 21:10:30 +0000" "v1.98.0 — Phase 7m: sponsoredUntil was a writable control with no reader
+
+Four comments said nothing reads it — schema, ordering method, DTO, frontend
+model — and all four were true. The ordering method even explains why it stays
+out of the ORDER BY, and a drive asserts sponsoring does not move a provider up
+the list.
+
+What none of them said is that it was writable. PATCH /api/services/admin/:id
+with a sponsoredUntil returned HTTP 200, echoed the date and stored it, and
+\`1999-01-01\` was accepted too — the only rule on it was @IsISO8601(). An admin
+could sell a placement, record it, be told it worked, and have nothing happen.
+The house defect with money attached: the payment would be real, the placement
+would not exist.
+
+The subtler half is that it sat in the ordered() SELECT, which is this
+codebase's deliberate allowlist and the mechanism that keeps checkedByAdminId
+away from landlords. Every landlord received the field; nothing in the app read
+it. So the decision not to sell placement was held by a comment in a backend
+method while the material to defeat it was already in the browser and typed in
+the model — one .sort() in a component makes the directory an advertising
+surface without touching the backend, the comment, or the drive that guards it.
+
+Off both DTOs, so forbidNonWhitelisted turns a write into a 400 naming the
+property. Out of the payload and out of the model. Existing values cleared as
+residue: nothing set them deliberately, nothing can set them now, nothing reads
+them, and a date there asserts a commercial arrangement that does not exist. The
+column stays — a cheap bet in Phase 4 and still cheap.
+
+The old single check PATCHed a sponsorship and asserted the order held, which
+passed while exercising the write that was the defect. Four checks now, the
+ordering guard tested against a row that really is sponsored (set in the
+database, because the API cannot), precondition asserted, and the drive cleans
+up after itself — it had left a live development provider reading \"sponsored
+until 2026-11-03\".
+
+Falsified by reintroducing all three bugs at once: four failures, each naming
+its own. And one of the two new smoke checks was faulty and caught before
+shipping — it passed on a 401 body, the third time in this repository and the
+second in that file, which warns about it in its own header.
+
+Selling placement remains undecided and needs a label plus a contractor who can
+be billed: the same blocker as lead fees, folded into Outstanding 16 as one
+decision. 568 smoke checks passed, 0 failed."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -788,7 +832,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-7])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-8])[.]'"
 else
   echo "Nothing to push."
 fi
