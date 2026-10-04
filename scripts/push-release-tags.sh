@@ -397,6 +397,42 @@ Verified: 497 smoke checks, 43 + 33 drive checks, 25 accessibility pages with
 content on them, nav audit clean, throttle lint clean, production build green,
 26.8 KB under the bundle budget."
 
+tag_if_missing "v1.89.0" "ecca8afc1c9ce351501388242606fad35c8c4797" "2026-10-04 08:41:20 +0000" "v1.89.0 — Phase 7d: a dashboard that answers one question
+
+The brief asked for the task inbox to lead both dashboards, for every number to
+be audited against the plain-English principle in the REAL components rather
+than in the design document, and for persistent 'Add a room' and 'Add a
+property' entry points on the landlord home.
+
+The audit found that 'Total views' was a lifetime counter, so a room posted in
+June could read 200 views without one of them being this month — and the spec's
+own example sentence, 'viewed 47 times this week', had no data under it. New
+room_view_days table: one row per room per day, a counter rather than a row per
+view, no viewer identity, and the owner's own look not counted. The dashboard
+reads as sentences now, with every clause stating its window, and the tenant
+dashboard gets the task list the brief asks for in both portals.
+
+Three things Phase 7b had broken, all found by doing this work:
+
+  - The two most important buttons on the dashboard went nowhere. Each task
+    row's destination is a string from the API, and they pointed at
+    /landlord/yard, which 7b turned into a redirect — and a redirect drops the
+    fragment, so 'Mark it' landed a landlord on a bare list of addresses.
+  - 'Rent reminders' became unreachable from every screen: the control built
+    because the API had no UI, left on a view with no route.
+  - A landlord who never grouped their rooms could not reach their own rent.
+    Grouping is optional by design, so /landlord/properties/ungrouped is now a
+    real destination.
+
+scripts/nav-audit.mjs resolves the paths the API hands the browser now, and
+holds any path with a fragment to the rule that a fragment on a redirect can
+never arrive. The tool was blind twice before it worked, reporting success both
+times, which is recorded in docs/FLOW-AUDIT.md 5.22.
+
+Verified: 511 smoke checks, 35 + 29 drive checks, 26 accessibility pages with
+content on them, nav audit clean including its new section, production build
+green, 26.8 KB under the bundle budget."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -404,7 +440,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-8])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9])[.]'"
 else
   echo "Nothing to push."
 fi
