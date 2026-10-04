@@ -31,12 +31,24 @@ const byLandlord = await apiCall(API,'POST','/api/services/admin',{category:'plu
 byLandlord.status===403 ? ok('a landlord cannot add a provider') : bad(`landlord add returned ${byLandlord.status}`);
 
 // Phone normalisation, via the shared helper.
-const p1 = await apiCall(API,'POST','/api/services/admin',{category:'plumber',name:'Sipho — Tembisa Plumbing',phone:'082 123 4567',areas:['Tembisa','Kempton Park'],note:'Geysers and blocked drains.',active:true},A);
+// ⚠️ phoneConfirmedAt is now part of the fixture, not decoration — Phase 7j.
+//
+// A provider cannot be listed until somebody has rung the number and recorded
+// it, enforced by the service AND a CHECK constraint, because the directory
+// tells landlords these names were checked. This drive's fixtures were all
+// `active: true` with nothing recorded, so every one of them started failing
+// the moment the rule landed — which is the rule working. The check below
+// asserts it here too, so this drive knows about the rule rather than merely
+// satisfying it.
+const unchecked = await apiCall(API,'POST','/api/services/admin',{category:'plumber',name:'Unchecked Plumber',phone:'082 999 0000',areas:['Tembisa'],active:true},A);
+unchecked.status===400 ? ok('a provider cannot be listed before the number has been rung') : bad(`creating a live unchecked provider returned ${unchecked.status}`);
+
+const p1 = await apiCall(API,'POST','/api/services/admin',{category:'plumber',name:'Sipho — Tembisa Plumbing',phone:'082 123 4567',areas:['Tembisa','Kempton Park'],note:'Geysers and blocked drains.',active:true,phoneConfirmedAt:'2026-09-18T10:00:00.000Z'},A);
 p1.status===201 ? ok('admin adds a plumber') : bad(`create ${p1.status} ${JSON.stringify(p1.body).slice(0,200)}`);
 p1.body.phone==='+27821234567' ? ok(`"082 123 4567" is stored as ${p1.body.phone}`) : bad(`stored as ${p1.body.phone}`);
 
 // The same number in another format must normalise identically.
-const p2 = await apiCall(API,'POST','/api/services/admin',{category:'electrician',name:'Thabo Electrical',phone:'+27 82 765 4321',areas:['Soweto'],active:true},A);
+const p2 = await apiCall(API,'POST','/api/services/admin',{category:'electrician',name:'Thabo Electrical',phone:'+27 82 765 4321',areas:['Soweto'],active:true,phoneConfirmedAt:'2026-09-18T10:00:00.000Z'},A);
 p2.body.phone==='+27827654321' ? ok('and "+27 82 765 4321" normalises the same way') : bad(`stored as ${p2.body.phone}`);
 
 // Rubbish is refused rather than stored unusable.
@@ -59,7 +71,10 @@ const inTembisa = await apiCall(API,'GET','/api/services?area=Tembisa',undefined
 const lowerCase = await apiCall(API,'GET','/api/services?area=tembisa',undefined,ll.token);
 (lowerCase.body||[]).length===1 ? ok('and matches an area typed in lower case') : bad(`"tembisa" returned ${(lowerCase.body||[]).length}`);
 
-// Switching one on makes it visible.
+// Switching one on makes it visible — once the number has been rung.
+const switchedTooEarly = await apiCall(API,'PATCH',`/api/services/admin/${p3.body.id}`,{active:true},A);
+switchedTooEarly.status===400 ? ok('…and cannot be switched on later either, without the check') : bad(`switching on an unchecked provider returned ${switchedTooEarly.status}`);
+await apiCall(API,'PATCH',`/api/services/admin/${p3.body.id}`,{phoneConfirmedAt:'2026-09-18T10:00:00.000Z'},A);
 await apiCall(API,'PATCH',`/api/services/admin/${p3.body.id}`,{active:true},A);
 const seen2 = await apiCall(API,'GET','/api/services',undefined,ll.token);
 (seen2.body||[]).some(x=>x.name==='Draft Locksmith') ? ok('switching it on makes it visible') : bad('still hidden after activation');

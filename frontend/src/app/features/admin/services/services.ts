@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ServiceDirectoryService } from '../../../core/services/service-directory.service';
 import {
@@ -21,7 +22,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 @Component({
   selector: 'app-admin-services',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -93,12 +94,48 @@ import { DialogService } from '../../../core/services/dialog.service';
               </div>
               <p class="muted">{{ p.phone }} · {{ p.areas.join(', ') || 'no areas set' }}</p>
               @if (p.note) { <p class="provider__note">{{ p.note }}</p> }
+
+              <!-- ⚠️ What has actually been checked — Phase 7j.
+                   The landlord screen used to say "people we have checked out"
+                   with nothing in the product recording a check. This is where
+                   the checks get recorded, and the row shows which are missing
+                   so a half-checked name is visible rather than inferred. -->
+              <ul class="svc-checks">
+                @for (c of checkRows(p); track c.key) {
+                  <li [class.svc-checks--missing]="!c.on">
+                    {{ c.on ? '✓' : '—' }} {{ c.label }}
+                    @if (c.on) {
+                      <span class="muted">{{ c.on | date: 'd MMM yyyy' }}</span>
+                    } @else {
+                      <button type="button" class="link-btn" [disabled]="busy() === p.id"
+                              (click)="recordCheck(p, c.key)">Record it</button>
+                    }
+                  </li>
+                }
+              </ul>
+              @if (p.tradeRegistration) {
+                <p class="muted svc-reg">Registration: {{ p.tradeRegistration }}</p>
+              }
+
               <div class="provider__actions">
+                <!-- ⚠️ Disabled, with the reason, rather than offered and
+                     refused. The API and a CHECK constraint both reject
+                     publishing somebody nobody has rung; a button that looks
+                     live and fails is the worse version of the same rule. -->
                 <button type="button" class="btn btn-sm"
                         [class.btn-sage]="!p.active" [class.btn-outline]="p.active"
-                        [disabled]="busy() === p.id" (click)="toggle(p)">
+                        [disabled]="busy() === p.id || (!p.active && !p.phoneConfirmedAt)"
+                        [attr.title]="!p.active && !p.phoneConfirmedAt
+                          ? 'Ring the number and record that first — the directory tells landlords these names were checked'
+                          : null"
+                        (click)="toggle(p)">
                   {{ p.active ? 'Switch off' : 'Switch on' }}
                 </button>
+                @if (!p.active && !p.phoneConfirmedAt) {
+                  <span class="svc-blocked">
+                    Ring the number and record it before listing this person.
+                  </span>
+                }
                 @if (p.whatsapp) {
                   <a class="link-btn" [href]="waLink(p)" target="_blank" rel="noopener">Test the WhatsApp link</a>
                 }
@@ -123,6 +160,14 @@ import { DialogService } from '../../../core/services/dialog.service';
       .provider--off { opacity: 0.72; }
       .provider__head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
       .provider__note { margin: 0.25rem 0 0.5rem; }
+    .svc-checks {
+      list-style: none; margin: .4rem 0 .5rem; padding: 0;
+      font-size: .78rem; line-height: 1.9; color: var(--ink2);
+    }
+    .svc-checks li { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; }
+    .svc-checks--missing { color: var(--slate); }
+    .svc-reg { font-size: .78rem; margin: 0 0 .5rem; }
+    .svc-blocked { font-size: .78rem; color: var(--slate); line-height: 1.6; max-width: 26rem; }
       .provider__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
       .pill--off { background: rgba(26, 20, 16, 0.08); }
     `,
@@ -219,6 +264,44 @@ export class AdminServices implements OnInit {
           this.error.set('That did not save. Try again.');
         },
       });
+  }
+
+  /**
+   * The three checks, present or missing, in the order they are usually done.
+   *
+   * Rendered for every provider including the ones with nothing recorded, so a
+   * half-checked name shows as half-checked. A list that only showed what was
+   * present would make "we rang them" and "we rang them, saw ID and called a
+   * reference" look the same at a glance.
+   */
+  protected checkRows(p: ServiceProvider) {
+    return [
+      { key: 'phoneConfirmedAt' as const, label: 'Rang the number and reached them', on: p.phoneConfirmedAt },
+      { key: 'idCheckedAt' as const, label: 'Saw an identity document', on: p.idCheckedAt },
+      { key: 'referenceCheckedAt' as const, label: 'Spoke to a landlord they worked for', on: p.referenceCheckedAt },
+    ];
+  }
+
+  /**
+   * Record a check as of now.
+   *
+   * ⚠️ Today's date, because this records a check being made now. The API
+   * accepts any ISO date so a call made on Tuesday and recorded on Thursday can
+   * be entered as Tuesday — back-dating is the honest option and the field
+   * allows it — but a one-tap button must not quietly claim a date it does not
+   * know. Admin screens get the tap; correcting a date is a database job until
+   * somebody needs it on screen.
+   */
+  protected recordCheck(p: ServiceProvider, key: 'phoneConfirmedAt' | 'idCheckedAt' | 'referenceCheckedAt') {
+    this.busy.set(p.id);
+    this.error.set(null);
+    this.directory.update(p.id, { [key]: new Date().toISOString() }).subscribe({
+      next: () => { this.busy.set(null); this.load(); },
+      error: () => {
+        this.busy.set(null);
+        this.error.set('Could not record that. Try again.');
+      },
+    });
   }
 
   protected toggle(p: ServiceProvider) {
