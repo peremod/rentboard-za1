@@ -538,6 +538,52 @@ failed 14 of them naming every piece of cascade damage. 51 UI checks across
 360/390/768/1280, falsified by restoring the 401, which failed 7 and named both
 screens. 13 new smoke checks; 453 passed."
 
+tag_if_missing "v1.93.0" "30d3742b9f9df6edcbad789f22412665dd1a5b02" "2026-10-04 16:04:40 +0000" "v1.93.0 — Phase 7h: the controls a landlord presses
+
+Six brief items that read like styling niceties. Every one was a control that
+looked like a control, and none was visible to any other gate here, because
+each is a question about the rendered box.
+
+The wizard's Back, Cancel and Next measured three identical solid terra
+buttons, 33px tall, 6px apart at 360px — one of which abandons the form. Cancel
+carried a real global class written to make it a bordered secondary button, and
+that class had done nothing since the day it was typed: a component's own bare
+element rule outranks it, because Angular's emulated encapsulation appends an
+attribute selector. The same rule had been rendering the property picker
+Phase 7b built as a stack of solid blocks, with the dashed card's dash
+invisible, and made choosing one DARKER by a shade nobody would notice.
+
+Deleting it also removed the only :disabled styling in the app, so that is
+global now — the wizard's Next is disabled until the description reaches 50
+characters, and a disabled primary that looks live is a button somebody taps
+while nothing happens.
+
+Sideways scroll at 360px was blamed on the portal nav, which rendered 386px
+wide. The nav was not the cause; it was the only thing wide enough to notice. A
+fieldset will not shrink below its min-content, and main.portal-main is a grid
+item whose min-width: auto sizes the whole track. Both needed min-width: 0.
+
+The applicant action row was 25-27px tall and 8px apart — Accept beside Reject
+— and its media query used a breakpoint this codebase does not have, so at
+430px the mobile layout did not apply at all. The card itself could only be
+opened with a pointer: a div with a click handler and no role or key handler,
+so a landlord on a keyboard could reach no applicant's details, references,
+Accept or Reject.
+
+.btn is 44px app-wide now, after a third screen in one sitting needed the same
+local patch, and .link-btn went from 17px to 44px — that class carries Remove
+on each expense, which deletes the record.
+
+The grouped property card was measured at four widths and found sound, so
+nothing was changed. Saving the shared facilities said nothing at all. And the
+money-spent section had no stylesheet anywhere in the product: the receipts
+rendered as a disc list and the actions row with the buttons a word space apart.
+
+130 drive checks at four widths, falsified twice — 24 failures with the wizard
+rule restored, 30 with the expense stylesheet removed, naming Remove at 20px.
+Three faults in the drive itself are recorded, and a pre-existing dashboard
+flake was fixed rather than lived with."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -545,7 +591,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-2])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-3])[.]'"
 else
   echo "Nothing to push."
 fi
