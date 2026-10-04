@@ -433,6 +433,37 @@ Verified: 511 smoke checks, 35 + 29 drive checks, 26 accessibility pages with
 content on them, nav audit clean including its new section, production build
 green, 26.8 KB under the bundle budget."
 
+tag_if_missing "v1.90.0" "ef2aed1c25660374182e65fcd047da609822711f" "2026-10-04 12:33:33 +0000" "v1.90.0 — Phase 7e: the portal sidebar is drawn once
+
+The sidebar was a component every guarded screen imported for itself, and two of
+them did not: the listing wizard and the per-room applicants list, which are the
+two screens a landlord uses most. On a phone, where that sidebar is the strip
+across the top and the header hamburger carries only public links, there was no
+way out of either except the browser's back button.
+
+PortalLayout sits on the four guarded parent routes now, with the children
+rendering into its outlet, so a new portal screen cannot ship without the
+navigation. One badges service replaces four screens that had each grown their
+own refresh call, and a screen's name moved onto the route beside the browser
+title it has to agree with.
+
+Item 23: Log in and Get started stay in the mobile header rather than behind the
+hamburger — and both were 28px tall, under the tap target, before and after.
+Item 24: the footer stopped offering a signed-out visitor two guarded routes,
+listing Pricing twice, and offering a signed-in person a sign-up link.
+
+Two of my own gates were wrong in the same way, a proximity window standing in
+for structure, and one was the route guard check: it reported all four guarded
+areas as public about a file whose guards were untouched. Both brace matched
+now, and both falsified against a real defect.
+
+CLAUDE.md records the standing constraints, mobile-first verification among
+them.
+
+Verified: 511 smoke checks, 46 new drive checks, 26 accessibility pages, nav and
+route audits clean, production build green, 100.8 KB under budget. Checked at
+360, 390, 768 and 1280px."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -440,7 +471,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|90)[.]'"
 else
   echo "Nothing to push."
 fi
