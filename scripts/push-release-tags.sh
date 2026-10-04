@@ -817,6 +817,60 @@ Selling placement remains undecided and needs a label plus a contractor who can
 be billed: the same blocker as lead fees, folded into Outstanding 16 as one
 decision. 568 smoke checks passed, 0 failed."
 
+tag_if_missing "v1.99.0" "e84e5201debf426a7c6da3d9928aeeb34c65a744" "2026-10-04 21:53:12 +0000" "v1.99.0 — Phase 7n: the mobile nav strip was complete in the DOM and unusable
+
+Phase 7e fixed whether the portal nav is drawn, after two screens shipped
+without it. Phase 7a fixed what it says, after six copies disagreed. Neither
+asked whether a person holding a phone can use it, and the 46 checks asserted
+\`scrollable: true\` and stopped there.
+
+Measured at 360px: fourteen items, TWO visible. A 2251px strip in a 359px
+window, so 1892px off the right-hand edge, with background-image none, no mask,
+a 1px scrollbar and opening scrolled to 0. A landlord saw Dashboard and Active
+listings and a clean edge. All applicants, Messages, My properties,
+Verification, Your public page, Who to call, Notices, Settings and the + List a
+room call to action were all real, all 44px tall, and all behind a swipe gesture
+with nothing on screen suggesting there was anywhere to swipe. Log out was the
+one item not stranded: it is also two taps away in the phone drawer.
+
+Two more faults surfaced while measuring, neither of which the nav audit can
+see, because every link in the nav resolves to a real route — the same blind
+spot that hid the footer's guarded links in 7e. Browse rooms was marked the
+current page on all six tenant screens, because it points at / and a non-exact
+match treats / as a prefix of every URL in the app. And every item naming a
+dashboard section lit up together, routerLinkActive not looking at the fragment:
+five highlighted on the tenant dashboard, four on the landlord one. A nav that
+says you are in five places tells you nothing about which.
+
+The fix is a four-layer scroll shadow, chosen because it is self-regulating —
+the covers scroll with the content over shadows pinned to the element, so an
+edge fade shows only while there is really more nav past it, and a static
+gradient would promise more nav at the end of the strip. Light shadows and ink2
+covers, because this is a dark bar and the usual black scroll shadow is
+invisible on it, which is how it would have shipped looking fixed. isActive()
+replaces routerLinkActive with one readable rule, giving exactly one
+aria-current per screen where there was none. And the strip scrolls to the
+active item, assigning scrollLeft rather than calling scrollIntoView, which
+walks up the ancestors and would jump the content being read.
+
+/tenant/passport now opens with the strip at 610px and the right item on
+screen, alone. It was 0px with the wrong item highlighted.
+
+Six new checks, including the one nothing asserted before: that the far end of
+the strip really arrives. Falsified by reintroducing four bugs at once: four
+failures. A seventh check was then added because one of those four had no check
+that could fail for it, and falsified on its own.
+
+One of my own new checks reported a product bug that did not exist: this phase
+added scroll-behavior smooth, so a programmatic scrollLeft is animated and
+reading it back in the same tick gives the starting value. Recorded.
+
+Named rather than implied: two of fourteen items is what fits at 360px with word
+labels. Showing more means truncating them or going icons-only, which is a
+redesign of a strip 7e chose deliberately and which the drive asserts. The fade
+and the reveal make that pattern work; they do not make fourteen items fit on a
+360px screen. 54 drive checks, 569 smoke passed, 0 failed."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -832,7 +886,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-8])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]'"
 else
   echo "Nothing to push."
 fi
