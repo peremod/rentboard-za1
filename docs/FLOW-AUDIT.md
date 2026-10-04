@@ -1569,6 +1569,110 @@ compiled symbol and the process list for the PID is what found it.
 | A landlord with two properties in the same suburb still sees two identical "where" lines unless they filled the address in. The address is the fix and it is optional, so the ambiguity is theirs to resolve | Low |
 
 
+### 5.25 Pausing an account, and ending one — ✅ built in v1.92.0 (Phase 7g)
+
+Item 3 of the UX brief: *"Account Deactivation/Deletion."* Two different things,
+built as two different things.
+
+**The question that had to be answered before any code.** `DELETE FROM users`
+looks like the implementation. The foreign keys say otherwise — read out of
+postgres rather than guessed:
+
+| Deleting a user row cascades into | Which belongs to |
+|---|---|
+| their `rooms` → other tenants' `applications`, `saved_rooms`, `reviews` | other people |
+| `applications` → `messages` | **both sides of every conversation** |
+| `tenancies` → `rent_periods` | the tenant's own proof of payment |
+| `reviews.authorId` | the person who was reviewed, and everyone reading |
+| `payments` | the accounting record |
+
+So a landlord closing their account would have deleted their tenant's
+application, the tenant's rent history, and both halves of the conversation
+between them. POPIA s.24 is a right to have **your** personal information
+deleted — not somebody else's, and not a right to destroy a record two parties
+share.
+
+**The mechanism is a tombstone.** The row stays; the person is erased. Name
+becomes `Former member`, email becomes `deleted-<id>@deleted.mastande.invalid`
+(a reserved TLD that can never reach anybody), password hash, phone, photo,
+verification outcomes, notices and sessions all go, the avatar goes through the
+existing `file_deletions` queue rather than merely being unlinked, and the whole
+thing is one `$transaction` so the queue row commits with the erasure.
+
+| Decision | Why |
+|---|---|
+| Pausing does **not** reuse `isActive` | `isActive` is the admin suspension, refused on every sign-in path with "contact support". Reusing it would have looked like one line of work and shipped an account nobody could ever reopen. `deactivatedAt` is separate, and signing in still works — that is the only way back |
+| …which forced one shared visibility rule | Because `isActive` stays **true** while paused, every existing `user: { isActive: true }` filter would have kept a paused landlord's public page lit. `PUBLIC_USER` / `SIGN_IN_USER` in `common/prisma/account-visibility.ts`, applied in six places. A pause that leaves the shop window on is not a pause |
+| Waking up does **not** republish the rooms | One may have been let while the account slept. Advertising a taken room to people who then apply for it is worse than making the landlord press publish — so it reports how many are waiting instead of silently omitting them |
+| The screen is its own route, reached by a **link** from settings | An irreversible control should not be one scroll below "change your name". The drive asserts both halves: the link exists, and the destructive button is **not** on the settings screen |
+| The preview is counted from the person's own rows | A landlord with a live tenancy is told something different from a tenant who applied for one room. A generic warning is a warning about nothing |
+| Each kept item carries its own `why` | Driven structurally, not by phrase: one explained bullet and three bare labels reads as an explanation and is not one |
+| Three things to close it: password, the typed word `DELETE`, an **unticked** box | `@Equals(true)` on the acknowledgement, because a checkbox whose binding never fired ships as *absent*, not false |
+| Ten attempts per fifteen minutes, not five | The form's four honest refusals plus one correct attempt is exactly five. A limit that stops the owner before it stops an attacker is the wrong limit |
+| The screen clears the device's saved rooms itself, and says so | They are in `localStorage` (see Outstanding §14). Without it, somebody who closed their account would hand the next person to pick up the phone the list of rooms they had been looking at |
+
+**🔴 The defect this phase found, and it was not on this screen.** The step-up
+checks answered **401**. The frontend's `errorInterceptor` reads a 401 on any
+non-auth endpoint as an expired access token: refresh silently, retry once. The
+retry re-sent the same wrong password, got 401 again, and a second failure means
+what it says — *"Your session has expired"*, session cleared, login page.
+
+So typing your own password wrong signed you out. And it had been true of
+`/account/settings` since that screen shipped: both its forms have an inline
+`.field-error` written for a message that could never render, because the
+component was gone before it had the chance. Observed in a browser:
+
+```
+URL AFTER WRONG CURRENT PASSWORD: /auth/login?returnUrl=%2Faccount%2Fsettings
+inline .field-error: []
+says session expired: true
+```
+
+Now **403** — the request was authenticated; the password typed into the form is
+what was refused — plus an `INLINE_ERRORS` HttpContext token so a form that
+shows the message itself does not also get a modal over it. The fix is driven on
+both screens: section 4 of the account drive for the new one, section 7 for the
+settings forms where it had actually shipped.
+
+⚠️ **The smoke suite had a check here and it could not fail.** One line asserted
+401 for a wrong current password; another asserted 401 for no auth at all. Both
+were 401, so the suite could not distinguish "the password you typed is wrong"
+from "you are not signed in" — exactly what the browser could not distinguish.
+403 and 401 now, and the pair is the check.
+
+**🔴 And a 34px button, on a screen built this phase.** "Pause my account" and
+"Use my account again" measured **34px** at all four widths — under the 44px
+target of WCAG 2.5.8 — because the base `.btn` sets padding and `line-height: 1`
+and no `min-height`. Fixed here; measured across the public pages and recorded
+in Outstanding §13, where it is 13 of 23 visible buttons and as low as 32px.
+
+⚠️ How that was found is the part worth keeping: the **previous** version of the
+drive computed the smallest control height, the pause button included, and then
+**never asserted it**. The number was measured and thrown away. Same family as a
+`MAX_ATTEMPTS` nothing reads.
+
+### What the drives prove
+
+`scripts/account-lifecycle-drive.mjs` — 48 checks. Falsified by replacing the
+tombstone with `tx.user.delete()`, which produced **14 failures** naming every
+piece of cascade damage: the tenant's application, both sides of the
+conversation, the tenancy, the rent history, another tenant's saved room, the
+review the person wrote, and the thread 404ing for the tenant.
+
+`scripts/account-lifecycle-ui-drive.mjs` — 51 checks across four widths.
+Falsified by putting `UnauthorizedException` back at both step-up sites, which
+failed 7 checks and named both screens.
+
+### Gaps
+
+| Gap | Severity |
+|---|---|
+| A phone-only account has no password, so it cannot close itself from this screen. It is told to set a password first or ask through notices, rather than being offered a weaker confirmation — but "ask us" is a manual process with no admin screen behind it yet | Medium — and item "Admin Cannot Delete User Accounts" in the brief is where it lands |
+| Nothing emails a confirmation after closure. The address is erased in the same transaction, so there is nowhere to send it — arguably correct, but it means the only record a person has is the screen they were on | Low, by choice |
+| `deletedAt` is set and the row kept forever. Nothing prunes tombstones, because the shared rows they anchor are kept forever too | Low — but it is a POPIA retention question somebody will eventually ask |
+| Deactivation does not withdraw applications already sent. Said plainly on screen, because withdrawing cannot be undone and pausing should not do it silently | Low, by choice |
+
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

@@ -22,6 +22,14 @@ export interface User {
    * hides it from people who have not.
    */
   walkthroughSeenAt?: string | null;
+  /**
+   * Non-null means the owner paused their own account — Phase 7g.
+   *
+   * ⚠️ Not the same as `isActive`, which is an admin suspension and blocks
+   * sign-in. This one deliberately does not: signing in is how somebody comes
+   * back, so the portal reads this and offers to wake the account up.
+   */
+  deactivatedAt?: string | null;
 }
 
 export interface AuthResponse {

@@ -6,6 +6,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { sanitizeText } from '../../common/utils/sanitize.util';
 import { normaliseSaMobile } from '../../common/utils/phone.util';
 import { parseRent, parseRoomType, buildTitle } from './listing-parser';
+import { SIGN_IN_USER } from '../../common/prisma/account-visibility';
 
 /** A conversation goes quiet for this long and the draft stops being live. */
 const ABANDON_AFTER_DAYS = 14;
@@ -67,7 +68,7 @@ export class ListingBotService {
     const phone = normaliseSaMobile(waId);
     if (!phone) return null;
     return this.prisma.user.findFirst({
-      where: { phone, phoneVerified: true, role: 'LANDLORD', isActive: true },
+      where: { phone, phoneVerified: true, role: 'LANDLORD', ...SIGN_IN_USER },
       select: { id: true, fullName: true },
     });
   }

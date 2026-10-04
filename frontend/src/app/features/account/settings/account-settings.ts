@@ -148,6 +148,29 @@ import { WalkthroughService } from '../../../core/services/walkthrough.service';
         </form>
       </section>
 
+      <!-- Pausing or closing the account — Phase 7g.
+           A link, not the buttons: this screen is for editing a profile, and an
+           irreversible action a scroll below "change your name" is one somebody
+           reaches by accident. The destructive explanation lives on its own
+           page with the real counts on it. -->
+      <section class="dash-section">
+        <h2 class="dash-section-title">Your account</h2>
+        @if (auth.user()?.deactivatedAt) {
+          <p class="muted settings-hint">
+            <strong>Your account is paused.</strong> Your listings are off the board
+            and we are not sending you anything. Nothing has been deleted.
+          </p>
+          <a class="btn btn-primary" routerLink="/account/close">Use my account again</a>
+        } @else {
+          <p class="muted settings-hint">
+            Take a break, or close your account for good. We explain the
+            difference, and exactly what happens to your listings, your messages
+            and your records, before you decide.
+          </p>
+          <a class="btn btn-outline" routerLink="/account/close">Pause or close my account</a>
+        }
+      </section>
+
       <!-- The way back to the walkthrough — Phase 7f.
            The brief asks for a way to reach it again, and clearing the stamp IS
            that way: the portal shows the tour whenever the stamp is null, so

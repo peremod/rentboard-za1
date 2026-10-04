@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { tap, catchError, of, Observable, map, shareReplay, finalize } from 'rxjs';
 import { environment } from '@env/environment';
 import { AuthResponse, LoginDto, RegisterDto, User } from '../models/user.model';
+import { inlineErrors } from '../interceptors/inline-errors';
 
 /**
  * "This browser has signed in before."
@@ -289,17 +290,25 @@ export class AuthService {
     return this.http.post<{ message: string }>(`${this.api}/auth/reset-password`, { token, newPassword });
   }
 
-  /** Signed in. Requires the current password — a live session alone is not enough. */
+  /**
+   * Signed in. Requires the current password — a live session alone is not enough.
+   *
+   * INLINE_ERRORS because the settings screen renders the refusal under the
+   * field. Without it a wrong password would be reported twice; before the
+   * server started answering 403 it was reported as "your session has expired"
+   * and not reported under the field at all, because the person had already
+   * been sent to the login page.
+   */
   changePassword(currentPassword: string, newPassword: string) {
     return this.http.post<{ message: string }>(`${this.api}/auth/change-password`, {
       currentPassword, newPassword,
-    });
+    }, { context: inlineErrors() });
   }
 
   requestEmailChange(newEmail: string, currentPassword: string) {
     return this.http.post<{ message: string }>(`${this.api}/auth/change-email`, {
       newEmail, currentPassword,
-    });
+    }, { context: inlineErrors() });
   }
 
   /**

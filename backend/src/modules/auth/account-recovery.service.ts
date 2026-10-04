@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ForbiddenException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { NoticeRouter } from '../notifications/notice-router.service';
@@ -131,7 +131,25 @@ export class AccountRecoveryService {
     }
 
     const valid = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!valid) throw new UnauthorizedException('Your current password is not correct.');
+    /**
+     * ⚠️ 403, not 401, and the difference is a shipped bug.
+     *
+     * A 401 means "the token you presented is no good", and the frontend's
+     * error interceptor correctly reads it that way: it silently refreshes the
+     * session and retries the request once. The retry re-sent the same wrong
+     * password, came back 401 again, and the interceptor then did what a second
+     * failure means — showed "Your session has expired", cleared the session and
+     * sent the person to the login page.
+     *
+     * So the inline "Your current password is not correct." written on the
+     * settings screen could never appear: the component was unmounted before it
+     * rendered. Typing your own password wrong logged you out. Proven in a
+     * browser, not reasoned about.
+     *
+     * The request was authenticated. What failed is the password typed INTO the
+     * form, which is a step-up check on an authorised request — 403.
+     */
+    if (!valid) throw new ForbiddenException('Your current password is not correct.');
     if (currentPassword === newPassword) {
       throw new BadRequestException('The new password must be different from the current one.');
     }
@@ -164,7 +182,9 @@ export class AccountRecoveryService {
       throw new BadRequestException('This account signs in with Google. Change the address on your Google account.');
     }
     const valid = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!valid) throw new UnauthorizedException('Your password is not correct.');
+    // 403 for the same reason as changePassword above: the request is
+    // authenticated, the password typed into the form is what was refused.
+    if (!valid) throw new ForbiddenException('Your password is not correct.');
     if (normalised === user.email) {
       throw new BadRequestException('That is already your email address.');
     }
