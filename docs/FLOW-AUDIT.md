@@ -1192,6 +1192,104 @@ exactly as before, the picker is not shown to somebody with no properties, and
 "No — somewhere new" is a real answer. The brief is explicit, and it matters
 most for the person this product is for.
 
+### 5.21 Applicants and messages had no home — ✅ built in v1.88.0 (Phase 7c)
+
+**The diagnosis.** Both lists existed only inside a single room or a single
+application. A landlord with six rooms and eleven applicants had seventeen
+screens to open before they knew the answer to the only question they actually
+have — "has anybody written to me?" — and no screen anywhere could answer it
+across the lot. Both portal navs listed "Messages" greyed out with a "Soon"
+chip, which Phase 7a had made them do because the entry was a promise nothing
+kept.
+
+**What changed.**
+
+| Before | Now |
+|---|---|
+| Applicants per room only, at `/landlord/rooms/:roomId/applicants` | `GET /applications/inbox` and `/landlord/applicants`: every applicant across every room, filterable by room or property, sortable newest-first or waiting-on-you-first |
+| Messages only inside the application they belonged to | `GET /messages/inbox` and `/account/messages`: every conversation, newest activity first, for both roles |
+| Both navs: "Messages", greyed, "Soon" | Both navs: "Messages" → `/account/messages`, a real link |
+| The nav's applicants badge was every application ever received | The badge is what is waiting on the landlord, defined once on the server so the dashboard and the applicants screen cannot drift into two answers |
+| A row could only land you on the room | `?open=<applicationId>` expands that applicant on the room's screen — a list that tells you somebody is waiting and then makes you find them again has moved the work, not saved it |
+| Sending into a closed thread failed and the component swallowed it | The inbox flags the thread closed, the composer is replaced by a sentence saying why, and every other send failure is now shown instead of dropped |
+
+**One screen for both roles, in `/account`.** The same reasoning as the notices
+screen, plus a stronger one: a sub-lessor is a TENANT account that also lets a
+room, so they hold conversations on **both sides at once**. Two role-scoped
+inboxes would split one person's messages in half by a distinction they do not
+have. Each row says which side it is, because that changes where a reply goes.
+
+**The channel warning is the point, not decoration.** A tenant's message is
+forwarded to the landlord over WhatsApp; if the landlord replies there, the
+webhook threads that reply back into the same conversation. So one thread
+genuinely mixes channels, and a reply typed on this screen is **always** an
+in-app message — a landlord's answer never goes out over WhatsApp, whatever
+channel the message they are answering arrived on. Each row shows the channel of
+the last message; a thread that has used more than one gets an explicit warning
+above the composer, and a thread that has used one gets the quiet version. The
+two wordings differ by role because the truth does: a tenant's reply *is*
+forwarded to the landlord on WhatsApp when they have it switched on.
+
+🔴 **Two defects were found by building this, and neither would error.**
+
+- **Every WhatsApp reply a landlord typed was stored as though the tenant had
+  written it.** `handleIncomingWebhook` set `senderId: originalMessage.senderId`
+  — the id of the person whose message we *forwarded*. The tenant opened the
+  thread and read the landlord's answer attributed to themselves; the landlord
+  saw their own reply apparently coming from the applicant. The sender is now
+  resolved from the **number the reply came from**, which is the only
+  trustworthy signal: the landlord opted that number in, and
+  `LandlordWhatsappConfig` maps it to their profile. A reply from any other
+  number is dropped rather than guessed at — attributing by the quoted wamid
+  alone meant anyone who could post a signed payload could write into a private
+  conversation under the tenant's name.
+- **`Message.readAt` had been on the model since messaging shipped and nothing
+  ever wrote it.** Any unread badge built on it would have counted every message
+  ever sent, for ever — the same defect as a `documentDeletedAt` that deletes
+  nothing and a `MAX_ATTEMPTS` nobody reads, and the fourth of its kind in four
+  releases. Opening a thread now marks **the other party's** messages read;
+  marking your own would make the count on the other side depend on whether you
+  had looked at your own words.
+
+Both were falsified before being trusted: reintroduced, driven, and confirmed to
+fail the check that is supposed to catch them.
+
+**⚠️ Three findings about the checks, not the code.**
+
+- **The accessibility drive had been auditing every portal screen EMPTY.** A
+  fresh account has no rooms, no applicants and no messages, so the drive
+  measured each screen's chrome and its "nothing here yet" sentence and reported
+  the page green — while the rows, badges, status pills and channel chips people
+  actually read were never on screen to be measured. It now seeds one room, one
+  application and one message first, and **that change immediately found a live
+  contrast failure**: the inbox row is a real `<button>` so it can be reached by
+  keyboard, `font: inherit` resets the family and size but not the colour, and
+  every row was rendering white-on-cream at 1.06:1. Invisible, and green.
+- **An emoji in a CSS comment silently breaks the dev server.** `⚠️` inside a
+  component's `styles` block fails esbuild's CSS parser, and `ng serve` then
+  keeps serving the previous bundle — so a fix appears not to work and the drive
+  keeps reporting the old defect. The production build does fail, which is the
+  net that caught it.
+- **A Playwright `hasText` filter is case-insensitive.** Selecting the
+  single-channel thread by the text "In the app" also matched the mixed-channel
+  thread once expanded, because its warning reads "…is sent in the app…". The
+  drive reported the warning leaking onto a thread it was never on. Rows are now
+  selected by the channel chip's own class. A check that selects the wrong
+  element is worse than no check: it invents a defect and sends somebody looking
+  for it in the component.
+
+**Two smoke-suite alarms that cried wolf, fixed rather than silenced.** A 429 on
+any check that did not ask for one is now a **named skip**: v1.86.0 put real
+per-route rate limiting on the auth routes with a 15-minute in-memory window, so
+running the suite twice inside it made "login with correct password" fail — the
+limiter doing exactly its job, reported as a login bug. And the phone sign-up
+enumeration check compares the reply for a taken number against the reply for a
+free one using a fixed number, which spends one of its ten daily codes per run;
+on the second run of the day the answer became "Too many codes sent to this
+number today" and the check read that as an enumeration leak. The cap refusal is
+identical whether or not the number is taken, so it leaks nothing — it simply
+cannot answer the question today, and now says so.
+
 ### Gaps
 
 | Gap | Severity |
@@ -1229,7 +1327,9 @@ the fixtures are expensive or the assertions are about a browser:
 | `notes-calendar-drive.mjs` | that a private note is private — from another landlord, the tenant AND an admin — and that calendar dates are days, not instants |
 | `storage-drive.mjs` | **that deleting really deletes** — it IS an ImageKit stub, so it checks a DELETE arrived, and that a 500 is not recorded as success |
 | `lease-docs-ui-drive.mjs` | both parties see the lease, and nothing on screen claims it was signed here |
-| `a11y-drive.mjs` | 25 pages: heading order, accessible names, contrast at rest, on hover and on focus |
+| `messages-inbox-drive.mjs` | who a WhatsApp reply is actually from, that `readAt` is written by something, and that two new surfaces onto private conversations are scoped by the WHERE clause rather than by a guard |
+| `messages-inbox-ui-drive.mjs` | that both navs lead somewhere, that the screen says which channel a reply leaves by, that a closed thread offers no box to type in, and that a failed request does not read as an empty inbox |
+| `a11y-drive.mjs` | 25 pages with CONTENT on them: heading order, accessible names, contrast at rest, on hover and on focus. It seeds a room, an application and a message first — before that it audited every portal screen empty and reported it green |
 | `refund-drive.mjs` | the refund promise |
 | `verify-build.sh` | what the production build and the deploy artefact actually *serve* |
 
@@ -1245,7 +1345,10 @@ way in this codebase:
 - **A green check on an empty screen proves nothing.** An accessibility run
   passed 23 pages while the admin queues were empty, and a heading defect on a
   populated queue survived it. Where a drive covers something the a11y run
-  cannot see, it says so in its own header.
+  cannot see, it says so in its own header. Phase 7c went further and **seeded
+  the portal run**, because the same fault applied to every landlord and tenant
+  screen it visited: the first run with rows on the page found a row of text
+  rendering white-on-cream at 1.06:1.
 - **A check can be true and prove nothing.** The retention promise was covered by
   `documentDeletedAt != null` — our own timestamp, asserting our own claim, with
   no file deleted anywhere. It was also behind `ADMIN_TOKEN` and had never run.

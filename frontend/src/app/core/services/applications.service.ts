@@ -2,7 +2,9 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '@env/environment';
-import { Application } from '../models/application.model';
+import {
+  Application, ApplicantInbox, ApplicantInboxFilters,
+} from '../models/application.model';
 
 @Injectable({ providedIn: 'root' })
 export class ApplicationsService {
@@ -18,6 +20,23 @@ export class ApplicationsService {
   }
 
   // ── Landlord: applicant manager ──
+  /**
+   * Every applicant across everything this landlord lets — Phase 7c.
+   *
+   * `getRoomApplications` below is per room, which meant a landlord with six
+   * rooms had six screens to check before they knew whether anybody had
+   * applied. Empty filter keys are dropped rather than sent as `undefined`:
+   * `HttpParams` would serialise them as `roomId=undefined`, and the server's
+   * `@IsUUID()` would answer 400 to a request that meant "no filter".
+   */
+  inbox(filters: ApplicantInboxFilters = {}): Observable<ApplicantInbox> {
+    const params: Record<string, string> = {};
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) params[key] = value;
+    }
+    return this.http.get<ApplicantInbox>(`${this.api}/applications/inbox`, { params });
+  }
+
   getRoomApplications(roomId: string): Observable<Application[]> {
     return this.http.get<Application[]>(`${this.api}/applications/room/${roomId}`);
   }

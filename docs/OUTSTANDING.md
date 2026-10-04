@@ -434,9 +434,17 @@ gets built accordingly.
 ADMIN_EMAIL=<seeded admin> ADMIN_PASSWORD=<their password> \
   WHATSAPP_APP_SECRET=<the API's own> \
   RESEND_WEBHOOK_SECRET=<the API's own> \
-  ./scripts/smoke-test.sh          # 464 passed, 8 skipped without the three
+  ./scripts/smoke-test.sh          # 497 passed, 9 skipped without the three
                                    # secrets above; set them and five of those
-                                   # become checks, leaving 3 named skips
+                                   # become checks, leaving 4 named skips
+#
+# ⚠️ The auth limiter counts in memory over 15 minutes, so running the suite
+# twice inside that window rate-limits its own login checks. Those now report
+# as NAMED SKIPS rather than failures — reported as failures they were an alarm
+# crying wolf on every second run. To have them actually run, wait the window
+# out or restart the API first. The phone sign-up enumeration check has the
+# same shape: it spends one of a fixed number's ten daily codes per run, so on
+# the second run of a day it skips with its reason named.
 
 # What the production build actually serves. Run it BOTH ways:
 ./scripts/verify-build.sh          # with an API on :3000
@@ -462,7 +470,23 @@ node scripts/nav-audit.mjs               # Phase 7a: dead nav links, unreachable
 node scripts/properties-drive.mjs        # 22 checks — Phase 7b, incl. "deleting a
                                          # property cannot delete a listing"
 node scripts/properties-ui-drive.mjs     # 18 checks — can a landlord FIND grouping
+node scripts/messages-inbox-drive.mjs    # 43 checks — Phase 7c. Includes the two
+                                         # defects it found: who a WhatsApp reply
+                                         # is from, and that readAt is written
+node scripts/messages-inbox-ui-drive.mjs # 33 checks — which channel a reply
+                                         # leaves by, said out loud
+node scripts/a11y-drive.mjs              # 25 pages WITH CONTENT on them. Before
+                                         # Phase 7c it seeded nothing and so
+                                         # audited every portal screen empty
 ```
+
+⚠️ **Two traps in this container, both of which cost a cycle.** `ng serve` and
+`tsc -w` both stop watching silently, so a fix can appear not to work while the
+old bundle is still being served — restart them rather than trusting the
+watcher. And an **emoji inside a CSS comment** in a component's `styles` block
+fails esbuild's CSS parser; `ng serve` reports it and then keeps serving the
+previous bundle, so the symptom is "my change did nothing". The production build
+fails on it, which is the net.
 
 The suite prints the release invocation itself whenever anything skipped. Ninety
 -two checks in it had never run once before v1.84.0, and the one assertion

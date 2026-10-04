@@ -30,7 +30,16 @@ import { TenantReferences } from '../../../core/models/review.model';
            /tenant/sublet/:roomId/applicants, and a tenant account cannot open
            /landlord/dashboard — the link would have been a dead end back to a
            guard. The route's own data says which portal we are in. -->
-      <p><a [routerLink]="backLink()">← Back to dashboard</a></p>
+      <p class="applicants__back">
+        <a [routerLink]="backLink()">← Back to dashboard</a>
+        <!-- Phase 7c. The portfolio-wide list is in the nav, but this screen is
+             most often reached from a room card rather than from there, and
+             somebody checking one room's applicants is usually about to check
+             the next. The sub-lessor side has no such screen — see the route. -->
+        @if (route.snapshot.data['listerType'] !== 'sublessor') {
+          <a routerLink="/landlord/applicants">All applicants across your rooms →</a>
+        }
+      </p>
       <h1>Applicants</h1>
 
       @if (loading()) {
@@ -179,6 +188,7 @@ import { TenantReferences } from '../../../core/models/review.model';
   `,
   styles: [`
     .applicants { max-width: 640px; margin: 2rem auto; padding: 0 1.25rem; font-family: sans-serif; }
+    .applicants__back { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: space-between; font-size: .85rem; }
     h1 { font-size: 1.3rem; margin: .5rem 0 1.5rem; }
     .muted { color: var(--slate); }
     .applicant-card { border: 1px solid #DDD5C8; border-radius: 8px; margin-bottom: .75rem; overflow: hidden; }
@@ -222,7 +232,7 @@ export class Applicants implements OnInit {
    * is not the question — an ADMIN opening a sub-lessor's applicants in support
    * belongs back where they came from too.
    */
-  private route = inject(ActivatedRoute);
+  route = inject(ActivatedRoute);
 
   backLink(): string {
     return this.route.snapshot.data['listerType'] === 'sublessor'
@@ -346,9 +356,34 @@ export class Applicants implements OnInit {
 
   ngOnInit() {
     this.applicationsService.getRoomApplications(this.roomId()).subscribe({
-      next: (apps) => { this.applications.set(apps); this.loading.set(false); },
+      next: (apps) => {
+        this.applications.set(apps);
+        this.loading.set(false);
+        this.openRequested(apps);
+      },
       error: () => this.loading.set(false),
     });
+  }
+
+  /**
+   * `?open=<applicationId>` expands that applicant — Phase 7c.
+   *
+   * The all-applicants screen lists people across every room; its rows have to
+   * land somewhere, and landing on the room alone would mean a list that tells
+   * you somebody is waiting and then makes you find them again. That is not
+   * saved work, it is moved work.
+   *
+   * An id that is not in this room's list is ignored rather than errored: a
+   * stale link, or one for an application that has since been archived, should
+   * open the room's applicants normally. Only read on the first load — after
+   * that the landlord is driving, and re-expanding a card they just collapsed
+   * because the URL still says so would fight them.
+   */
+  private openRequested(apps: Application[]) {
+    const wanted = this.route.snapshot.queryParamMap.get('open');
+    if (!wanted) return;
+    const match = apps.find((a) => a.id === wanted);
+    if (match) this.toggleOpen(match);
   }
 
   toggleOpen(app: Application) {

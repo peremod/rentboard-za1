@@ -29,7 +29,7 @@
  * Exits non-zero on any skipped heading level or any unnamed control, so it
  * can be a gate. Skips with a clear message when the site is not running.
  */
-import { registerUser, signIn, PASSWORD } from './lib/drive-session.mjs';
+import { registerUser, apiCall, signIn, PASSWORD, dbQuery as q } from './lib/drive-session.mjs';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
@@ -104,12 +104,23 @@ const LANDLORD_PAGES = [
   // place a notification can be read, so it is not a page that may quietly
   // regress.
   '/account/notices',
+  // Phase 7c. The portfolio-wide applicants list — four native selects and a
+  // list of rows, on a phone, which is where a filter bar either works or
+  // becomes four full-width dropdowns nobody can tell apart.
+  '/landlord/applicants',
+  // Phase 7c. The unified inbox, where each row is a real <button> rather than
+  // a clickable div precisely so it can be reached by keyboard — exactly the
+  // thing this drive is for.
+  '/account/messages',
 ];
 const TENANT_PAGES = [
   '/tenant/dashboard', '/tenant/rent', '/tenant/passport',
   // Phase 6. A four-step form filled in on a phone — label association and
   // target size are the whole experience here, not a detail.
   '/tenant/sublet/new',
+  // Phase 7c. The same inbox from the other side — the sidebar differs, so the
+  // page is not the same page.
+  '/account/messages',
 ];
 const ADMIN_PAGES = [
   '/admin/dashboard',
@@ -651,13 +662,59 @@ if (!apiReachable) {
   failures.push(`the portal was not audited: no API on ${API}`);
 } else {
   const stamp = Date.now();
+
+  /**
+   * One room, one application and one message between the two accounts.
+   *
+   * ⚠️ Without this, every portal page was audited EMPTY. A fresh account has
+   * no rooms, no applicants and no messages, so the drive measured each
+   * screen's chrome and its "nothing here yet" sentence and reported the page
+   * green — while the rows, badges, status pills and channel chips that people
+   * actually read were never on screen to be measured. A contrast check that
+   * cannot see the text it is about is the same shape of defect as the rest of
+   * this codebase's history: a control that only looks like one.
+   *
+   * Best-effort on purpose. If the seed fails the drive still audits the empty
+   * screens — that is worth more than nothing — but it says so, because
+   * "audited" and "audited with content on it" are different claims.
+   */
+  const accounts = {};
+  let seeded = false;
+  try {
+    accounts.LANDLORD = await registerUser(API, 'LANDLORD', stamp);
+    accounts.TENANT = await registerUser(API, 'TENANT', stamp);
+
+    const prop = await apiCall(API, 'POST', '/api/properties', {
+      name: 'Ext 7 back rooms', suburb: 'Tembisa', city: 'Johannesburg', province: 'Gauteng',
+    }, accounts.LANDLORD.token);
+    const room = await apiCall(API, 'POST', '/api/rooms', {
+      roomType: 'shared_house', title: 'Back room with its own entrance',
+      description: 'A clean room in a shared house, close to transport and the shops. Available now.',
+      rentCents: 285000, province: 'Gauteng', city: 'Johannesburg',
+      locationDisplay: 'Tembisa, Johannesburg',
+      availableFrom: new Date(Date.now() + 7 * 86400_000).toISOString().slice(0, 10),
+      propertyId: prop.body?.id,
+    }, accounts.LANDLORD.token);
+    q(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${room.body.id}'`);
+
+    const app = await apiCall(API, 'POST', '/api/applications',
+      { roomId: room.body.id, coverNote: 'I work at the mall and can move in on the first.' },
+      accounts.TENANT.token);
+    await apiCall(API, 'POST', `/api/applications/${app.body.id}/messages`,
+      { body: 'Good day, is the room still open? I can come see it on Saturday.' },
+      accounts.TENANT.token);
+    seeded = true;
+  } catch (err) {
+    failures.push(`the portal screens were audited EMPTY — the seed failed (${err.message}), so rows, badges and pills were never measured`);
+  }
+
   for (const [role, pages] of [
     ['LANDLORD', LANDLORD_PAGES],
     ['TENANT', TENANT_PAGES],
   ]) {
     let session;
     try {
-      const user = await registerUser(API, role, stamp);
+      const user = accounts[role] ?? await registerUser(API, role, stamp);
       session = await signIn(browser, BASE, user.email, PASSWORD, { width: WIDTH });
     } catch (err) {
       if (err.buildOverlay) {

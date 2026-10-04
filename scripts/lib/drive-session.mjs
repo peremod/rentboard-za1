@@ -133,6 +133,11 @@ export async function signIn(browser, web, email, password, { width = 412, heigh
  * handed the same string and said so.
  *
  * Hence the first line, explicitly.
+ *
+ * ⚠️ One line of SQL per call. The statement is handed to `psql -c` through
+ * `JSON.stringify`, so a newline inside it arrives as a literal backslash-n and
+ * Postgres answers "syntax error at or near \\". It fails loudly rather than
+ * quietly, but it costs a cycle to work out why.
  */
 export function dbQuery(sql) {
   const url = process.env.DATABASE_URL

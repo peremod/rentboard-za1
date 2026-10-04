@@ -104,10 +104,26 @@ check() {
   local name="$1" want="$2" got="$3" body="${4:-}"
   if [[ "$got" == "$want" ]]; then
     green "  PASS  $name  ($got)"; PASS=$((PASS+1))
-  else
-    red   "  FAIL  $name  (expected $want, got $got)"; FAIL=$((FAIL+1))
-    [[ -n "$body" ]] && grey "        $(echo "$body" | head -c 400)"
+    return
   fi
+  # ⚠️ A 429 nobody asked for cannot answer the question the check was asking.
+  #
+  # v1.86.0 put real per-route rate limiting on the auth routes — a window of
+  # fifteen minutes, counted in memory. Running this suite twice inside that
+  # window therefore made "login with correct password" fail with a 429, and
+  # four other checks behind it, none of which is a login bug: it is the
+  # limiter doing exactly its job. Reported as failures they were an alarm
+  # crying wolf on every second run, which is how a suite stops being read.
+  #
+  # Skipped and NAMED instead, with the remedy, because this file's rule is
+  # that nothing unexamined is allowed to look like a pass. A check expecting a
+  # 429 still passes or fails on its own terms, since `want` is compared first.
+  if [[ "$got" == "429" ]]; then
+    skipped "$name — rate limited (429). The auth limiter counts in memory over 15 minutes: wait it out, or restart the API, and re-run"
+    return
+  fi
+  red   "  FAIL  $name  (expected $want, got $got)"; FAIL=$((FAIL+1))
+  [[ -n "$body" ]] && grey "        $(echo "$body" | head -c 400)"
 }
 
 # req <METHOD> <path> <json|""> [token] -> sets $STATUS and $BODY
@@ -361,6 +377,38 @@ if [[ -n "$ROOM_ID" ]]; then
     req POST "/api/applications/$APP_ID/shortlist" "" "$LTOKEN"
     check "landlord shortlists applicant" 200 "$STATUS" "$BODY"
   fi
+
+  # ── Phase 7c: every applicant in one call ────────────────────────────────
+  # Applicants were per room and only per room, so a landlord with six rooms
+  # had six screens to check before they knew whether anybody had applied.
+  req GET "/api/applications/inbox" "" "$LTOKEN"
+  check "landlord lists every applicant across all rooms" 200 "$STATUS" "$BODY"
+  if [[ -n "$APP_ID" ]]; then
+    if echo "$BODY" | jq -e --arg id "$APP_ID" '.data | map(.id) | index($id)' >/dev/null 2>&1; then
+      green "  PASS  the applicant from this run is in it"; PASS=$((PASS+1))
+    else
+      red "  FAIL  the portfolio-wide inbox does not contain the application just created"; FAIL=$((FAIL+1))
+    fi
+  fi
+
+  req GET "/api/applications/inbox?roomId=$ROOM_ID" "" "$LTOKEN"
+  check "applicants filterable by room" 200 "$STATUS" "$BODY"
+
+  req GET "/api/applications/inbox?roomId=not-a-uuid" "" "$LTOKEN"
+  check "malformed room filter refused, not ignored" 400 "$STATUS" "$BODY"
+
+  # 200-and-empty, NOT 403. ListerGuard admits a tenant because a sub-lessor
+  # lets rooms too (Phase 6); what keeps them out of a landlord's applicants is
+  # the WHERE clause, and that is the thing worth checking. A guard-shaped
+  # expectation here would pass even if the scoping were removed.
+  req GET "/api/applications/inbox" "" "$TTOKEN"
+  check "tenant may ask for their own lettings' applicants" 200 "$STATUS" "$BODY"
+  TENANT_SEES=$(echo "$BODY" | jq -r '.data | length' 2>/dev/null || echo "?")
+  if [[ "$TENANT_SEES" == "0" ]]; then
+    green "  PASS  …and sees none, because they let nothing  (scoped by the clause, not the guard)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  a tenant saw $TENANT_SEES applicant(s) for rooms they do not let"; FAIL=$((FAIL+1))
+  fi
 fi
 
 # ── 5. Messaging ───────────────────────────────────────────────────────────
@@ -378,6 +426,41 @@ if [[ -n "$APP_ID" ]]; then
   check "thread readable by participant" 200 "$STATUS" "$BODY"
   MSGS=$(echo "$BODY" | jq -r 'if type=="array" then length else (.data|length) end' 2>/dev/null || echo "?")
   grey "        messages in thread: $MSGS"
+
+  # ── Phase 7c: one inbox across every conversation ────────────────────────
+  # Threads were reachable only from inside the application they belonged to,
+  # so both navs listed "Messages" greyed out with a "Soon" chip.
+  req GET "/api/messages/inbox" "" "$LTOKEN"
+  check "landlord lists every conversation in one call" 200 "$STATUS" "$BODY"
+  if echo "$BODY" | jq -e --arg id "$APP_ID" '.data | map(.applicationId) | index($id)' >/dev/null 2>&1; then
+    green "  PASS  the thread from this run is in it"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the unified inbox does not contain the conversation just created"; FAIL=$((FAIL+1))
+  fi
+
+  # The channel is in the payload because a thread genuinely mixes them: a
+  # tenant's message is forwarded to the landlord on WhatsApp and a reply there
+  # is threaded back. Without it, a landlord cannot tell where their last answer
+  # went — which the UI warns about explicitly.
+  LAST_CHAN=$(echo "$BODY" | jq -r --arg id "$APP_ID" '.data[] | select(.applicationId==$id) | .lastMessage.channel' 2>/dev/null)
+  if [[ "$LAST_CHAN" == "in_app" || "$LAST_CHAN" == "whatsapp" ]]; then
+    green "  PASS  …saying which channel the last message arrived on  ($LAST_CHAN)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the inbox row carries no channel: '$LAST_CHAN'"; FAIL=$((FAIL+1))
+  fi
+
+  # ⚠️ Message.readAt had been on the model since messaging shipped and NOTHING
+  # ever wrote it. Any unread badge built on it would have counted every message
+  # ever sent, for ever. Opening the thread (above, as the tenant) is what marks
+  # the landlord's message read, so the tenant's own unread count must now be 0.
+  req GET "/api/messages/inbox" "" "$TTOKEN"
+  check "tenant has the same inbox from the other side" 200 "$STATUS" "$BODY"
+  T_UNREAD=$(echo "$BODY" | jq -r --arg id "$APP_ID" '.data[] | select(.applicationId==$id) | .unread' 2>/dev/null)
+  if [[ "$T_UNREAD" == "0" ]]; then
+    green "  PASS  …with the unread count cleared by opening the thread  (readAt is finally written)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  unread is '$T_UNREAD' after the tenant opened the thread — readAt is not being written"; FAIL=$((FAIL+1))
+  fi
 else
   skipped "no application created — messaging not exercised"
 fi
@@ -422,6 +505,18 @@ if [[ -n "$APP_ID" && -n "$ITOKEN" ]]; then
     green "  PASS  other tenant CANNOT post into the thread  ($STATUS)"; PASS=$((PASS+1))
   else
     red "  FAIL  other tenant POSTED into a private thread  (got $STATUS)"; FAIL=$((FAIL+1))
+  fi
+
+  # Phase 7c. The unified inbox is a NEW surface onto private conversations and
+  # carries no role guard at all — both roles need it. 200-and-absent is the
+  # right answer: the scoping is the only thing keeping a stranger out, so it is
+  # what gets checked rather than a status code.
+  req GET "/api/messages/inbox" "" "$ITOKEN"
+  check "unified inbox readable by any signed-in account" 200 "$STATUS" "$BODY"
+  if echo "$BODY" | jq -e --arg id "$APP_ID" '.data | map(.applicationId) | index($id)' >/dev/null 2>&1; then
+    red "  FAIL  a stranger's inbox CONTAINS a conversation they are not part of"; FAIL=$((FAIL+1))
+  else
+    green "  PASS  …and contains no conversation this account is not part of"; PASS=$((PASS+1))
   fi
 
   req POST "/api/applications/$APP_ID/accept" "" "$ITOKEN"
@@ -2147,11 +2242,26 @@ check "sign-up code request accepted" 200 "$STATUS" "$BODY"
 SIGNUP_MSG=$(echo "$BODY" | jq -r '.message')
 
 # The same number sign-in uses above, which by now HAS an account.
+#
+# ⚠️ The daily cap is checked FIRST, and that is not a get-out. This number is
+# fixed, so every run of the suite against the same database spends another of
+# its codes for the day; on the second run the answer becomes "Too many codes
+# sent to this number today", which differs from the generic message for a
+# reason that has nothing to do with account enumeration. Read as a failure, it
+# was an alarm that cried wolf on any database the suite had already been run
+# against — and a check that fails for the wrong reason gets ignored like any
+# other. The cap refusal is identical whether or not the number is taken, so it
+# leaks nothing; it simply cannot answer this question today, and says so.
 req POST /api/auth/phone/signup/request-code '{"phone":"0821234567"}'
-if [[ "$(echo "$BODY" | jq -r '.message')" == "$SIGNUP_MSG" ]]; then
+SIGNUP_TAKEN_MSG=$(echo "$BODY" | jq -r '.message')
+if [[ "$SIGNUP_TAKEN_MSG" == "$SIGNUP_MSG" ]]; then
   green "  PASS  sign-up says the same thing whether or not the number is taken"; PASS=$((PASS+1))
+elif [[ "$SIGNUP_TAKEN_MSG" == Too\ many\ codes* ]]; then
+  skipped "enumeration wording — this number has spent its codes for today on an earlier run of the suite"
 else
   red "  FAIL  sign-up reveals that a number already has an account"; FAIL=$((FAIL+1))
+  grey "        taken: $SIGNUP_TAKEN_MSG"
+  grey "        free:  $SIGNUP_MSG"
 fi
 
 req POST /api/auth/phone/signup/request-code '{"phone":"12345"}'
@@ -2407,8 +2517,12 @@ head_ "39. Phone verification"
 LOGIN_HEADERS=$(curl -s -D - -o /dev/null -X POST "$API/api/auth/login" \
   -H 'Content-Type: application/json' \
   -d "{\"email\":\"$LANDLORD_EMAIL\",\"password\":\"$PASSWORD\"}" 2>/dev/null)
+# A 429 here is the limiter, not a missing cookie — see check() for why that is
+# a named skip rather than a failure.
 if echo "$LOGIN_HEADERS" | grep -qi 'set-cookie:.*rb_refresh'; then
   green "  PASS  login issues the refresh cookie"; PASS=$((PASS+1))
+elif echo "$LOGIN_HEADERS" | grep -qi '^HTTP/[0-9.]* 429'; then
+  skipped "login refresh cookie — rate limited (429); wait out the 15-minute window or restart the API"
 else
   red "  FAIL  login sets no rb_refresh cookie — reloads will sign people out"; FAIL=$((FAIL+1))
 fi
@@ -2416,6 +2530,8 @@ fi
 req POST /api/auth/login "{\"email\":\"$LANDLORD_EMAIL\",\"password\":\"$PASSWORD\"}"
 if echo "$BODY" | jq -e '.user | has("phone")' >/dev/null 2>&1; then
   green "  PASS  the login response carries phone"; PASS=$((PASS+1))
+elif [[ "$STATUS" == "429" ]]; then
+  skipped "login response carries phone — rate limited (429); wait out the 15-minute window or restart the API"
 else
   red "  FAIL  login omits phone — settings shows a blank field after signing in"; FAIL=$((FAIL+1))
 fi

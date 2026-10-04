@@ -5,11 +5,16 @@ import { MessagesService } from '../../../core/services/messages.service';
 import { Message } from '../../../core/models/message.model';
 
 /**
- * Reusable conversation thread — embedded in both the tenant dashboard
- * (per application) and the landlord applicant manager (per applicant).
- * Tenant→landlord messages also go out over WhatsApp if the landlord has
- * opted in (see backend MessagesService) — that's invisible here, this
- * component only ever renders/sends the in-app (`mastande`) record.
+ * Reusable conversation thread — embedded in the tenant dashboard (per
+ * application), the landlord applicant manager (per applicant) and the unified
+ * inbox (per thread).
+ *
+ * What it SENDS is always an in-app message (`channel: 'in_app'`). What it
+ * RENDERS may not be: a tenant's message is forwarded to the landlord over
+ * WhatsApp, and if the landlord replies there the webhook threads that reply
+ * back into this same conversation as `channel: 'whatsapp'`. So one thread
+ * genuinely mixes channels, every message carries which one it came in on, and
+ * the inbox screen says out loud where a reply typed here will go — Phase 7c.
  */
 @Component({
   selector: 'app-message-thread',
@@ -32,10 +37,24 @@ import { Message } from '../../../core/models/message.model';
           }
         }
       </div>
-      <div class="thread__composer">
-        <input type="text" [(ngModel)]="draft" placeholder="Type a message…" (keyup.enter)="send()"/>
-        <button type="button" [disabled]="!draft.trim() || sending()" (click)="send()">Send</button>
-      </div>
+      <!-- A closed conversation stays readable and cannot be added to. The
+           server already refuses the send; until Phase 7c the refusal was
+           caught and dropped, so the message simply vanished from the input
+           with no explanation. Hiding the composer says why BEFORE somebody
+           types. -->
+      @if (closed()) {
+        <p class="thread__closed">{{ closedReason() }}</p>
+      } @else {
+        <div class="thread__composer">
+          <input type="text" [(ngModel)]="draft" placeholder="Type a message…" (keyup.enter)="send()"/>
+          <button type="button" [disabled]="!draft.trim() || sending()" (click)="send()">Send</button>
+        </div>
+        <!-- Every other failure, said out loud. A send that fails silently
+             looks exactly like a send that worked. -->
+        @if (sendError()) {
+          <p class="thread__error" role="alert">{{ sendError() }}</p>
+        }
+      }
     </div>
   `,
   styles: [`
@@ -49,10 +68,22 @@ import { Message } from '../../../core/models/message.model';
     .thread__composer input { flex: 1; border: none; padding: .6rem .7rem; font-size: .82rem; font-family: inherit; }
     .thread__composer button { border: none; background: #1A1410; color: #fff; padding: 0 1rem; cursor: pointer; font-weight: 700; font-size: .8rem; }
     .thread__composer button:disabled { opacity: .5; cursor: not-allowed; }
+    .thread__closed { margin: 0; padding: .6rem .7rem; font-size: .75rem; color: var(--slate);
+                      border-top: 1px solid #DDD5C8; background: #FDFAF5; line-height: 1.5; }
+    .thread__error { margin: 0; padding: .5rem .7rem; font-size: .75rem; color: #D63B3B;
+                     border-top: 1px solid #DDD5C8; background: rgba(214,59,59,.06); }
   `],
 })
 export class MessageThread implements OnInit {
   applicationId = input.required<string>();
+
+  /**
+   * Hides the composer. Passed by a caller that already knows the application
+   * is rejected, withdrawn or relisted — the server refuses those sends, and
+   * this component has no business guessing at the reason itself.
+   */
+  closed = input(false);
+  closedReason = input('This conversation is closed. The messages stay here to read.');
 
   auth = inject(AuthService);
   private messagesService = inject(MessagesService);
@@ -60,6 +91,7 @@ export class MessageThread implements OnInit {
   messages = signal<Message[]>([]);
   loading = signal(true);
   sending = signal(false);
+  sendError = signal<string | null>(null);
   draft = '';
 
   ngOnInit() {
@@ -73,13 +105,21 @@ export class MessageThread implements OnInit {
     const body = this.draft.trim();
     if (!body) return;
     this.sending.set(true);
+    this.sendError.set(null);
     this.messagesService.send(this.applicationId(), body).subscribe({
       next: (msg) => {
         this.messages.update((m) => [...m, msg]);
         this.draft = '';
         this.sending.set(false);
       },
-      error: () => this.sending.set(false),
+      error: (err) => {
+        this.sending.set(false);
+        // The draft is deliberately left in the input: clearing it on failure
+        // is how somebody loses what they wrote and does not find out.
+        this.sendError.set(
+          err?.error?.message ?? 'That did not send. Check your connection and try again.',
+        );
+      },
     });
   }
 }
