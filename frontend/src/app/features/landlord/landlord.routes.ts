@@ -5,17 +5,20 @@ export const LANDLORD_ROUTES: Routes = [
   {
     path: 'dashboard',
     loadComponent: () => import('./dashboard/landlord-dashboard').then((m) => m.LandlordDashboard),
+    data: { pageTitle: 'Your dashboard' },
     title: 'Your Dashboard — Mastande',
   },
   {
     path: 'rooms/new',
     loadComponent: () => import('./create-room/create-room').then((m) => m.CreateRoom),
+    data: { pageTitle: 'List a room' },
     title: 'List a Room — Mastande',
   },
   {
     // Resumes an existing draft in the same wizard used to create one.
     path: 'rooms/:roomId/edit',
     loadComponent: () => import('./create-room/create-room').then((m) => m.CreateRoom),
+    data: { pageTitle: 'Continue your listing' },
     title: 'Continue Your Listing — Mastande',
   },
   {
@@ -31,11 +34,13 @@ export const LANDLORD_ROUTES: Routes = [
      */
     path: 'properties',
     loadComponent: () => import('./properties/properties').then((m) => m.Properties),
+    data: { pageTitle: 'My properties' },
     title: 'My properties — Mastande',
   },
   {
     path: 'properties/:propertyId',
     loadComponent: () => import('./yard/yard').then((m) => m.Yard),
+    data: { pageTitle: 'Your property' },
     title: 'Property — Mastande',
   },
   {
@@ -59,16 +64,19 @@ export const LANDLORD_ROUTES: Routes = [
     path: 'applicants',
     loadComponent: () =>
       import('./applicants-inbox/applicants-inbox').then((m) => m.ApplicantsInbox),
+    data: { pageTitle: 'All applicants' },
     title: 'All applicants — Mastande',
   },
   {
     path: 'rooms/:roomId/applicants',
     loadComponent: () => import('./applicants/applicants').then((m) => m.Applicants),
+    data: { pageTitle: 'Applicants' },
     title: 'Applicants — Mastande',
   },
   {
     path: 'verification',
     loadComponent: () => import('./verification/landlord-verification').then((m) => m.LandlordVerification),
+    data: { pageTitle: 'Verification' },
     title: 'Verification — Mastande',
   },
   // No 'upgrade' route. It served a page offering Pro at R349/mo and Agency at
@@ -87,11 +95,13 @@ export const LANDLORD_ROUTES: Routes = [
     path: 'public-page',
     loadComponent: () =>
       import('./storefront-settings/storefront-settings').then((m) => m.StorefrontSettings),
+    data: { pageTitle: 'Your public page' },
     title: 'Your public page — Mastande',
   },
   {
     path: 'services',
     loadComponent: () => import('./services/services').then((m) => m.LandlordServices),
+    data: { pageTitle: 'Who to call' },
     title: 'Who to call — Mastande',
   },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },

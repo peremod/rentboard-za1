@@ -1,8 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '@env/environment';
-import { PortalShell } from '../../../shared/components/portal-shell/portal-shell';
-import { ADMIN_NAV } from '../admin-nav';
 
 interface AggregateQuestion {
   id: string;
@@ -60,10 +58,8 @@ interface SurveyAggregate {
 @Component({
   selector: 'app-admin-surveys',
   standalone: true,
-  imports: [PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Survey">
 
       @if (loading()) {
         <p class="muted">Loading results…</p>
@@ -159,7 +155,6 @@ interface SurveyAggregate {
           }
         }
       }
-    </app-portal-shell>
   `,
   styles: [
     `
@@ -215,7 +210,6 @@ interface SurveyAggregate {
 })
 export class AdminSurveys implements OnInit {
   private http = inject(HttpClient);
-  navItems = ADMIN_NAV;
 
   readonly data = signal<SurveyAggregate | null>(null);
   readonly loading = signal(true);

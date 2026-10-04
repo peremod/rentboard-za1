@@ -1,7 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { AdminService, ReferralStats, LaunchCode } from '../../../core/services/admin.service';
-import { PortalShell } from '../../../shared/components/portal-shell/portal-shell';
-import { ADMIN_NAV } from '../admin-nav';
 
 /**
  * Referral performance and the launch invite codes.
@@ -12,10 +10,8 @@ import { ADMIN_NAV } from '../admin-nav';
 @Component({
   selector: 'app-admin-referrals',
   standalone: true,
-  imports: [PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Referrals">
 
       @if (stats(); as s) {
         <div class="insight-banner">
@@ -86,7 +82,6 @@ import { ADMIN_NAV } from '../admin-nav';
       } @else if (loading()) {
         <p class="muted">Loading…</p>
       }
-    </app-portal-shell>
   `,
   styles: [`
     .code-grid { display: flex; flex-wrap: wrap; gap: .4rem; padding: .75rem 0 .25rem; }
@@ -99,8 +94,6 @@ import { ADMIN_NAV } from '../admin-nav';
 })
 export class AdminReferrals implements OnInit {
   private admin = inject(AdminService);
-
-  readonly navItems = ADMIN_NAV;
 
   stats = signal<ReferralStats | null>(null);
   codes = signal<LaunchCode[]>([]);

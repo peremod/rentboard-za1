@@ -92,10 +92,43 @@ const PRIVATE_AREAS = {
   'account': ['authGuard'],
 };
 
+/**
+ * The route object for one area, by brace matching — Phase 7e.
+ *
+ * ⚠️ This was a 400-character proximity window:
+ *
+ *     path:\s*'landlord'[\s\S]{0,400}?canActivate:\s*\[([^\]]*)\]
+ *
+ * and in Phase 7e a fifteen-line comment was added between `path:` and
+ * `canActivate:` — explaining the layout mount — which pushed the guard out of
+ * the window. All four areas were then reported as "everything under it is
+ * public", about a file whose guards were untouched and present.
+ *
+ * That is the SAME defect Phase 7a found in the old link check in this file:
+ * a window measured in characters, standing in for the structure of the thing
+ * being read. It is worse here, because a security check that cries wolf
+ * teaches the next reader to dismiss it — and the fourth time it fires, they
+ * will dismiss a real one.
+ *
+ * Brace matching has no window: the block ends where the object ends.
+ */
+function areaBlock(src, area) {
+  const needle = `path: '${area}'`;
+  const at = src.indexOf(needle);
+  if (at === -1) return null;
+  // Back up to the '{' that opens this route object.
+  let open = src.lastIndexOf('{', at);
+  let depth = 0;
+  for (let i = open; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}' && --depth === 0) return src.slice(open, i + 1);
+  }
+  return null;
+}
+
 for (const [area, expected] of Object.entries(PRIVATE_AREAS)) {
-  // find the parent route block for this area
-  const re = new RegExp(`path:\\s*'${area}'[\\s\\S]{0,400}?canActivate:\\s*\\[([^\\]]*)\\]`);
-  const found = appRoutes.match(re);
+  const block = areaBlock(appRoutes, area);
+  const found = block && block.match(/canActivate:\s*\[([^\]]*)\]/);
   if (!found) {
     fail(`/${area} has no canActivate — everything under it is public`);
     continue;

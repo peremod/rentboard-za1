@@ -3,8 +3,6 @@ import { RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ReportsService } from '../../../core/services/reports.service';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
-import { ADMIN_NAV } from '../admin-nav';
 
 /** Reasons that mean someone may be about to lose money. Surfaced first. */
 const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_real_listing'];
@@ -12,10 +10,9 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
 @Component({
   selector: 'app-admin-reports',
   standalone: true,
-  imports: [RouterLink, DatePipe, FormsModule, PortalShell],
+  imports: [RouterLink, DatePipe, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Reports">
 
       <div class="insight-banner">
         🚩
@@ -109,7 +106,6 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
           </div>
         }
       }
-    </app-portal-shell>
   `,
   styles: [`
     .report--urgent { border-color: rgba(178,59,59,.4); box-shadow: 0 0 0 1px rgba(178,59,59,.15); }
@@ -122,8 +118,6 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
 })
 export class AdminReports implements OnInit {
   private reportsService = inject(ReportsService);
-
-  readonly navItems: PortalNavItem[] = ADMIN_NAV;
 
   reports = signal<any[]>([]);
   context = signal<Record<string, { priorReportsOnRoom: number; priorReportsOnUser: number }>>({});

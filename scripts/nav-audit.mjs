@@ -116,12 +116,32 @@ function routeObjects(src) {
     const comp = flat.match(/loadComponent:[\s\S]*?import\('([^']+)'\)/);
     const children = flat.match(/loadChildren:[\s\S]*?import\('([^']+)'\)[\s\S]*?m\.([A-Z_]+)/);
     const redirect = flat.match(/redirectTo:\s*'([^']*)'/);
+    /**
+     * The page's own name, from `data.pageTitle` — Phase 7e.
+     *
+     * It used to be an input on each screen's `<app-portal-shell>` tag, so
+     * section 5 below read it out of the component file. The sidebar is drawn
+     * once by PortalLayout now and the name lives on the route, next to the
+     * browser `title` it has to agree with. Both quote styles, because a title
+     * containing an apostrophe ("Renter's Passport") is double-quoted.
+     *
+     * ⚠️ Read from `block.text`, NOT from `flat`. `flatten` blanks out nested
+     * objects so keys read at one level — right for `path`, wrong here, because
+     * `pageTitle` lives inside `data: { … }`. Reading the flattened text found
+     * nothing, every guarded route fell through to the component-file lookup,
+     * and the label count silently dropped from 48 to 20: twenty-eight
+     * comparisons skipped with all four sections still reporting green. The
+     * count is printed at the end of section 5 for exactly this reason.
+     */
+    const pageTitle = block.text.match(/pageTitle:\s*'((?:[^'\\]|\\.)*)'/)
+      ?? block.text.match(/pageTitle:\s*"((?:[^"\\]|\\.)*)"/);
     out.push({
       path: path[1],
       component: comp ? comp[1] : null,
       childFile: children ? children[1] : null,
       childSymbol: children ? children[2] : null,
       redirect: redirect ? redirect[1] : null,
+      pageTitle: pageTitle ? pageTitle[1].replace(/\\'/g, "'") : null,
     });
   }
   return out;
@@ -145,6 +165,17 @@ const componentOf = new Map();
  */
 const redirects = new Set();
 
+/**
+ * What each guarded route calls itself, from `data.pageTitle` — Phase 7e.
+ *
+ * Keyed by the full route path rather than by the component file, because the
+ * name is now a property of the route: `/landlord/rooms/new` and
+ * `/tenant/sublet/new` load the SAME component and are deliberately called
+ * different things ("List a room" and "Sublet a room in your place"), which a
+ * file-keyed map could not express.
+ */
+const pageTitleOf = new Map();
+
 for (const r of topLevel) {
   if (r.path === '**' || r.path === ':lang') continue;
   if (r.component || r.redirect !== null) {
@@ -161,6 +192,7 @@ for (const r of topLevel) {
   for (const child of routeObjects(src)) {
     const full = [r.path, child.path].filter(Boolean).join('/');
     routes.add(full);
+    if (child.pageTitle) pageTitleOf.set(full, child.pageTitle);
     if (child.component) componentOf.set(full, child.component);
     else if (child.redirect !== null) redirects.add(full);
   }
@@ -396,13 +428,11 @@ console.log('\n── Labels ─────────────────
 const headings = new Map();
 for (const file of FILES) {
   const src = read(file);
-  for (const m of src.matchAll(/pageTitle="([^"]+)"/g)) {
-    headings.set(rel(file), m[1]);
-  }
-  if (!headings.has(rel(file))) {
-    const h1 = src.match(/<h1[^>]*>([^<{]+)</);
-    if (h1) headings.set(rel(file), h1[1].replace(/\s+/g, ' ').trim());
-  }
+  // A public page still says its name in its own <h1>; the guarded ones say it
+  // on the route (see pageTitleOf), which is checked first where the nav item
+  // resolves to a route that has one.
+  const h1 = src.match(/<h1[^>]*>([^<{]+)</);
+  if (h1) headings.set(rel(file), h1[1].replace(/\s+/g, ' ').trim());
 }
 
 /**
@@ -475,10 +505,21 @@ for (const item of allNavItems) {
     continue;
   }
 
-  const comp = componentOf.get(item.target);
-  if (!comp) continue;
-  const compFile = comp.replace(/^\.\//, '');
-  const heading = [...headings.entries()].find(([f]) => f.includes(compFile.replace(/^features\//, 'features/')))?.[1];
+  /**
+   * The route's own `data.pageTitle` first, the component's `<h1>` second.
+   *
+   * Guarded screens stopped carrying their own h1 in Phase 7e — the layout
+   * draws it from the route — so a component-file lookup now finds nothing for
+   * most of the portal and every one of those comparisons would be silently
+   * skipped. The count printed below is what makes that visible: it was 48
+   * before this change and has to stay there.
+   */
+  const heading = pageTitleOf.get(item.target) ?? (() => {
+    const comp = componentOf.get(item.target);
+    if (!comp) return null;
+    const compFile = comp.replace(/^\.\//, '');
+    return [...headings.entries()].find(([f]) => f.includes(compFile.replace(/^features\//, 'features/')))?.[1] ?? null;
+  })();
   if (!heading) continue;
 
   compared++;

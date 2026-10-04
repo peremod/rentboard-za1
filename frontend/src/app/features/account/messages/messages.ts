@@ -1,14 +1,9 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { MessageThread } from '../../../shared/components/message-thread/message-thread';
 import { AuthService } from '../../../core/services/auth.service';
 import { MessagesService } from '../../../core/services/messages.service';
-import { NoticesService } from '../../../core/services/notices';
 import { MessageThreadSummary } from '../../../core/models/message.model';
-import { landlordNav } from '../../landlord/landlord-nav';
-import { tenantNav } from '../../tenant/tenant-nav';
-import { ADMIN_NAV } from '../../admin/admin-nav';
 
 /**
  * Your messages — Phase 7c.
@@ -46,10 +41,9 @@ import { ADMIN_NAV } from '../../admin/admin-nav';
 @Component({
   selector: 'app-messages',
   standalone: true,
-  imports: [PortalShell, MessageThread, DatePipe],
+  imports: [MessageThread, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems()" [roleLabel]="roleLabel()" pageTitle="Your messages">
       <section class="dash-section">
         <div class="msg-head">
           <h2 class="dash-section-title">Every conversation</h2>
@@ -141,7 +135,6 @@ import { ADMIN_NAV } from '../../admin/admin-nav';
           }
         </ul>
       </section>
-    </app-portal-shell>
   `,
   styles: `
     .msg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
@@ -193,7 +186,6 @@ import { ADMIN_NAV } from '../../admin/admin-nav';
 export class MessagesInbox implements OnInit {
   private auth = inject(AuthService);
   private messages = inject(MessagesService);
-  private notices = inject(NoticesService);
 
   readonly loading = signal(true);
   readonly failed = signal(false);
@@ -201,21 +193,9 @@ export class MessagesInbox implements OnInit {
   readonly unreadThreads = signal(0);
   readonly openId = signal<string | null>(null);
 
-  roleLabel = () =>
-    this.auth.isAdmin() ? 'Admin' : this.auth.isLandlord() ? 'Landlord' : 'Tenant';
-
-  navItems = (): PortalNavItem[] =>
-    this.auth.isAdmin()
-      ? ADMIN_NAV
-      : this.auth.isLandlord()
-        ? landlordNav({ notices: this.notices.unreadCount() })
-        : tenantNav({ notices: this.notices.unreadCount() });
-
   ngOnInit() {
     this.load();
     // So the Notices badge in the sidebar is a real number on this screen too,
-    // rather than silently 0 because nothing had fetched it yet.
-    this.notices.refreshUnread().subscribe({ error: () => {} });
   }
 
   load() {

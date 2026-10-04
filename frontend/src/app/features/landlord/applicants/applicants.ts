@@ -40,7 +40,6 @@ import { TenantReferences } from '../../../core/models/review.model';
           <a routerLink="/landlord/applicants">All applicants across your rooms →</a>
         }
       </p>
-      <h1>Applicants</h1>
 
       @if (loading()) {
         <p>Loading…</p>

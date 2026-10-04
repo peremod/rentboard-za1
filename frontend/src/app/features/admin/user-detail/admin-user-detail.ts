@@ -3,9 +3,8 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AdminService, AdminUserDetail } from '../../../core/services/admin.service';
-import { PortalShell } from '../../../shared/components/portal-shell/portal-shell';
+
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
-import { ADMIN_NAV } from '../admin-nav';
 
 /**
  * One account, everything about it.
@@ -21,10 +20,9 @@ import { ADMIN_NAV } from '../admin-nav';
 @Component({
   selector: 'app-admin-user-detail',
   standalone: true,
-  imports: [DatePipe, FormsModule, RouterLink, PortalShell, ZarCentsPipe],
+  imports: [DatePipe, FormsModule, RouterLink, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Account">
       <a routerLink="/admin/dashboard" class="muted">← Back to accounts</a>
 
       @if (loading()) {
@@ -199,13 +197,11 @@ import { ADMIN_NAV } from '../admin-nav';
           </section>
         }
       }
-    </app-portal-shell>
   `,
 })
 export class AdminUserDetailPage implements OnInit {
   private admin = inject(AdminService);
 
-  readonly navItems = ADMIN_NAV;
   /** Routed input, bound from the :id path parameter. */
   readonly id = input.required<string>();
 

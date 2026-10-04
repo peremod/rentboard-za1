@@ -4,9 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { TenanciesService } from '../../../core/services/tenancies.service';
 import { RentService, RentPeriod } from '../../../core/services/rent.service';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { Tenancy } from '../../../core/models/tenancy.model';
-import { tenantNav } from '../tenant-nav';
 import { LeaseDocuments } from '../../../shared/components/lease-documents/lease-documents';
 
 /**
@@ -37,10 +35,9 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
 @Component({
   selector: 'app-tenant-rent',
   standalone: true,
-  imports: [DatePipe, FormsModule, ZarCentsPipe, PortalShell, LeaseDocuments],
+  imports: [DatePipe, FormsModule, ZarCentsPipe, LeaseDocuments],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Tenant" avatarColour="var(--sage)" pageTitle="Rent">
 
       <div class="insight-banner">
         🧾
@@ -152,14 +149,11 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
           </section>
         }
       }
-    </app-portal-shell>
   `,
 })
 export class TenantRent implements OnInit {
   private tenancies_ = inject(TenanciesService);
   private rent = inject(RentService);
-
-  readonly navItems: PortalNavItem[] = tenantNav();
 
   tenancies = signal<Tenancy[]>([]);
   loading = signal(true);

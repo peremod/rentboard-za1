@@ -2,9 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { DatePipe, DecimalPipe, LowerCasePipe } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
 import { AdminService, AdCampaign, AdEnquiry, ReachAnalysis } from '../../../core/services/admin.service';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
-import { ADMIN_NAV } from '../admin-nav';
 import { SA_PROVINCES } from '../../../core/models/room.model';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -17,10 +15,9 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
 @Component({
   selector: 'app-admin-advertising',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, LowerCasePipe, FormsModule, ReactiveFormsModule, PortalShell, ZarCentsPipe],
+  imports: [DatePipe, DecimalPipe, LowerCasePipe, FormsModule, ReactiveFormsModule, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Advertising">
 
       @if (reach(); as r) {
         <section class="dash-section">
@@ -367,7 +364,6 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
           }
         }
       </section>
-    </app-portal-shell>
   `,
 })
 export class AdminAdvertising implements OnInit {
@@ -375,8 +371,6 @@ export class AdminAdvertising implements OnInit {
   private fb = inject(FormBuilder);
   private uploads = inject(UploadsService);
   private dialogs = inject(DialogService);
-
-  readonly navItems: PortalNavItem[] = ADMIN_NAV;
 
   enquiries = signal<AdEnquiry[]>([]);
   campaigns = signal<AdCampaign[]>([]);

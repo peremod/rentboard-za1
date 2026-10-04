@@ -1,13 +1,10 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ApplicationsService } from '../../../core/services/applications.service';
-import { NoticesService } from '../../../core/services/notices';
 import {
   ApplicantInboxRow, ApplicantInboxFilters, ApplicationStatus,
 } from '../../../core/models/application.model';
-import { landlordNav } from '../landlord-nav';
 
 /**
  * All applicants — Phase 7c.
@@ -44,10 +41,9 @@ import { landlordNav } from '../landlord-nav';
 @Component({
   selector: 'app-applicants-inbox',
   standalone: true,
-  imports: [PortalShell, RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems()" roleLabel="Landlord" pageTitle="All applicants">
       <section class="dash-section">
         <div class="ai-head">
           <h2 class="dash-section-title">Everyone who has applied</h2>
@@ -200,7 +196,6 @@ import { landlordNav } from '../landlord-nav';
           }
         </ul>
       </section>
-    </app-portal-shell>
   `,
   styles: `
     .ai-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
@@ -252,7 +247,6 @@ import { landlordNav } from '../landlord-nav';
 })
 export class ApplicantsInbox implements OnInit {
   private applications = inject(ApplicationsService);
-  private notices = inject(NoticesService);
 
   readonly loading = signal(true);
   readonly failed = signal(false);
@@ -277,20 +271,12 @@ export class ApplicantsInbox implements OnInit {
   readonly roomOptions = signal<{ id: string; title: string }[]>([]);
   readonly hasUngrouped = signal(false);
 
-  navItems = (): PortalNavItem[] =>
-    landlordNav({
-      applicants: this.inbox()?.needsAttention,
-      notices: this.notices.unreadCount(),
-    });
-
   anyFilter(): boolean {
     return !!this.roomId() || !!this.propertyId() || !!this.status();
   }
 
   ngOnInit() {
     this.load();
-    // So the Notices badge in the sidebar is a real number here too.
-    this.notices.refreshUnread().subscribe({ error: () => {} });
   }
 
   load() {

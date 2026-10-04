@@ -2,8 +2,6 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminService, PendingVerification } from '../../../core/services/admin.service';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
-import { ADMIN_NAV } from '../admin-nav';
 import { VerificationService } from '../../../core/services/verification.service';
 
 /**
@@ -21,10 +19,9 @@ import { VerificationService } from '../../../core/services/verification.service
 @Component({
   selector: 'app-admin-verifications',
   standalone: true,
-  imports: [DatePipe, FormsModule, PortalShell],
+  imports: [DatePipe, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Verification queue">
 
       <div class="insight-banner">
         🔒
@@ -164,14 +161,11 @@ import { VerificationService } from '../../../core/services/verification.service
           </div>
         }
       }
-    </app-portal-shell>
   `,
 })
 export class AdminVerifications implements OnInit {
   private adminService = inject(AdminService);
   private verification = inject(VerificationService);
-
-  readonly navItems: PortalNavItem[] = ADMIN_NAV;
 
   requests = signal<PendingVerification[]>([]);
   loading = signal(true);

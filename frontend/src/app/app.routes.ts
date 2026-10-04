@@ -1,4 +1,5 @@
 import { Routes } from '@angular/router';
+import { PortalLayout } from './shared/components/portal-layout/portal-layout';
 import { RenderMode, ServerRoute } from '@angular/ssr';
 import { authGuard } from './core/guards/auth.guard';
 import { landlordGuard } from './core/guards/landlord.guard';
@@ -115,24 +116,84 @@ const CONTENT_ROUTES: Routes = [
   {
     path: 'tenant',
     data: { seo: { noIndex: true } },
+    /**
+     * The sidebar, drawn once for every screen in this area — Phase 7e.
+     *
+     * `component` beside `loadChildren`, so the children render into this
+     * layout's outlet rather than each importing a shell of their own. Two of
+     * them never did: /landlord/rooms/new and the per-room applicants screen,
+     * which are the two a landlord uses most, and on both the portal navigation
+     * disappeared entirely. See PortalLayout for why it cannot live in the
+     * pages.
+     *
+     * Eagerly imported, unlike the children. It is the frame around every
+     * guarded screen, so lazy-loading it would only add a round trip before the
+     * first of them could paint.
+     */
+    component: PortalLayout,
     canActivate: [authGuard, tenantGuard],
     loadChildren: () => import('./features/tenant/tenant.routes').then((m) => m.TENANT_ROUTES),
   },
   {
     path: 'landlord',
     data: { seo: { noIndex: true } },
+    /**
+     * The sidebar, drawn once for every screen in this area — Phase 7e.
+     *
+     * `component` beside `loadChildren`, so the children render into this
+     * layout's outlet rather than each importing a shell of their own. Two of
+     * them never did: /landlord/rooms/new and the per-room applicants screen,
+     * which are the two a landlord uses most, and on both the portal navigation
+     * disappeared entirely. See PortalLayout for why it cannot live in the
+     * pages.
+     *
+     * Eagerly imported, unlike the children. It is the frame around every
+     * guarded screen, so lazy-loading it would only add a round trip before the
+     * first of them could paint.
+     */
+    component: PortalLayout,
     canActivate: [authGuard, landlordGuard],
     loadChildren: () => import('./features/landlord/landlord.routes').then((m) => m.LANDLORD_ROUTES),
   },
   {
     path: 'account',
     data: { seo: { noIndex: true } },
+    /**
+     * The sidebar, drawn once for every screen in this area — Phase 7e.
+     *
+     * `component` beside `loadChildren`, so the children render into this
+     * layout's outlet rather than each importing a shell of their own. Two of
+     * them never did: /landlord/rooms/new and the per-room applicants screen,
+     * which are the two a landlord uses most, and on both the portal navigation
+     * disappeared entirely. See PortalLayout for why it cannot live in the
+     * pages.
+     *
+     * Eagerly imported, unlike the children. It is the frame around every
+     * guarded screen, so lazy-loading it would only add a round trip before the
+     * first of them could paint.
+     */
+    component: PortalLayout,
     canActivate: [authGuard],
     loadChildren: () => import('./features/account/account.routes').then((m) => m.ACCOUNT_ROUTES),
   },
   {
     path: 'admin',
     data: { seo: { noIndex: true } },
+    /**
+     * The sidebar, drawn once for every screen in this area — Phase 7e.
+     *
+     * `component` beside `loadChildren`, so the children render into this
+     * layout's outlet rather than each importing a shell of their own. Two of
+     * them never did: /landlord/rooms/new and the per-room applicants screen,
+     * which are the two a landlord uses most, and on both the portal navigation
+     * disappeared entirely. See PortalLayout for why it cannot live in the
+     * pages.
+     *
+     * Eagerly imported, unlike the children. It is the frame around every
+     * guarded screen, so lazy-loading it would only add a round trip before the
+     * first of them could paint.
+     */
+    component: PortalLayout,
     canActivate: [authGuard, adminGuard],
     loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
   },

@@ -6,8 +6,6 @@ import { UploadsService } from '../../../core/services/uploads.service';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { Room } from '../../../core/models/room.model';
 import { VerificationType } from '../../../core/models/verification.model';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
-import { tenantNav } from '../tenant-nav';
 
 /**
  * Renter's Passport — the tenant side of verification.
@@ -32,10 +30,9 @@ import { tenantNav } from '../tenant-nav';
 @Component({
   selector: 'app-passport-verify',
   standalone: true,
-  imports: [DatePipe, FormsModule, PortalShell],
+  imports: [DatePipe, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Tenant" avatarColour="var(--sage)" pageTitle="Renter's Passport">
 
       @if (progress().complete) {
         <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
@@ -209,15 +206,12 @@ import { tenantNav } from '../tenant-nav';
         </div>
         }
       }
-    </app-portal-shell>
   `,
 })
 export class PassportVerify implements OnInit {
   protected readonly verification = inject(VerificationService);
   private uploads = inject(UploadsService);
   private rooms = inject(RoomsService);
-
-  protected readonly navItems: PortalNavItem[] = tenantNav();
 
   protected readonly uploading = signal<VerificationType | null>(null);
   protected readonly submitting = signal(false);

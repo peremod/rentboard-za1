@@ -167,6 +167,11 @@ export class SeoController {
       { loc: '/legal/disclaimer', priority: '0.3', freq: 'yearly' },
       { loc: '/legal/cookies', priority: '0.3', freq: 'yearly' },
       { loc: '/legal/paia', priority: '0.3', freq: 'yearly' },
+      // Phase 6's page, and it was in the footer and not in the sitemap —
+      // the footer audit in Phase 7e asked that the two agree. It is the one
+      // public page explaining what an applicant risks on a sublet, so a
+      // search for it should find it.
+      { loc: '/legal/sublet', priority: '0.3', freq: 'yearly' },
     ];
 
     /**

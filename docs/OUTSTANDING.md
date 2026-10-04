@@ -484,6 +484,11 @@ node scripts/a11y-drive.mjs              # 26 pages WITH CONTENT on them. Before
 node scripts/dashboard-drive.mjs         # 35 checks — Phase 7d. "Viewed 47 times
                                          # this week" now has data under it, and
                                          # the task buttons point somewhere real
+node scripts/nav-ui-drive.mjs            # 46 checks — Phase 7e. The sidebar on
+                                         # every guarded screen, the mobile
+                                         # header CTAs at 360/390/430px, the
+                                         # footer, and three widths with no
+                                         # sideways scroll
 node scripts/dashboard-ui-drive.mjs      # 29 checks — that the task buttons
                                          # ARRIVE, not just that the string is
                                          # right, and that a landlord who never

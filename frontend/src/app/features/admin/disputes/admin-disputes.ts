@@ -4,8 +4,6 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AdminService } from '../../../core/services/admin.service';
 import { FLAG_REASONS, OpenTenancyFlag, TenancyFlagReason } from '../../../core/models/tenancy.model';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
-import { ADMIN_NAV } from '../admin-nav';
 
 /**
  * The post-tenancy dispute queue.
@@ -29,11 +27,9 @@ import { ADMIN_NAV } from '../admin-nav';
 @Component({
   selector: 'app-admin-disputes',
   standalone: true,
-  imports: [DatePipe, LowerCasePipe, FormsModule, RouterLink, PortalShell],
+  imports: [DatePipe, LowerCasePipe, FormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell pageTitle="Disputes" [navItems]="navItems" roleLabel="Admin"
-                      avatarColour="var(--ink2)">
       <div class="insight-banner">
         ⚖️
         <span>
@@ -128,7 +124,6 @@ import { ADMIN_NAV } from '../admin-nav';
           </div>
         }
       }
-    </app-portal-shell>
   `,
   styles: [`
     .dispute-detail {
@@ -144,8 +139,6 @@ import { ADMIN_NAV } from '../admin-nav';
 })
 export class AdminDisputes implements OnInit {
   private adminService = inject(AdminService);
-
-  readonly navItems: PortalNavItem[] = ADMIN_NAV;
 
   flags = signal<OpenTenancyFlag[]>([]);
   loading = signal(true);

@@ -6,8 +6,6 @@ import { AuthService } from '../../../core/services/auth.service';
 import { PaymentsService } from '../../../core/services/payments.service';
 import { ActivatedRoute } from '@angular/router';
 import { VerificationType, VerificationRequest } from '../../../core/models/verification.model';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
-import { landlordNav } from '../landlord-nav';
 
 /**
  * Landlord-facing verification.
@@ -21,10 +19,9 @@ import { landlordNav } from '../landlord-nav';
 @Component({
   selector: 'app-landlord-verification',
   standalone: true,
-  imports: [DatePipe, PortalShell],
+  imports: [DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Landlord" pageTitle="Verification">
 
       @if (verification.isIdentityVerified()) {
         <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
@@ -131,7 +128,6 @@ import { landlordNav } from '../landlord-nav';
           </div>
         }
       </section>
-    </app-portal-shell>
   `,
   styles: [`
     .verify-facts { margin: 0 0 0 1.1rem; }
@@ -145,8 +141,6 @@ export class LandlordVerification implements OnInit {
   private auth = inject(AuthService);
   private payments = inject(PaymentsService);
   private route = inject(ActivatedRoute);
-
-  readonly navItems: PortalNavItem[] = landlordNav();
 
   readonly types: { value: VerificationType; label: string; hint: string; icon: string }[] = [
     {

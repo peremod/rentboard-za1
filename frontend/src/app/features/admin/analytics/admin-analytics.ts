@@ -1,7 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { PortalShell } from '../../../shared/components/portal-shell/portal-shell';
+
 import { AdminService, Funnels, ContentSignals, Growth } from '../../../core/services/admin.service';
-import { ADMIN_NAV } from '../admin-nav';
 
 /**
  * UX measurement, aggregate only.
@@ -14,10 +13,8 @@ import { ADMIN_NAV } from '../admin-nav';
 @Component({
   selector: 'app-admin-analytics',
   standalone: true,
-  imports: [PortalShell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="How the site is used">
 
       @if (growth(); as g) {
         <section class="dash-section">
@@ -217,7 +214,6 @@ import { ADMIN_NAV } from '../admin-nav';
           </div>
         </section>
       }
-    </app-portal-shell>
   `,
   styles: [`
     .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
@@ -253,7 +249,6 @@ import { ADMIN_NAV } from '../admin-nav';
 export class AdminAnalytics implements OnInit {
   private admin = inject(AdminService);
 
-  readonly navItems = ADMIN_NAV;
   growth = signal<Growth | null>(null);
   funnels = signal<Funnels | null>(null);
   signals = signal<ContentSignals | null>(null);

@@ -1,13 +1,11 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { forkJoin, of, catchError } from 'rxjs';
 import { RouterLink } from '@angular/router';
-import { NoticesService } from '../../../core/services/notices';
 import { AuthService } from '../../../core/services/auth.service';
 import { ApplicationsService } from '../../../core/services/applications.service';
 import { Application } from '../../../core/models/application.model';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { MessageThread } from '../../../shared/components/message-thread/message-thread';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
 import { DisputePanel } from '../../../shared/components/dispute-panel/dispute-panel';
 import { ReferralPanel } from '../../../shared/components/referral-panel/referral-panel';
@@ -19,18 +17,16 @@ import { RoomsService } from '../../../core/services/rooms.service';
 import { Room } from '../../../core/models/room.model';
 import { RoomCard } from '../../../shared/components/room-card/room-card';
 import { TenantInboxPanel } from '../../../shared/components/tenant-inbox/tenant-inbox';
-import { tenantNav } from '../tenant-nav';
 
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
   imports: [
-    RouterLink, ZarCentsPipe, MessageThread, PortalShell, RoomCard, ReviewPrompt,
+    RouterLink, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt,
     DisputePanel, ReferralPanel, TenantInboxPanel,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems()" roleLabel="Tenant" avatarColour="var(--sage)" pageTitle="Your dashboard">
 
       <!-- The dashboard's question, answered first — Phase 7d.
            This is the Phase 5a task-inbox concept on the tenant side, which the
@@ -311,7 +307,6 @@ import { tenantNav } from '../tenant-nav';
           }
         }
       </section>
-    </app-portal-shell>
   `,
   styles: `
     .sublet-list { list-style: none; margin: 0 0 1rem; padding: 0; }
@@ -339,7 +334,6 @@ export class TenantDashboard implements OnInit {
   loadingSaved = signal(false);
   withdrawing = signal<string | null>(null);
   alerts = inject(AlertsService);
-  notices = inject(NoticesService);
   private dialogs = inject(DialogService);
 
   /** Plain-language summary of a saved search's filters. */
@@ -400,23 +394,6 @@ export class TenantDashboard implements OnInit {
   }
 
   busySearch = signal<string | null>(null);
-
-  /**
-   * Computed rather than static so the Applications and Saved Rooms badges
-   * track live counts. Applications and Messages resolve to this dashboard,
-   * which is where both live today.
-   */
-  readonly navItems = computed<PortalNavItem[]>(() =>
-    tenantNav({
-      applications: this.activeApplicationCount(),
-      saved: this.savedRooms.count(),
-      alerts: this.alerts.searches().length,
-      // Phase 7g. The badge is how the notices screen gets found, and for an
-      // account with no email address it is the only indication that anything
-      // happened at all.
-      notices: this.notices.unreadCount(),
-    }),
-  );
 
   applications = signal<Application[]>([]);
   loading = signal(true);
@@ -493,7 +470,6 @@ export class TenantDashboard implements OnInit {
 
     // None of these may break the dashboard if they fail.
     this.alerts.load().subscribe({ error: () => {} });
-    this.notices.refreshUnread().subscribe({ error: () => {} });
     this.loadSavedRooms();
   }
 

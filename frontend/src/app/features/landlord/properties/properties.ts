@@ -2,11 +2,9 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { NgOptimizedImage } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { PropertiesService } from '../../../core/services/properties.service';
 import { YardDashboard, YardGroup } from '../../../core/models/property.model';
 import { SA_PROVINCES } from '../../../core/models/room.model';
-import { landlordNav } from '../landlord-nav';
 
 /**
  * My properties — Phase 7b.
@@ -36,10 +34,9 @@ import { landlordNav } from '../landlord-nav';
 @Component({
   selector: 'app-properties',
   standalone: true,
-  imports: [PortalShell, RouterLink, FormsModule, NgOptimizedImage],
+  imports: [RouterLink, FormsModule, NgOptimizedImage],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Landlord" pageTitle="My properties">
 
       @if (loading()) {
         <p class="muted">Loading…</p>
@@ -260,7 +257,6 @@ import { landlordNav } from '../landlord-nav';
           </form>
         }
       }
-    </app-portal-shell>
   `,
   styles: `
     .prop-ungrouped-link { font-size: .9rem; font-weight: 600; }
@@ -340,7 +336,6 @@ export class Properties implements OnInit {
   }
   private properties = inject(PropertiesService);
 
-  readonly navItems: PortalNavItem[] = landlordNav();
   readonly provinces = SA_PROVINCES;
 
   readonly dash = signal<YardDashboard | null>(null);

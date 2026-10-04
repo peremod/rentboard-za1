@@ -1416,6 +1416,72 @@ to look at. `registerUser` now names the limiter and the remedy, and the UI
 drive reuses its signed-in pages for the phone-width pass rather than signing in
 twice more.
 
+### 5.23 The sidebar was a thing each page remembered to draw — ✅ fixed in v1.90.0 (Phase 7e)
+
+**The defect.** `PortalShell` was a component every guarded screen imported for
+itself, and **two of them did not**: `/landlord/rooms/new` and
+`/landlord/rooms/:roomId/applicants`. Those are the two screens a landlord uses
+most — posting a room, and deciding on the people who applied for it. On both,
+the portal navigation simply was not there; and on a phone, where that sidebar
+IS the strip across the top and the header hamburger carries only public links,
+there was no way out of either except the browser's back button.
+
+Phase 7a had already fixed the same shape of fault one layer down: the nav's
+CONTENTS were defined six times and the copies disagreed, so the sidebar shrank
+as a landlord walked through their own portal. That fixed what it said; this
+fixes whether it is drawn.
+
+| Before | Now |
+|---|---|
+| 23 screens each importing a shell; 2 forgetting | `PortalLayout` on the four guarded parent routes, children rendering into its outlet. A new portal screen cannot ship without the navigation |
+| Each screen passed its own `navItems`, `roleLabel`, `pageTitle` | Derived once from the role and the route |
+| Badges were right only on the screen that happened to fetch them — four screens had grown a `refreshUnread()` call just to stop the sidebar lying on that one page | `PortalBadgesService`, loaded once per portal visit, `refresh()` for a screen that changes a count |
+| The sidebar CTA ("+ List a room") was passed by the dashboard alone, so it appeared on one screen in ten | On every landlord screen |
+| A screen's name lived in its template, the route said something else in `title` | `data.pageTitle` on the route, next to the `title` it has to agree with — and `nav-audit.mjs` reads the same place |
+
+**Item 23 — Log in and Get started stay in the header on a phone.** They were
+`display: none` at ≤480px, so Log in was reachable only by opening the
+hamburger: two taps to the thing the header is for. Get started stayed, which
+made it worse — the header showed one half of a pair. Both are in the header
+now for a VISITOR; a signed-in account's three actions (Dashboard, List a room,
+Log out) do not fit beside a logo at 360px and stay in the drawer, which the
+CSS can tell apart because the navbar now marks the header with the auth state.
+
+⚠️ **And the pair was 28px tall.** Measured, not read: `btn-sm`'s padding alone
+never reached the target, so the two most important buttons on the public site
+were both under it, before and after the change. `min-height: 44px` now, matching
+what the portal strip already used.
+
+**Item 24 — the footer quick links.** Three faults, none of which the nav audit
+could see, because every one of these links resolves to a real route:
+
+- "Landlord portal" and "My applications" were guarded routes, and the footer's
+  main reader is a signed-out visitor on the public board. They asked for a
+  portal and got a login form with nothing to explain it.
+- Pricing was listed twice, under "For Landlords" and under "Business".
+- A signed-in person was shown "Create account" and "Post a room free".
+
+Each column now says what is true for whoever is reading it. ⚠️ The first
+version of that had two branches, so a **landlord** fell into the visitor one
+and was offered "Create account" — the drive caught it. `/legal/sublet` was in
+the footer and not in the sitemap; the sitemap has it now.
+
+⚠️ **Two of my own tools were wrong in the same way, and one was a security
+check.** `scripts/route-audit.mjs` matched `canActivate` within a 400-character
+window of `path:`, so the fifteen-line comment explaining the layout mount
+pushed the guard out of range and all four areas were reported as **"everything
+under it is public"** — about a file whose guards were untouched. It is brace
+matched now, and the failure was reproduced on a genuinely removed guard to
+prove the check still bites. `nav-audit.mjs` had the mirror image: it read
+`pageTitle` from the FLATTENED route block, which blanks nested objects by
+design, so every guarded route fell through and the label count dropped from 48
+to 20 — twenty-eight comparisons skipped with all sections still green. The
+count is printed for exactly that reason, and it is 49 now.
+
+A proximity window standing in for the structure of the thing being read is the
+third time this codebase has paid for it. A security check that cries wolf is
+the worst of the three: the fourth time it fires, somebody dismisses a real one.
+
 ### Gaps
 
 | Gap | Severity |
@@ -1454,6 +1520,7 @@ the fixtures are expensive or the assertions are about a browser:
 | `storage-drive.mjs` | **that deleting really deletes** — it IS an ImageKit stub, so it checks a DELETE arrived, and that a 500 is not recorded as success |
 | `lease-docs-ui-drive.mjs` | both parties see the lease, and nothing on screen claims it was signed here |
 | `dashboard-drive.mjs` | that "viewed 47 times this week" has data under it and counts the right things, that the task buttons point somewhere that exists, and the tenant task list — including what it deliberately leaves out |
+| `nav-ui-drive.mjs` | that the portal sidebar is on every guarded screen and the same size on all of them, that the mobile header keeps both visitor CTAs at 360/390/430px with a 44px target, that the footer offers a visitor nothing it cannot open, and that nothing scrolls sideways at three widths |
 | `dashboard-ui-drive.mjs` | that the task buttons ARRIVE (a click, not a string), that the numbers read as sentences with their window stated, that rent reminders is reachable at all, and that a landlord who never grouped anything can reach their own money |
 | `messages-inbox-drive.mjs` | who a WhatsApp reply is actually from, that `readAt` is written by something, and that two new surfaces onto private conversations are scoped by the WHERE clause rather than by a guard |
 | `messages-inbox-ui-drive.mjs` | that both navs lead somewhere, that the screen says which channel a reply leaves by, that a closed thread offers no box to type in, and that a failed request does not read as an empty inbox |

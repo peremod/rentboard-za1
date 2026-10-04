@@ -4,9 +4,8 @@ import { ServiceDirectoryService } from '../../../core/services/service-director
 import {
   SERVICE_LABELS, ServiceCategory, ServiceProvider, whatsappLink,
 } from '../../../core/models/service-provider.model';
-import { PortalShell } from '../../../shared/components/portal-shell/portal-shell';
+
 import { DialogService } from '../../../core/services/dialog.service';
-import { ADMIN_NAV } from '../admin-nav';
 
 /**
  * Curating the contractor directory.
@@ -22,10 +21,9 @@ import { ADMIN_NAV } from '../admin-nav';
 @Component({
   selector: 'app-admin-services',
   standalone: true,
-  imports: [FormsModule, PortalShell],
+  imports: [FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Who to call">
 
       <div class="insight-banner">
         💡
@@ -111,7 +109,6 @@ import { ADMIN_NAV } from '../admin-nav';
           }
         </section>
       }
-    </app-portal-shell>
   `,
   styles: [
     `
@@ -134,7 +131,6 @@ import { ADMIN_NAV } from '../admin-nav';
 export class AdminServices implements OnInit {
   private directory = inject(ServiceDirectoryService);
   private dialogs = inject(DialogService);
-  navItems = ADMIN_NAV;
 
   protected readonly categories: ServiceCategory[] = [
     'plumber', 'electrician', 'locksmith', 'cleaner', 'other',
