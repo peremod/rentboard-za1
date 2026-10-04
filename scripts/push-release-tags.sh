@@ -584,6 +584,42 @@ rule restored, 30 with the expense stylesheet removed, naming Remove at 20px.
 Three faults in the drive itself are recorded, and a pre-existing dashboard
 flake was fixed rather than lived with."
 
+tag_if_missing "v1.94.0" "0b6d87e83cc34cdcbfeb3d7394d0adc2d4c2f3ea" "2026-10-04 16:43:49 +0000" "v1.94.0 — Phase 7i: an admin can end an account on its owner's request
+
+It could not before, and Phase 7g had already recorded why that mattered: a
+phone-only account has no password, so /account/close cannot confirm it. That
+screen tells the person to ask us, and there was nothing behind the asking.
+POPIA s.24 is a right, not a feature request.
+
+Its own route rather than a flag on the suspend one, because suspension is
+reversible, keeps the email and is a moderation decision we make, while closure
+is irreversible, erases the email and is the owner's decision we carry out. One
+endpoint doing both is how somebody suspends an account and ends it.
+
+The erasure is the same code as the owner's path, extracted to one method both
+call — two erasures that start identical drift, and the one that drifts is the
+one nobody drives. The preview is byte-for-byte the owner's, so an admin acting
+on a request reads what that person would have read.
+
+It takes a written request of real length, the word CLOSE, and a box that
+arrives unticked, because after it runs the email, the name and the number are
+gone and the audit row is the only lasting evidence it was asked for. That row
+holds the user id, the admin and the reason, and no identity at all: an audit
+trail that keeps what the erasure removed defeats the erasure it audits.
+
+The suspend toggle could have resurrected a closed account. Sign-in would still
+have refused it, but the admin screen would have shown it as active and the
+operator would have believed it.
+
+Falsification rescued a guard that looked redundant: without it, an admin
+closing their own account is still refused, but refused with advice to delete
+their own row from the database — the one action the tombstone design exists to
+prevent.
+
+42 + 42 drive checks, both drives promoting their own admin so nothing is
+skipped for want of a credential. And the admin screens were accessibility
+audited for the first time: 17 portal pages to 27."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -591,7 +627,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-3])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-4])[.]'"
 else
   echo "Nothing to push."
 fi
