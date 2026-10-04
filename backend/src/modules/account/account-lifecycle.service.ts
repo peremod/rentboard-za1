@@ -385,6 +385,21 @@ export class AccountLifecycleService {
       // profiles. The documents behind them were already deleted at review
       // time — only outcomes ever persisted, and now not even those.
       tx.verificationRequest.deleteMany({ where: { userId } }),
+
+      /**
+       * ⚠️ Contractor leads: the PERSON goes, the record stays — Phase 7k.
+       *
+       * A lead says a contractor's number was passed on, and it is the basis
+       * on which that contractor may be invoiced. Deleting it would destroy a
+       * third party's record of work we sent them, which is the same mistake
+       * as deleting the conversation; keeping the landlord id would retain
+       * personal information about somebody who asked to be forgotten.
+       *
+       * So the id is nulled and the lead is kept. The foreign key is already
+       * ON DELETE SET NULL, which handles a real row deletion; this handles the
+       * tombstone, where the row does not go anywhere.
+       */
+      tx.contractorLead.updateMany({ where: { landlordId: userId }, data: { landlordId: null } }),
       tx.tenantProfile.deleteMany({ where: { userId } }),
       tx.landlordProfile.deleteMany({ where: { userId } }),
 

@@ -38,6 +38,19 @@ import {
         </span>
       </div>
 
+      <!-- ⚠️ Said plainly, because it happens whether or not we mention it.
+           Pressing Call or WhatsApp records that we passed the number on — we
+           may charge the tradesperson for the introduction, never you. A
+           landlord finding that out some other way would be right to feel
+           something had been done behind their back, and POPIA s.18 requires
+           telling them what is collected and why in any case. -->
+      <p class="services-note muted">
+        When you press Call or WhatsApp we note that we passed the number on, so
+        we can ask the tradesperson for a referral fee. <strong>You are never
+        charged</strong> — listing rooms and taking applications stay free — and
+        we do not tell them which landlord it was.
+      </p>
+
       <div class="services-filter">
         <label>
           <span>Where is the work?</span>
@@ -106,9 +119,11 @@ import {
                 <div class="provider__actions">
                   <!-- tel: and wa.me, not an in-app message. The whole point is
                        to get the landlord onto the phone. -->
-                  <a class="btn btn-sm btn-primary" [href]="'tel:' + p.phone">📞 Call {{ p.phone }}</a>
+                  <a class="btn btn-sm btn-primary" [href]="'tel:' + p.phone"
+                     (click)="noteContact(p, 'call')">📞 Call {{ p.phone }}</a>
                   @if (p.whatsapp) {
-                    <a class="btn btn-sm btn-sage" [href]="waLink(p)" target="_blank" rel="noopener">
+                    <a class="btn btn-sm btn-sage" [href]="waLink(p)" target="_blank" rel="noopener"
+                       (click)="noteContact(p, 'whatsapp')">
                       WhatsApp {{ p.name }}
                     </a>
                   }
@@ -145,6 +160,7 @@ import {
          1280px — a line of text hundreds of characters long, which is the
          fourth item in CLAUDE.md's mobile list and just as wrong on a desktop.
          Found by measuring the rendered box, not by looking at the page. */
+      .services-note { font-size: 0.8rem; line-height: 1.7; max-width: 42rem; margin: 0 0 1rem; }
       .provider__note,
       .provider__checks,
       .provider__reg { max-width: 42rem; }
@@ -223,6 +239,24 @@ export class LandlordServices implements OnInit {
    * disagree about what counts as a check — and so the list is built from the
    * stored outcomes rather than from a sentence somebody wrote.
    */
+  /**
+   * Note that we handed this number over — Phase 7k.
+   *
+   * ⚠️ Fire and forget, deliberately. The landlord pressed Call: the dialler
+   * must open whether or not this write succeeds, so nothing waits on it and
+   * the error is swallowed. A failed bookkeeping request must never stand
+   * between somebody with a burst pipe and a plumber.
+   *
+   * Deduplicated server-side to one per landlord per day, so tapping twice
+   * while the phone rings does not record two.
+   */
+  protected noteContact(p: ServiceProvider, channel: 'call' | 'whatsapp') {
+    this.directory.recordLead(p.id, channel).subscribe({
+      next: () => {},
+      error: () => {},
+    });
+  }
+
   protected checks(p: ServiceProvider) {
     return checksFor(p);
   }

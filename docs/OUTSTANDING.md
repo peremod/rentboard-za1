@@ -545,6 +545,63 @@ step-up checks added later, and because the pattern to copy is here.
 
 ---
 
+## 16. 💰 Contractor lead fees: the record is built, collecting is your call
+
+Phase 7k built everything up to the money and stopped. This is the decision
+waiting on you, and it is a product decision rather than a technical one.
+
+### What the models forced
+
+**A contractor is not a user.** `ServiceProvider` has no `userId` and no email —
+a name, a phone number and the areas they cover. They cannot sign in, cannot
+see a bill, cannot accept terms and cannot dispute a charge. There was also no
+lead model at all, so nothing recorded that a number had been passed on.
+
+So the product now keeps the **record**: what was passed on, to whom, on what
+day, and what it comes to at a rate you set. **Nothing collects**, and the
+drives assert that — no `paid`/`invoiced`/`settled` column on a lead, and no
+`pay`/`invoice`/`checkout`/`charge` route under the services module.
+
+⚠️ This does **not** touch "free to list, free to apply": the money would come
+from a contractor receiving leads, a third party, never from a landlord listing
+a room or a tenant applying for one.
+
+### What you can do today, with no code
+
+1. **Set a rate.** Admin → Who to call → "Set what a lead costs". Per trade,
+   from a date. There is no default anywhere in the product and no number
+   suggested in the form, because the brief said not to assume pricing — until
+   you set one, leads are counted and deliberately not priced.
+2. **Record that a contractor agreed**, in their own words, on the same screen.
+   Nothing is billable without it: charging somebody for leads they never
+   agreed to receive is not defensible, and they have no account in which to
+   agree.
+3. **Read the table and invoice from it.** It reports leads priced, leads
+   counted-only, and what the priced ones come to. It says in its own words
+   that nothing has been invoiced or paid.
+
+### The three ways forward, and what each costs
+
+| | What it means | What it needs |
+|---|---|---|
+| **Stay here** | You invoice by hand from the admin screen. Works now | Nothing |
+| **Contractor accounts** | They sign in, see their leads, accept terms, dispute a charge, and pay | A portal, auth for a new kind of user, terms, a dispute path. The biggest piece of new product in the backlog |
+| **Charge per job, not per introduction** | Fairer, and what a contractor would prefer | The contractor has to tell us a job happened — which needs an account, so it is the row above plus a pricing change |
+
+⚠️ **A bill somebody cannot see is a bill they can reasonably refuse.** That is
+the real argument for contractor accounts, and it is why this stopped where it
+did rather than wiring PayFast to a phone number.
+
+### Also undecided
+
+`sponsoredUntil` has been on `ServiceProvider` since Phase 4 and **nothing
+reads it**. In a directory now captioned "names we have looked into", a paid
+placement needs a label saying it is one — otherwise the first sponsored entry
+jumps a queue that the page tells landlords is about trust. Worth settling
+before any money changes hands, not after.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash
@@ -635,6 +692,12 @@ node scripts/contractor-checks-drive.mjs # 22 checks — Phase 7j. The directory
 node scripts/contractor-checks-ui-drive.mjs # 41 checks — and the screen states
                                          # which checks exist rather than
                                          # asserting that someone checked
+node scripts/contractor-leads-drive.mjs  # 33 checks — Phase 7k. Leads recorded,
+                                         # priced only at a rate somebody set,
+                                         # and nothing that collects money
+node scripts/contractor-leads-ui-drive.mjs # 43 checks — the landlord is told
+                                         # they are never charged, and the admin
+                                         # screen says record, not invoice
 ```
 
 ⚠️ **Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` for the a11y drive.** Without them

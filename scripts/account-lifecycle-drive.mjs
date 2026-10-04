@@ -179,6 +179,21 @@ reviewsByLeaver >= 1
   ? ok('…and the landlord has written a review, saved rooms and a tenancy with rent on it')
   : bad('the review fixture did not insert — the survival check below would prove nothing');
 
+/**
+ * A contractor lead belonging to the leaver — Phase 7k.
+ *
+ * Inserted directly with an asserted precondition. The endpoint exists
+ * (POST /services/:id/lead) but it needs a LISTED provider, which needs a
+ * recorded phone check, which is a fixture this drive does not otherwise need —
+ * and a survival check whose setup silently failed proves nothing in either
+ * direction, which this file has already paid for once over saved_rooms.
+ */
+const leadProvider = q(`INSERT INTO service_providers (id, category, name, phone, whatsapp, areas, active, "phoneConfirmedAt", "createdAt", "updatedAt") VALUES (gen_random_uuid()::text, 'plumber', 'Lead Fixture Plumber ${S}', '+2782${String(S).padStart(7, '0').slice(0, 7)}', true, ARRAY['Tembisa'], true, now(), now(), now()) RETURNING id`);
+const leadId = q(`INSERT INTO contractor_leads (id, "providerId", "landlordId", channel, "leadDay", billable, "createdAt") VALUES (gen_random_uuid()::text, '${leadProvider}', '${leaver.id}', 'call', CURRENT_DATE, false, now()) RETURNING id`);
+Number(q(`SELECT COUNT(*) FROM contractor_leads WHERE id = '${leadId}'`)) === 1
+  ? ok('the leaver has a contractor lead against them (precondition, asserted)')
+  : bad('the contractor-lead fixture did not insert — the survival check below proves nothing');
+
 console.log('\n── 3. The preview tells them the truth, from their own rows ──');
 
 const preview = await apiCall(API, 'GET', '/api/account/deletion-preview', null, leaver.token);
@@ -359,6 +374,23 @@ const thread = await apiCall(API, 'GET', `/api/applications/${app.body.id}/messa
 thread.status === 200 && (thread.body ?? []).length === 2
   ? ok('and the tenant can still open the conversation and read all of it')
   : bad(`the tenant's thread returned ${thread.status} with ${(thread.body ?? []).length} message(s)`);
+
+/**
+ * ⚠️ Contractor leads — Phase 7k, asserted here because the erasure owns them.
+ *
+ * A lead records that a contractor's number was passed on, and it is what that
+ * contractor may be invoiced from. Deleting it would destroy a third party's
+ * record of work we sent them; keeping the landlord id would retain personal
+ * information about somebody who asked to be forgotten. So the row stays and
+ * the id is nulled, and both halves are checked — a drive that only asserted
+ * the row survived would pass with the person still named in it.
+ */
+Number(q(`SELECT COUNT(*) FROM contractor_leads WHERE id = '${leadId}'`)) === 1
+  ? ok('the contractor lead survives, because it is what a third party may be invoiced from')
+  : bad('closing the account destroyed a contractor lead the contractor may be billed for');
+q(`SELECT "landlordId" IS NULL FROM contractor_leads WHERE id = '${leadId}'`) === 't'
+  ? ok('…with the landlord’s identity removed from it')
+  : bad('the contractor lead still names the person who closed their account');
 
 console.log('\n── 7. A second attempt, and somebody else’s account ─────────');
 
