@@ -77,6 +77,45 @@ function monthStart(): Date {
  * three that exist and does not pretend to a fourth. When a maintenance log
  * lands, it adds a `kind` here and nothing else changes.
  */
+
+/**
+ * Where a room's rent lives — Phase 7d. The lease section is below it.
+ *
+ * ⚠️ Every item in this list used to point at `/landlord/yard#money` or
+ * `/landlord/yard#ending-soon`, and Phase 7b turned `/landlord/yard` into a
+ * REDIRECT to the properties list. A redirect drops the fragment, so the two
+ * most important buttons on the dashboard — "Mark it" on an unpaid month and
+ * "Decide on the lease" — landed a landlord on a list of addresses with no
+ * explanation. Nothing errored and no check covered it: the nav audit's unit is
+ * a route, and these paths are strings in the API rather than links in a
+ * template. scripts/nav-audit.mjs now resolves them too.
+ *
+ * `#ending-soon` was worse than stale — it was an id that existed on no screen
+ * at all, so even the un-redirected path could not have worked.
+ *
+ * 'ungrouped' is a real destination, not a placeholder: a landlord who never
+ * grouped their rooms has no property id, and the detail screen now accepts
+ * that word for exactly this reason.
+ */
+function moneyPath(propertyId: string | null | undefined): string {
+  return `/landlord/properties/${propertyId ?? 'ungrouped'}#money`;
+}
+
+/**
+ * The lease section, on the same screen.
+ *
+ * Two near-identical functions rather than one with a `section` parameter, and
+ * that is deliberate: `scripts/nav-audit.mjs` now resolves these paths and
+ * checks the fragment against the ids that exist in the app, and it can only do
+ * that if the fragment is a literal in the string. A parameterised version
+ * emitted `#${section}`, which the audit could only report as unverifiable —
+ * and a check that reports "cannot tell" about the exact thing it was written
+ * for is a check that will be switched off. Six lines to keep it honest.
+ */
+function leasePath(propertyId: string | null | undefined): string {
+  return `/landlord/properties/${propertyId ?? 'ungrouped'}#ending-soon`;
+}
+
 @Injectable()
 export class LandlordInboxService {
   constructor(
@@ -191,7 +230,7 @@ export class LandlordInboxService {
       roomTitle: r.room.title,
       daysUntil: r.daysUntilEmpty,
       actionLabel: r.reason === 'notice_given' ? 'Get it back on the board' : 'Decide on the lease',
-      actionPath: '/landlord/yard#ending-soon',
+      actionPath: leasePath(r.room.propertyId),
     }));
   }
 
@@ -214,7 +253,7 @@ export class LandlordInboxService {
       select: {
         id: true,
         tenant: { select: { fullName: true } },
-        room: { select: { title: true } },
+        room: { select: { title: true, propertyId: true } },
         rentPeriods: {
           where: { periodStart: start },
           select: { id: true, status: true, tenantDisputedAt: true, tenantNote: true },
@@ -242,7 +281,7 @@ export class LandlordInboxService {
           roomTitle: t.room.title,
           daysUntil: null,
           actionLabel: 'Look at the month',
-          actionPath: '/landlord/yard#money',
+          actionPath: moneyPath(t.room.propertyId),
         });
         continue;
       }
@@ -262,7 +301,7 @@ export class LandlordInboxService {
           roomTitle: t.room.title,
           daysUntil: null,
           actionLabel: 'Mark it',
-          actionPath: '/landlord/yard#money',
+          actionPath: moneyPath(t.room.propertyId),
         });
       }
     }

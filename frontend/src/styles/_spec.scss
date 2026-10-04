@@ -509,6 +509,16 @@ img{display:block;max-width:100%}
 .dash-section{margin-bottom:2rem}
 .dash-section-title{font-size:1rem;font-weight:700;color:var(--ink);margin-bottom:1rem}
 
+/* Phase 7d — the dashboard home, in sentences.
+   Here rather than in the component because LandlordDashboard has no scoped
+   styles on purpose: a scoped rule is more specific than this file and than
+   _responsive.scss, so it would survive the breakpoints and break them. */
+.dash-starts{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem}
+.dash-starts__note{font-size:.75rem;color:var(--slate)}
+.dash-week{line-height:1.7;margin:0 0 .75rem;max-width:42rem;color:var(--ink2)}
+.dash-week--nudge{font-size:.85rem;color:var(--slate)}
+.app-week{font-size:.75rem;color:var(--slate);margin-top:.15rem}
+
 /* ═══ APP CARD ═══ */
 .app-card{
   background:var(--card);border:1px solid var(--border);

@@ -51,6 +51,15 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
  * "who is in, who is out, who has not paid" — and splitting it across two
  * pages would mean checking both every month.
  */
+/**
+ * The path segment that means "the rooms that are in no property".
+ *
+ * A word rather than a uuid because it is not an entity — there is no
+ * `Property` row for ungrouped rooms and inventing one would force structure on
+ * a landlord who was promised they did not need it.
+ */
+const UNGROUPED = 'ungrouped';
+
 @Component({
   selector: 'app-yard',
   standalone: true,
@@ -81,6 +90,16 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
              They live on /landlord/properties. -->
         <p class="yard-back"><a routerLink="/landlord/properties">← My properties</a></p>
 
+        @if (isUngrouped()) {
+          <!-- Said plainly, because somebody who arrived here from a task
+               button needs to know which rooms they are looking at. -->
+          <p class="muted yard-ungrouped-note">
+            These are your rooms that are not grouped under a property. Their
+            rent and their paperwork work exactly the same; grouping is only for
+            setting the house rules and the shared facilities once per address.
+          </p>
+        }
+
         <div class="yard-totals">
           <div class="yard-total">
             <strong>{{ one.roomCount }}</strong><span>{{ one.roomCount === 1 ? 'room' : 'rooms' }}</span>
@@ -98,15 +117,25 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
         <!-- Add a room HERE, with this property already chosen — the brief asks
              for exactly this, and it is where grouping is won or lost: a
              landlord made to re-type the suburb does not come back to do it. -->
-        <div class="yard-detail-actions">
-          <a class="btn btn-primary" routerLink="/landlord/rooms/new"
-             [queryParams]="{ propertyId: one.property!.id }">
-            + Add a room to this property
-          </a>
-          <button type="button" class="btn btn-outline" (click)="editShared(one.property!)">
-            Edit this property
-          </button>
-        </div>
+        <!-- Guarded on the group's property: the ungrouped view has none,
+             and a non-null assertion on it would have put the word
+             "undefined" into the wizard's query string. -->
+        @if (one.property; as prop) {
+          <div class="yard-detail-actions">
+            <a class="btn btn-primary" routerLink="/landlord/rooms/new"
+               [queryParams]="{ propertyId: prop.id }">
+              + Add a room to this property
+            </a>
+            <button type="button" class="btn btn-outline" (click)="editShared(prop)">
+              Edit this property
+            </button>
+          </div>
+        } @else {
+          <div class="yard-detail-actions">
+            <a class="btn btn-primary" routerLink="/landlord/rooms/new">+ List another room</a>
+            <a class="btn btn-outline" routerLink="/landlord/properties">Group these into a property</a>
+          </div>
+        }
 
         <ng-container [ngTemplateOutlet]="yardTpl"
                       [ngTemplateOutletContext]="{ $implicit: one }"/>
@@ -177,51 +206,10 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
           }
         </div>
 
-        <!--
-          The reminder window, where rent already is.
-
-          PATCH /properties/rent/settings has existed since rent tracking
-          shipped and nothing in the UI ever called it: the grace period is
-          per landlord precisely because a month-end wage and a SASSA payment
-          date want different windows, and a landlord could neither set it nor
-          turn reminders off. The API was there, the service method was there,
-          and no screen used either.
-        -->
-        <section class="dash-section rent-reminders">
-          <h2 class="dash-section-title">Rent reminders</h2>
-          <p class="muted">
-            When a month is marked unpaid, we message the tenant once — after
-            this many days from the 1st. Set it to 0 to send nothing at all;
-            you can still record what was paid and what was not.
-          </p>
-          <div class="yard-new__row">
-            <label for="grace-days">
-              Days after the 1st
-              <input id="grace-days" type="number" min="0" max="28" [(ngModel)]="graceDays"
-                     name="graceDays"/>
-            </label>
-            <button type="button" class="btn btn-primary" [disabled]="savingGrace()"
-                    (click)="saveGraceDays()">
-              {{ savingGrace() ? 'Saving…' : 'Save' }}
-            </button>
-          </div>
-          @if (graceSaved()) {
-            <p class="muted" role="status">
-              @if (graceDays === 0) {
-                Reminders are off. Nothing is sent to your tenants.
-              } @else {
-                Saved — a reminder goes out {{ graceDays }}
-                {{ graceDays === 1 ? 'day' : 'days' }} after the 1st.
-              }
-            </p>
-          }
-          @if (graceError()) { <p class="field-error" role="alert">{{ graceError() }}</p> }
-          <p class="muted">
-            Reminders go to verified numbers only. A number typed into a
-            profile has not been checked, and "your rent is unpaid" sent to
-            whoever holds that number is not a message we will send.
-          </p>
-        </section>
+        <!-- The reminder window used to be here, in the landlord-wide view
+             that Phase 7b left without a route. It is on /landlord/properties
+             now, which is where the brief said the landlord-wide things belong
+             and, more to the point, where a landlord can actually reach it. -->
       }
 
       <!-- Order on this screen: what needs DECIDING, then the figures, then the
@@ -242,29 +230,51 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
            The basis line is not decoration. It says which rent months are
            counted, because a figure whose rules are invisible is one someone
            plans around and is wrong about. -->
-      @if (summary(); as sum) {
+      @if (money(); as m) {
         <section class="dash-section" id="money">
           <h2 class="dash-section-title">This month</h2>
 
+          <!-- ⚠️ Scoped to the property this screen is about — Phase 7d.
+               It was the landlord's PORTFOLIO total, rendered here unchanged, so
+               opening one of four yards showed the rent and the spend of all
+               four under that yard's name. The comment at the top of the scoped
+               branch had already written down why that must not happen ("a
+               four-property total shown inside one property is the kind of
+               half-true number this project keeps having to take back out") and
+               the section it was about sat outside the branch it described. -->
+          <p class="muted money-scope">{{ m.scope }}</p>
+
           <div class="stat-row">
             <div class="stat-box">
-              <div class="val">{{ sum.totalRentCents | zarCents: 'exact' }}</div>
+              <div class="val">{{ m.rentCents | zarCents: 'exact' }}</div>
               <div class="lbl">Rent marked paid</div>
             </div>
-            <div class="stat-box">
-              <div class="val">{{ sum.totalExpenseCents | zarCents: 'exact' }}</div>
-              <div class="lbl">Spent</div>
-            </div>
-            <div class="stat-box">
-              <div class="val" [class.stat-warn]="sum.netCents < 0">{{ sum.netCents | zarCents: 'exact' }}</div>
-              <div class="lbl">Left over</div>
-            </div>
+            @if (m.expenseCents !== null) {
+              <div class="stat-box">
+                <div class="val">{{ m.expenseCents | zarCents: 'exact' }}</div>
+                <div class="lbl">Spent</div>
+              </div>
+              <div class="stat-box">
+                <div class="val" [class.stat-warn]="m.netCents! < 0">{{ m.netCents | zarCents: 'exact' }}</div>
+                <div class="lbl">Left over</div>
+              </div>
+            }
           </div>
 
-          <p class="muted money-basis">{{ sum.rentBasis }}</p>
-          @if (sum.ungroupedRentCents > 0) {
+          @if (m.expenseCents === null) {
+            <!-- An expense is recorded against a property, so there is no
+                 figure to show here rather than a zero. A zero would read as
+                 "you spent nothing", which is a different claim. -->
             <p class="muted">
-              {{ sum.ungroupedRentCents | zarCents: 'exact' }} of that rent is on rooms not in a property, so the
+              Expenses are recorded against a property, so there is nothing to
+              total for rooms that are not in one.
+            </p>
+          }
+
+          <p class="muted money-basis">{{ money()!.basis }}</p>
+          @if (!scoped() && money()!.ungroupedRentCents > 0) {
+            <p class="muted">
+              {{ money()!.ungroupedRentCents | zarCents: 'exact' }} of that rent is on rooms not in a property, so the
               per-yard rows below add up to less than the total.
             </p>
           }
@@ -580,12 +590,29 @@ export class Yard implements OnInit {
 
   protected readonly dash = this.properties.dashboard;
 
-  /** The one group this screen shows when it is scoped to a property. */
+  /**
+   * The one group this screen shows when it is scoped to a property.
+   *
+   * ⚠️ `'ungrouped'` is a real destination, not a sentinel hack — Phase 7d.
+   *
+   * Phase 7b turned `/landlord/yard` into a redirect, and the only screen that
+   * renders a room's rent, its lease paperwork and the expenses against it is
+   * this one, reached as `/landlord/properties/:propertyId`. A landlord who
+   * never grouped their rooms has no property id, so for them that screen had
+   * no address at all: the properties list sent their ungrouped card to the
+   * dashboard, and the task inbox's "Mark it" button sent them to the list.
+   * Grouping is optional by design (Phase 7b insisted on it), so it cannot be
+   * the price of reaching your own rent records.
+   */
   protected readonly scoped = computed(() => {
     const id = this.propertyId();
     if (!id) return null;
+    if (id === UNGROUPED) return this.dash()?.ungrouped ?? null;
     return this.dash()?.properties.find((g) => g.property?.id === id) ?? null;
   });
+
+  /** True when this screen is showing the rooms that are in no property. */
+  protected readonly isUngrouped = computed(() => this.propertyId() === UNGROUPED);
   protected readonly loading = signal(true);
   protected readonly busy = signal(false);
   protected readonly creating = signal(false);
@@ -616,10 +643,6 @@ export class Yard implements OnInit {
   protected newProvince = '';
 
   /** Mirrors the saved value, so the box shows what is actually being applied. */
-  protected graceDays = 3;
-  protected readonly savingGrace = signal(false);
-  protected readonly graceSaved = signal(false);
-  protected readonly graceError = signal<string | null>(null);
 
   // ── Shared living, and bulk relist ────────────────────────────────────────
   protected readonly editing = signal<string | null>(null);
@@ -629,6 +652,54 @@ export class Yard implements OnInit {
 
   // ── Expenses ──────────────────────────────────────────────────────────────
   protected readonly summary = signal<ExpenseSummary | null>(null);
+
+  /**
+   * "This month", for whatever this screen is actually about — Phase 7d.
+   *
+   * One computed rather than three branches in the template: the figures, the
+   * sentence that says whose they are, and whether an expense total exists at
+   * all have to move together, and a template deciding each separately is a
+   * template that will show one property's rent under another's name.
+   *
+   * `expenseCents` is null rather than 0 for ungrouped rooms, because an
+   * expense hangs off a property and "you spent nothing" is a different claim
+   * from "there is nothing to total".
+   */
+  protected readonly money = computed(() => {
+    const sum = this.summary();
+    if (!sum) return null;
+
+    const id = this.propertyId();
+    if (id && id !== UNGROUPED) {
+      const row = sum.properties.find((p) => p.propertyId === id);
+      return {
+        scope: `For ${row?.name ?? 'this property'} only.`,
+        rentCents: row?.rentCents ?? 0,
+        expenseCents: row?.expenseCents ?? 0,
+        netCents: row?.netCents ?? 0,
+        basis: sum.rentBasis,
+        ungroupedRentCents: sum.ungroupedRentCents,
+      };
+    }
+    if (id === UNGROUPED) {
+      return {
+        scope: 'For your rooms that are not in a property.',
+        rentCents: sum.ungroupedRentCents,
+        expenseCents: null as number | null,
+        netCents: null as number | null,
+        basis: sum.rentBasis,
+        ungroupedRentCents: sum.ungroupedRentCents,
+      };
+    }
+    return {
+      scope: 'Across everything you let.',
+      rentCents: sum.totalRentCents,
+      expenseCents: sum.totalExpenseCents as number | null,
+      netCents: sum.netCents as number | null,
+      basis: sum.rentBasis,
+      ungroupedRentCents: sum.ungroupedRentCents,
+    };
+  });
   protected readonly openExpenses = signal<string | null>(null);
   protected readonly expenses = signal<Expense[]>([]);
   protected readonly loadingExpenses = signal(false);
@@ -682,10 +753,8 @@ export class Yard implements OnInit {
   private reload() {
     this.loading.set(true);
     this.properties.loadDashboard().subscribe({
-      next: (d) => {
-        this.loading.set(false);
-        this.graceDays = d.rentGraceDays;
-      },
+      // The payload lands in PropertiesService.dashboard, which `dash` reads.
+      next: () => this.loading.set(false),
       error: (err) => {
         this.loading.set(false);
         this.error.set(err?.error?.message ?? 'Could not load your property.');
@@ -693,26 +762,6 @@ export class Yard implements OnInit {
     });
   }
 
-  protected saveGraceDays() {
-    const days = Number(this.graceDays);
-    if (!Number.isInteger(days) || days < 0 || days > 28) {
-      this.graceError.set('Pick a whole number of days between 0 and 28.');
-      return;
-    }
-    this.graceError.set(null);
-    this.graceSaved.set(false);
-    this.savingGrace.set(true);
-    this.properties.setGraceDays(days).subscribe({
-      next: () => {
-        this.savingGrace.set(false);
-        this.graceSaved.set(true);
-      },
-      error: (err) => {
-        this.savingGrace.set(false);
-        this.graceError.set(err?.error?.message ?? 'Could not save that.');
-      },
-    });
-  }
 
   /** First of the current month, matching how the API normalises a period. */
   private thisMonth(): string {

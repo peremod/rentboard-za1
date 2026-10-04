@@ -1,7 +1,7 @@
 import {
   ChangeDetectionStrategy, Component, OnInit, computed, inject, input, signal,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { TaskRows } from '../task-rows/task-rows';
 import { LandlordInboxService } from '../../../core/services/landlord-inbox.service';
 import {
   InboxItem, InboxKind, LandlordHealth, LandlordInbox,
@@ -45,7 +45,7 @@ const ICONS: Record<InboxKind, string> = {
 @Component({
   selector: 'app-landlord-inbox',
   standalone: true,
-  imports: [RouterLink],
+  imports: [TaskRows],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (items().length) {
@@ -62,31 +62,12 @@ const ICONS: Record<InboxKind, string> = {
           </h3>
         }
 
-        <ul class="inbox-list">
-          @for (item of items(); track item.kind + item.entityId) {
-            <li class="inbox-row" [class.inbox-row--urgent]="isOverdue(item)">
-              <span class="inbox-icon" aria-hidden="true">{{ icon(item.kind) }}</span>
-              <span class="inbox-body">
-                <span class="inbox-title">{{ item.title }}</span>
-                @if (item.roomTitle) {
-                  <span class="inbox-meta">{{ item.roomTitle }}</span>
-                }
-                @if (item.detail) {
-                  <span class="inbox-detail">{{ item.detail }}</span>
-                }
-              </span>
-              <!-- aria-label, because "Mark it" repeated down a list tells a
-                   screen-reader user nothing about WHICH one. The visible label
-                   stays short; the accessible name carries the context. -->
-              <a class="btn btn-sm btn-outline inbox-action"
-                 [routerLink]="pathOf(item)"
-                 [fragment]="fragmentOf(item)"
-                 [attr.aria-label]="item.actionLabel + ': ' + item.title">
-                {{ item.actionLabel }}
-              </a>
-            </li>
-          }
-        </ul>
+        <!-- The rows themselves are shared with the tenant side — Phase 7d.
+             See TaskRows for why there is one copy of this markup and not two.
+             The application_waiting kind counts days WAITED, which is negative
+             by construction, so it must not read as overdue. -->
+        <app-task-rows [items]="items()" [icons]="icons"
+                       [waitingKinds]="['application_waiting']"/>
       </section>
     }
 
@@ -112,31 +93,8 @@ const ICONS: Record<InboxKind, string> = {
   `,
   styles: [
     `
-      .inbox-list { list-style: none; margin: 0; padding: 0; }
-      .inbox-row {
-        align-items: flex-start;
-        border-bottom: 1px solid var(--line);
-        display: flex;
-        gap: 0.7rem;
-        padding: 0.7rem 0;
-      }
-      .inbox-row:last-child { border-bottom: 0; }
-      /* A left edge, not colour alone — the same information is in the text. */
-      .inbox-row--urgent { border-left: 3px solid var(--warn, #B4541F); padding-left: 0.6rem; }
-      .inbox-icon { flex: 0 0 auto; font-size: 1.05rem; line-height: 1.5; }
-      .inbox-body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1 1 auto; }
-      .inbox-title { font-weight: 600; }
-      .inbox-meta, .inbox-detail { font-size: 0.85rem; opacity: 0.8; }
-      .inbox-action { flex: 0 0 auto; white-space: nowrap; }
       .health-summary { line-height: 1.7; margin: 0; }
       .health-note { font-size: 0.85rem; margin-top: 0.4rem; }
-
-      /* On a phone the action wraps under the text rather than squeezing the
-         sentence into two words a line. */
-      @media (max-width: 30rem) {
-        .inbox-row { flex-wrap: wrap; }
-        .inbox-action { margin-left: 1.75rem; }
-      }
     `,
   ],
 })
@@ -168,19 +126,6 @@ export class LandlordInboxPanel implements OnInit {
     });
   }
 
-  icon(kind: InboxKind) { return ICONS[kind]; }
-
-  /** Already past, so the row earns an edge. Null days are never overdue. */
-  isOverdue(item: InboxItem) {
-    return item.kind !== 'application_waiting' && item.daysUntil !== null && item.daysUntil < 0;
-  }
-
-  /** The path without its fragment — routerLink and fragment are separate inputs. */
-  pathOf(item: InboxItem) { return item.actionPath.split('#')[0]; }
-
-  /** The fragment, or undefined. Lands the landlord on the section, not the page top. */
-  fragmentOf(item: InboxItem): string | undefined {
-    const [, fragment] = item.actionPath.split('#');
-    return fragment || undefined;
-  }
+  /** Passed to the shared rows; the vocabulary is this role's, the markup is not. */
+  readonly icons = ICONS as Record<string, string>;
 }

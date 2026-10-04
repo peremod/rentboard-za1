@@ -40,6 +40,7 @@ import { join, resolve, dirname, relative } from 'node:path';
 
 const ROOT = resolve(dirname(new URL(import.meta.url).pathname), '..');
 const FE = join(ROOT, 'frontend/src/app');
+const BE = join(ROOT, 'backend/src');
 
 let problems = 0;
 let warnings = 0;
@@ -56,6 +57,8 @@ function walk(dir, out = []) {
   return out;
 }
 const FILES = walk(FE);
+/** The API's own files, for the action paths it emits — see section 6. */
+const BE_FILES = walk(BE);
 const read = (f) => readFileSync(f, 'utf8');
 const rel = (f) => relative(FE, f);
 
@@ -509,10 +512,167 @@ for (const item of allNavItems) {
 }
 ok(`${compared} nav item(s) compared against the heading of the page or section they open`);
 
+// ── 6. Paths the API hands the browser ───────────────────────────────────
+console.log('\n── API action paths ────────────────────────────────────────');
+
+/**
+ * Destinations that come from the SERVER, not from a template — Phase 7d.
+ *
+ * ⚠️ This section exists because of a break it would have caught. The landlord
+ * task inbox — the dashboard's top section, the list of things needing doing —
+ * emits each row's destination as a string from `LandlordInboxService`. Phase 7b
+ * turned `/landlord/yard` into a redirect, and those strings still said
+ * `/landlord/yard#money` and `/landlord/yard#ending-soon`. A redirect DROPS the
+ * fragment, so the two most important buttons on the dashboard put a landlord on
+ * a list of addresses with no explanation of why.
+ *
+ * Nothing caught it. Sections 2 and 4 above read templates and route tables, and
+ * these paths are in neither: they are string literals in the API. So they are
+ * read here, resolved against the same route table, and held to one extra rule
+ * that templates are held to as well below — a fragment on a route that only
+ * redirects can never arrive.
+ *
+ * Interpolated segments become `:param`, because `/landlord/properties/${id}`
+ * is the same claim about the route table as `/landlord/properties/:id`.
+ */
+const API_PATHS = [];
+
+/**
+ * One pattern per quote style, and that is the whole point.
+ *
+ * ⚠️ Twice now a single pattern written as `[^'"`\n]*` — "anything that is not
+ * a quote" — has made this harvester silently blind. `moneyPath` returns
+ * `/landlord/properties/${propertyId ?? 'ungrouped'}#money`, which contains a
+ * single quote INSIDE a template literal, so the combined character class
+ * rejected the one string this section was written to check. It reported four
+ * paths, all green, and said nothing about the two that matter.
+ *
+ * The exclusion set must be the DELIMITER only. Hence three patterns.
+ */
+const QUOTED = [
+  { open: '`', re: /return\s+`(\/[^`\n]*)`/g, attr: /actionPath:\s*`([^`\n]*)`/g },
+  { open: "'", re: /return\s+'(\/[^'\n]*)'/g, attr: /actionPath:\s*'([^'\n]*)'/g },
+  { open: '"', re: /return\s+"(\/[^"\n]*)"/g, attr: /actionPath:\s*"([^"\n]*)"/g },
+];
+
+for (const file of BE_FILES) {
+  const src = read(file);
+  for (const { re, attr } of QUOTED) {
+    // A destination written straight onto the item.
+    for (const m of src.matchAll(new RegExp(attr.source, 'g'))) {
+      API_PATHS.push({ raw: m[1], file });
+    }
+    // The helper form: a small function that returns the path.
+    for (const m of src.matchAll(new RegExp(re.source, 'g'))) {
+      if (/#/.test(m[1]) || /^\/(landlord|tenant|account|admin)\//.test(m[1])) {
+        API_PATHS.push({ raw: m[1], file });
+      }
+    }
+  }
+}
+
+/** Every `id="..."` in the app, so a fragment can be checked for a target. */
+const SECTION_IDS = new Set();
+for (const file of FILES) {
+  for (const m of read(file).matchAll(/\bid="([a-z0-9-]+)"/g)) SECTION_IDS.add(m[1]);
+}
+
+let apiChecked = 0;
+let apiFragments = 0;
+const apiSeen = new Set();
+for (const { raw, file } of API_PATHS) {
+  // `${...}` → a parameter. The route table matches a segment, not a value.
+  const normalised = raw.replace(/\$\{[^}]*\}/g, ':param');
+  const { path, fragment } = split(normalised);
+  const key = `${normalised}|${file}`;
+  if (apiSeen.has(key)) continue;
+  apiSeen.add(key);
+  apiChecked++;
+
+  const route = resolves(path);
+  if (route === null) {
+    fail(`the API hands the browser '${raw}', which matches no route (${relative(ROOT, file)})`);
+    continue;
+  }
+  if (!fragment) continue;
+  apiFragments++;
+
+  // The rule that catches the Phase 7b break: a redirect cannot carry a
+  // fragment through, so the landing page never scrolls to the section and the
+  // person is left at the top of somewhere they did not ask for.
+  if (redirects.has(route)) {
+    fail(
+      `the API hands the browser '${raw}', but '${route}' only redirects — a redirect drops the fragment, `
+      + `so nobody ever reaches #${fragment} (${relative(ROOT, file)})`,
+    );
+    continue;
+  }
+  if (fragment === ':param') {
+    fail(
+      `the API builds a fragment by interpolation in ${relative(ROOT, file)} ('${raw}'), so this check `
+      + 'cannot tell which section it means. Write the fragment as a literal — see moneyPath/leasePath.',
+    );
+    continue;
+  }
+  if (!SECTION_IDS.has(fragment)) {
+    fail(`the API hands the browser '${raw}', and no screen has id="${fragment}" (${relative(ROOT, file)})`);
+  }
+}
+
+/**
+ * The harvester's own smoke alarm.
+ *
+ * The API is known to emit fragment paths — the landlord task inbox's rows are
+ * built on them. If none is found, the regexes have stopped matching rather
+ * than the problem having gone away, which is exactly how this section was
+ * blind twice over. Reported as a failure, not a note.
+ */
+if (apiFragments === 0) {
+  fail(
+    'no API path with a fragment was found at all. The landlord task inbox emits two, '
+    + 'so this harvester has stopped matching rather than the paths having gone away.',
+  );
+}
+// Worded as what was READ, not as a verdict: an earlier version printed "none
+// points a fragment at a redirect" on the same run as two failures saying
+// exactly that, because the line ran unconditionally. A summary line that
+// contradicts the findings above it is how a reader learns to skip both.
+ok(`${apiChecked} path(s) emitted by the API checked against the route table, ${apiFragments} of them with a fragment`);
+
+/**
+ * The app's own fragment links, held to the same two rules.
+ *
+ * Both forms: `routerLink="/x#frag"` written into a template, and the nav
+ * items' separate `fragment:` property — which is most of them, since half the
+ * landlord nav names a section of the dashboard rather than a page of its own.
+ * Reading only the first form would check almost nothing.
+ */
+let fragmentLinks = 0;
+const fragmentTargets = [
+  ...links.map((l) => ({ where: rel(l.file), raw: l.raw, ...split(l.raw) })),
+  ...allNavItems
+    .filter((i) => i.fragment && !i.disabled)
+    .map((i) => ({ where: i.surface, raw: `${i.path}#${i.fragment}`, path: i.path, fragment: i.fragment })),
+];
+
+for (const t of fragmentTargets) {
+  if (!t.fragment) continue;
+  const route = resolves(t.path);
+  if (route === null) continue;   // already reported above
+  fragmentLinks++;
+  if (redirects.has(route)) {
+    fail(`${t.where} links to '${t.raw}', but '${route}' only redirects — the fragment is dropped`);
+  } else if (!SECTION_IDS.has(t.fragment)) {
+    fail(`${t.where} links to '${t.raw}', and no screen has id="${t.fragment}"`);
+  }
+}
+ok(`${fragmentLinks} link(s) with a fragment checked the same way`);
+
 // ── Summary ─────────────────────────────────────────────────────────────
 console.log('\n════════════════════════════════════════════════════════════');
 if (problems === 0 && warnings === 0) {
-  console.log('  Every nav link resolves, every screen is reachable, every label agrees.');
+  console.log('  Every nav link resolves, every screen is reachable, every label agrees,');
+  console.log('  and every path the API hands the browser lands on a section that exists.');
 } else {
   console.log(`  ${problems} problem(s), ${warnings} label warning(s)`);
 }

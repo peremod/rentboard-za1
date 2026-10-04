@@ -3286,6 +3286,116 @@ check "a tenant cannot open the landlord inbox" 403 "$STATUS" "$BODY"
 req GET /api/landlord/health "" ""
 check "nor can a stranger read portfolio health" 401 "$STATUS" "$BODY"
 
+# ⚠️ Phase 7d. Every row's destination comes from the API as a string, and
+# /landlord/yard became a REDIRECT in v1.87.0 — which drops the fragment, so
+# "Mark it" and "Decide on the lease" landed a landlord on a list of addresses.
+# scripts/nav-audit.mjs resolves these statically now; this is the runtime half.
+req GET /api/landlord/inbox "" "$LTOKEN"
+if echo "$BODY" | jq -e '.items | any(.actionPath | startswith("/landlord/yard"))' >/dev/null 2>&1; then
+  red "  FAIL  a task button still points at /landlord/yard, which only redirects"; FAIL=$((FAIL+1))
+else
+  green "  PASS  no task button points at /landlord/yard, a redirect since v1.87.0"; PASS=$((PASS+1))
+fi
+
+# ── The tenant's side of the same list (Phase 7d) ──────────────────────────
+#
+# The brief asks for the task inbox in BOTH portals. The tenant dashboard
+# opened on three bare numbers, so an acceptance waiting on an answer, an
+# unread message and a month the landlord had not recorded were each only
+# visible on a different screen.
+head_ "Tenant task inbox"
+
+req GET /api/tenant-inbox "" "$TTOKEN"
+check "a tenant can read their own task list" 200 "$STATUS" "$BODY"
+if echo "$BODY" | jq -e 'has("items") and has("counts")' >/dev/null 2>&1; then
+  green "  PASS  it carries both the list and the per-kind counts"; PASS=$((PASS+1))
+else
+  red "  FAIL  tenant inbox shape: $(echo "$BODY" | head -c 200)"; FAIL=$((FAIL+1))
+fi
+if echo "$BODY" | jq -e '.items | all(has("actionPath") and has("actionLabel") and has("urgency"))' >/dev/null 2>&1; then
+  green "  PASS  every row carries its own action and its urgency"; PASS=$((PASS+1))
+else
+  red "  FAIL  a tenant row is missing actionPath/actionLabel/urgency"; FAIL=$((FAIL+1))
+fi
+# ⚠️ Mastande does not handle the money and has not checked whether it arrived.
+# A tenant who paid in cash on the 1st being told by an app that they are in
+# arrears is the one accusation this product must never make.
+if echo "$BODY" | jq -e '[.items[] | select(.kind == "rent_unrecorded")] | all((.title + " " + (.detail // "")) | test("you have not paid|arrears|overdue"; "i") | not)' >/dev/null 2>&1; then
+  green "  PASS  no rent row tells a tenant they have not paid — only that it is not recorded"; PASS=$((PASS+1))
+else
+  red "  FAIL  a rent row accuses the tenant: $(echo "$BODY" | jq -c '[.items[] | select(.kind == "rent_unrecorded")][0]')"; FAIL=$((FAIL+1))
+fi
+
+# 200-and-empty, not 403: a LANDLORD rents somewhere too, and a role guard here
+# would hide their own lease and their own messages from them. The scoping is
+# what keeps one person's tasks out of another's, so that is what is checked.
+req GET /api/tenant-inbox "" "$LTOKEN"
+check "a landlord may ask for theirs as a tenant" 200 "$STATUS" "$BODY"
+req GET /api/tenant-inbox "" ""
+check "a stranger cannot" 401 "$STATUS" "$BODY"
+
+# ── This week's views (Phase 7d) ───────────────────────────────────────────
+#
+# ⚠️ rooms.viewCount is a LIFETIME integer, so the UX spec's own example
+# sentence — "Your room has been viewed 47 times this week" — had no data under
+# it: a room posted in June could show 200 views without one of them being this
+# month, which is the only question a landlord with an empty room is asking.
+# room_view_days is new; what matters is that it counts the right things.
+head_ "This week's views"
+
+req GET /api/rooms/my-rooms "" "$LTOKEN"
+check "the landlord's own room list" 200 "$STATUS" "$BODY"
+if echo "$BODY" | jq -e 'all(has("viewsLast7Days"))' >/dev/null 2>&1; then
+  green "  PASS  every room carries a weekly figure — 0 included, so 'nobody looked' is not 'we do not know'"; PASS=$((PASS+1))
+else
+  red "  FAIL  a room has no viewsLast7Days: $(echo "$BODY" | jq -c '[.[] | {id, viewsLast7Days}] | .[0:3]')"; FAIL=$((FAIL+1))
+fi
+
+if [[ -n "$ROOM_ID" ]]; then
+  BEFORE=$(echo "$BODY" | jq -r --arg id "$ROOM_ID" '[.[] | select(.id == $id) | .viewsLast7Days][0] // "none"')
+  # The landlord's own look must not count. A landlord refreshing their listing
+  # to see how it looks being reported back as interest is a lie about demand.
+  req GET "/api/rooms/$ROOM_ID" "" "$LTOKEN"
+  sleep 1
+  req GET /api/rooms/my-rooms "" "$LTOKEN"
+  OWN=$(echo "$BODY" | jq -r --arg id "$ROOM_ID" '[.[] | select(.id == $id) | .viewsLast7Days][0] // "none"')
+  if [[ "$OWN" == "$BEFORE" ]]; then
+    green "  PASS  the landlord opening their OWN room does not count as a view  ($OWN)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  a landlord's own look was counted: $BEFORE → $OWN"; FAIL=$((FAIL+1))
+  fi
+
+  req GET "/api/rooms/$ROOM_ID" "" "$TTOKEN"
+  sleep 1
+  req GET /api/rooms/my-rooms "" "$LTOKEN"
+  AFTER=$(echo "$BODY" | jq -r --arg id "$ROOM_ID" '[.[] | select(.id == $id) | .viewsLast7Days][0] // "none"')
+  if [[ "$AFTER" == "$((OWN + 1))" ]]; then
+    green "  PASS  somebody else opening it counts as one  ($OWN → $AFTER)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  a visitor's view was not counted: $OWN → $AFTER"; FAIL=$((FAIL+1))
+  fi
+else
+  skipped "this week's view counting — no room was created earlier in this run"
+fi
+
+# ── Rent reminders (Phase 7d) ──────────────────────────────────────────────
+#
+# ⚠️ This control's own code comment records that it was built because
+# PATCH /properties/rent/settings had existed since rent tracking shipped with
+# no screen calling it. Phase 7b then left the screen it was given without a
+# route, so it was unreachable again. The reachability is checked on a rendered
+# page by scripts/dashboard-ui-drive.mjs; this is the data behind it.
+req PATCH /api/properties/rent/settings '{"rentGraceDays":0}' "$LTOKEN"
+check "reminders can be switched off entirely" 200 "$STATUS" "$BODY"
+req GET /api/properties/dashboard "" "$LTOKEN"
+if [[ "$(echo "$BODY" | jq -r '.rentGraceDays')" == "0" ]]; then
+  green "  PASS  and the dashboard reports the real 0, so the box cannot show a default over it"; PASS=$((PASS+1))
+else
+  red "  FAIL  dashboard reports rentGraceDays $(echo "$BODY" | jq -c '.rentGraceDays') after setting 0"; FAIL=$((FAIL+1))
+fi
+req PATCH /api/properties/rent/settings '{"rentGraceDays":3}' "$LTOKEN"
+check "and a real window round-trips" 200 "$STATUS" "$BODY"
+
 # ── Landlord survey (Phase 0) ──────────────────────────────────────────────
 #
 # The survey is seeded by prisma/seed.ts, so a database seeded without it

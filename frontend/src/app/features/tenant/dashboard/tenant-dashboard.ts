@@ -18,32 +18,35 @@ import { SavedSearch } from '../../../core/models/alerts.model';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { Room } from '../../../core/models/room.model';
 import { RoomCard } from '../../../shared/components/room-card/room-card';
+import { TenantInboxPanel } from '../../../shared/components/tenant-inbox/tenant-inbox';
 import { tenantNav } from '../tenant-nav';
 
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, MessageThread, PortalShell, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel],
+  imports: [
+    RouterLink, ZarCentsPipe, MessageThread, PortalShell, RoomCard, ReviewPrompt,
+    DisputePanel, ReferralPanel, TenantInboxPanel,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems()" roleLabel="Tenant" avatarColour="var(--sage)" pageTitle="Your dashboard">
 
-      @if (shortlistedCount() > 0) {
-        <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
-          🎉
-          <span>
-            You've been <strong>shortlisted</strong> for
-            {{ shortlistedCount() }} {{ shortlistedCount() === 1 ? 'room' : 'rooms' }}.
-            Message the landlord to arrange a viewing.
-          </span>
-        </div>
-      }
+      <!-- The dashboard's question, answered first — Phase 7d.
+           This is the Phase 5a task-inbox concept on the tenant side, which the
+           brief asks for in BOTH portals. It renders nothing when nothing needs
+           doing, so a tenant who is up to date is not shown an empty queue.
+           headingLevel 2: it sits directly under the shell's page h1. -->
+      <app-tenant-inbox [headingLevel]="2"/>
 
-      <div class="stat-row">
-        <div class="stat-box"><div class="val">{{ activeApplications().length }}</div><div class="lbl">Applications</div></div>
-        <div class="stat-box"><div class="val">{{ shortlistedCount() }}</div><div class="lbl">Shortlisted</div></div>
-        <div class="stat-box"><div class="val">{{ pendingCount() }}</div><div class="lbl">Awaiting reply</div></div>
-      </div>
+      <!-- ⚠️ This replaced a shortlisted banner and three bare numbers — Phase 7d.
+           The boxes read "3 / 1 / 2" under "Applications", "Shortlisted" and
+           "Awaiting reply", where the second and third add up to the first —
+           so a tenant could not tell whether the three overlapped or summed,
+           and none of them said what to do about any of it. Being shortlisted
+           is now a row in the list above, with the action on it, because that
+           is a thing needing an answer rather than a figure to admire. -->
+      <p class="dash-week">{{ applicationSummary() }}</p>
 
       <app-review-prompt/>
 
@@ -652,6 +655,55 @@ export class TenantDashboard implements OnInit {
 
   pendingCount() {
     return this.activeApplications().filter((a) => a.status === 'pending' || a.status === 'viewed').length;
+  }
+
+  /** Opened by the landlord but not answered. A different thing from unopened. */
+  seenCount() {
+    return this.activeApplications().filter((a) => a.status === 'viewed').length;
+  }
+
+  /**
+   * Where the tenant's applications stand, as a sentence — Phase 7d.
+   *
+   * Built here rather than in the template because the wording has to change
+   * with the data, which is the same reason the landlord's health paragraph is
+   * built beside its numbers.
+   *
+   * Two things it is careful about. It distinguishes "nobody has opened it yet"
+   * from "the landlord has read it and not answered", because those feel
+   * entirely different to the person waiting and the raw statuses were the only
+   * place that difference was visible. And it does not count accepted or
+   * shortlisted applications into "waiting": those are in the list above with
+   * an action on them, and counting them twice is how a number stops being
+   * read.
+   */
+  applicationSummary(): string {
+    const live = this.activeApplications().length;
+    if (live === 0) {
+      return this.applications().length === 0
+        ? 'You have not applied for anything yet. Browsing is free and so is applying.'
+        : 'None of your applications are still open. Browsing is free and so is applying.';
+    }
+
+    const unopened = this.pendingCount() - this.seenCount();
+    const seen = this.seenCount();
+    const parts = [`You have ${live} application${live === 1 ? '' : 's'} open.`];
+
+    if (unopened > 0) {
+      parts.push(
+        `${unopened} ${unopened === 1 ? 'has' : 'have'} not been opened by the landlord yet.`,
+      );
+    }
+    if (seen > 0) {
+      parts.push(
+        `${seen} ${seen === 1 ? 'has been read' : 'have been read'} and not answered — ` +
+        'you can message them to ask.',
+      );
+    }
+    if (unopened === 0 && seen === 0) {
+      parts.push('Everything open has had a reply, so there is nothing to chase.');
+    }
+    return parts.join(' ');
   }
 
   /** Human-readable status, matching the spec's pill labels. */

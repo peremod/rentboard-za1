@@ -140,7 +140,7 @@ configuration problem, not a routing one.
 
 ## 5. Staging migrations — before any deploy
 
-Twenty migrations are in the repo. How many are unapplied on staging depends on
+Twenty-three migrations are in the repo. How many are unapplied on staging depends on
 when it was last migrated, so **ask rather than assume**:
 
 ```bash
@@ -176,6 +176,9 @@ Full context: `docs/RUNBOOK.md` § Staging.
 | `20260929064000_landlord_storefront` | Adds four nullable/defaulted columns + a unique index. Additive. |
 | `20260929090000_phone_login_identity` | Makes `users.email` nullable, adds an email-or-phone CHECK, and a **partial** unique index on verified phones. Prisma reports that index as drift on `migrate dev` — do not let it remove it. |
 | `20261003080000_phone_signup` | Creates `phone_signups`. Purely additive: no existing column, index or constraint is touched, so no downtime window is needed. |
+| `20261003170000_sublet_listings` | Adds `listerType` and `subletCheckedAt` to rooms, a `roomId` to verification requests, the three household enums and their Property columns, and a `sublet_right` verification type. Additive. |
+| `20261003220000_property_address_line` | One nullable column on `properties`. Landlord-private; never in a public payload. |
+| `20261004090000_room_view_days` | Creates `room_view_days` (roomId + day + counter). Purely additive, and **it starts empty** — so for the first seven days after the deploy the dashboard honestly says "nobody has looked at your rooms in the last seven days" for rooms that were in fact being viewed before it existed. `rooms.viewCount`, the lifetime figure, is untouched. There is no backfill because there is nothing to backfill from: per-day view data has never been recorded. |
 
 **If skipped:** the API 500s on whichever endpoint needs a missing column.
 
@@ -434,7 +437,7 @@ gets built accordingly.
 ADMIN_EMAIL=<seeded admin> ADMIN_PASSWORD=<their password> \
   WHATSAPP_APP_SECRET=<the API's own> \
   RESEND_WEBHOOK_SECRET=<the API's own> \
-  ./scripts/smoke-test.sh          # 497 passed, 9 skipped without the three
+  ./scripts/smoke-test.sh          # 511 passed, 9 skipped without the three
                                    # secrets above; set them and five of those
                                    # become checks, leaving 4 named skips
 #
@@ -475,10 +478,25 @@ node scripts/messages-inbox-drive.mjs    # 43 checks — Phase 7c. Includes the 
                                          # is from, and that readAt is written
 node scripts/messages-inbox-ui-drive.mjs # 33 checks — which channel a reply
                                          # leaves by, said out loud
-node scripts/a11y-drive.mjs              # 25 pages WITH CONTENT on them. Before
+node scripts/a11y-drive.mjs              # 26 pages WITH CONTENT on them. Before
                                          # Phase 7c it seeded nothing and so
                                          # audited every portal screen empty
+node scripts/dashboard-drive.mjs         # 35 checks — Phase 7d. "Viewed 47 times
+                                         # this week" now has data under it, and
+                                         # the task buttons point somewhere real
+node scripts/dashboard-ui-drive.mjs      # 29 checks — that the task buttons
+                                         # ARRIVE, not just that the string is
+                                         # right, and that a landlord who never
+                                         # grouped anything can reach their rent
 ```
+
+⚠️ **Rate limiting is the binding constraint on running these back to back.**
+`/auth/register` allows 60 an hour and `/auth/login` 30 per 15 minutes, counted
+in memory per instance (v1.86.0). The dashboard UI drive alone needs nine
+accounts, so a full sweep exhausts the window — and the failure reads as
+`register failed: 429` or `still on /auth/login`, which looks like an auth bug.
+`registerUser` names the limiter and the remedy now. **Restart the API to clear
+the counters** between sweeps; they are in memory, so a restart is enough.
 
 ⚠️ **Two traps in this container, both of which cost a cycle.** `ng serve` and
 `tsc -w` both stop watching silently, so a fix can appear not to work while the
