@@ -709,6 +709,40 @@ disabling the guard, dropping the constraint and leaking the admin id: seven
 failures, including \"2 live providers have no phone check — the claim on the
 screen is false for them\"."
 
+tag_if_missing "v1.96.0" "acacd212e2e1574bc2fcd16d5abf2f960e466ba7" "2026-10-04 20:12:46 +0000" "v1.96.0 — Phase 7k: contractor leads recorded, collecting left to a decision
+
+The brief said to inspect the contractor, lead and user models before
+implementing payments. Inspecting them answered the question: a contractor is
+not a user. ServiceProvider has no userId and no email — a name, a phone number
+and the areas they cover — so they cannot sign in, see a bill, accept terms or
+dispute a charge. There was no lead model at all either.
+
+So this builds the record and stops: what was passed on, to whom, on what day,
+and what it comes to at a rate somebody agreed. Invoicing happens outside the
+product, by a person. Collecting inside it needs contractor accounts first,
+which is a product and the owner's decision — recorded as Outstanding 16 with
+the three ways forward.
+
+The drives assert the stop: no paid, invoiced or settled column on a lead, and
+no pay, invoice, checkout or charge route. It does not touch free-to-list,
+free-to-apply: the money would come from a third party receiving leads.
+
+There is no price anywhere in the code — not a constant, a default, an env var,
+an API example or a form placeholder. The rate table ships empty, and an
+unpriced lead is counted and marked not billable, which the admin screen says
+in words rather than showing R0.00. Rates are per category, effective-dated and
+insert-only; the fee is snapshotted so a price rise cannot re-price history, and
+billable is stored so agreeing terms in November cannot make October billable.
+
+The landlord is told that pressing Call records the hand-over, that they are
+never charged, and that we do not say which landlord it was. Their identity is
+kept for dedupe and disputes, never shown to the contractor, and nulled when
+they close their account.
+
+33 + 43 drive checks, falsified by inventing a default price and by folding the
+two lead counts into one: four failures. Three faults in the drives themselves
+are recorded, including one that only passed on a clean database."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -724,7 +758,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-5])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-6])[.]'"
 else
   echo "Nothing to push."
 fi
