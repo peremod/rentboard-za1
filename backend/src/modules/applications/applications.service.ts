@@ -7,6 +7,7 @@ import { TenanciesService } from '../tenancies/tenancies.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
+import { ApplicantInboxDto } from './dto/inbox.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
 import { sanitizeText } from '../../common/utils/sanitize.util';
 
@@ -203,6 +204,119 @@ export class ApplicationsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /**
+   * Every applicant across everything this lister lets — Phase 7c.
+   *
+   * ── Why this exists
+   *
+   * Applicants were reachable only at `rooms/:roomId/applicants`, so a landlord
+   * with six rooms had six screens to check and no way to know which of them
+   * was worth opening. The brief calls it out, and the yard screen's
+   * "N waiting" badges were the only hint anybody had.
+   *
+   * ── What "unread" means, since the column it rests on was never written
+   *
+   * `Message.readAt` has existed since messaging shipped and nothing ever set
+   * it — another column whose name promised something no code did. It is set
+   * now, when the recipient opens the thread (MessagesService.getThread), which
+   * is what makes this orderable at all.
+   *
+   * So an application is unread when the landlord has never opened it
+   * (`status: pending`) OR the applicant has sent something the landlord has
+   * not read. That is the question a landlord is asking — "what is waiting on
+   * me" — rather than a literal per-row boolean.
+   *
+   * ── Ordering, not filtering
+   *
+   * `sortBy: 'unread'` puts those first and keeps the rest below. A landlord
+   * who has read everything must still see their applicants; a view that
+   * emptied itself once they were up to date would read as "nobody applied".
+   */
+  async inbox(landlordId: string, filters: ApplicantInboxDto) {
+    const { roomId, propertyId, status, sortBy = 'newest' } = filters;
+
+    /**
+     * Scoped by the lister in the WHERE, through the room — never by a guard
+     * alone. `ListerGuard` admits any lister and `LandlordGuard` admits every
+     * admin, so the only thing that keeps one landlord's applicants out of
+     * another's inbox is this clause.
+     */
+    const applications = await this.prisma.application.findMany({
+      where: {
+        archivedAt: null,
+        room: {
+          landlordId,
+          ...(roomId ? { id: roomId } : {}),
+          ...(propertyId ? { propertyId } : {}),
+        },
+        ...(status ? { status } : {}),
+      },
+      include: {
+        tenant: {
+          select: {
+            id: true, fullName: true, avatarPath: true,
+            // The badge only. What it rests on is fetched per applicant when
+            // the landlord opens one: requesting personal information about
+            // people whose applications may never be opened is exactly what
+            // POPIA minimality is about.
+            tenantProfile: { select: { hasPassport: true } },
+          },
+        },
+        room: {
+          select: {
+            id: true, title: true, status: true, rentCents: true, relistCount: true,
+            property: { select: { id: true, name: true } },
+          },
+        },
+        messages: {
+          select: { id: true, senderId: true, readAt: true, createdAt: true, channel: true, body: true },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const rows = applications
+      // A relisted room's previous cycle is history, not an applicant. The
+      // `archivedAt: null` above catches most of it; a room relisted inside the
+      // same request window can still carry one, so the cycle is checked too.
+      .filter((a) => a.cycle === a.room.relistCount)
+      .map((a) => {
+        const fromTenant = a.messages.filter((m) => m.senderId === a.tenantId);
+        const unreadMessages = fromTenant.filter((m) => !m.readAt).length;
+        const last = a.messages[0] ?? null;
+        const { messages, ...rest } = a;
+        return {
+          ...rest,
+          messageCount: messages.length,
+          unreadMessages,
+          /** Never opened, or they have said something since you last looked. */
+          needsAttention: a.status === 'pending' || unreadMessages > 0,
+          lastMessage: last
+            ? {
+                body: last.body.slice(0, 140),
+                channel: last.channel,
+                createdAt: last.createdAt,
+                fromTenant: last.senderId === a.tenantId,
+              }
+            : null,
+        };
+      });
+
+    if (sortBy === 'unread') {
+      rows.sort((a, b) => {
+        if (a.needsAttention !== b.needsAttention) return a.needsAttention ? -1 : 1;
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
+    }
+
+    return {
+      data: rows,
+      total: rows.length,
+      needsAttention: rows.filter((r) => r.needsAttention).length,
+    };
   }
 
   /** Marks an application as viewed the first time a landlord opens it — idempotent, and emails the tenant only once. */

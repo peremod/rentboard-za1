@@ -48,6 +48,20 @@ export const LANDLORD_ROUTES: Routes = [
     pathMatch: 'full',
   },
   {
+    /**
+     * All applicants, across every room — Phase 7c.
+     *
+     * Declared BEFORE `rooms/:roomId/applicants` is not needed (the paths do
+     * not overlap), but it is listed next to it on purpose: this is the finder
+     * and that is the manager, and the next person to touch one should see the
+     * other.
+     */
+    path: 'applicants',
+    loadComponent: () =>
+      import('./applicants-inbox/applicants-inbox').then((m) => m.ApplicantsInbox),
+    title: 'All applicants — Mastande',
+  },
+  {
     path: 'rooms/:roomId/applicants',
     loadComponent: () => import('./applicants/applicants').then((m) => m.Applicants),
     title: 'Applicants — Mastande',

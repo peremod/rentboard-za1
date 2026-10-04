@@ -278,16 +278,70 @@ export class WhatsappService {
       return;
     }
 
-    const originalMessage = await this.prisma.message.findUnique({ where: { waMessageId: contextId } });
+    const originalMessage = await this.prisma.message.findUnique({
+      where: { waMessageId: contextId },
+      include: {
+        application: {
+          select: { id: true, tenantId: true, room: { select: { landlordId: true } } },
+        },
+      },
+    });
     if (!originalMessage) {
       this.logger.log(`Inbound WhatsApp reply references unknown wamid ${contextId} — ignoring`);
+      return;
+    }
+
+    /**
+     * Who actually sent this — Phase 7c.
+     *
+     * ⚠️ This was `senderId: originalMessage.senderId`, and that is the id of
+     * the person whose message we FORWARDED to WhatsApp — the tenant. So every
+     * reply a landlord typed into WhatsApp was stored in the thread as though
+     * the tenant had written it. The tenant then opened the conversation and
+     * read the landlord's answer attributed to themselves, and the landlord saw
+     * their own reply apparently coming from the applicant. Nothing errored, so
+     * nothing surfaced it; the only reason it is visible now is that Phase 7c
+     * builds an inbox that has to say who each message is from.
+     *
+     * The sender is resolved from the NUMBER the reply came from, which is the
+     * only trustworthy signal here: the landlord opted that number in, and
+     * LandlordWhatsappConfig maps it to their profile. A reply from any other
+     * number is dropped rather than guessed at — a webhook that can be made to
+     * write into somebody else's conversation by quoting a wamid is a hole, not
+     * a convenience.
+     */
+    const from = (message.from ?? entry?.contacts?.[0]?.wa_id ?? '').replace(/\D/g, '');
+    const config = from
+      ? await this.prisma.landlordWhatsappConfig.findFirst({
+          // Stored with a +, arriving without one. Compared on digits.
+          where: { phoneNumber: { endsWith: from.slice(-9) } },
+          select: { phoneNumber: true, landlord: { select: { userId: true } } },
+        })
+      : null;
+
+    const senderId = config?.landlord?.userId ?? null;
+    if (!senderId) {
+      this.logger.warn(
+        `Inbound WhatsApp reply from an unrecognised number for application ${originalMessage.applicationId} — dropped rather than attributed to a guess`,
+      );
+      return;
+    }
+
+    // And that person has to be in this conversation. A landlord replying to a
+    // quoted wamid from somebody else's thread would otherwise be written into
+    // it under their own name, which is worse than the bug above, not better.
+    const app = originalMessage.application;
+    if (senderId !== app.room.landlordId && senderId !== app.tenantId) {
+      this.logger.warn(
+        `WhatsApp reply from ${senderId} does not belong to application ${app.id} — dropped`,
+      );
       return;
     }
 
     await this.prisma.message.create({
       data: {
         applicationId: originalMessage.applicationId,
-        senderId: originalMessage.senderId,
+        senderId,
         channel: 'whatsapp',
         body: sanitizeText(message.text?.body ?? '[unsupported message type]'),
         waMessageId: message.id,

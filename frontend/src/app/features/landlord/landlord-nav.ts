@@ -2,6 +2,13 @@ import { PortalNavItem } from '../../shared/components/portal-shell/portal-shell
 
 /** Counts shown as badges. A screen that does not know one leaves it out. */
 export interface LandlordNavBadges {
+  /**
+   * Applicants WAITING ON THE LANDLORD — never opened, or they have said
+   * something since you last looked. Phase 7c narrowed it from "every
+   * application ever received", which never went down and so was never read.
+   * The definition is the server's, in `ApplicationsService.inbox`, so the two
+   * screens that draw this badge cannot disagree about it.
+   */
   applicants?: number;
   /** Rooms started and never published — Phase 7a. */
   drafts?: number;
@@ -38,24 +45,31 @@ export function landlordNav(badges: LandlordNavBadges = {}): PortalNavItem[] {
     // drafts clicked "My Rooms" and read "No rooms listed yet" while holding
     // three of them. The two names are now one, and Drafts has its own entry
     // below so the other case is reachable rather than inferred.
-    { label: 'Active listings', icon: '🏠', route: '/landlord/dashboard', fragment: 'active-listings', badge: badges.applicants },
+    { label: 'Active listings', icon: '🏠', route: '/landlord/dashboard', fragment: 'active-listings' },
     { label: 'Drafts', icon: '📝', route: '/landlord/dashboard', fragment: 'drafts', badge: badges.drafts },
-    // ⚠️ There was an "Applicants" item here pointing at #active-listings, and
-    // it was a promise the dashboard cannot keep: there is no applicants
-    // screen, and no section by that name — applicants are listed per room
-    // under Active listings, which is where you act on them. A nav label naming
-    // a destination that does not exist is the same defect as /landlord/billing
-    // was, one layer up: the link resolves and still takes you somewhere you
-    // did not ask for.
+    // ⚠️ History, because it explains the item below and the one after it.
+    // There was an "Applicants" item here pointing at #active-listings, and it
+    // was a promise the dashboard could not keep: there was no applicants
+    // screen, and no section by that name. Phase 7a therefore deleted it and
+    // moved the COUNT onto Active listings. Phase 7c built the screen, so the
+    // entry is back as "All applicants" below, with the count on it where it
+    // belongs; Active listings carries no badge any more, because two items
+    // showing the same number is how a landlord learns to read neither.
     //
-    // So the applicants COUNT moved onto Active listings (above), where they
-    // are, and this slot now points at the section that exists for the things
+    // This slot keeps pointing at the section that exists for the things
     // waiting on a landlord — applications first among them.
     { label: 'Needs you', icon: '👀', route: '/landlord/dashboard', fragment: 'needs-attention' },
-    // No messages screen exists. Threads live inside an application, reached
-    // from that application. `disabled` renders it greyed with a "Soon" chip,
-    // which is the truth; listing it as a destination was not.
-    { label: 'Messages', icon: '💬', route: '/landlord/dashboard', disabled: true },
+    // Phase 7c. Phase 7a DELETED an "Applicants" item from this nav because it
+    // pointed at a dashboard section of another name — a destination that did
+    // not exist. The entry is back because the destination is: one list across
+    // every room, which is the question a landlord with six of them actually
+    // has. The badge counts what is waiting on them, not everything ever sent.
+    { label: 'All applicants', icon: '📥', route: '/landlord/applicants', badge: badges.applicants },
+    // Phase 7c. Was `disabled` with a "Soon" chip, because until now threads
+    // lived only inside an application and there was no inbox to point at.
+    // There is now: /account/messages, one screen for both roles — see the
+    // route for why it is in /account rather than here.
+    { label: 'Messages', icon: '💬', route: '/account/messages' },
     // Phase 7b. Was "My property" → /landlord/yard, which was both singular for
     // a thing a landlord can have several of and a word ("yard") that appeared
     // nowhere else in the nav. The screen behind it is now a list of properties

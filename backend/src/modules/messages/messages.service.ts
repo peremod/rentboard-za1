@@ -26,10 +26,126 @@ export class MessagesService {
 
   async getThread(applicationId: string, userId: string) {
     const application = await this.getParticipantApplication(applicationId, userId);
+
+    /**
+     * Opening a thread marks the other side's messages read — Phase 7c.
+     *
+     * ⚠️ `Message.readAt` has been on the model since messaging shipped and
+     * NOTHING ever wrote it. A column called readAt that no code sets is the
+     * same defect as a `documentDeletedAt` that deletes nothing and a
+     * `MAX_ATTEMPTS` nobody reads: it tells the next person a feature exists.
+     * Any "unread" badge built on it would have counted every message ever
+     * sent, for ever.
+     *
+     * Only the OTHER party's messages: marking your own read is meaningless,
+     * and would make the unread count on the other side depend on whether you
+     * had looked at your own words.
+     *
+     * Not awaited for the read itself — the thread is returned either way. A
+     * failure here must not stop somebody reading their messages, and the worst
+     * case is a badge that stays up until the next time they open it.
+     */
+    this.prisma.message
+      .updateMany({
+        where: { applicationId: application.id, senderId: { not: userId }, readAt: null },
+        data: { readAt: new Date() },
+      })
+      .catch(() => {});
+
     return this.prisma.message.findMany({
       where: { applicationId: application.id },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  /**
+   * Every conversation this person is in, newest activity first — Phase 7c.
+   *
+   * ── Why it exists
+   *
+   * Messages were reachable only inside one application, at
+   * `applications/:applicationId/messages`. A landlord with six rooms and
+   * eleven applicants had seventeen places to look for "did anybody reply",
+   * and the brief asks for one. It serves both sides: a tenant with four
+   * applications had the same problem in miniature.
+   *
+   * ── Why the channel is in the payload
+   *
+   * Because the brief is right that replying in the wrong channel is a real
+   * confusion risk rather than an edge case. A tenant's message is forwarded to
+   * the landlord over WhatsApp; if the landlord replies there, the webhook
+   * threads it back and it lands here as `whatsapp`. So one conversation
+   * genuinely mixes channels, and the only way a landlord can tell where their
+   * last answer went is for the list to say so.
+   */
+  async inbox(userId: string) {
+    const applications = await this.prisma.application.findMany({
+      // Both sides, in one query: the landlord of the room, or the tenant who
+      // applied. Scoped in the WHERE, as everything here is.
+      where: {
+        OR: [{ tenantId: userId }, { room: { landlordId: userId } }],
+        messages: { some: {} },
+      },
+      select: {
+        id: true,
+        status: true,
+        archivedAt: true,
+        tenantId: true,
+        tenant: { select: { id: true, fullName: true, avatarPath: true } },
+        room: {
+          select: {
+            id: true, title: true, landlordId: true,
+            landlord: { select: { id: true, fullName: true, avatarPath: true } },
+          },
+        },
+        messages: {
+          select: { id: true, senderId: true, body: true, channel: true, createdAt: true, readAt: true },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    const threads = applications.map((a) => {
+      const iAmLandlord = a.room.landlordId === userId;
+      const other = iAmLandlord ? a.tenant : a.room.landlord;
+      const last = a.messages[0];
+      const unread = a.messages.filter((m) => m.senderId !== userId && !m.readAt).length;
+
+      return {
+        applicationId: a.id,
+        status: a.status,
+        /** A closed conversation stays readable; the UI says so rather than hiding it. */
+        closed: !!a.archivedAt || a.status === 'rejected' || a.status === 'withdrawn',
+        room: { id: a.room.id, title: a.room.title },
+        withName: other.fullName,
+        withAvatarPath: other.avatarPath,
+        iAmLandlord,
+        unread,
+        messageCount: a.messages.length,
+        lastMessage: {
+          body: last.body.slice(0, 160),
+          channel: last.channel,
+          createdAt: last.createdAt,
+          fromMe: last.senderId === userId,
+        },
+        /**
+         * Which channel the last thing anybody said arrived on, and whether the
+         * conversation has used more than one. The UI warns on the second case:
+         * a landlord who answered the last message in WhatsApp and is now
+         * typing here is about to send to a different place from the one they
+         * last used, and nothing else on the screen would tell them.
+         */
+        channelsUsed: [...new Set(a.messages.map((m) => m.channel))],
+      };
+    });
+
+    threads.sort((x, y) => y.lastMessage.createdAt.getTime() - x.lastMessage.createdAt.getTime());
+
+    return {
+      data: threads,
+      total: threads.length,
+      unreadThreads: threads.filter((t) => t.unread > 0).length,
+    };
   }
 
   async send(applicationId: string, senderId: string, dto: SendMessageDto) {

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Query, Get, Post, Body, Param, UseGuards, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ListerGuard } from '../../common/guards/lister.guard';
@@ -6,6 +6,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ApplicationsService } from './applications.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
+import { ApplicantInboxDto } from './dto/inbox.dto';
 
 @ApiTags('applications')
 @Controller('applications')
@@ -26,6 +27,25 @@ export class ApplicationsController {
   }
 
   // ── Landlord: applicant manager ──
+  /**
+   * Every applicant across everything you let — Phase 7c.
+   *
+   * Declared BEFORE `room/:roomId` deliberately: Nest matches routes in
+   * declaration order, and `inbox` would otherwise be read as a room id by the
+   * route above it and answer a 400 from ParseUUIDPipe.
+   */
+  @Get('inbox')
+  @UseGuards(ListerGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'All applicants across every room you let, filterable and sortable',
+    description:
+      'Applicants were per-room only, so a landlord with six rooms had six screens to check. Filter by room or property, sort newest or by what is waiting on you.',
+  })
+  inbox(@Query() filters: ApplicantInboxDto, @CurrentUser() user: { id: string }) {
+    return this.applicationsService.inbox(user.id, filters);
+  }
+
   @Get('room/:roomId')
   @UseGuards(ListerGuard)
   getForRoom(@Param('roomId', ParseUUIDPipe) roomId: string, @CurrentUser() user: { id: string }) {

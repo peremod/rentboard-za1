@@ -25,8 +25,11 @@ export function tenantNav(badges: TenantNavBadges = {}): PortalNavItem[] {
       label: 'Applications', icon: '📋', route: '/tenant/dashboard',
       fragment: 'your-applications', badge: badges.applications,
     },
-    // No messages screen exists; threads live inside an application.
-    { label: 'Messages', icon: '💬', route: '/tenant/dashboard', disabled: true },
+    // Phase 7c. Was `disabled` with a "Soon" chip. The inbox is at
+    // /account/messages — one screen for both roles, which matters most for a
+    // sub-lessor: a TENANT account that also lets a room has conversations on
+    // both sides, and a tenant-only inbox would show them half their messages.
+    { label: 'Messages', icon: '💬', route: '/account/messages' },
     { label: 'Browse rooms', icon: '🔍', route: '/' },
     { label: 'Rent', icon: '🧾', route: '/tenant/rent' },
     { label: "Renter's Passport", icon: '🪪', route: '/tenant/passport' },

@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { WhatsappDraftsService, WhatsappDraft } from '../../../core/services/whatsapp-drafts.service';
 import { NoticesService } from '../../../core/services/notices';
+import { ApplicationsService } from '../../../core/services/applications.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { DialogService } from '../../../core/services/dialog.service';
@@ -313,6 +314,7 @@ export class LandlordDashboard implements OnInit {
   private dialogs = inject(DialogService);
   private surveys = inject(SurveyService);
   notices = inject(NoticesService);
+  private applications = inject(ApplicationsService);
 
   /**
    * True for the one render after a room is marked let, which swaps the survey
@@ -326,10 +328,26 @@ export class LandlordDashboard implements OnInit {
 
   billingEnabled = BILLING_ENABLED;
 
+  /**
+   * How many applicants are waiting on this landlord — Phase 7c.
+   *
+   * ⚠️ This badge used to carry `totalApplicants()`, every application ever
+   * received. That number only goes up: a landlord who has dealt with all
+   * eleven of theirs still saw "11" beside the nav item for ever, and a badge
+   * that never clears is a badge people stop reading — at which point the one
+   * that matters is invisible too.
+   *
+   * It now means one thing, everywhere it is drawn: never opened, or they have
+   * said something since you last looked. The definition lives on the server in
+   * `ApplicationsService.inbox`, so the dashboard and the applicants screen
+   * cannot drift into two answers.
+   */
+  readonly applicantsWaiting = signal<number | undefined>(undefined);
+
   /** Computed so the Applicants and Notices badges track the live totals. */
   readonly navItems = computed<PortalNavItem[]>(() =>
     landlordNav({
-      applicants: this.totalApplicants(),
+      applicants: this.applicantsWaiting(),
       drafts: this.draftRooms().length,
       // Phase 7g. The badge is how the notices screen gets found at all, and
       // for a landlord with no email address it is the only indication that
@@ -362,6 +380,13 @@ export class LandlordDashboard implements OnInit {
 
     this.whatsappDrafts.load().subscribe({ error: () => {} });
     this.notices.refreshUnread().subscribe({ error: () => {} });
+    // The nav badge only. Left undefined on failure rather than set to 0: a
+    // zero would say "nothing is waiting on you", which is a different claim
+    // from "we could not find out".
+    this.applications.inbox({ sortBy: 'unread' }).subscribe({
+      next: (res) => this.applicantsWaiting.set(res.needsAttention),
+      error: () => {},
+    });
     this.roomsService.getLandlordRooms().subscribe({
       next: (rooms) => { this.rooms.set(rooms); this.loading.set(false); },
       error: () => this.loading.set(false),
