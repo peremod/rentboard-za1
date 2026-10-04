@@ -1,0 +1,51 @@
+-- Phase 7g: a person can put their account to sleep, or end it.
+--
+-- TWO columns, and the reason there are two is the whole design.
+--
+-- `users.isActive` already existed and is enforced on every sign-in path —
+-- password, magic link, refresh, phone OTP — with the message "Your account has
+-- been suspended. Please contact support." That is an ADMIN switch: it locks
+-- somebody out. It cannot be what a person uses to deactivate their own
+-- account, because an account you cannot sign into is an account you can never
+-- reactivate, and "contact support" is not a self-service control. Reusing it
+-- would have looked like one line of work and shipped a trapdoor.
+--
+-- So:
+--
+--   deactivatedAt  the owner's own pause. Sign-in still works — that is how you
+--                  come back. Listings come off the board, nothing is destroyed.
+--
+--   deletedAt      the end. The row becomes a TOMBSTONE rather than
+--                  disappearing, and that is not a softening of "permanent":
+--                  see below.
+--
+-- ── Why deletion does not DELETE the row
+--
+-- The foreign keys were read before this was designed, and a plain
+-- `DELETE FROM users` cascades into other people's records:
+--
+--   · rooms.landlordId CASCADE → every room goes, and from rooms so do OTHER
+--     tenants' applications, their saved_rooms, and the reviews they wrote.
+--   · applications.tenantId CASCADE → and from applications, messages — so
+--     deleting a tenant erases the LANDLORD's own side of the conversation.
+--   · tenancies CASCADE → and rent_periods with them. That is the record both
+--     parties rely on, and the tenant did not ask for it to go.
+--   · reviews.authorId CASCADE → a review this person WROTE about somebody
+--     else, which other people read when deciding where to live.
+--   · payments.userId CASCADE → a financial record.
+--
+-- POPIA s.24 gives a person the right to have THEIR personal information
+-- deleted. It does not give them the right to delete somebody else's, and it
+-- does not require destroying a transaction record that two parties share. So
+-- the personal information is erased — name, email, phone, photo, password,
+-- income, employment, documents — and the shared record is kept with the
+-- person's identity removed. The screen says exactly this before anything
+-- happens; a dialog that says "permanently delete" and leaves a named row
+-- behind would be the lie.
+ALTER TABLE "users" ADD COLUMN "deactivatedAt" TIMESTAMP(3);
+ALTER TABLE "users" ADD COLUMN "deletedAt"     TIMESTAMP(3);
+
+-- Both are read on every sign-in and on every public query that must not show a
+-- sleeping or ended account.
+CREATE INDEX "users_deactivatedAt_idx" ON "users"("deactivatedAt");
+CREATE INDEX "users_deletedAt_idx" ON "users"("deletedAt");

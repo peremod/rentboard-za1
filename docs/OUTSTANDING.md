@@ -431,6 +431,113 @@ gets built accordingly.
 
 ---
 
+## 13. ⚠️ Buttons are 34px, nearly everywhere — a decision, not a bug report
+
+Found by the new width checks in `scripts/account-lifecycle-ui-drive.mjs`, then
+measured across the public pages:
+
+| Screen (360px) | `.btn` under 44px | Heights seen |
+| --- | --- | --- |
+| `/` | 4 of 6 | 38, 40, 42px |
+| `/rooms` | 4 of 6 | 38, 40, 42px |
+| `/how-it-works` | 2 of 4 | 40, 42px |
+| `/pricing` | 3 of 5 | **32, 34px** — "List a room", "Create a landlord account" |
+| `/auth/login` | 0 of 2 | — |
+
+The base rule in `frontend/src/styles/_spec.scss:107` sets `padding: .55rem 1.2rem`,
+`font-size: .875rem` and `line-height: 1`, and **no `min-height`**. That computes
+to about 34px, under the 44px target of WCAG 2.5.8. Every button that clears it
+today does so because somebody wrote `min-height` by hand on that one button —
+`.nav-actions .btn` in `_responsive.scss:276` (the mobile header, fixed in
+v1.91.0) and `.btn-danger` on the close-account screen.
+
+Phase 7g fixed **its own** screen: `.ca-paused .btn, .dash-section > .btn` now
+carry 44px, because "Pause my account" and "Use my account again" measured 34px
+at all four widths and those buttons were built this phase. The drive asserts it
+at 360, 390, 768 and 1280.
+
+**Not fixed globally here, deliberately.** One line on `.btn` would raise every
+button in the app, which changes the vertical rhythm of every screen in the
+product — forms, cards, filter bars, the admin tables. That is its own change
+with the full drive suite behind it, not a footnote to a change about closing
+accounts. Say the word and it gets done as one, with the sweep.
+
+⚠️ Note how this was found: the previous version of that drive **computed** the
+smallest control height, including the pause button, and then never asserted it.
+The number was measured and discarded. Same family as a `MAX_ATTEMPTS` nothing
+reads.
+
+---
+
+## 14. `saved_rooms` is a table nothing writes to
+
+In the schema. Read in two places, deleted from in one, and **no create, no
+upsert, not one write** anywhere in the backend. Saved rooms are entirely
+`localStorage`, keyed per user id in `SavedRoomsService` — and that service's own
+comment claimed the opposite until this phase corrected it.
+
+So the model says the feature is server-side and it is not. The next person to
+read the schema will believe it, which is the same shape of defect as a
+`documentDeletedAt` that deleted nothing.
+
+It surfaced twice in Phase 7g:
+
+- `scripts/account-lifecycle-drive.mjs` first POSTed to `/rooms/:id/save` — a
+  route that does not exist. The row was never created, the survival check
+  passed against nothing, and the drive reported a product bug about a row that
+  had never been there. It now inserts the row directly **and asserts the
+  precondition**, because a negative check whose setup silently failed proves
+  nothing in either direction.
+- Closing an account cannot erase a person's real saved rooms, because they are
+  on their device. The close-account screen therefore clears every
+  `rb_saved_rooms*` key itself (`SavedRoomsService.clearDevice()`) and says so on
+  screen — otherwise somebody who closed their account would hand the next
+  person to pick up the phone the list of rooms they had been looking at.
+
+**Promoting it** is a create endpoint, an index, and a migration of everybody's
+device-local saves — not a line. **Removing it** is a migration and deleting the
+two reads. Either is fine; leaving a table in the schema that lies about the
+feature is not.
+
+---
+
+## 15. A wrong password used to log you out — fixed, and worth knowing why
+
+Phase 7g. `/auth/change-password`, `/auth/change-email` and `DELETE /account`
+answered **401** when the password typed INTO the form was wrong. The frontend's
+`errorInterceptor` reads a 401 on any non-auth endpoint as an expired access
+token: it refreshed the session silently, retried the request once, re-sent the
+same wrong password, got 401 again — and a second failure means what it says.
+"Your session has expired", session cleared, login page.
+
+So typing your own password wrong signed you out. The inline
+`Your current password is not correct.` written on the settings screen could
+never render, because the component was gone before it had the chance. Proven in
+a browser, not reasoned about:
+
+```
+URL AFTER WRONG CURRENT PASSWORD: /auth/login?returnUrl=%2Faccount%2Fsettings
+inline .field-error: []
+says session expired: true
+```
+
+Those refusals are **403** now — the request was authenticated, the supplied
+password is what was refused — plus an `INLINE_ERRORS` HttpContext token so a
+form that shows the message itself does not also get a modal over it. Driven in
+`scripts/account-lifecycle-ui-drive.mjs` sections 4 and 7, section 7 being the
+settings screen where it had actually shipped.
+
+⚠️ **The smoke suite had a check here and it could not fail.** Line 967 asserted
+401 for a wrong current password; line 974 asserted 401 for no auth at all. Both
+were 401, so the suite could not tell "the password you typed is wrong" from
+"you are not signed in" — the same thing the browser could not tell. They are
+403 and 401 now, and the pair is the check.
+
+**Nothing to do.** Listed because the same 401 is probably sitting on other
+step-up checks added later, and because the pattern to copy is here.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

@@ -389,6 +389,11 @@ const NOT_IN_NAV = {
   'tenant/sublet/:roomId/applicants': 'opened from that listing in the dashboard section',
   'admin/users/:id': 'opened from a row in the admin user list',
   'landlord/properties/:propertyId': 'opened by tapping a property card on /landlord/properties',
+  // Deliberately NOT a nav item. An irreversible action does not belong in a
+  // menu next to "Messages": it is a link at the foot of /account/settings,
+  // asserted by scripts/account-lifecycle-ui-drive.mjs section 1, which also
+  // checks the destructive button is not ON the settings screen itself.
+  'account/close': 'a link at the foot of /account/settings — not a menu item, by design',
 };
 
 const guardedAreas = ['landlord', 'tenant', 'admin', 'account'];

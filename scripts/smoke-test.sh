@@ -68,6 +68,23 @@ SKIP_REASONS=()
 # summary can name what did not run.
 skipped() { grey "  SKIP  $1"; SKIP=$((SKIP+1)); SKIP_REASONS+=("$1"); }
 
+# throttled <name> -> 0 if the last response was a 429, having SKIPPED the check
+#
+# ⚠️ For assertions that read $BODY instead of going through check().
+#
+# check() already skips a 429 and names the remedy. A hand-rolled `if` reading
+# a jq field does not: a 429 body has no field, so the assertion falls to its
+# else branch and reports a logic failure. Section 29 did exactly that — three
+# runs of this suite inside a minute spent the 20/min on
+# /api/referrals/validate, and the two checks around it reported "own code did
+# not validate" AND "unknown code validated", which cannot both be true. A
+# limiter doing its job read as the endpoint being broken in both directions.
+throttled() {
+  [[ "$STATUS" == "429" ]] || return 1
+  skipped "$1 — rate limited (429). Counted in memory: wait it out, or restart the API, and re-run"
+  return 0
+}
+
 # ── Derive ADMIN_TOKEN, so the admin sections actually run ─────────────────
 #
 # Seven sections of this suite are gated on ADMIN_TOKEN, and in practice nobody
@@ -958,14 +975,22 @@ check "rejects an invalid reset token" 400 "$STATUS" "$BODY"
 req POST /api/auth/reset-password '{"token":"whatever","newPassword":"weak"}'
 check "reset enforces password strength" 400 "$STATUS" "$BODY"
 
+# A wrong CURRENT password is 403, not 401, and these two checks are the pair
+# that proves it. Both were 401 before, so the suite could not tell "the
+# password you typed is wrong" from "you are not signed in" — and the browser
+# could not either: it refreshed the session, retried with the same wrong
+# password and logged the person out saying their session had expired.
 req POST /api/auth/change-password '{"currentPassword":"wrong","newPassword":"NewPass123"}' "$LTOKEN"
-check "change-password rejects a wrong current password" 401 "$STATUS" "$BODY"
+check "change-password rejects a wrong current password (403, not a lost session)" 403 "$STATUS" "$BODY"
 
 req POST /api/auth/change-password "{\"currentPassword\":\"$PASSWORD\",\"newPassword\":\"$PASSWORD\"}" "$LTOKEN"
 check "rejects reusing the same password" 400 "$STATUS" "$BODY"
 
 req POST /api/auth/change-password '{"currentPassword":"x","newPassword":"NewPass123"}'
 check "change-password requires auth" 401 "$STATUS"
+
+req POST /api/auth/change-email "{\"newEmail\":\"new-$$@example.com\",\"currentPassword\":\"wrong\"}" "$LTOKEN"
+check "change-email rejects a wrong password (403, not a lost session)" 403 "$STATUS" "$BODY"
 
 req POST /api/auth/change-email "{\"newEmail\":\"$TENANT_EMAIL\",\"currentPassword\":\"$PASSWORD\"}" "$LTOKEN"
 check "cannot move to an address already in use" 400 "$STATUS" "$BODY"
@@ -975,6 +1000,93 @@ check "cannot change to your own address" 400 "$STATUS" "$BODY"
 
 req POST /api/auth/confirm-email-change '{"token":"invalid"}'
 check "rejects an invalid confirmation token" 400 "$STATUS" "$BODY"
+
+
+# -- 17b. Pausing and ending an account (Phase 7g) -------------------------
+# A DEDICATED account, deliberately. Pausing $TTOKEN's tenant would hide a
+# person the rest of this file still asks questions about, and a suite whose
+# own setup changes the subject under a later section is how three false
+# failures got into this file already.
+#
+# NOTE the DELETE endpoint allows ten attempts per fifteen minutes, counted in
+# memory. This section spends four on refusals and never sends a valid one, so
+# the drives still have a budget.
+head_ "17b. Pausing and ending an account"
+
+CLOSER_EMAIL="closer+${STAMP}@mastande.test"
+req POST /api/auth/register \
+  "{\"email\":\"$CLOSER_EMAIL\",\"password\":\"$PASSWORD\",\"fullName\":\"Test Closer\",\"role\":\"TENANT\"}"
+check "register the account this section will pause" 201 "$STATUS" "$BODY"
+CTOKEN=$(echo "$BODY" | jq -r '.accessToken // empty')
+
+if [[ -z "$CTOKEN" ]]; then
+  skipped "pausing and ending an account — no token, so nothing below could be asked"
+else
+  req GET /api/account/deletion-preview "" "$CTOKEN"
+  check "the deletion preview answers" 200 "$STATUS" "$BODY"
+
+  # It must name what STAYS, not only what goes. A screen promising
+  # "permanently deleted" over a mechanism that keeps shared rows is the lie
+  # this endpoint exists to prevent.
+  if throttled "the preview names what is erased, what is KEPT and what stops"; then
+    :
+  elif echo "$BODY" | jq -e '(.kept | type) == "array" and (.erased | type) == "array" and (.stops | type) == "array"' >/dev/null 2>&1; then
+    green "  PASS  the preview names what is erased, what is KEPT and what stops"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the preview does not carry all three lists"; FAIL=$((FAIL+1))
+    grey "        $(echo "$BODY" | head -c 300)"
+  fi
+
+  req GET /api/account/deletion-preview
+  check "the preview needs a session" 401 "$STATUS"
+
+  req DELETE /api/account '{"confirm":"DELETE","understood":true}' "$CTOKEN"
+  check "closing an account without the password is refused" 400 "$STATUS" "$BODY"
+
+  # ⚠️ 403, not 401, and the number IS the check — a 401 is read by the browser
+  # as an expired token: it refreshes, retries with the same wrong password and
+  # logs the person out saying their session expired.
+  req DELETE /api/account '{"password":"not-the-one","confirm":"DELETE","understood":true}' "$CTOKEN"
+  check "a wrong password is 403, not a lost session" 403 "$STATUS" "$BODY"
+
+  req DELETE /api/account "{\"password\":\"$PASSWORD\",\"confirm\":\"yes\",\"understood\":true}" "$CTOKEN"
+  check "the typed word has to be DELETE" 400 "$STATUS" "$BODY"
+
+  # Absent, not false: a checkbox whose binding never fired ships as absent,
+  # and @Equals(true) refuses both.
+  req DELETE /api/account "{\"password\":\"$PASSWORD\",\"confirm\":\"DELETE\"}" "$CTOKEN"
+  check "an absent acknowledgement is refused, not read as false" 400 "$STATUS" "$BODY"
+
+  req POST /api/account/deactivate "" "$CTOKEN"
+  check "pausing an account answers" 200 "$STATUS" "$BODY"
+
+  # The check `isActive` could not satisfy. Pausing leaves isActive TRUE on
+  # purpose, because signing in is the only way back — reusing the admin
+  # suspension flag would have shipped an account nobody could reopen.
+  req POST /api/auth/login "{\"email\":\"$CLOSER_EMAIL\",\"password\":\"$PASSWORD\"}"
+  check "a paused person can still sign in — the only way back" 201 "$STATUS" "$BODY"
+  if throttled "…and the payload says the account is paused"; then
+    :
+  elif echo "$BODY" | jq -e '.user.deactivatedAt != null' >/dev/null 2>&1; then
+    green "  PASS  …and the payload says the account is paused, so the portal can offer to wake it"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the sign-in payload does not say the account is paused"; FAIL=$((FAIL+1))
+    grey "        $(echo "$BODY" | head -c 200)"
+  fi
+
+  req POST /api/account/reactivate "" "$CTOKEN"
+  check "waking it up answers" 200 "$STATUS" "$BODY"
+  # Rooms are NOT republished by waking up — one may have been let in the
+  # meantime — so the count has to be reported rather than silently omitted.
+  if throttled "…clears the pause and says how many rooms are still off the board"; then
+    :
+  elif echo "$BODY" | jq -e 'has("roomsStillPaused") and .deactivatedAt == null' >/dev/null 2>&1; then
+    green "  PASS  …clears the pause and says how many rooms are still off the board"; PASS=$((PASS+1))
+  else
+    red "  FAIL  reactivate did not clear the pause or did not report the paused rooms"; FAIL=$((FAIL+1))
+    grey "        $(echo "$BODY" | head -c 300)"
+  fi
+fi
 
 
 # -- 18. Safety reports ----------------------------------------------------
@@ -1787,18 +1899,23 @@ if [[ -n "$REF_CODE" ]]; then
   green "  PASS  code issued ($REF_CODE)"; PASS=$((PASS+1))
 
   req GET "/api/referrals/validate?code=$REF_CODE"
-  VALID=$(echo "$BODY" | jq -r '.valid')
-  if [[ "$VALID" == "true" ]]; then
-    green "  PASS  code validates publicly"; PASS=$((PASS+1))
+  if throttled "code validates publicly"; then
+    skipped "validate reveals only a display name — same 429"
   else
-    red "  FAIL  own code did not validate"; FAIL=$((FAIL+1))
-  fi
+    VALID=$(echo "$BODY" | jq -r '.valid')
+    if [[ "$VALID" == "true" ]]; then
+      green "  PASS  code validates publicly"; PASS=$((PASS+1))
+    else
+      red "  FAIL  own code did not validate (valid=$VALID)"; FAIL=$((FAIL+1))
+      grey "        $(echo "$BODY" | head -c 200)"
+    fi
 
-  # The validate response must not leak anything identifying.
-  if echo "$BODY" | jq -e 'has("ownerId") or has("email")' >/dev/null 2>&1; then
-    red "  FAIL  validate response leaks referrer identity"; FAIL=$((FAIL+1))
-  else
-    green "  PASS  validate reveals only a display name"; PASS=$((PASS+1))
+    # The validate response must not leak anything identifying.
+    if echo "$BODY" | jq -e 'has("ownerId") or has("email")' >/dev/null 2>&1; then
+      red "  FAIL  validate response leaks referrer identity"; FAIL=$((FAIL+1))
+    else
+      green "  PASS  validate reveals only a display name"; PASS=$((PASS+1))
+    fi
   fi
 
   # Referred signup, then qualification via a real action.
@@ -1818,7 +1935,9 @@ if [[ -n "$REF_CODE" ]]; then
   fi
 
   req GET "/api/referrals/validate?code=NONSENSE-XX"
-  if [[ "$(echo "$BODY" | jq -r '.valid')" == "false" ]]; then
+  if throttled "unknown code rejected"; then
+    :
+  elif [[ "$(echo "$BODY" | jq -r '.valid')" == "false" ]]; then
     green "  PASS  unknown code rejected"; PASS=$((PASS+1))
   else
     red "  FAIL  unknown code validated"; FAIL=$((FAIL+1))

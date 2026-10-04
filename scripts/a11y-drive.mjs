@@ -116,6 +116,11 @@ const LANDLORD_PAGES = [
   // landlord who never grouped anything reaches their rent through. The seed
   // below leaves this account with exactly that shape.
   '/landlord/properties/ungrouped',
+  // Phase 7g. A column of explanation and three controls, one of them
+  // irreversible — the contrast of the danger button and the association
+  // between the tick box and the sentence beside it are the whole safety of
+  // the screen, not a detail of it.
+  '/account/close',
 ];
 const TENANT_PAGES = [
   '/tenant/dashboard', '/tenant/rent', '/tenant/passport',

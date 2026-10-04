@@ -107,7 +107,22 @@ model User {
   /// extra index is left alone.
   phone             String?
   isVerified        Boolean   @default(false)
+  /// ⚠️ The ADMIN suspension switch, not a self-service control — Phase 7g.
+  ///
+  /// Every sign-in path refuses a false value with "Your account has been
+  /// suspended. Please contact support." A person deactivating their own
+  /// account must still be able to sign in, or they can never reactivate, so
+  /// that case uses `deactivatedAt` instead. Reusing this one would have
+  /// looked like a one-line feature and shipped a trapdoor.
   isActive          Boolean   @default(true)
+  /// The owner's own pause — Phase 7g. Sign-in still works; the account is off
+  /// the board and sends nothing. Null means live. Reversible by its nature.
+  deactivatedAt     DateTime?
+  /// The end — Phase 7g. The row stays as a TOMBSTONE with every personal
+  /// field erased, because `DELETE FROM users` cascades into other people's
+  /// rooms, applications, messages, tenancies, rent history and reviews. See
+  /// the migration for the full list and for why POPIA does not require that.
+  deletedAt         DateTime?
   /// 'email', 'magic_link', 'google', 'facebook', 'phone'. Kept as a string
   /// rather than an enum so adding a provider does not need a migration —
   /// 'phone' arrived in v1.85.1 and needed no schema change, which is the

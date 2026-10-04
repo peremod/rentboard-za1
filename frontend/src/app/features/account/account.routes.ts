@@ -31,5 +31,17 @@ export const ACCOUNT_ROUTES: Routes = [
     data: { pageTitle: 'Your messages' },
     title: 'Your messages — Mastande',
   },
+  {
+    /**
+     * Pausing or ending the account — Phase 7g.
+     *
+     * Its own route rather than a section under profile edits: the
+     * irreversible control should not sit one scroll below "change your name".
+     */
+    path: 'close',
+    loadComponent: () => import('./close-account/close-account').then((m) => m.CloseAccount),
+    data: { pageTitle: 'Your account' },
+    title: 'Your account — Mastande',
+  },
   { path: '', redirectTo: 'settings', pathMatch: 'full' },
 ];

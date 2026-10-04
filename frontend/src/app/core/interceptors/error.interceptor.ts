@@ -4,9 +4,12 @@ import { catchError, switchMap, throwError, of } from 'rxjs';
 import { Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 import { DialogService } from '../services/dialog.service';
+import { INLINE_ERRORS } from './inline-errors';
 
 /** Requests where a 401 must never trigger a silent-refresh attempt — refreshing off a failed refresh/login is how you build an infinite loop. */
 const AUTH_ENDPOINTS_NO_RETRY = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/google'];
+
+
 
 /**
  * Global HTTP error handler.
@@ -71,7 +74,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         return attemptSilentRefreshAndRetry(req, next, auth, router, dialogs);
       }
 
-      handleNonAuthError(err, dialogs);
+      if (!req.context.get(INLINE_ERRORS)) handleNonAuthError(err, dialogs);
       return throwError(() => err);
     }),
   );
@@ -118,9 +121,25 @@ function attemptSilentRefreshAndRetry(
 
 function handleNonAuthError(err: HttpErrorResponse, dialogs: DialogService) {
   switch (err.status) {
-    case 403:
-      dialogs.error("You don't have permission to do that.", 'Not allowed');
+    /**
+     * ⚠️ Use OUR message when there is one.
+     *
+     * 403 is also the honest code for a step-up check that failed — a wrong
+     * current password on a form, where the session is fine and the action is
+     * refused. Those used to be 401, which the branch above reads as an expired
+     * session: the retry re-sent the wrong password and the person was logged
+     * out and told their session had expired. Replacing a specific reason with
+     * "You don't have permission to do that." would be the same loss of
+     * information by a shorter route.
+     */
+    case 403: {
+      const msg = (err.error as any)?.message;
+      dialogs.error(
+        typeof msg === 'string' && msg ? msg : "You don't have permission to do that.",
+        'Not allowed',
+      );
       break;
+    }
     case 429:
       dialogs.error('Too many requests. Please wait a moment and try again.', 'Slow down');
       break;

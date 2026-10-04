@@ -2,6 +2,7 @@ import { Controller, Get, Header, Res } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PUBLIC_USER } from '../../common/prisma/account-visibility';
 
 /**
  * Locales that carry a URL prefix. Mirrors PREFIXED_LOCALES in
@@ -143,7 +144,7 @@ export class SeoController {
      * carries a real person's name and their live listings.
      */
     const storefronts = await this.prisma.landlordProfile.findMany({
-      where: { storefrontLive: true, slug: { not: null }, user: { isActive: true } },
+      where: { storefrontLive: true, slug: { not: null }, user: PUBLIC_USER },
       select: { slug: true, user: { select: { updatedAt: true } } },
       take: 20000,
     });

@@ -14,9 +14,20 @@ const ANON_KEY = `${KEY_PREFIX}:anon`;
  * merely a display bug, so storage is now keyed by user id and the in-memory
  * set is swapped whenever the signed-in user changes.
  *
- * PERSISTENCE: still device-local. There is no SavedRoom model in the schema
- * and no endpoint behind it, so saves do not follow a user across devices.
- * Promoting this to the backend is a join table plus two routes.
+ * PERSISTENCE: still device-local, and this note was out of date.
+ *
+ * ⚠️ There IS a `saved_rooms` table in the schema, and **nothing writes to
+ * it** — no create, no upsert, not one reference in the backend. It is read in
+ * two places and deleted from in one. So the schema says the feature is
+ * server-side and the feature is not, which is the same family of defect as a
+ * `documentDeletedAt` that deleted nothing: the next person to read the model
+ * will believe it. Recorded in docs/OUTSTANDING.md rather than fixed here,
+ * because promoting this is a create endpoint plus a migration of everybody's
+ * device-local saves, not a line.
+ *
+ * It matters for account deletion (Phase 7g): a person's real saved rooms are
+ * on their device, so closing the account cannot erase them server-side. The
+ * close-account screen therefore clears this bucket itself, and says so.
  */
 @Injectable({ providedIn: 'root' })
 export class SavedRoomsService {
@@ -67,6 +78,31 @@ export class SavedRoomsService {
   clear() {
     this._ids.set([]);
     this.persist();
+  }
+
+  /**
+   * Wipe every bucket on this device — Phase 7g.
+   *
+   * For account deletion. The saves live in localStorage, so the server cannot
+   * reach them: if this were not called, somebody who closed their account
+   * would hand the next person to pick up the phone a list of the rooms they
+   * had been looking at. That is personal information about a person who has
+   * asked to be forgotten, left behind by the one action that promised to
+   * forget them.
+   *
+   * Every key, not just the current user's: the point is that nothing of
+   * theirs is left on the device, and the anonymous bucket may hold saves they
+   * made before signing up.
+   */
+  clearDevice() {
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith(KEY_PREFIX)) localStorage.removeItem(key);
+      }
+    } catch {
+      /* storage unavailable — there is nothing stored to clear */
+    }
+    this._ids.set([]);
   }
 
   private keyFor(userId: string | null): string {

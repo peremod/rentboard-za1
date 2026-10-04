@@ -4,6 +4,7 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { normaliseSaMobile } from '../../common/utils/phone.util';
+import { SIGN_IN_USER } from '../../common/prisma/account-visibility';
 
 const OTP_TTL_MINUTES = 10;
 
@@ -108,7 +109,7 @@ export class PhoneOtpService {
     }
 
     const user = await this.prisma.user.findFirst({
-      where: { phone, phoneVerified: true, isActive: true },
+      where: { phone, phoneVerified: true, ...SIGN_IN_USER },
     });
 
     if (user) {
@@ -284,7 +285,7 @@ export class PhoneOtpService {
       where: {
         type: 'phone_otp',
         usedAt: null,
-        user: { phone, phoneVerified: true, isActive: true },
+        user: { phone, phoneVerified: true, ...SIGN_IN_USER },
       },
       include: { user: true },
       orderBy: { createdAt: 'desc' },

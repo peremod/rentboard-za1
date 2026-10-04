@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { isPlausibleSlug, slugify, uniqueSlug } from './slug';
+import { PUBLIC_USER } from '../../common/prisma/account-visibility';
 
 /** A badge the platform awards from usage, never self-declared — Phase 5h. */
 export interface Badge {
@@ -149,7 +150,7 @@ export class StorefrontService {
     if (!isPlausibleSlug(slug)) throw new NotFoundException('No such storefront');
 
     const profile = await this.prisma.landlordProfile.findFirst({
-      where: { slug, storefrontLive: true, user: { isActive: true } },
+      where: { slug, storefrontLive: true, user: PUBLIC_USER },
       select: {
         slug: true, bio: true, logoPath: true, companyName: true,
         idVerified: true, rating: true, ratingCount: true,
@@ -303,7 +304,7 @@ export class StorefrontService {
   /** Every published storefront, for the sitemap. Slug and freshness only. */
   async allPublicSlugs() {
     return this.prisma.landlordProfile.findMany({
-      where: { storefrontLive: true, slug: { not: null }, user: { isActive: true } },
+      where: { storefrontLive: true, slug: { not: null }, user: PUBLIC_USER },
       select: { slug: true, user: { select: { updatedAt: true } } },
       take: 20000,
     });

@@ -41,6 +41,8 @@ export interface AuthResponse {
     marketingEmails?: boolean;
     /** Null means this account has never been shown round — Phase 7f. */
     walkthroughSeenAt?: Date | null;
+    /** Non-null means the owner paused the account — Phase 7g. */
+    deactivatedAt?: Date | null;
   };
 }
 
@@ -111,6 +113,24 @@ export class AuthService {
     if (!valid) {
       throw new UnauthorizedException('Invalid email or password');
     }
+    /**
+     * ⚠️ Deleted and suspended are DIFFERENT answers — Phase 7g.
+     *
+     * A tombstone has no password hash, so bcrypt above would already have
+     * failed it; this is the second, independent refusal, because this is the
+     * one that must not be got wrong. "Contact support" would be cruel and
+     * false to somebody who ended their own account deliberately.
+     *
+     * A DEACTIVATED account is deliberately NOT refused: sign-in is how
+     * somebody comes back, and locking them out would make the control a
+     * trapdoor. The payload carries `deactivatedAt` so the portal can offer
+     * reactivation on the first screen.
+     */
+    if (user.deletedAt) {
+      throw new UnauthorizedException(
+        'This account has been closed. If you want to use Mastande again, create a new account.',
+      );
+    }
     if (!user.isActive) {
       throw new UnauthorizedException('Your account has been suspended. Please contact support.');
     }
@@ -128,6 +148,13 @@ export class AuthService {
    * duplicating token issuance is how the paths drift apart.
    */
   async issueSessionFor(user: User): Promise<AuthResponse> {
+    // Every other way in lands here — magic link, OAuth, phone code — so the
+    // deleted check belongs here too rather than only on the password path.
+    if (user.deletedAt) {
+      throw new UnauthorizedException(
+        'This account has been closed. If you want to use Mastande again, create a new account.',
+      );
+    }
     if (!user.isActive) {
       throw new UnauthorizedException('Your account has been suspended. Please contact support.');
     }
@@ -238,6 +265,7 @@ export class AuthService {
               phoneVerified: replacement.user.phoneVerified,
               marketingEmails: replacement.user.marketingEmails,
               walkthroughSeenAt: replacement.user.walkthroughSeenAt ?? null,
+              deactivatedAt: replacement.user.deactivatedAt ?? null,
             },
           };
         }
@@ -255,6 +283,9 @@ export class AuthService {
 
     if (stored.expiresAt < new Date()) {
       throw new UnauthorizedException('Your session has expired. Please log in again.');
+    }
+    if (stored.user.deletedAt) {
+      throw new UnauthorizedException('This account has been closed.');
     }
     if (!stored.user.isActive) {
       throw new UnauthorizedException('Your account has been suspended. Please contact support.');
@@ -295,6 +326,10 @@ export class AuthService {
         // a second round trip would mean it appears a beat after the dashboard,
         // which reads as a glitch rather than a welcome.
         walkthroughSeenAt: true,
+        // Phase 7g. The portal reads this on the first paint to offer waking
+        // the account up, rather than leaving somebody signed in to a paused
+        // account with nothing telling them why their rooms are gone.
+        deactivatedAt: true,
       },
     });
   }
@@ -324,6 +359,8 @@ export class AuthService {
         // Phase 7f. Null means this account has never been shown round, which
         // is what a brand-new one wants to say on the very first paint.
         walkthroughSeenAt: user.walkthroughSeenAt ?? null,
+        /** Phase 7g. Non-null means the owner paused it; the portal offers to wake it. */
+        deactivatedAt: user.deactivatedAt ?? null,
       },
     };
   }
