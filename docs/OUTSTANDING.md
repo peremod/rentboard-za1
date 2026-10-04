@@ -629,6 +629,12 @@ node scripts/admin-closure-drive.mjs     # 42 checks — Phase 7i. An admin endi
                                          # suspension cannot be confused
 node scripts/admin-closure-ui-drive.mjs  # 42 checks — the same on screen, at
                                          # four widths
+node scripts/contractor-checks-drive.mjs # 22 checks — Phase 7j. The directory
+                                         # said "people we have checked out"
+                                         # and nothing recorded a check
+node scripts/contractor-checks-ui-drive.mjs # 41 checks — and the screen states
+                                         # which checks exist rather than
+                                         # asserting that someone checked
 ```
 
 ⚠️ **Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` for the a11y drive.** Without them

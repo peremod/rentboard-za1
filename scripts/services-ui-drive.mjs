@@ -70,9 +70,33 @@ await page.waitForTimeout(2200);
 ((await page.locator('body').textContent()) ?? '').includes('Sipho') === false
   ? ok('a landlord cannot see a provider that is switched off') : bad('inactive provider visible to landlord');
 
-// Switch on.
+// ── Switch on, which now needs the number rung first — Phase 7j ───────────
+//
+// ⚠️ This drive used to click "Switch on" straight away, and it started
+// timing out on a DISABLED button carrying the reason in its title. That is the
+// control working: the directory tells landlords these names were checked, so
+// nobody is listed until an admin has rung the number and recorded it.
+//
+// Driven through the admin UI's own "Record it" button rather than patched in
+// over the API, because the button is the thing a person uses and a drive that
+// goes around it would not notice if it broke.
 await admin.reload({waitUntil:'domcontentloaded'});
 await admin.waitForTimeout(2200);
+
+const switchBtn = admin.getByRole('button',{name:'Switch on'}).first();
+(await switchBtn.isDisabled())
+  ? ok('"Switch on" is disabled until the number has been rung, with the reason on it')
+  : bad('an unchecked provider can be switched on from the admin screen');
+((await admin.locator('.svc-blocked').first().textContent()) ?? '').match(/ring the number/i)
+  ? ok('…and the reason is on the screen, not only in a title attribute')
+  : bad('nothing on screen says why the provider cannot be listed');
+
+await admin.locator('.svc-checks li').filter({hasText:'Rang the number'}).locator('button:has-text("Record it")').click();
+await admin.waitForTimeout(2200);
+((await admin.locator('.svc-checks').first().textContent()) ?? '').includes('✓')
+  ? ok('recording the call ticks it off on the row')
+  : bad('the recorded check did not appear on the row');
+
 await admin.getByRole('button',{name:'Switch on'}).first().click();
 await admin.waitForTimeout(2200);
 ((await admin.locator('body').textContent()) ?? '').includes('(1 live)') ? ok('switching on updates the live count') : bad('live count did not change');

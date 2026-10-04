@@ -50,6 +50,58 @@ export class CreateServiceProviderDto {
   @ApiPropertyOptional()
   @IsOptional() @IsISO8601()
   sponsoredUntil?: string | null;
+
+  // ── What was checked — Phase 7j ─────────────────────────────────────────
+  //
+  // ⚠️ Dates, not booleans. A check has a date or it is a rumour: "we verified
+  // them" with no date is worth nothing two years later, and a landlord
+  // deciding today should be able to see that the reference call was in 2024.
+  //
+  // Supplied by the admin rather than stamped by the server, because the check
+  // happened when it happened — a phone call on Tuesday recorded on Thursday is
+  // a Tuesday check, and back-dating it is the honest option.
+
+  /**
+   * We rang this number and reached this person.
+   *
+   * The minimum bar for being listed: `active` cannot be true without it,
+   * enforced in the service AND as a CHECK constraint.
+   */
+  @ApiPropertyOptional({ description: 'When we rang the number and reached them. Required to list.' })
+  @IsOptional() @IsISO8601()
+  phoneConfirmedAt?: string | null;
+
+  /**
+   * We were shown an identity document.
+   *
+   * ⚠️ Only the OUTCOME is stored. The document is never uploaded, never
+   * stored and never referenced — the rule verification_requests already
+   * follows (POPIA s.19, minimality). There is deliberately no documentPath
+   * here, and adding one would be a change to argue about rather than a field
+   * to fill in.
+   */
+  @ApiPropertyOptional({ description: 'When an identity document was seen. The document is never stored.' })
+  @IsOptional() @IsISO8601()
+  idCheckedAt?: string | null;
+
+  /** We spoke to a landlord this person has worked for. */
+  @ApiPropertyOptional({ description: 'When we spoke to a landlord they have worked for.' })
+  @IsOptional() @IsISO8601()
+  referenceCheckedAt?: string | null;
+
+  /**
+   * A trade registration, as the issuing body writes it.
+   *
+   * "PIRB P12345" for a plumber, a Department of Labour number for an
+   * electrician who can issue a Certificate of Compliance. Free text because
+   * the bodies differ per trade and several trades have none — an enum would
+   * force an admin to lie or leave it blank. Shown to landlords verbatim so
+   * they can check it with the body themselves, which is the only thing that
+   * makes it worth storing.
+   */
+  @ApiPropertyOptional({ example: 'PIRB P12345' })
+  @IsOptional() @IsString() @MaxLength(80)
+  tradeRegistration?: string | null;
 }
 
 export class UpdateServiceProviderDto {
@@ -78,4 +130,56 @@ export class UpdateServiceProviderDto {
 
   @ApiPropertyOptional() @IsOptional() @IsISO8601()
   sponsoredUntil?: string | null;
+
+  // ── What was checked — Phase 7j ─────────────────────────────────────────
+  //
+  // ⚠️ Dates, not booleans. A check has a date or it is a rumour: "we verified
+  // them" with no date is worth nothing two years later, and a landlord
+  // deciding today should be able to see that the reference call was in 2024.
+  //
+  // Supplied by the admin rather than stamped by the server, because the check
+  // happened when it happened — a phone call on Tuesday recorded on Thursday is
+  // a Tuesday check, and back-dating it is the honest option.
+
+  /**
+   * We rang this number and reached this person.
+   *
+   * The minimum bar for being listed: `active` cannot be true without it,
+   * enforced in the service AND as a CHECK constraint.
+   */
+  @ApiPropertyOptional({ description: 'When we rang the number and reached them. Required to list.' })
+  @IsOptional() @IsISO8601()
+  phoneConfirmedAt?: string | null;
+
+  /**
+   * We were shown an identity document.
+   *
+   * ⚠️ Only the OUTCOME is stored. The document is never uploaded, never
+   * stored and never referenced — the rule verification_requests already
+   * follows (POPIA s.19, minimality). There is deliberately no documentPath
+   * here, and adding one would be a change to argue about rather than a field
+   * to fill in.
+   */
+  @ApiPropertyOptional({ description: 'When an identity document was seen. The document is never stored.' })
+  @IsOptional() @IsISO8601()
+  idCheckedAt?: string | null;
+
+  /** We spoke to a landlord this person has worked for. */
+  @ApiPropertyOptional({ description: 'When we spoke to a landlord they have worked for.' })
+  @IsOptional() @IsISO8601()
+  referenceCheckedAt?: string | null;
+
+  /**
+   * A trade registration, as the issuing body writes it.
+   *
+   * "PIRB P12345" for a plumber, a Department of Labour number for an
+   * electrician who can issue a Certificate of Compliance. Free text because
+   * the bodies differ per trade and several trades have none — an enum would
+   * force an admin to lie or leave it blank. Shown to landlords verbatim so
+   * they can check it with the body themselves, which is the only thing that
+   * makes it worth storing.
+   */
+  @ApiPropertyOptional({ example: 'PIRB P12345' })
+  @IsOptional() @IsString() @MaxLength(80)
+  tradeRegistration?: string | null;
 }

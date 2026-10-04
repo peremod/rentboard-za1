@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { ServicesService } from './services.service';
 import { CreateServiceProviderDto, UpdateServiceProviderDto } from './dto/service-provider.dto';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('services')
 @Controller('services')
@@ -42,16 +43,20 @@ export class ServicesController {
   @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Add a provider. Off by default until switched on.' })
-  create(@Body() dto: CreateServiceProviderDto) {
-    return this.services.create(dto);
+  create(@Body() dto: CreateServiceProviderDto, @CurrentUser() admin: { id: string }) {
+    return this.services.create(dto, admin.id);
   }
 
   @Patch('admin/:id')
   @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Edit a provider, or switch it on and off' })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateServiceProviderDto) {
-    return this.services.update(id, dto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateServiceProviderDto,
+    @CurrentUser() admin: { id: string },
+  ) {
+    return this.services.update(id, dto, admin.id);
   }
 
   @Delete('admin/:id')

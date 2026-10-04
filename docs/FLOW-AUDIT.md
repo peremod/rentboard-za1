@@ -1888,6 +1888,86 @@ fails a contrast threshold while looking deliberate. All clean.
 | An admin closing an account still has to find it first, and the dashboard's user list does not show whether an account is already closed | Low — the detail screen says so plainly once opened |
 
 
+### 5.28 "People we have checked out" — ✅ made true in v1.95.0 (Phase 7j)
+
+The brief asked for contractor verification on the "Who to Call" page. Reading
+the page first turned the task into something sharper than a feature request.
+
+**🔴 The page already made the claim. Nothing in the product recorded a check.**
+
+`/landlord/services` opened with *"People we have checked out and can pass on"*,
+and its empty state read *"It is names we have checked, not an open
+directory."* `ServiceProvider` had `category`, `name`, `phone`, `whatsapp`,
+`areas`, `note`, `active` and an unused `sponsoredUntil`. No column, no table,
+no outcome — nothing anywhere recorded that anybody had checked anything.
+
+Same family as a `documentDeletedAt` that deleted nothing, with one difference
+that makes it worse: this one **faced the user and asked them to rely on it**,
+on the axis this product competes on, in the moment a landlord decides whether
+to let a stranger into their tenant's room.
+
+| Decision | Why |
+|---|---|
+| Three named outcomes, not a `verified` boolean | A blanket claim is unfalsifiable. "We rang this number on 18 Sep" is not. The screen now lists which checks exist, so one check and three checks do not read alike — which is precisely what "we checked them" did for both |
+| **Timestamps**, not booleans | A check has a date or it is a rumour. "Verified" with no date is worth nothing two years later; a landlord deciding today can see the reference call was in 2024 and judge for themselves |
+| The admin supplies the date | A call made on Tuesday and recorded on Thursday is a Tuesday check. A server stamping `now()` would quietly make every check look fresher than it is. The one-tap admin button uses today, because that is the date it honestly knows |
+| `active` requires `phoneConfirmedAt` | Reaching the person on the number is the minimum that makes "we can pass this on" true. Enforced in the service **and** as a CHECK constraint, because the rule matters more than the route: a seed script, a direct UPDATE or a second admin surface must not be able to publish an unchecked name |
+| Evaluated against what the row will **be** | `{active: true}` with no phone field is the common case — ticking "list this person" on a row that already has the check. Reading only the DTO refuses that; reading only the row waves through `{active: true, phoneConfirmedAt: null}`, which clears the check and publishes in one call |
+| Only outcomes. No document, ever | `idCheckedAt` records that an identity document was **seen**. There is deliberately no `documentPath` — the rule `VerificationRequest` already follows (POPIA s.19, minimality). The drive asserts the column list by name, because "store the ID so we can re-check it" is a reasonable-sounding thing somebody adds later |
+| `tradeRegistration` is free text | "PIRB P12345" for a plumber, a Department of Labour number for an electrician who can issue a CoC. The bodies differ per trade and several have none, so an enum would force an admin to lie or leave it blank. Shown **verbatim** with the caveat that we pass it on as given — a landlord checking it with the body themselves is the only thing that makes it worth storing |
+| `checkedByAdminId` is never in a landlord payload | Which admin signed somebody off is accountability, not directory content. The listing query has an explicit SELECT, because the column did not exist before and a bare `findMany` would have started shipping it the moment it did — the same reasoning as the verification endpoint withholding `documentPath` |
+
+**⚠️ The migration un-published every live provider**, and that is the honest
+migration rather than the convenient one. None of them had a recorded check, and
+leaving them live would mean the directory still said "we checked these" about
+rows nobody checked — the exact defect it exists to end. An admin re-confirms
+the number and republishes: a few minutes per name, against a claim the product
+cannot otherwise make honestly.
+
+### What the drives prove
+
+`scripts/contractor-checks-drive.mjs` — 22 checks. `scripts/contractor-checks-ui-drive.mjs`
+— 41 checks at four widths, including the one that matters most: it **clears a
+stored outcome in the database and reads the screen again**. If the check lines
+were decoration — a fixed set of reassurances rather than a render of the data —
+removing the reference call would change nothing on screen. It disappears.
+
+Falsified by disabling the application guard, dropping the CHECK constraint, and
+adding `checkedByAdminId` to the landlord SELECT: **7 failures**, including "2
+live provider(s) have no phone check — the claim on the screen is false for
+them", which is the sentence this phase exists to prevent.
+
+⚠️ **Both existing services drives started failing the moment the rule landed**,
+because every fixture in them was `active: true` with nothing recorded. That is
+the rule working. Rather than patch the fixtures to pass, both now **assert the
+rule themselves** — and the UI drive records the check through the admin
+screen's own "Record it" button rather than over the API, because the button is
+what a person uses and a drive that goes around it would not notice if it broke.
+
+⚠️ **The directory had no smoke coverage at all** — not one check on the
+endpoints behind a screen that tells landlords these names were looked into. It
+has seven now, and the ones that matter need no admin token: the rule that stops
+an unchecked name reaching a landlord should not be among the checks that only
+run when somebody sets an env var.
+
+⚠️ **And a fault in my own smoke section, which reported success.** "Every
+listed provider has had their number rung" was four requests below the one it
+was about, so it read the 401 body from an unauthenticated POST — and its own
+`if type=="array" … else true` guard **passed** it. This file's header warns
+about exactly that (`req` overwrites `$BODY`). Both body assertions now sit
+immediately after their request, and the type check requires an array rather
+than excusing anything that is not one.
+
+### Gaps
+
+| Gap | Severity |
+|---|---|
+| Nothing expires a check. A phone call from 2024 renders with its date, which is honest, but no screen nags an admin to re-ring it and `lastCheckedAt` has no consumer yet | Medium — the data supports a staleness view; nothing builds one |
+| `tradeRegistration` is passed on as given and we say so. We do not verify it with PIRB or the Department of Labour, and could not from here | Low, and stated on screen |
+| A landlord cannot report that a tradesperson was bad. The reports table is about rooms and people, not providers, so the feedback loop that would keep this list honest over time does not exist | Medium — it is the natural next piece |
+| `sponsoredUntil` still exists and still nothing reads it. A paid placement in a list captioned "names we looked into" now has a sharper problem than before: a sponsored name needs a label saying so | Low now, a decision before any money |
+
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

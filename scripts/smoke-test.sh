@@ -1136,6 +1136,62 @@ else
 fi
 
 
+# -- 17c. Who to call, and what we checked (Phase 7j) ----------------------
+# ⚠️ The directory had NO smoke coverage at all before this — not one check on
+# the endpoints behind a screen that tells landlords these names were looked
+# into. The guard and rule checks here need no admin token, deliberately: the
+# rule that stops an unchecked name reaching a landlord should not be among the
+# checks that only run when somebody sets an env var.
+head_ "17c. Who to call, and what we checked"
+
+req GET /api/services
+check "the directory needs a session" 401 "$STATUS"
+
+# ⚠️ BOTH body assertions sit immediately after the request they are about.
+#
+# The first version put "every listed provider has had their number rung" four
+# requests later, so it read the 401 body from an unauthenticated POST — and its
+# own `if type=="array" ... else true` guard then PASSED it. A check that cannot
+# see its subject and reports success is worse than no check, and this file's
+# header warns about exactly this: `req` overwrites $BODY.
+req GET /api/services "" "$LTOKEN"
+check "a landlord can read the directory" 200 "$STATUS" "$BODY"
+
+# Only outcomes reach a landlord, never which admin signed somebody off.
+if echo "$BODY" | jq -e 'if (type=="array" and length>0) then (.[0] | has("checkedByAdminId")) else false end' >/dev/null 2>&1; then
+  red "  FAIL  the directory leaks checkedByAdminId to landlords"; FAIL=$((FAIL+1))
+else
+  green "  PASS  the directory withholds which admin signed a provider off"; PASS=$((PASS+1))
+fi
+
+# No listed provider is without a phone check. Asserted from the landlord-facing
+# list, which is the only place the claim is made — and REQUIRING an array, so a
+# non-list response fails rather than being waved through.
+if echo "$BODY" | jq -e 'type=="array" and (map(select(.phoneConfirmedAt == null)) | length) == 0' >/dev/null 2>&1; then
+  green "  PASS  every listed provider has had their number rung"; PASS=$((PASS+1))
+else
+  red "  FAIL  a listed provider has no recorded phone check, or the directory did not return a list"; FAIL=$((FAIL+1))
+  grey "        $(echo "$BODY" | head -c 300)"
+fi
+
+# The admin list is GET services/admin/all, not services/admin — the first
+# version used the latter and got a 404 the check reported as a missing guard.
+req GET /api/services/admin/all "" "$LTOKEN"
+check "a landlord CANNOT read the admin directory" 403 "$STATUS" "$BODY"
+
+req POST /api/services/admin '{"category":"plumber","name":"Not allowed","phone":"082 000 0000","areas":["Tembisa"]}' "$LTOKEN"
+check "a landlord CANNOT add a tradesperson" 403 "$STATUS" "$BODY"
+
+req POST /api/services/admin '{"category":"plumber","name":"Unauthenticated","phone":"082 000 0000","areas":["Tembisa"]}'
+check "adding a tradesperson requires auth" 401 "$STATUS"
+
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  req POST /api/services/admin '{"category":"plumber","name":"Smoke Unchecked","phone":"082 111 2222","areas":["Tembisa"],"active":true}' "$ADMIN_TOKEN"
+  check "a provider cannot be listed before the number is rung" 400 "$STATUS" "$BODY"
+else
+  skipped "the publish rule on the admin route — set ADMIN_TOKEN to include it"
+fi
+
 # -- 18. Safety reports ----------------------------------------------------
 head_ "18. Safety reports"
 if [[ -n "$ROOM_ID" ]]; then

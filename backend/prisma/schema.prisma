@@ -2219,7 +2219,56 @@ model ServiceProvider {
 
   /// Off by default. A half-entered provider that is live by accident is worse
   /// than one nobody can find — the same reasoning as Survey.active.
+  ///
+  /// ⚠️ Cannot be set true without `phoneConfirmedAt` — see below.
   active Boolean @default(false)
+
+  // ── What was actually checked — Phase 7j ─────────────────────────────────
+  //
+  // ⚠️ The screen claimed this before any of it existed.
+  //
+  // /landlord/services opened with "People we have checked out and can pass
+  // on", and its empty state read "It is names we have checked, not an open
+  // directory". Nothing on this model recorded a check of any kind. The page
+  // made a trust claim the data could not support — on the one axis this
+  // product competes on — and the claim was the only thing a landlord had to
+  // go on when deciding whether to let a stranger into their tenant's room.
+  //
+  // So: dated outcomes, named individually, and the screen states exactly
+  // which ones are present rather than asserting "checked". A blanket claim is
+  // unfalsifiable; "rang the number on 3 Oct" is not.
+  //
+  // ── Timestamps rather than booleans
+  //
+  // A check has a date or it is a rumour. "We verified them" with no date is
+  // worth nothing two years later, and a landlord deciding today should be able
+  // to see that the reference call was in 2024.
+
+  /// We rang this number and reached this person. The minimum bar for being
+  /// listed at all: `active` cannot be true without it.
+  phoneConfirmedAt DateTime?
+
+  /// We were shown an identity document. **Only the outcome persists** — the
+  /// document itself is never stored, following the VerificationRequest
+  /// pattern (POPIA s.19, and minimality: the outcome is what anybody needs).
+  idCheckedAt DateTime?
+
+  /// We spoke to a landlord this person has worked for.
+  referenceCheckedAt DateTime?
+
+  /// A trade registration, as the body issues it — "PIRB P12345" for a plumber,
+  /// a Department of Labour number for an electrician who can issue a CoC.
+  ///
+  /// Free text and nullable on purpose: the bodies differ per trade, several
+  /// trades have none, and an enum here would force an admin to either lie or
+  /// leave it blank. Shown verbatim so a landlord can check it themselves,
+  /// which is the only thing that makes it worth storing.
+  tradeRegistration String?
+
+  /// When the checks were last revisited, and by whom. The admin id is for
+  /// accountability and is **never** in a landlord-facing payload.
+  lastCheckedAt   DateTime?
+  checkedByAdminId String?
 
   /// See the note above. Nothing reads this yet.
   sponsoredUntil DateTime?
