@@ -698,6 +698,11 @@ node scripts/contractor-leads-drive.mjs  # 33 checks — Phase 7k. Leads recorde
 node scripts/contractor-leads-ui-drive.mjs # 43 checks — the landlord is told
                                          # they are never charged, and the admin
                                          # screen says record, not invoice
+node scripts/viewings-drive.mjs          # 35 checks — Phase 7l. Inviting an
+                                         # applicant, and the private property
+                                         # address never reaching them
+node scripts/viewings-ui-drive.mjs       # 41 checks — the form says what it
+                                         # sends, and the tenant can answer
 ```
 
 ⚠️ **Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` for the a11y drive.** Without them

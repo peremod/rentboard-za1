@@ -17,13 +17,14 @@ import { RoomsService } from '../../../core/services/rooms.service';
 import { Room } from '../../../core/models/room.model';
 import { RoomCard } from '../../../shared/components/room-card/room-card';
 import { TenantInboxPanel } from '../../../shared/components/tenant-inbox/tenant-inbox';
+import { ViewingInvitations } from '../../../shared/components/viewing-invitations/viewing-invitations';
 
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
   imports: [
     RouterLink, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt,
-    DisputePanel, ReferralPanel, TenantInboxPanel,
+    DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -34,6 +35,15 @@ import { TenantInboxPanel } from '../../../shared/components/tenant-inbox/tenant
            doing, so a tenant who is up to date is not shown an empty queue.
            headingLevel 2: it sits directly under the shell's page h1. -->
       <app-tenant-inbox [headingLevel]="2"/>
+
+      <!-- ⚠️ Above the application summary, and its own panel — Phase 7l.
+           It is the only thing on this dashboard with a PLACE and a TIME on it:
+           somewhere a person physically has to be, on a day. The task inbox is
+           a list of things to answer; this is a list of things to attend, and
+           burying "Saturday 16:00, the blue gate in Tembisa" among "three
+           applications awaiting reply" is how somebody misses it. It renders
+           nothing when there is nothing. -->
+      <app-viewing-invitations/>
 
       <!-- ⚠️ This replaced a shortlisted banner and three bare numbers — Phase 7d.
            The boxes read "3 / 1 / 2" under "Applications", "Shortlisted" and

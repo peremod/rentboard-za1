@@ -6,6 +6,36 @@ import {
   Application, ApplicantInbox, ApplicantInboxFilters,
 } from '../models/application.model';
 
+
+/**
+ * A viewing arranged on an application — Phase 7l.
+ *
+ * There was no such thing before: `ApplicationStatus`'s `viewed` means the
+ * LANDLORD opened the application, not that anybody saw the room.
+ */
+export interface RoomViewing {
+  id: string;
+  startsAt: string;
+  /** Typed by the landlord for this viewing. Never their stored property address. */
+  meetingPlace: string;
+  note?: string | null;
+  status: 'proposed' | 'accepted' | 'declined' | 'cancelled';
+  respondedAt?: string | null;
+  declineReason?: string | null;
+  cancelledAt?: string | null;
+  cancelledById?: string | null;
+}
+
+/** The tenant's upcoming list, which names the room so three applications stay apart. */
+export interface UpcomingViewing {
+  id: string;
+  startsAt: string;
+  meetingPlace: string;
+  note?: string | null;
+  status: 'proposed' | 'accepted';
+  application: { id: string; room: { id: string; title: string; locationDisplay: string } };
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApplicationsService {
   private http = inject(HttpClient);
@@ -59,6 +89,42 @@ export class ApplicationsService {
 
   unshortlist(id: string) {
     return this.http.post<Application>(`${this.api}/applications/${id}/unshortlist`, {});
+  }
+
+  // ── Viewings — Phase 7l ──────────────────────────────────────────────────
+
+  /**
+   * Invite this applicant to come and see the room.
+   *
+   * ⚠️ `meetingPlace` is typed by the landlord and IS sent to the applicant.
+   * There is deliberately no option to use the property's stored address: the
+   * form where that was typed promises "Only you see this. It is never on a
+   * listing and never sent to an applicant", and a convenience here would break
+   * that on the landlord's behalf without their knowing.
+   */
+  inviteToViewing(applicationId: string, body: { startsAt: string; meetingPlace: string; note?: string }) {
+    return this.http.post<RoomViewing>(`${this.api}/applications/${applicationId}/viewings`, body);
+  }
+
+  viewingsFor(applicationId: string) {
+    return this.http.get<RoomViewing[]>(`${this.api}/applications/${applicationId}/viewings`);
+  }
+
+  /** The tenant answers. Only the tenant may — the server enforces it. */
+  respondToViewing(viewingId: string, accept: boolean, declineReason?: string) {
+    return this.http.post<RoomViewing>(
+      `${this.api}/applications/viewings/${viewingId}/respond`, { accept, declineReason },
+    );
+  }
+
+  /** Either side calls it off. */
+  cancelViewing(viewingId: string) {
+    return this.http.post<RoomViewing>(`${this.api}/applications/viewings/${viewingId}/cancel`, {});
+  }
+
+  /** What this tenant has coming up, across every application. */
+  myViewings() {
+    return this.http.get<UpcomingViewing[]>(`${this.api}/applications/viewings/mine`);
   }
 
   shortlist(applicationId: string): Observable<Application> {

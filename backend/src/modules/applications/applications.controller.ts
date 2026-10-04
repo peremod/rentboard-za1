@@ -7,13 +7,18 @@ import { ApplicationsService } from './applications.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
 import { ApplicantInboxDto } from './dto/inbox.dto';
+import { ViewingsService } from './viewings.service';
+import { InviteToViewingDto, RespondToViewingDto } from './dto/viewing.dto';
 
 @ApiTags('applications')
 @Controller('applications')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class ApplicationsController {
-  constructor(private applicationsService: ApplicationsService) {}
+  constructor(
+    private applicationsService: ApplicationsService,
+    private viewings: ViewingsService,
+  ) {}
 
   // ── Tenant ──
   @Post()
@@ -107,5 +112,70 @@ export class ApplicationsController {
   @HttpCode(HttpStatus.OK)
   reject(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectApplicationDto, @CurrentUser() user: { id: string }) {
     return this.applicationsService.reject(id, user.id, dto);
+  }
+
+  // ── Viewings — Phase 7l ──────────────────────────────────────────────────
+  //
+  // ⚠️ Nothing here reads Property.addressLine. The landlord types where to
+  // meet, because the form they typed that address into promised them it is
+  // "never sent to an applicant". See viewings.service.ts.
+
+  @Post(':id/viewings')
+  @ApiOperation({
+    summary: 'Invite this applicant to come and see the room',
+    description:
+      'Landlord only, and only while the application is still live. The meeting place '
+      + 'is sent to the applicant, so it is typed per viewing and never taken from the '
+      + 'private property address.',
+  })
+  invite(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: InviteToViewingDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.viewings.invite(id, user.id, {
+      startsAt: new Date(dto.startsAt),
+      meetingPlace: dto.meetingPlace,
+      note: dto.note,
+    });
+  }
+
+  @Get(':id/viewings')
+  @ApiOperation({ summary: 'Viewings arranged on this application — either party' })
+  listViewings(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.viewings.forApplication(id, user.id);
+  }
+
+  /** The tenant answers. Only the tenant — see the service. */
+  @Post('viewings/:viewingId/respond')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Say whether you can make the viewing' })
+  respond(
+    @Param('viewingId', ParseUUIDPipe) viewingId: string,
+    @Body() dto: RespondToViewingDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.viewings.respond(viewingId, user.id, {
+      accept: dto.accept,
+      declineReason: dto.declineReason,
+    });
+  }
+
+  /** Either side calls it off. */
+  @Post('viewings/:viewingId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Call off a viewing — either the landlord or the applicant' })
+  cancelViewing(
+    @Param('viewingId', ParseUUIDPipe) viewingId: string,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.viewings.cancel(viewingId, user.id);
+  }
+
+  /** What this tenant has coming up, across every application they have made. */
+  @Get('viewings/mine')
+  @ApiOperation({ summary: 'Viewings you have been invited to that have not happened yet' })
+  myViewings(@CurrentUser() user: { id: string }) {
+    return this.viewings.forTenant(user.id);
   }
 }

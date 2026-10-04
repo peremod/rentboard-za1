@@ -1,9 +1,11 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, input, signal } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { VerificationService } from '../../../core/services/verification.service';
 import { BadgeBasis } from '../../../core/models/verification.model';
+import { RoomViewing } from '../../../core/services/applications.service';
 import { ApplicationsService } from '../../../core/services/applications.service';
 import { Application } from '../../../core/models/application.model';
 import { TenantNotes } from '../../../shared/components/tenant-notes/tenant-notes';
@@ -22,7 +24,7 @@ import { TenantReferences } from '../../../core/models/review.model';
 @Component({
   selector: 'app-applicants',
   standalone: true,
-  imports: [DatePipe, RouterLink, MessageThread, ReviewList, TenantNotes],
+  imports: [DatePipe, FormsModule, RouterLink, MessageThread, ReviewList, TenantNotes],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="applicants">
@@ -160,9 +162,65 @@ import { TenantReferences } from '../../../core/models/review.model';
                     } @else {
                       <button type="button" (click)="unshortlist(app)">Remove from shortlist</button>
                     }
+                    <button type="button" (click)="startInvite(app)">📅 Invite to view</button>
                     <button type="button" class="accept" (click)="accept(app)">✓ Accept</button>
                     <button type="button" class="reject" (click)="reject(app)">✕ Reject</button>
                   </div>
+
+                  <!-- ── Viewings — Phase 7l ─────────────────────────────
+                       There was no such thing before: "I'll meet you Saturday
+                       at four" lived in the message thread, with no date either
+                       side could look up and nothing the tenant could answer. -->
+                  @if (viewingFor(app.id); as v) {
+                    <div class="viewing" [class.viewing--off]="v.status === 'cancelled' || v.status === 'declined'">
+                      <strong>{{ viewingLabel(v) }}</strong>
+                      <span>{{ v.startsAt | date: 'EEEE d MMM, HH:mm' }} — {{ v.meetingPlace }}</span>
+                      @if (v.note) { <span class="muted">{{ v.note }}</span> }
+                      @if (v.declineReason) { <span class="muted">They said: {{ v.declineReason }}</span> }
+                      @if (v.status === 'proposed' || v.status === 'accepted') {
+                        <button type="button" class="link-btn" [disabled]="busyViewing() === app.id"
+                                (click)="callOff(app, v)">Call it off</button>
+                      }
+                    </div>
+                  }
+
+                  @if (invitingId() === app.id) {
+                    <form class="viewing-form" (ngSubmit)="sendInvite(app)">
+                      <h4 class="viewing-form__title">Invite {{ app.tenant?.fullName }} to see the room</h4>
+                      <label>
+                        <span>When</span>
+                        <input type="datetime-local" [(ngModel)]="inviteForm.when" name="when"/>
+                      </label>
+                      <label>
+                        <span>Where to meet</span>
+                        <input type="text" [(ngModel)]="inviteForm.place" name="place"
+                               placeholder="e.g. 14 Vilakazi Street — the blue gate"/>
+                        <!-- ⚠️ Said out loud, because the landlord typed their
+                             property address into a form that promised "Only
+                             you see this. It is never on a listing and never
+                             sent to an applicant." Nothing pre-fills it here;
+                             this is them choosing to tell one person. -->
+                        <span class="field-hint">
+                          <strong>This is sent to {{ app.tenant?.fullName }}.</strong>
+                          We never use the address you saved on your property —
+                          that stays private. Type what you want this one person
+                          to know.
+                        </span>
+                      </label>
+                      <label>
+                        <span>Anything else (optional)</span>
+                        <input type="text" [(ngModel)]="inviteForm.note" name="viewingNote"
+                               placeholder="Ask for Sipho at the gate."/>
+                      </label>
+                      @if (inviteError()) { <p class="field-error" role="alert">{{ inviteError() }}</p> }
+                      <div class="viewing-form__actions">
+                        <button type="submit" class="btn btn-sm btn-primary" [disabled]="busyViewing() === app.id">
+                          {{ busyViewing() === app.id ? 'Sending…' : 'Send the invitation' }}
+                        </button>
+                        <button type="button" class="link-btn" (click)="invitingId.set(null)">Cancel</button>
+                      </div>
+                    </form>
+                  }
                 }
 
                 <div class="applicant-card__refs">
@@ -245,6 +303,22 @@ import { TenantReferences } from '../../../core/models/review.model';
       border: 1px solid #DDD5C8; background: #fff; cursor: pointer;
       font-size: .78rem; font-weight: 600;
     }
+    .viewing {
+      display: grid; gap: .2rem; margin: .5rem 0;
+      padding: .6rem .7rem; font-size: .82rem; line-height: 1.6;
+      border-left: 3px solid var(--sage); background: rgba(61,112,64,.06);
+      border-radius: var(--r4, 4px);
+    }
+    .viewing--off { border-left-color: var(--slate); background: var(--cream2); }
+    .viewing-form { display: grid; gap: .7rem; margin: .6rem 0; max-width: 28rem; }
+    .viewing-form__title { font-size: .9rem; margin: 0; }
+    .viewing-form label { display: grid; gap: .25rem; font-size: .82rem; font-weight: 600; }
+    .viewing-form input {
+      font: inherit; font-weight: 400; padding: .55rem .6rem; min-height: 44px;
+      border: 1.5px solid #DDD5C8; border-radius: 6px;
+    }
+    .viewing-form .field-hint { font-weight: 400; line-height: 1.6; }
+    .viewing-form__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; }
     .applicant-card__actions .accept { background: #3D7040; color: #fff; border: none; }
     .applicant-card__actions .reject { background: #D63B3B; color: #fff; border: none; }
 
@@ -389,12 +463,128 @@ export class Applicants implements OnInit {
   loading = signal(true);
   openId = signal<string | null>(null);
 
+  // ── Viewings — Phase 7l ────────────────────────────────────────────────
+  //
+  // There was no such thing before: ApplicationStatus's `viewed` means the
+  // LANDLORD opened the application, so "I'll meet you Saturday at four" lived
+  // in the message thread with no date either side could look up and nothing
+  // the tenant could answer.
+  invitingId = signal<string | null>(null);
+  busyViewing = signal<string | null>(null);
+  inviteError = signal<string | null>(null);
+  /** applicationId → its latest viewing. */
+  viewings = signal<Record<string, RoomViewing>>({});
+  inviteForm = { when: '', place: '', note: '' };
+
+  viewingFor(applicationId: string): RoomViewing | null {
+    return this.viewings()[applicationId] ?? null;
+  }
+
+  viewingLabel(v: RoomViewing): string {
+    return {
+      proposed: '📅 Invited, waiting for an answer',
+      accepted: '✅ They are coming',
+      declined: '✕ They cannot make it',
+      cancelled: '✕ Called off',
+    }[v.status];
+  }
+
+  /**
+   * Load the viewings for the applicants on screen.
+   *
+   * One request per application rather than a batch endpoint: this screen shows
+   * one room's applicants, which is a handful, and a list endpoint nobody else
+   * needs is a second thing to keep right.
+   */
+  loadViewings(ids: string[]) {
+    for (const id of ids) {
+      this.applicationsService.viewingsFor(id).subscribe({
+        next: (list) => {
+          // The latest by start time: an older cancelled one under it is noise.
+          const latest = [...list].sort((a, b) => b.startsAt.localeCompare(a.startsAt))[0];
+          if (latest) this.viewings.update((m) => ({ ...m, [id]: latest }));
+        },
+        error: () => {},
+      });
+    }
+  }
+
+  startInvite(app: { id: string }) {
+    this.inviteError.set(null);
+    /**
+     * ⚠️ Empty, not pre-filled with the property address.
+     *
+     * The landlord typed that address into a field promising "Only you see
+     * this. It is never on a listing and never sent to an applicant."
+     * Pre-filling it here would break that on their behalf, without their
+     * knowing it had happened.
+     */
+    this.inviteForm = { when: '', place: '', note: '' };
+    this.invitingId.set(app.id);
+  }
+
+  sendInvite(app: { id: string }) {
+    const when = this.inviteForm.when;
+    const place = this.inviteForm.place.trim();
+    if (!when) { this.inviteError.set('Pick a day and a time.'); return; }
+    if (place.length < 3) {
+      this.inviteError.set('Say where to meet. An invitation with no place is one nobody can turn up to.');
+      return;
+    }
+    // datetime-local carries no timezone, so the browser reads it as local
+    // time — which for everybody using this is SAST, the time they meant.
+    const startsAt = new Date(when);
+    if (startsAt.getTime() <= Date.now()) {
+      this.inviteError.set('Pick a time that has not already passed.');
+      return;
+    }
+
+    this.busyViewing.set(app.id);
+    this.inviteError.set(null);
+    this.applicationsService.inviteToViewing(app.id, {
+      startsAt: startsAt.toISOString(),
+      meetingPlace: place,
+      note: this.inviteForm.note.trim() || undefined,
+    }).subscribe({
+      next: (v) => {
+        this.busyViewing.set(null);
+        this.invitingId.set(null);
+        this.viewings.update((m) => ({ ...m, [app.id]: v }));
+      },
+      error: (err) => {
+        this.busyViewing.set(null);
+        this.inviteError.set(err?.error?.message ?? 'That did not send. Try again.');
+      },
+    });
+  }
+
+  async callOff(app: { id: string }, v: RoomViewing) {
+    const confirmed = await this.dialogs.confirm(
+      'Call off the viewing?',
+      'We will tell them it is off so nobody turns up. You can offer another time afterwards.',
+      'Call it off',
+    );
+    if (!confirmed) return;
+    this.busyViewing.set(app.id);
+    this.applicationsService.cancelViewing(v.id).subscribe({
+      next: (updated) => {
+        this.busyViewing.set(null);
+        this.viewings.update((m) => ({ ...m, [app.id]: updated }));
+      },
+      error: (err) => {
+        this.busyViewing.set(null);
+        this.dialogs.error(err?.error?.message ?? 'Could not call that off. Try again.');
+      },
+    });
+  }
+
   ngOnInit() {
     this.applicationsService.getRoomApplications(this.roomId()).subscribe({
       next: (apps) => {
         this.applications.set(apps);
         this.loading.set(false);
         this.openRequested(apps);
+        this.loadViewings(apps.map((a) => a.id));
       },
       error: () => this.loading.set(false),
     });
