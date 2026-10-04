@@ -623,7 +623,21 @@ node scripts/layout-ui-drive.mjs         # 130 checks — Phase 7h. The rendered
                                          # presses: heights, gaps, computed
                                          # backgrounds and page overflow at
                                          # 360/390/768/1280
+node scripts/admin-closure-drive.mjs     # 42 checks — Phase 7i. An admin ending
+                                         # an account on request: the audit row,
+                                         # the refusals, and that closure and
+                                         # suspension cannot be confused
+node scripts/admin-closure-ui-drive.mjs  # 42 checks — the same on screen, at
+                                         # four widths
 ```
+
+⚠️ **Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` for the a11y drive.** Without them
+it audits 10 public + 17 portal pages and SKIPS every admin screen — which is
+where it had been for every release until v1.94.0. With them it does 27,
+including `/admin/users/:id`, the only admin screen carrying a destructive form
+and so the one place a red-on-pink danger panel can fail a contrast threshold
+while looking deliberate. The two closure drives promote their own admin and
+need nothing set.
 
 ⚠️ **Rate limiting is the binding constraint on running these back to back.**
 `/auth/register` allows 60 an hour and `/auth/login` 30 per 15 minutes, counted

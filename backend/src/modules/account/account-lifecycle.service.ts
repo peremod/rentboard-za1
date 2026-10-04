@@ -1,5 +1,5 @@
 import {
-  BadRequestException, ForbiddenException, Injectable, Logger,
+  BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -244,22 +244,117 @@ export class AccountLifecycleService {
       );
     }
 
-    const now = new Date();
+    return this.erase(user, { actor: 'owner' });
+  }
+
+  /**
+   * End somebody else's account, on their request — Phase 7i.
+   *
+   * ── Why an admin needs this at all
+   *
+   * A phone-only account has no password, so /account/close cannot confirm it;
+   * that screen says to ask us, and until now there was nothing behind the
+   * asking. POPIA s.24 is a right, not a feature request: if the only
+   * self-service path requires a credential some accounts do not have, the
+   * operator has to be able to act on the request.
+   *
+   * ── It is not suspension, and the two must not blur
+   *
+   * `setUserActive(false)` is reversible, keeps the email and is a moderation
+   * decision we make. This is irreversible, erases the email and is a decision
+   * the OWNER made and we are carrying out. Different verbs, different screens,
+   * different records.
+   *
+   * ── The erasure is the same code, deliberately
+   *
+   * Not a second implementation. Two erasures that start identical drift, and
+   * the one that drifts is the one nobody drives — so the day a column is added
+   * to the self-service path, the admin path would quietly stop erasing it.
+   */
+  async closeOnBehalf(
+    userId: string,
+    adminId: string,
+    detail: { reason: string },
+  ) {
+    const reason = detail.reason?.trim();
+    if (!reason || reason.length < 10) {
+      throw new BadRequestException(
+        'Record how the request reached you — this is the only lasting evidence that it was asked for.',
+      );
+    }
 
     /**
-     * ⚠️ Everything in ONE transaction, the photo's deletion included.
+     * ⚠️ An admin cannot close their OWN account from here.
      *
-     * `StorageService.enqueueDelete` takes the transaction client for exactly
-     * this reason: the queue row and the erasure commit together or not at all.
-     * Queued outside it, a failure half way through would leave a live account
-     * whose photo was already on its way to being destroyed.
+     * Not tidiness: this route takes no password, so an admin using it on
+     * themselves would be skipping the re-authentication that /account/close
+     * exists to demand — and the whole point of that check is that a session
+     * somebody walked away from must not be enough.
      *
-     * The queue rather than a direct ImageKit call, because that service marks
-     * a deletion done only from ImageKit's own response — the pattern this
-     * codebase had to go back and make true after shipping a column whose name
-     * asserted a deletion that never happened. A face is personal information
-     * and this is the request where "we meant to" is not good enough.
+     * ⚠️ Falsifying it showed something worth keeping. Removed, the request
+     * still fails — the ADMIN-role check below catches it, because the caller
+     * of this route is always an admin. But it fails saying "use the database
+     * directly", which tells an admin to go and DELETE their own user row:
+     * the one action the whole tombstone design exists to prevent, because it
+     * cascades into other people's applications, conversations and tenancies.
+     * So this guard is not redundant. It is the difference between a correct
+     * instruction and one that advises the damage.
      */
+    if (userId === adminId) {
+      throw new BadRequestException(
+        'Close your own account from Settings, where it asks for your password.',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true, email: true, passwordHash: true, avatarPath: true, deletedAt: true, role: true,
+      },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.deletedAt) throw new BadRequestException('This account has already been ended.');
+
+    // The same rule suspension already applies, for the same reason: an admin
+    // removing another admin is a database decision with a person watching, not
+    // a button on a support screen.
+    if (user.role === 'ADMIN') {
+      throw new BadRequestException(
+        'Admin accounts cannot be ended from here — use the database directly.',
+      );
+    }
+
+    return this.erase(user, { actor: 'admin', adminId, reason });
+  }
+
+  /**
+   * The erasure itself — the one copy of it.
+   *
+   * ⚠️ Everything in ONE transaction, the photo's deletion and the audit row
+   * included.
+   *
+   * `StorageService.enqueueDelete` takes the transaction client for exactly
+   * this reason: the queue row and the erasure commit together or not at all.
+   * Queued outside it, a failure half way through would leave a live account
+   * whose photo was already on its way to being destroyed.
+   *
+   * The queue rather than a direct ImageKit call, because that service marks a
+   * deletion done only from ImageKit's own response — the pattern this codebase
+   * had to go back and make true after shipping a column whose name asserted a
+   * deletion that never happened. A face is personal information and this is
+   * the request where "we meant to" is not good enough.
+   *
+   * The audit row goes in the same transaction for the same reason: a closure
+   * with no record of who asked for it, or a record of a closure that did not
+   * happen, are both worse than either alone.
+   */
+  private async erase(
+    user: { id: string; email: string | null; avatarPath: string | null; role: string },
+    by: { actor: 'owner' | 'admin'; adminId?: string; reason?: string },
+  ) {
+    const userId = user.id;
+    const now = new Date();
+
     await this.prisma.$transaction(async (tx) => {
       if (user.avatarPath) {
         await this.storage.enqueueDelete(tx, user.avatarPath, 'account_deleted');
@@ -292,6 +387,22 @@ export class AccountLifecycleService {
       tx.verificationRequest.deleteMany({ where: { userId } }),
       tx.tenantProfile.deleteMany({ where: { userId } }),
       tx.landlordProfile.deleteMany({ where: { userId } }),
+
+      /**
+       * ── The record of the closure ───────────────────────────────────────
+       *
+       * Holds the user id, who acted and why — never the email, the name or
+       * the number. An audit trail that keeps what the erasure removed defeats
+       * the erasure it audits.
+       */
+      tx.accountClosure.create({
+        data: {
+          userId,
+          actor: by.actor,
+          closedByAdminId: by.actor === 'admin' ? by.adminId : null,
+          reason: by.reason ?? null,
+        },
+      }),
 
       /**
        * ── The tombstone ───────────────────────────────────────────────────
@@ -327,7 +438,11 @@ export class AccountLifecycleService {
       ]);
     });
 
-    this.log.log(`Account ${userId} (${user.role}) ended at the owner's request`);
+    this.log.log(
+      by.actor === 'admin'
+        ? `Account ${userId} (${user.role}) ended by admin ${by.adminId} — ${by.reason}`
+        : `Account ${userId} (${user.role}) ended at the owner's request`,
+    );
     return { deletedAt: now };
   }
 }

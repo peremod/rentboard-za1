@@ -927,6 +927,21 @@ check "tenant CANNOT suspend an account" 403 "$STATUS" "$BODY"
 req GET /api/verification/pending "" "$TTOKEN"
 check "tenant CANNOT read the verification queue" 403 "$STATUS" "$BODY"
 
+# Ending somebody's account — Phase 7i. These need NO admin token, which is the
+# point: the guards on the most destructive route in the product should not be
+# among the checks that only run when somebody remembers to set an env var.
+req DELETE "/api/admin/users/$TENANT_ID" '{"reason":"A landlord should never reach this route.","confirm":"CLOSE","understood":true}' "$LTOKEN"
+check "landlord CANNOT end an account" 403 "$STATUS" "$BODY"
+
+req DELETE "/api/admin/users/$TENANT_ID" '{"reason":"A tenant should never reach this route.","confirm":"CLOSE","understood":true}' "$TTOKEN"
+check "tenant CANNOT end an account" 403 "$STATUS" "$BODY"
+
+req DELETE "/api/admin/users/$TENANT_ID" '{"reason":"Unauthenticated.","confirm":"CLOSE","understood":true}'
+check "ending an account requires auth" 401 "$STATUS"
+
+req GET "/api/admin/users/$TENANT_ID/closure-preview" "" "$TTOKEN"
+check "tenant CANNOT see what ending an account would do" 403 "$STATUS" "$BODY"
+
 if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req GET /api/admin/stats "" "$ADMIN_TOKEN"
   check "admin reads stats" 200 "$STATUS" "$BODY"
@@ -944,6 +959,38 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req PATCH "/api/admin/users/00000000-0000-0000-0000-000000000000/active" \
     '{"isActive":false,"reason":"probe"}' "$ADMIN_TOKEN"
   check "suspending an unknown user returns 404" 404 "$STATUS" "$BODY"
+
+  # ── Ending an account on its owner's request — Phase 7i.
+  #
+  # NOTHING here sends a valid closure: it is irreversible, and a smoke suite
+  # that ends an account every run would erase the tenant the sections after it
+  # still ask questions about. scripts/admin-closure-drive.mjs does the real
+  # one, on accounts it registered itself.
+  if [[ -n "$TENANT_ID" ]]; then
+    req GET "/api/admin/users/$TENANT_ID/closure-preview" "" "$ADMIN_TOKEN"
+    check "admin can see what ending an account would do" 200 "$STATUS" "$BODY"
+    if throttled "the closure preview names what is erased, KEPT and what stops"; then
+      :
+    elif echo "$BODY" | jq -e '(.kept | type) == "array" and (.erased | type) == "array" and (.stops | type) == "array"' >/dev/null 2>&1; then
+      green "  PASS  the closure preview names what is erased, what is KEPT and what stops"; PASS=$((PASS+1))
+    else
+      red "  FAIL  the closure preview does not carry all three lists"; FAIL=$((FAIL+1))
+      grey "        $(echo "$BODY" | head -c 300)"
+    fi
+
+    req DELETE "/api/admin/users/$TENANT_ID" '{"reason":"ok","confirm":"CLOSE","understood":true}' "$ADMIN_TOKEN"
+    check "a two-character request is refused — the audit row is the only evidence" 400 "$STATUS" "$BODY"
+
+    req DELETE "/api/admin/users/$TENANT_ID" '{"reason":"Emailed from the registered address, ticket 412.","confirm":"yes","understood":true}' "$ADMIN_TOKEN"
+    check "the typed word has to be CLOSE" 400 "$STATUS" "$BODY"
+
+    req DELETE "/api/admin/users/$TENANT_ID" '{"reason":"Emailed from the registered address, ticket 412.","confirm":"CLOSE"}' "$ADMIN_TOKEN"
+    check "an absent acknowledgement is refused, not read as false" 400 "$STATUS" "$BODY"
+  fi
+
+  req DELETE /api/admin/users/00000000-0000-0000-0000-000000000000 \
+    '{"reason":"Ending an account that does not exist.","confirm":"CLOSE","understood":true}' "$ADMIN_TOKEN"
+  check "ending an unknown account returns 404" 404 "$STATUS" "$BODY"
 else
   skipped "authorised admin paths — set ADMIN_TOKEN to include them"
 fi

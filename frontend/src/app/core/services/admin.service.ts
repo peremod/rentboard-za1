@@ -3,6 +3,8 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '@env/environment';
 import { VerificationRequest, VerificationStatus } from '../models/verification.model';
 import { OpenTenancyFlag, TenancyFlag } from '../models/tenancy.model';
+import { inlineErrors } from '../interceptors/inline-errors';
+import { DeletionPreview } from './account-lifecycle.service';
 
 export interface AdminStats {
   users: { total: number; landlords: number; tenants: number; suspended: number };
@@ -70,6 +72,15 @@ export interface AdminUserDetail {
     phone?: string | null;
     marketingEmails?: boolean;
     authProvider?: string;
+    /**
+     * Phase 7i. The lifecycle state the detail screen branches on — a paused
+     * account is not a suspended one, and an ended one has nothing left to
+     * offer a button for. Both are in the endpoint's SELECT; a type claiming a
+     * field the API does not send is the same family of defect as a column
+     * whose name asserts something untrue.
+     */
+    deactivatedAt?: string | null;
+    deletedAt?: string | null;
     /// Wider than the search payload: the detail endpoint also selects
     /// ratingCount and planTier.
     landlordProfile?: {
@@ -336,6 +347,31 @@ export class AdminService {
       `${this.api}/admin/users/${id}/active`,
       { isActive, reason },
     );
+  }
+
+  /**
+   * What ending this account would erase and what it would keep — Phase 7i.
+   *
+   * The same shape and the same data the owner is shown on /account/close, from
+   * the same server code, so an admin acting on somebody's request reads what
+   * that person would have read.
+   */
+  closurePreview(id: string) {
+    return this.http.get<DeletionPreview>(`${this.api}/admin/users/${id}/closure-preview`);
+  }
+
+  /**
+   * End a user's account on their request — irreversible.
+   *
+   * INLINE_ERRORS because the screen shows the refusal under the form and keeps
+   * what was typed. The server answers 403 for a refusal rather than 401, so it
+   * is not read as an expired session (see docs/OUTSTANDING.md §15).
+   */
+  closeUserAccount(id: string, reason: string) {
+    return this.http.delete<{ deletedAt: string }>(`${this.api}/admin/users/${id}`, {
+      body: { reason, confirm: 'CLOSE', understood: true },
+      context: inlineErrors(),
+    });
   }
 
   recentRooms() {

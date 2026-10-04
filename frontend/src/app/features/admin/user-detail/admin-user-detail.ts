@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AdminService, AdminUserDetail } from '../../../core/services/admin.service';
+import { DeletionPreview } from '../../../core/services/account-lifecycle.service';
 
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 
@@ -196,7 +197,135 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
             }
           </section>
         }
+
+        <!-- ── Ending the account, on the owner's request ─────────────────
+             Phase 7i. Here rather than in the dashboard's user list, where
+             suspension lives: suspension is reversible and quick, and belongs
+             inline. This erases the email, the name and the number, so it
+             belongs on a screen that can show what it will do BEFORE offering
+             the button — the same reasoning that kept it off the settings
+             screen for the owner's own closure. -->
+        @if (d.user.role !== 'ADMIN' && !closed()) {
+          <section class="dash-section ac-danger">
+            <h2 class="dash-section-title">End this account on the owner's request</h2>
+            <p class="ac-lead">
+              For a request this person cannot carry out themselves — an account
+              that signs in with a phone number has no password, so the
+              close-account screen cannot confirm it. This is
+              <strong>not suspension</strong>: it cannot be undone, and there is
+              no way to restore the account afterwards.
+            </p>
+            <p class="ac-lead muted">
+              Only do this on a request from the account holder. What you type
+              below is kept permanently and is the only lasting evidence that it
+              was asked for — the email, name and number are erased.
+            </p>
+
+            @if (loadingPreview()) {
+              <p class="muted">Working out what this would do…</p>
+            } @else if (previewFailed()) {
+              <p class="ac-lead" role="alert">
+                We could not check what is on this account, so the button is not
+                being offered — you would be confirming a list that never
+                arrived.
+                <button type="button" class="link-btn" (click)="loadPreview()">Try again</button>
+              </p>
+            } @else if (preview(); as p) {
+              <h3 class="ac-sub">What gets erased</h3>
+              <ul class="ac-list">
+                @for (row of p.erased; track row.label) {
+                  <li>{{ row.label }}@if (row.count !== null) { — {{ row.count }} }</li>
+                }
+              </ul>
+
+              @if (p.kept.length) {
+                <h3 class="ac-sub">What stays, with their name taken off it</h3>
+                <ul class="ac-list ac-list--kept">
+                  @for (row of p.kept; track row.label) {
+                    <li>
+                      <strong>{{ row.label }} ({{ row.count }})</strong>
+                      <span class="ac-why">{{ row.why }}</span>
+                    </li>
+                  }
+                </ul>
+              }
+
+              <form class="ac-form" (ngSubmit)="closeAccount()">
+                <label>
+                  <span>How did the request reach you?</span>
+                  <input type="text" name="reason" [(ngModel)]="reason"
+                         placeholder="Emailed from the registered address on 3 Oct, ticket 412"/>
+                  <span class="field-hint">
+                    Kept permanently. Write about the request, never about the
+                    person — this record outlives everything else about them.
+                  </span>
+                </label>
+
+                <label>
+                  <span>Type CLOSE to confirm</span>
+                  <input type="text" name="confirm" autocomplete="off" spellcheck="false"
+                         [(ngModel)]="confirm" placeholder="CLOSE"/>
+                </label>
+
+                <label class="ac-check">
+                  <input type="checkbox" name="understood" [(ngModel)]="understood"/>
+                  <span>
+                    I have read what this erases and what it keeps, the account
+                    holder asked for it, and I understand it cannot be undone.
+                  </span>
+                </label>
+
+                @if (closeError()) { <p class="field-error" role="alert">{{ closeError() }}</p> }
+
+                <button type="submit" class="btn btn-danger"
+                        [disabled]="!canClose() || closing()">
+                  {{ closing() ? 'Ending the account…' : 'End this account for good' }}
+                </button>
+              </form>
+            }
+          </section>
+        }
+
+        @if (closed()) {
+          <section class="dash-section ac-done">
+            <h2 class="dash-section-title">This account has been ended</h2>
+            <p role="status">
+              The person has been erased and the shared records kept, with their
+              name taken off them. The request you recorded is stored against
+              this account permanently.
+              <a routerLink="/admin/dashboard">Back to accounts</a>
+            </p>
+          </section>
+        }
       }
+  `,
+  styles: `
+    .ac-lead { line-height: 1.7; max-width: 42rem; }
+    .ac-sub { font-size: .9rem; margin: 1.1rem 0 .4rem; }
+    .ac-list { margin: 0 0 .75rem; padding-left: 1.2rem; line-height: 1.7; max-width: 42rem; }
+    .ac-list--kept li { margin-bottom: .6rem; }
+    .ac-why { display: block; font-size: .85rem; color: var(--slate); line-height: 1.6; }
+    .ac-danger {
+      border: 1px solid rgba(214, 59, 59, .35);
+      background: rgba(214, 59, 59, .04);
+    }
+    .ac-done { border-left: 3px solid var(--sage); }
+    .ac-form { margin-top: 1rem; max-width: 28rem; display: flex; flex-direction: column; gap: .9rem; }
+    .ac-form label { display: flex; flex-direction: column; gap: .25rem; font-size: .85rem; }
+    .ac-form input[type="text"] {
+      font: inherit; padding: .55rem .6rem; border: 1px solid var(--border);
+      border-radius: 6px; min-height: 44px;
+    }
+    .ac-check { flex-direction: row !important; align-items: flex-start; gap: .55rem; line-height: 1.6; }
+    .ac-check input { width: 20px; height: 20px; margin-top: .15rem; flex-shrink: 0; }
+    .btn-danger {
+      background: #D63B3B; color: #fff; border: none;
+      &:disabled { opacity: .5; cursor: not-allowed; }
+    }
+    @media (max-width: 480px) {
+      .ac-form, .ac-lead, .ac-list { max-width: none; }
+      .btn-danger { width: 100%; }
+    }
   `,
 })
 export class AdminUserDetailPage implements OnInit {
@@ -209,12 +338,76 @@ export class AdminUserDetailPage implements OnInit {
   loading = signal(true);
   error = signal<string | null>(null);
 
+  // ── Ending the account on the owner's request — Phase 7i ───────────────
+  protected reason = '';
+  protected confirm = '';
+  protected understood = false;
+
+  protected readonly preview = signal<DeletionPreview | null>(null);
+  protected readonly loadingPreview = signal(true);
+  /**
+   * ⚠️ Distinguished from "nothing to show". If the preview cannot be loaded
+   * the button is NOT offered: an admin would otherwise be confirming they had
+   * read a list that never arrived, on somebody else's account.
+   */
+  protected readonly previewFailed = signal(false);
+  protected readonly closing = signal(false);
+  protected readonly closeError = signal<string | null>(null);
+  protected readonly closed = signal(false);
+
+  protected canClose(): boolean {
+    if (!this.preview() || this.previewFailed()) return false;
+    return this.reason.trim().length >= 10
+      && this.confirm.trim() === 'CLOSE'
+      && this.understood;
+  }
+
   ngOnInit() {
     this.admin.getUserDetail(this.id()).subscribe({
-      next: (d) => { this.detail.set(d); this.loading.set(false); },
+      next: (d) => {
+        this.detail.set(d);
+        this.loading.set(false);
+        // Already ended: there is nothing to preview and nothing to offer.
+        if (d.user.deletedAt) {
+          this.closed.set(true);
+          this.loadingPreview.set(false);
+        } else if (d.user.role !== 'ADMIN') {
+          this.loadPreview();
+        } else {
+          this.loadingPreview.set(false);
+        }
+      },
       error: () => {
         this.error.set('Could not load that account.');
         this.loading.set(false);
+        this.loadingPreview.set(false);
+      },
+    });
+  }
+
+  protected loadPreview() {
+    this.loadingPreview.set(true);
+    this.previewFailed.set(false);
+    this.admin.closurePreview(this.id()).subscribe({
+      next: (p) => { this.preview.set(p); this.loadingPreview.set(false); },
+      error: () => { this.loadingPreview.set(false); this.previewFailed.set(true); },
+    });
+  }
+
+  protected closeAccount() {
+    if (!this.canClose()) return;
+    this.closing.set(true);
+    this.closeError.set(null);
+    this.admin.closeUserAccount(this.id(), this.reason.trim()).subscribe({
+      next: () => {
+        this.closing.set(false);
+        this.closed.set(true);
+      },
+      error: (err) => {
+        this.closing.set(false);
+        this.closeError.set(
+          err?.error?.message ?? 'That did not work just now. Try again in a moment.',
+        );
       },
     });
   }
