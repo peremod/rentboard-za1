@@ -464,6 +464,38 @@ Verified: 511 smoke checks, 46 new drive checks, 26 accessibility pages, nav and
 route audits clean, production build green, 100.8 KB under budget. Checked at
 360, 390, 768 and 1280px."
 
+tag_if_missing "v1.91.0" "68d151b39c9e65d4a98debc7d12e20a53011e94c" "2026-10-04 13:33:51 +0000" "v1.91.0 — Phase 7f: the social card, and showing somebody round once
+
+The default Open Graph image existed and was the right size. The URL was not:
+index.html pointed at the apex, which per environment.prod.ts is a different box
+answering a 301 to the www ROOT — so a crawler asked for a PNG and would be
+handed the homepage's HTML. It ships in index.csr.html, the shell used when
+server rendering is bypassed, which is the place nobody looks.
+
+Width, height, type and alt are emitted now, because Facebook and WhatsApp use
+them to draw a large card without fetching the file first, and WhatsApp is the
+channel that matters most here. They are stated only for the one image whose
+size is a measured fact: a room photo's ImageKit output size was never verified
+in this container, and a wrong height is worse than none because the platform
+believes it.
+
+The walkthrough is four role-appropriate steps, skippable, reachable again from
+settings, and recorded against the ACCOUNT rather than the browser — a phone
+here is shared and replaced, and under SSR there is no localStorage to read on
+the first paint.
+
+Four defects came out of driving it: every brand-new account got the cookie
+notice drawn over the tour's buttons, because both are fixed to the bottom and
+the notice is at z-index 9999; Escape was bound on a card nothing ever focused,
+so a modal on a phone had no way out but a tap; 'show me around again' opened
+instantly over the message promising it would open on the next screen; and the
+accessibility drive was passing for the wrong reason, auditing sixteen portal
+pages that the tour would have covered.
+
+Verified: 517 smoke checks, 35 new drive checks, 26 accessibility pages, nav,
+route and env-parity audits clean, production build green, 123.7 KB under
+budget. Both headline defects reintroduced to confirm the drive fails on them."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -471,7 +503,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|90)[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[01])[.]'"
 else
   echo "Nothing to push."
 fi
