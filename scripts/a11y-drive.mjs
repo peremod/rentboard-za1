@@ -730,6 +730,23 @@ if (!apiReachable) {
     await apiCall(API, 'POST', `/api/applications/${app.body.id}/messages`,
       { body: 'Good day, is the room still open? I can come see it on Saturday.' },
       accounts.TENANT.token);
+
+    /**
+     * ⚠️ A viewing invitation — Phase 7l.
+     *
+     * The tenant dashboard's viewings panel renders NOTHING when there is
+     * nothing, which is right for a tenant and wrong for this drive: without a
+     * live invitation the panel is never measured, and it is the one on that
+     * screen with a red-tinted safety box and a sage "you are coming" line —
+     * exactly where a contrast threshold fails while looking deliberate. This
+     * is the same mistake Phase 7c made by auditing every portal screen empty.
+     */
+    await apiCall(API, 'POST', `/api/applications/${app.body.id}/viewings`, {
+      startsAt: new Date(Date.now() + 5 * 86400_000).toISOString(),
+      meetingPlace: 'The blue gate on the corner',
+      note: 'Ask for Sipho at the gate.',
+    }, accounts.LANDLORD.token);
+
     seeded = true;
   } catch (err) {
     failures.push(`the portal screens were audited EMPTY — the seed failed (${err.message}), so rows, badges and pills were never measured`);

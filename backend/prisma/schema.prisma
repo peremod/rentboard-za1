@@ -211,6 +211,8 @@ model User {
   closuresPerformed AccountClosure[] @relation("ClosuresByAdmin")
   /// Phase 7k. Contractor numbers this landlord was handed. Nulled on closure.
   contractorLeads ContractorLead[] @relation("ContractorLeads")
+  /// Phase 7l. Viewings this person called off — either side may.
+  viewingsCancelled RoomViewing[] @relation("ViewingsCancelled")
 }
 
 model LandlordProfile {
@@ -525,6 +527,8 @@ model Application {
   @@index([roomId, status])
   @@index([roomId, cycle])
   @@map("applications")
+  /// Phase 7l. Viewings arranged on this application.
+  viewings RoomViewing[]
 }
 
 /// Single-use, short-lived token for password reset and email change.
@@ -2484,6 +2488,93 @@ model ContractorLead {
 enum ContractorLeadChannel {
   call
   whatsapp
+}
+
+/// A landlord inviting an applicant to come and see the room — Phase 7l.
+///
+/// ── There was no such thing before this
+///
+/// `ApplicationStatus` runs pending → viewed → shortlisted → accepted, and
+/// `viewed` means THE LANDLORD OPENED THE APPLICATION. Nothing in the product
+/// recorded a room viewing, so "I will meet you Saturday at four" happened in
+/// the message thread and nowhere else: no date anybody could look up, nothing
+/// the tenant could answer yes or no to, and nothing that reminded either of
+/// them it was happening.
+///
+/// ── Hung off the application, not off the room and tenant separately
+///
+/// An application already ties one tenant to one room, carries the letting
+/// cycle, and is the thing both sides already have a screen for. Two foreign
+/// keys would allow a viewing for a tenant who never applied, which is a
+/// stranger being given an address.
+///
+/// ── The meeting place is TYPED, never pre-filled
+///
+/// ⚠️ This is the decision that matters most in this model.
+///
+/// The board shows a suburb, not a street: `Room.locationDisplay` is "Tembisa,
+/// Johannesburg" on purpose, for the tenant's safety and the landlord's. And
+/// `Property.addressLine` exists but its own form says, in those words, "Only
+/// you see this. It is never on a listing and never sent to an applicant."
+///
+/// So a viewing invitation CANNOT pre-fill from it. Pre-filling would break a
+/// promise the product made in writing, on the form where the landlord typed
+/// it. The landlord types where to meet, for this viewing, for this person —
+/// and the invitation screen says that it goes to them.
+///
+/// It is the one moment an address is deliberately disclosed, to one named
+/// applicant, chosen deliberately. That is what makes it defensible.
+model RoomViewing {
+  id String @id @default(uuid())
+
+  applicationId String
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  /// When the landlord proposes they meet. Must be in the future when created —
+  /// an invitation to a time that has passed is not an invitation.
+  startsAt DateTime
+
+  /// Where to meet, in the landlord's own words, for this viewing only. See
+  /// the note above: never copied from Property.addressLine.
+  meetingPlace String
+
+  /// "Ask for Sipho at the gate." Optional, and the thing that actually gets
+  /// somebody through a locked gate.
+  note String?
+
+  status ViewingStatus @default(proposed)
+
+  /// The tenant's answer. Only the tenant may set it.
+  respondedAt DateTime?
+
+  /// Why they cannot come, if they said. Free text, optional — a tenant who
+  /// declines owes nobody a reason, and demanding one would mean they simply
+  /// do not answer.
+  declineReason String?
+
+  /// Either side may cancel, and who did is worth knowing: a landlord
+  /// cancelling twice on somebody is a different thing from a tenant doing it.
+  cancelledAt DateTime?
+  cancelledById String?
+  cancelledBy   User?   @relation("ViewingsCancelled", fields: [cancelledById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([applicationId, startsAt])
+  @@index([startsAt, status])
+  @@map("room_viewings")
+}
+
+enum ViewingStatus {
+  /// The landlord has invited; the tenant has not answered.
+  proposed
+  /// The tenant said yes.
+  accepted
+  /// The tenant said no.
+  declined
+  /// Called off by either side after the fact.
+  cancelled
 }
 
 /// A file that must be removed from ImageKit, kept until it actually is.

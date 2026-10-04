@@ -1136,6 +1136,40 @@ else
 fi
 
 
+# -- 17d. Inviting an applicant to a viewing (Phase 7l) --------------------
+# ⚠️ The checks that matter here are about the ADDRESS. The board shows a
+# suburb, not a street, and Property.addressLine's own form promises "Only you
+# see this. It is never on a listing and never sent to an applicant." So the
+# meeting place is typed per viewing and the guards on who may invite are the
+# guards on who gets told where somebody lives.
+head_ "17d. Inviting an applicant to a viewing"
+
+if [[ -n "$APP_ID" ]]; then
+  req POST "/api/applications/$APP_ID/viewings" '{"startsAt":"2099-01-01T12:00:00.000Z","meetingPlace":"The blue gate"}'
+  check "inviting to a viewing requires a session" 401 "$STATUS"
+
+  # The tenant on the application cannot invite themselves — only the landlord.
+  req POST "/api/applications/$APP_ID/viewings" '{"startsAt":"2099-01-01T12:00:00.000Z","meetingPlace":"The blue gate"}' "$TTOKEN"
+  check "an applicant CANNOT invite themselves to a viewing" 403 "$STATUS" "$BODY"
+
+  req POST "/api/applications/$APP_ID/viewings" '{"startsAt":"2099-01-01T12:00:00.000Z","meetingPlace":"  "}' "$LTOKEN"
+  check "an invitation with no meeting place is refused" 400 "$STATUS" "$BODY"
+
+  req POST "/api/applications/$APP_ID/viewings" '{"startsAt":"2020-01-01T12:00:00.000Z","meetingPlace":"The blue gate"}' "$LTOKEN"
+  check "a time that has already passed is refused" 400 "$STATUS" "$BODY"
+else
+  skipped "viewing invitations — no application id from the earlier section"
+fi
+
+req GET /api/applications/viewings/mine
+check "your upcoming viewings need a session" 401 "$STATUS"
+
+req GET /api/applications/viewings/mine "" "$TTOKEN"
+check "a tenant can read their upcoming viewings" 200 "$STATUS" "$BODY"
+
+req POST /api/applications/viewings/00000000-0000-0000-0000-000000000000/respond '{"accept":true}' "$TTOKEN"
+check "answering an unknown viewing returns 404" 404 "$STATUS" "$BODY"
+
 # -- 17c. Who to call, and what we checked (Phase 7j) ----------------------
 # ⚠️ The directory had NO smoke coverage at all before this — not one check on
 # the endpoints behind a screen that tells landlords these names were looked

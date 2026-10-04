@@ -2085,6 +2085,108 @@ that hid the split.
 | `sponsoredUntil` still exists and still nothing reads it. In a list captioned "names we looked into", a paid placement needs a label saying so | Low now, a decision before any money |
 
 
+### 5.30 Inviting an applicant to a viewing — ✅ built in v1.97.0 (Phase 7l)
+
+Brief item 26. Reading the models first showed the gap was wider than a button.
+
+**There was no concept of a room viewing anywhere in the product.**
+`ApplicationStatus` runs pending → viewed → shortlisted → accepted, and
+`viewed` means **the landlord opened the application** (§5.1's own table says
+so: "pending → viewed | landlord opens applicant"). So "I'll meet you Saturday
+at four" lived in the message thread and nowhere else: no date either side
+could look up, nothing the tenant could answer yes or no to, and nothing to say
+whether it had been agreed at all.
+
+### 🔴 The decision that matters: the address
+
+The board shows a suburb, not a street — `Room.locationDisplay` is "Tembisa,
+Johannesburg" deliberately, for the tenant's safety and the landlord's.
+`Property.addressLine` does hold a street address, and §5.20 records why it is
+nullable and private. The form where a landlord types it says, **in these
+words**:
+
+> Only you see this. It is never on a listing and never sent to an applicant.
+
+So the meeting place **cannot** be pre-filled from it. Doing so would break a
+promise the product made in writing, on the form where the landlord typed it,
+and the landlord would never know it had happened. There is no
+`useMyPropertyAddress` flag, no fallback and no suggestion: the landlord types
+where to meet, for this viewing, for this person, and the form says in bold
+that it is sent to them and that their saved address stays private.
+
+It is the one moment an address is deliberately disclosed, to one named
+applicant, chosen deliberately. That is what makes it defensible.
+
+| Decision | Why |
+|---|---|
+| Hung off the **application** | It already ties one tenant to one room and carries the letting cycle. Separate room and tenant columns would allow a viewing for somebody who never applied — a stranger handed a residential address |
+| Refused on a **closed** application | `rejected`, `withdrawn` or `archivedAt`. Sending somebody who has been told no a time and an address is a mistake, and they are not expecting to hear from us |
+| **One open invitation** at a time | Two times to turn up at is none, and the tenant has no way to tell which is meant. Not a database constraint, because Prisma cannot express "unique where status in (…)" — checked in the service and asserted by the drive |
+| **Only the tenant** answers | A landlord accepting on somebody's behalf turns a proposal into an appointment the other person never agreed to |
+| **Either side** cancels | A landlord whose geyser burst and a tenant who cannot get transport are the same situation from opposite ends. A product that only lets one cancel makes the other simply not turn up |
+| Cancelling **clears the answer** | A CHECK constraint says a cancelled viewing carries none, and "they accepted" stops being true of a viewing that is not happening. A row that says both contradicts itself |
+| Three CHECK constraints | A blank meeting place, an answer with no date, and a cancellation with no date are all refused at the database. The rule matters more than the route |
+| `Africa/Johannesburg` **explicitly** | The server runs UTC and everybody reading the message is in SAST. A viewing described two hours early is somebody standing at a gate alone |
+
+### The safety line travels with the invitation
+
+This product's own report reasons include `upfront_payment_demanded`, so the
+risk of being asked for money before seeing a room is already known to the
+codebase — and a viewing is exactly when it happens. So the warning is in the
+**notice**, at the moment of invitation, and on the **panel**, where somebody
+looks the night before: tell someone where you are going, and never pay
+anything before you have seen the room.
+
+The tenant's panel is its own section rather than a row in the task inbox,
+because it is the only thing on that dashboard with a **place and a time** —
+somewhere a person physically has to be, on a day. The inbox is a list of
+things to answer; this is a list of things to attend, and burying "Saturday
+16:00, the blue gate in Tembisa" among "three applications awaiting reply" is
+how somebody misses it. It renders nothing when there is nothing, like the
+inbox beside it.
+
+### What the drives prove
+
+`scripts/viewings-drive.mjs` — 35 checks. `scripts/viewings-ui-drive.mjs` — 41
+checks at four widths. Falsified by appending the private address to the notice
+and by removing the only-the-tenant-answers and closed-application guards:
+**5 failures**, including "the private property address reached the tenant in a
+notice".
+
+⚠️ **And falsifying it taught something about the check itself.** The first
+falsification made the service fall back to `addressLine` when the meeting
+place was blank — and the check stayed **green**, because the DTO's
+`@MinLength(3)` refuses a blank before the service ever runs, so the fallback
+could not fire. A leak does not arrive that way; it arrives as somebody
+helpfully appending "The address is …" to the notice so the tenant can find the
+place. That version the check does catch, proven by doing it — which is why it
+searches the stored row, the tenant's notices **and** the whole payload the API
+hands the tenant. Only one of the three would have caught the realistic one.
+
+⚠️ **`nav-audit.mjs` caught a dead link I had just written.** The safety line
+pointed at `/report`, which does not exist — reporting is a dialog on the room
+page. It links the room now. That gate exists because this codebase has shipped
+dead links the eye slides over, and it earned its keep inside an hour.
+
+⚠️ **The a11y drive was about to audit the panel empty.** It renders nothing
+when there is nothing, which is right for a tenant and wrong for a drive: its
+seeded tenant had no invitation, so the one panel on that screen with a
+red-tinted safety box and a sage "you are coming" line — exactly where a
+contrast threshold fails while looking deliberate — would never have been
+measured. Phase 7c made this mistake across every portal screen; the seed now
+creates a viewing, and the panel passes.
+
+### Gaps
+
+| Gap | Severity |
+|---|---|
+| Nothing reminds either side the day before. The data supports it (`startsAt`, `status`) and there is no scheduled job — the rent-reminder pass is the nearest precedent | Medium — the most likely next piece |
+| Nothing records whether the viewing actually happened. There is deliberately no `completed` status, because nothing would write it and a status nothing writes is this codebase's recurring defect | Low, by choice |
+| A landlord cannot invite several applicants to one slot in one action. Group viewings are normal, and this is one invitation at a time | Medium — a real convenience, not a correctness gap |
+| No calendar view. The landlord sees a viewing on each applicant card and nowhere as a day's schedule | Low — the notes calendar is the precedent if it is wanted |
+| A landlord who proposes a time cannot change it; they cancel and offer another. That is two notices to the tenant where one would do | Low |
+
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461
