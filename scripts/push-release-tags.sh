@@ -359,6 +359,44 @@ silently stopped emitting, so the running API was three edits behind and a drive
 caught it. The compiled output is checked for an assertion now rather than the
 watcher being trusted."
 
+tag_if_missing "v1.88.0" "4e2ea557643648db40e52909ffd362223a33c034" "2026-10-04 07:47:09 +0000" "v1.88.0 — Phase 7c: one place to find applicants and messages
+
+Applicants were reachable only inside one room and messages only inside one
+application, so a landlord with six rooms and eleven applicants had seventeen
+screens to open before they knew whether anybody had written to them. Both
+portal navs listed 'Messages' greyed out with a 'Soon' chip, which Phase 7a made
+them do because the entry was a promise nothing kept.
+
+Now GET /applications/inbox and /landlord/applicants — every applicant across
+every room, filtered by room or property, sorted newest first or by what is
+waiting on you — and GET /messages/inbox and /account/messages, every
+conversation, newest activity first, one screen for both roles. A sub-lessor is
+a TENANT account that also lets a room, so two role-scoped inboxes would split
+one person's messages by a distinction they do not have.
+
+The channel a reply leaves by is said out loud, because a thread genuinely mixes
+them: a tenant's message is forwarded to the landlord over WhatsApp and a reply
+there is threaded back, while a reply typed on this screen is always an in-app
+message. A thread that has used both channels warns about it above the composer.
+
+Two defects found by building it, neither of which could error. Every WhatsApp
+reply a landlord typed was stored as though the tenant had written it, because
+the handler used the senderId of the message we had forwarded; the sender is now
+resolved from the opted-in number and a reply from any other number is dropped
+rather than guessed at. And Message.readAt had been on the model since messaging
+shipped with nothing ever writing it, so any unread badge built on it would have
+counted every message ever sent, for ever. Both were reintroduced and driven to
+confirm the checks catch them.
+
+The accessibility drive turned out to have been auditing every portal screen
+empty — a fresh account has no rows — so it now seeds a room, an application and
+a message first, and the first run with content on the page found a row of text
+rendering white-on-cream at 1.06:1.
+
+Verified: 497 smoke checks, 43 + 33 drive checks, 25 accessibility pages with
+content on them, nav audit clean, throttle lint clean, production build green,
+26.8 KB under the bundle budget."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -366,7 +404,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-7])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-8])[.]'"
 else
   echo "Nothing to push."
 fi
