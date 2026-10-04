@@ -198,6 +198,22 @@
     padding: .5rem .75rem;
     border-bottom: 1px solid var(--border);
     -webkit-overflow-scrolling: touch;
+    // ⚠️ min-width: 0, or the scroller is not a scroller.
+    //
+    // This is a GRID item in .portal-wrap, and a grid item's default
+    // min-width: auto is its min-content width — the full 2251px strip of nav
+    // links will not shrink below it just because overflow-x says auto. The
+    // measured result at 360px was a nav 386px wide inside a 360px wrap, and
+    // so 26px of sideways scroll on the PAGE, which is the first thing in
+    // CLAUDE.md's mobile list.
+    //
+    // It only showed on some screens, which is what made it look like a
+    // content bug: the grid track is sized by the widest item, so the nav
+    // inherited the demand of whatever else was on the page. On the
+    // create-room wizard that was the property-picker fieldset (see the note
+    // on `fieldset` in styles.scss). Both had to be fixed; either alone left
+    // the other able to widen the page again.
+    min-width: 0;
   }
   .portal-user { display: none; }          // the avatar block is not navigation
   .portal-nav-link {

@@ -109,7 +109,30 @@ img{display:block;max-width:100%}
   padding:.55rem 1.2rem;border-radius:var(--r4);font-size:.875rem;
   font-weight:600;cursor:pointer;border:none;transition:all .15s;
   font-family:var(--font-body);white-space:nowrap;line-height:1;
+  /* ⚠️ 44px, app-wide — the one change this rule was missing (OUTSTANDING §13).
+     Padding plus line-height:1 computes to about 34px, so every .btn in the
+     product that reached the WCAG 2.5.8 target did so because somebody wrote
+     min-height by hand on that one button: .nav-actions .btn in
+     _responsive.scss (the mobile header, v1.91.0) and .btn-danger on the
+     close-account screen (v1.92.0). Measured across the public pages at 360px
+     it was 13 of 23 visible buttons under target, as low as 32px on /pricing.
+     Three more screens needed the same local patch in one sitting — the wizard
+     actions, the add-a-property form and the applicant row — which is the
+     signal that the base rule is the place to fix it, not the fourth screen.
+     min-height rather than padding so no button gets wider or re-wraps; it can
+     only grow a box that was too short. */
+  min-height:44px;
 }
+/* ⚠️ Disabled buttons looked enabled, app-wide.
+   There was no :disabled handling on .btn anywhere — each screen that cared
+   wrote its own, scoped to itself, and the create-room wizard's happened to be
+   a bare `button:disabled` rule that also overrode every global button class
+   (see the note in create-room.ts). A disabled primary that looks live is a
+   button somebody taps repeatedly while nothing happens, and the wizard's
+   "Next" is disabled until the description reaches 50 characters.
+   Additive and layout-neutral: opacity and cursor only, on disabled only. */
+.btn:disabled, .btn[disabled] { opacity: .5; cursor: not-allowed; box-shadow: none; transform: none; }
+.btn:disabled:hover, .btn[disabled]:hover { transform: none; box-shadow: none; }
 .btn-primary{background:var(--terra);color:#fff}
 /* Darkens on hover. --terra2 is the brand accent for text on dark; as a
    background under white text it is 3.56:1. See --terra-deep. */
@@ -488,7 +511,17 @@ img{display:block;max-width:100%}
   border-left-color:var(--terra);
 }
 .portal-nav-icon{font-size:1rem;flex-shrink:0}
-.portal-main{padding:2rem;background:var(--cream)}
+/* ⚠️ min-width: 0 — every portal screen's defence against sideways scroll.
+   This is a GRID item in .portal-wrap, so its default min-width: auto is its
+   min-content width, and a grid TRACK is sized by its widest item. One screen
+   whose content wants 354px therefore made the track 386px at a 360px
+   viewport, which stretched the nav to 386 and gave the whole PAGE 26px of
+   sideways scroll — and the nav, being the visibly-too-wide element, read as
+   the culprit. It was not; it was the only thing wide enough to notice.
+   Measured on the create-room wizard by hiding each child of the step in turn.
+   Without this, every portal screen is one wide element away from the same
+   bug, and the element that gets blamed will be the nav again. */
+.portal-main{padding:2rem;background:var(--cream);min-width:0}
 // The portal's h1. Deliberately close in size to a section title: this is a
 // working screen, not a landing page, and the point of the heading is the
 // outline rather than the drama.
@@ -677,6 +710,15 @@ img{display:block;max-width:100%}
 .link-btn{
   background:none;border:none;padding:0;font:inherit;font-size:.82rem;
   color:var(--terra);text-decoration:underline;cursor:pointer;
+  /* ⚠️ padding:0 on a .82rem font is a 17px tap target.
+     Measured on the property screen's expenses, where "Remove" DELETES an
+     expense record: a 17px destructive control on a phone. The "Money spent"
+     disclosure and "Download this year as CSV" were the same height. This
+     class is not .btn, so the base rule's 44px does not reach it.
+     All 21 uses in the product are standalone controls — none sits inside a
+     sentence — so inline-flex costs no paragraph its line height, and the
+     text keeps its size and underline. */
+  display:inline-flex;align-items:center;min-height:44px;
 }
 
 .admin-reference{
@@ -713,6 +755,67 @@ img{display:block;max-width:100%}
 .yard__count--vacant{color:var(--sage);font-weight:700}
 .yard__count--alert{color:var(--terra);font-weight:700}
 .yard__empty{padding:1rem;margin:0;font-size:.82rem}
+
+/* ── A property's shared facilities, and what it has cost (item 22) ─────────
+   ⚠️ None of these classes had ANY styles. Not one: not .yard-shared-form,
+   .yard-shared-form__actions, .yard-expenses, .expense-list, .expense,
+   .expense__main, .expense-form nor .expense-form__actions. The markup was
+   written with a stylesheet in mind and the stylesheet was never added, so the
+   whole money-spent section rendered as browser defaults — the receipts as a
+   LIST-ITEM list with disc markers, the form as a stack of unspaced labels and
+   inputs, and the actions row as display:block with the Add button and the CSV
+   link separated by a word space.
+   Measured in the browser before it was written, not inferred from the markup:
+   .expense came back display:list-item, list-style-type:disc, and
+   .expense-form__actions came back display:block. */
+
+.yard-shared-form {
+  display:grid;gap:.75rem;margin:.75rem 0;padding:.9rem;
+  background:var(--cream2);border:1px solid var(--border);border-radius:var(--r8);
+}
+.yard-shared-form label{display:grid;gap:.25rem;font-size:.85rem;font-weight:600}
+.yard-shared-form input,
+.yard-shared-form textarea,
+.yard-shared-form select{
+  width:100%;font:inherit;font-weight:400;padding:.55rem .6rem;
+  border:1.5px solid var(--border);border-radius:var(--r4);min-height:44px;
+}
+.yard-shared-form textarea{min-height:5rem;line-height:1.5}
+.yard-shared-form__actions{display:flex;flex-wrap:wrap;align-items:center;gap:.9rem}
+/* The confirmation that saving happened at all — item 21. */
+.yard-saved{
+  margin:.6rem 0 0;padding:.5rem .7rem;font-size:.82rem;line-height:1.6;
+  border-left:3px solid var(--sage);background:rgba(61,112,64,.06);border-radius:var(--r4);
+}
+
+.yard-expenses{padding:.7rem 1rem 1rem;border-top:1px solid var(--border)}
+.expense-list{list-style:none;margin:.7rem 0 0;padding:0;display:grid;gap:.5rem}
+.expense{
+  display:grid;gap:.25rem;padding:.6rem .7rem;background:var(--white);
+  border:1px solid var(--border);border-radius:var(--r8);
+}
+.expense__main{display:flex;flex-wrap:wrap;align-items:baseline;gap:.5rem;font-size:.85rem}
+.expense__main strong{font-size:.95rem}
+.expense__cat{font-weight:600;color:var(--ink2)}
+.expense__note{font-size:.8rem;color:var(--ink2);line-height:1.6}
+.expense-form{
+  display:grid;gap:.7rem;margin-top:.9rem;padding-top:.9rem;
+  border-top:1px dashed var(--border);
+  /* Two columns where there is room for two. minmax rather than a breakpoint
+     so it answers the width it is actually given — this form sits inside a
+     property card, which is narrower than the viewport. */
+  grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));
+}
+.expense-form label{display:grid;gap:.25rem;font-size:.85rem;font-weight:600}
+.expense-form input,
+.expense-form select{
+  width:100%;font:inherit;font-weight:400;padding:.55rem .6rem;
+  border:1.5px solid var(--border);border-radius:var(--r4);min-height:44px;
+}
+/* The error and the actions belong across the whole form, not in one column. */
+.expense-form .field-error,
+.expense-form__actions{grid-column:1 / -1}
+.expense-form__actions{display:flex;flex-wrap:wrap;align-items:center;gap:.9rem}
 
 .yard-room{padding:.75rem 1rem;border-bottom:1px solid var(--border)}
 /* ── Phase 7b: the property picker in the listing wizard ───────────────────

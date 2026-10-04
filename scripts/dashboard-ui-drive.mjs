@@ -226,14 +226,40 @@ scopeA.includes(propA.name)
  */
 const randOf = (text) => (text.match(/R\s?([\d,]+)/)?.[1] ?? '').replace(/,/g, '');
 
-const paidA = randOf(await page.locator('#money .stat-box').first().innerText());
+/**
+ * ⚠️ Waits for the FIGURE, not for the box around it.
+ *
+ * `waitForSelector('#money')` returns as soon as the section renders, and the
+ * money comes from a request that lands after it. So reading the stat box
+ * immediately caught R0 about one run in four, and reported "expected its own
+ * 3000, not the portfolio's 7500" — a scoping bug, about a screen that was
+ * right and merely not finished loading. A check that fails one run in four is
+ * one somebody eventually satisfies by changing working code.
+ *
+ * It polls until two consecutive reads agree, so it waits for the value to
+ * settle rather than for a fixed sleep. A figure that really is 0 still fails:
+ * the poll gives up and the assertion reads whatever is on the screen.
+ */
+const settledRand = async (locator, timeoutMs = 12000) => {
+  const started = Date.now();
+  let previous = null;
+  while (Date.now() - started < timeoutMs) {
+    const current = randOf(await locator.innerText().catch(() => ''));
+    if (current && current === previous) return current;
+    previous = current;
+    await page.waitForTimeout(400);
+  }
+  return previous ?? '';
+};
+
+const paidA = await settledRand(page.locator('#money .stat-box').first());
 paidA === '3000'
   ? ok("…and shows that property's R3 000, not the R7 500 across everything")
   : bad(`property A's "rent marked paid" is R${paidA} — expected its own 3000, not the portfolio's 7500`);
 
 await page.goto(`${WEB}/landlord/properties/${propB.id}`, { waitUntil: 'domcontentloaded' });
 await page.waitForSelector('#money', { timeout: 20000 });
-const paidB = randOf(await page.locator('#money .stat-box').first().innerText());
+const paidB = await settledRand(page.locator('#money .stat-box').first());
 paidB === '0'
   ? ok('…while the other property, whose month is unpaid, shows R0 — not A’s rent and not the total')
   : bad(`property B shows R${paidB} — it is being handed somebody else's money`);

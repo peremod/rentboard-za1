@@ -1673,6 +1673,148 @@ failed 7 checks and named both screens.
 | Deactivation does not withdraw applications already sent. Said plainly on screen, because withdrawing cannot be undone and pausing should not do it silently | Low, by choice |
 
 
+### 5.26 The controls a landlord presses — ✅ fixed in v1.93.0 (Phase 7h)
+
+Brief items 18–22 and 25. They read like styling niceties. Every one of them was
+a control that looked like a control, and none was visible to any other gate in
+the repository, because each is a question about the **rendered box**.
+
+**Item 18 — the wizard's Back, Cancel and Next.** Measured at 360px: three
+**identical solid terra buttons, 33px tall, 6px apart**, one of which abandons
+the form. Cancel carried `class="btn btn-ghost-light"` — a real global class,
+written to make it a bordered secondary button — and it had **never had any
+effect**: a component's own bare `button { background: var(--terra) }` rule
+outranks any single global class, because Angular's emulated encapsulation
+appends an attribute selector (`button[_ngcontent-x]` = 0,1,1 beats
+`.btn-ghost-light` = 0,1,0). The file's own styles block already carried a
+comment recording that exact trap, for labels, three lines above the button rule
+that was still doing it.
+
+Removing that rule fixed three things at once, each measured before and after:
+
+| | Before | After |
+|---|---|---|
+| Cancel vs Next | both `rgb(173,66,34)`, 33px | outlined vs solid, 44px |
+| The property picker Phase 7b built | solid terra blocks, `border-width: 0`, the dashed "somewhere new" card's dash invisible | white cards, 1px border, dashed where designed |
+| Choosing a property | `rgb(142,53,25)` — the `.is-chosen` 6% tint over solid terra, a shade nobody would notice | border goes `rgb(224,213,196)` → `rgb(173,66,34)` |
+
+⚠️ **And it took the `:disabled` styling with it**, because there was none on
+`.btn` anywhere in the app — each screen that cared wrote its own. The wizard's
+"Next" is disabled until the description reaches 50 characters, so a disabled
+primary that looks live is a button somebody taps while nothing happens. Now
+global, and driven.
+
+**🔴 Sideways scroll, and the element that got blamed for it.** At 360px the
+wizard's step 2 pushed the page 26px wider than the viewport, and the visibly
+too-wide element was `nav.portal-nav` at 386px. It was not the cause; it was
+the only thing wide enough to notice. Found by hiding each child of the step in
+turn and watching which one released the overflow:
+
+1. `fieldset.prop-picker` — a fieldset's default `min-width` is `min-content`
+   and it will not shrink below it, a quirk no other element has.
+2. `main.portal-main` is a **grid item**, so its `min-width: auto` is its
+   min-content width, and a grid **track** is sized by its widest item. One
+   screen wanting 354px therefore made the track 386px and stretched the nav
+   to match.
+
+Both needed fixing: either alone left the other able to widen the page. `fieldset
+{ min-width: 0 }` and `.portal-main { min-width: 0 }`, each with the measurement
+in a comment beside it — without the second, every portal screen is one wide
+element away from the same bug, and the nav gets blamed again.
+
+**Item 25 — Accept beside Reject.** The applicant action row measured **25–27px
+tall, 8px apart**, on the landlord's most consequential screen. 44px and 10px
+now. (A size fix rather than a redesign: the decision is reversible for 30
+minutes, which the card says.) Its media query was also `max-width: 400px`,
+which is not one of this codebase's three breakpoints — at 430px, an iPhone 14
+Pro Max, the mobile layout did not apply at all. 480px now.
+
+**🔴 And the applicant card could only be opened with a pointer.** The header
+was a `<div>` with a `(click)` handler and no `role`, `tabindex` or key handler,
+so a landlord on a keyboard could reach **no** applicant's details, references,
+Accept or Reject. Phase 7c fixed exactly this on the unified inbox, for exactly
+this reason; this older per-room screen kept the div, and Phase 7e then put the
+screen in the nav. It is a real `<button>` with `aria-expanded` and
+`aria-controls` now, and the drive opens it with Enter rather than asserting
+that it is focusable — a div with `tabindex` is reachable and still silent.
+
+**Item 19 — the add-a-property buttons** were 34px at all four widths. The third
+screen in one sitting to need the same local patch, which is what prompted the
+global fix (Outstanding §13): `.btn` is 44px app-wide now, and `.link-btn`,
+which is not `.btn` and set `padding: 0` on a `.82rem` font, went from **17px**
+to 44px. That class carries "Remove" on each expense, which deletes the record.
+
+**Item 20 — the grouped property card.** Measured at all four widths and found
+**sound**: 94–114px tall, 167–815px of room for the name and address beside the
+96px photo, nothing spilling, no overflow. No change made. Recorded because a
+redesign nobody needed is worse than none, and the measurements are in the drive
+so the next person can disagree with evidence.
+
+**Item 21 — the save that said nothing.** Saving the shared facilities set
+`editing` to null and reloaded, so the form vanished and **nothing** confirmed
+it. The failure path had an inline error; the success path had no feedback at
+all, while the create-room wizard already had a "Changes saved" panel for the
+same job. Now a `role="status"` line where the form was, which **names the
+property** — this screen lists several and a bare "Saved" over a list of four
+says nothing about which — held until the landlord next opens an edit form
+rather than cleared on a timer, because a confirmation that disappears by itself
+is one a slow reader never sees. The drive asserts the message, its role, the
+name, **and** that the house rules really are on the row, because a confirmation
+alone does not prove a save.
+
+**🔴 Item 22 — the money-spent section had no stylesheet.** Not a thin one:
+`.yard-shared-form`, `.yard-shared-form__actions`, `.yard-expenses`,
+`.expense-list`, `.expense`, `.expense__main`, `.expense-form` and
+`.expense-form__actions` had **no rules anywhere in the product**. Measured in
+the browser: the receipts rendered `display: list-item` with
+`list-style-type: disc`, and the actions row `display: block` with the Add
+button and the CSV link separated by a word space. The markup was written with
+a stylesheet in mind and the stylesheet was never added. Written now, and the
+disclosure gained `aria-expanded`/`aria-controls` so a screen reader is told it
+reveals anything.
+
+### What the drive proves
+
+`scripts/layout-ui-drive.mjs` — 130 checks at 360/390/768/1280. Falsified twice:
+restoring the wizard's bare `button` rule and the 28px applicant actions failed
+24 checks; removing the expense stylesheet, the `.link-btn` tap area and the
+saved confirmation failed 30, naming "Remove" at **20px**, the disclosure at
+21px, the receipts as a disc list and the action buttons 0px apart.
+
+⚠️ **Three faults in the drive itself, each of which reported something false:**
+it waited for `.applicant-card__actions`, which only exists once the card is
+opened, and threw a TimeoutError instead of reporting anything; it matched the
+edit control with `/rules|facilities|edit/i` and reported "there is no way to
+edit the shared facilities" about a screen with two such buttons; and it counted
+a locator immediately after page load, before the data arrived, for the same
+reason the close-account drive measured an empty kept-list last phase —
+`count()` does not auto-wait. It also signed in twelve times a run against a
+thirty-per-fifteen-minutes limiter, so two runs read as an auth bug; four now.
+
+⚠️ **A pre-existing flake fixed rather than lived with.** `dashboard-ui-drive`
+read `#money .stat-box` as soon as `#money` rendered, and the figures arrive one
+request later — so about one run in four it reported "property A's rent marked
+paid is R0 — expected its own 3000, not the portfolio's 7500", a scoping bug
+about a screen that was right and merely unfinished. It polls until two reads
+agree now; a figure that really is 0 still fails. One unexplained failure was
+seen immediately after an API restart and did not reproduce in nine subsequent
+runs, which is recorded rather than called clean.
+
+⚠️ **Backticks in a CSS comment inside a `styles` block closed the template
+literal — twice in this phase**, making it the third and fourth time in this
+codebase. CLAUDE.md names it; it is now named again in both comments that
+caused it.
+
+### Gaps
+
+| Gap | Severity |
+|---|---|
+| The grouped-card layout was measured and left alone. If the complaint behind item 20 was aesthetic rather than dimensional, it is unaddressed — the measurements say the card is not broken, not that it is handsome | Low, and deliberate |
+| `.link-btn` is now a 44px inline-flex box in all 21 places it is used. All of them are standalone controls today; the first one dropped inside a sentence will take a 44px line box with it | Low — a `.link-btn--inline` variant is the fix when it happens |
+| The expenses form is `repeat(auto-fit, minmax(11rem, 1fr))`, so at 1280px inside a wide property card it is two columns with the note field in whichever cell it lands. It reads fine and it is not a designed grid | Low |
+| Nothing drives the admin screens' button sizes — the a11y drive skips them without `ADMIN_EMAIL`/`ADMIN_PASSWORD`, so the global 44px change is unverified there | Medium — it is the same global rule, but "unverified" is the honest word |
+
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

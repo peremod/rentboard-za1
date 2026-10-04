@@ -76,7 +76,7 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
           <p class="muted">{{ basicsForm.get('description')?.value?.length ?? 0 }}/50 characters minimum</p>
           <div class="wizard__actions">
             <button type="button" class="btn btn-ghost-light" (click)="cancel()">Cancel</button>
-            <button type="button" [disabled]="basicsForm.invalid" (click)="goToStep(2)">Next →</button>
+            <button type="button" class="btn btn-primary" [disabled]="basicsForm.invalid" (click)="goToStep(2)">Next →</button>
           </div>
         </form>
       }
@@ -163,9 +163,9 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
           <div class="form-row"><label>Location display</label><input type="text" formControlName="locationDisplay" placeholder="Sandton, Gauteng"/></div>
           <div class="form-row"><label>Available from</label><input type="date" formControlName="availableFrom"/></div>
           <div class="wizard__actions">
-            <button type="button" (click)="step.set(1)">← Back</button>
+            <button type="button" class="btn btn-outline" (click)="step.set(1)">← Back</button>
             <button type="button" class="btn btn-ghost-light" (click)="cancel()">Cancel</button>
-            <button type="button" [disabled]="pricingForm.invalid" (click)="goToStep(3)">Next →</button>
+            <button type="button" class="btn btn-primary" [disabled]="pricingForm.invalid" (click)="goToStep(3)">Next →</button>
           </div>
         </form>
       }
@@ -308,9 +308,9 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
           }
 
           <div class="wizard__actions">
-            <button type="button" (click)="step.set(2)">← Back</button>
+            <button type="button" class="btn btn-outline" (click)="step.set(2)">← Back</button>
             <button type="button" class="btn btn-ghost-light" (click)="cancel()">Cancel</button>
-            <button type="button" [disabled]="creatingDraft()" (click)="createDraftAndContinue()">Next →</button>
+            <button type="button" class="btn btn-primary" [disabled]="creatingDraft()" (click)="createDraftAndContinue()">Next →</button>
           </div>
         </form>
       }
@@ -419,9 +419,52 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
     }
     .muted { font-size: .78rem; color: var(--slate); }
     .error { color: #D63B3B; font-size: .82rem; }
-    .wizard__actions { display: flex; justify-content: space-between; margin-top: 1.5rem; }
-    button { padding: .6rem 1.2rem; border-radius: 6px; border: none; background: var(--terra); color: #fff; font-weight: 700; cursor: pointer; }
-    button:disabled { opacity: .5; cursor: not-allowed; }
+    /* ⚠️ There was a bare button rule here setting background, colour and
+       border, and it is the same trap the comment above records for labels:
+       Angular's emulated encapsulation appends an attribute selector, so
+       button[_ngcontent-x] outranks any single global CLASS.
+
+       (No backticks in this comment. They terminate the inline template
+       literal — third compile failure in this codebase from exactly that, and
+       CLAUDE.md names it.)
+
+       Measured consequences, all at once:
+         - Cancel carried "btn btn-ghost-light", a real global class written to
+           make it a bordered secondary button, and rendered solid terra,
+           identical to Next: rgb(173,66,34) on all three, white text, no
+           border. Three identical buttons in a row, 6px apart at 360px, one of
+           which abandons the form. The class had never had any effect.
+         - The property picker Phase 7b built, whose whole point is "existing
+           places as cards a landlord recognises", rendered as a stack of solid
+           terra blocks, the dashed "somewhere new" card's dash invisible at
+           border-width 0.
+         - Choosing one made it rgb(142,53,25) - the is-chosen 6% tint
+           composited over solid terra. Selecting a property made it darker by
+           a shade nobody would notice, among blocks that all looked selected.
+
+       So the rule is gone and every button carries the class that says what it
+       is. Nothing here may style button as an element again. The :disabled
+       handling it was also providing is now global in _spec.scss, because
+       without it a disabled primary looks live. */
+    .wizard__actions {
+      display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.5rem;
+      justify-content: flex-end; align-items: center;
+    }
+    /* Back belongs at the far left; the rest group on the right. Written on the
+       first child rather than with :has() so it holds on step 1, which has no
+       Back button and whose Cancel then stays left of Next. */
+    .wizard__actions > :first-child { margin-right: auto; }
+    /* The base .btn has no min-height (docs/OUTSTANDING.md §13), so these
+       measured 33px — three of them 6px apart at 360px. */
+    .wizard__actions .btn { min-height: 44px; }
+    @media (max-width: 480px) {
+      /* Stacked rather than squeezed. The primary stays last, where a thumb
+         working down the form reaches it, and the two secondaries above it are
+         bordered rather than solid so the column is not three identical bars. */
+      .wizard__actions { flex-direction: column; align-items: stretch; }
+      .wizard__actions > :first-child { margin-right: 0; }
+      .wizard__actions .btn { width: 100%; }
+    }
   `],
 })
 export class CreateRoom implements OnInit {

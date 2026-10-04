@@ -235,7 +235,18 @@ input[type='radio'] {
 a.btn { text-decoration: none; }
 
 // ── Form layout helpers ──────────────────────────────────────────────────
-fieldset { border: none; margin-bottom: $sp-5; }
+// ⚠️ min-width: 0 is the whole point of this line, not tidiness.
+//
+// A fieldset's default min-width is min-content and it will not shrink below
+// it, whatever its parent says — a quirk no other element has. The property
+// picker on the create-room wizard is a fieldset, and at 360px it pushed the
+// page 26px wider than the viewport: the portal nav then rendered 386px wide
+// and read as the culprit, which it was not. Measured by hiding each child of
+// the step in turn and watching which one released the overflow.
+//
+// Sideways scroll on a phone is the first thing in CLAUDE.md's mobile list,
+// and this is the only element in the product that can cause it by default.
+fieldset { border: none; margin-bottom: $sp-5; min-width: 0; }
 legend { font-weight: 600; margin-bottom: $sp-3; }
 
 // Field-level help and error text sit tight under their control

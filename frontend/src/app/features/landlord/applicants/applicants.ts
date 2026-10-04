@@ -78,18 +78,29 @@ import { TenantReferences } from '../../../core/models/review.model';
             </div>
           }
           <div class="applicant-card">
-            <div class="applicant-card__header" (click)="toggleOpen(app)">
-              <div>
+            <!-- A real button, not a clickable div.
+                 This was a div with a (click) handler and no role, tabindex or
+                 key handler, so the ONLY way to open an applicant was to tap or
+                 click: a landlord on a keyboard could not reach any applicant's
+                 details, references, or the Accept and Reject buttons at all.
+                 Phase 7c fixed exactly this on the unified inbox, for exactly
+                 this reason; this older per-room screen kept the div, and
+                 Phase 7e then made the screen reachable from the nav. -->
+            <button type="button" class="applicant-card__header"
+                    [attr.aria-expanded]="openId() === app.id"
+                    [attr.aria-controls]="'applicant-body-' + app.id"
+                    (click)="toggleOpen(app)">
+              <span class="applicant-card__who">
                 <strong>{{ app.tenant?.fullName }}</strong>
                 @if (app.tenant?.isVerified) { <span class="pill">✓ Verified</span> }
                 @if (app.tenant?.tenantProfile?.hasPassport) { <span class="pill pill--passport">🛂 Passport</span> }
                 <span class="status status--{{ app.status }}">{{ app.status }}</span>
-              </div>
-              <span>{{ openId() === app.id ? '▲' : '▼' }}</span>
-            </div>
+              </span>
+              <span aria-hidden="true">{{ openId() === app.id ? '▲' : '▼' }}</span>
+            </button>
 
             @if (openId() === app.id) {
-              <div class="applicant-card__body">
+              <div class="applicant-card__body" [id]="'applicant-body-' + app.id">
                 <!-- The landlord's own private notes (Phase 5e). Here because
                      this is where they actually look at a person — and only
                      inside the expanded card, so a list of six applicants is not
@@ -191,7 +202,19 @@ import { TenantReferences } from '../../../core/models/review.model';
     h1 { font-size: 1.3rem; margin: .5rem 0 1.5rem; }
     .muted { color: var(--slate); }
     .applicant-card { border: 1px solid #DDD5C8; border-radius: 8px; margin-bottom: .75rem; overflow: hidden; }
-    .applicant-card__header { padding: .8rem 1rem; display: flex; justify-content: space-between; align-items: center; cursor: pointer; background: #FDFAF5; }
+    /* ⚠️ A button needs its inherited text put back BY NAME.
+       The font: inherit shorthand restores family and size and NOT colour -
+       which is how Phase 7c shipped inbox rows rendering white-on-cream at
+       1.06:1, present and invisible. So colour and text-align are explicit
+       here. (No backticks in a styles block: they close the template literal.
+       Fourth compile failure in this codebase from that, CLAUDE.md names it.) */
+    .applicant-card__header {
+      padding: .8rem 1rem; display: flex; justify-content: space-between;
+      align-items: center; cursor: pointer; background: #FDFAF5;
+      width: 100%; border: none; font: inherit; color: var(--ink);
+      text-align: left; gap: .5rem; min-height: 44px;
+    }
+    .applicant-card__who { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
     .pill { font-size: .6rem; font-weight: 700; background: rgba(61,112,64,.1); color: #3D7040; padding: .1rem .4rem; border-radius: 10px; margin-left: .4rem; }
     .status { font-size: .65rem; font-weight: 700; text-transform: uppercase; padding: .15rem .5rem; border-radius: 10px; background: #F2EDE3; margin-left: .5rem; }
     .status--accepted { background: rgba(61,112,64,.15); color: #3D7040; }
@@ -211,13 +234,26 @@ import { TenantReferences } from '../../../core/models/review.model';
     .applicant-group__title { font-size: .95rem; font-weight: 700; color: #3A3228; }
     .applicant-group__count { color: var(--slate); font-weight: 400; }
     .applicant-group__hint { font-size: .8rem; color: var(--slate); line-height: 1.6; margin-top: .2rem; }
-    .applicant-card__actions { display: flex; gap: .5rem; margin-bottom: .5rem; flex-wrap: wrap; }
-    .applicant-card__actions button { padding: .4rem .8rem; border-radius: 6px; border: 1px solid #DDD5C8; background: #fff; cursor: pointer; font-size: .78rem; font-weight: 600; }
+    .applicant-card__actions { display: flex; gap: .6rem; margin-bottom: .5rem; flex-wrap: wrap; }
+    /* ⚠️ These measured 28px tall and sat 8px apart — Accept beside Reject, on
+       a phone, on the landlord's most consequential screen. Under the 44px tap
+       target of WCAG 2.5.8, and a mis-tap decides somebody's housing. (It is
+       reversible for 30 minutes, which is why this is a size fix rather than a
+       redesign of the row.) */
+    .applicant-card__actions button {
+      padding: .4rem .9rem; min-height: 44px; border-radius: 6px;
+      border: 1px solid #DDD5C8; background: #fff; cursor: pointer;
+      font-size: .78rem; font-weight: 600;
+    }
     .applicant-card__actions .accept { background: #3D7040; color: #fff; border: none; }
     .applicant-card__actions .reject { background: #D63B3B; color: #fff; border: none; }
 
-    /* Mobile — PRE-LAUNCH-CHECKLIST.md #9 */
-    @media (max-width: 400px) {
+    /* Mobile — PRE-LAUNCH-CHECKLIST.md #9.
+       480px, not 400px: the breakpoints this codebase uses are 900/768/480
+       (styles/_responsive.scss), and at 430px — an iPhone 14 Pro Max — the
+       400px rule did not apply, so the row kept its desktop layout on one of
+       the commonest phone widths in the market. */
+    @media (max-width: 480px) {
       .applicant-card__header { flex-wrap: wrap; gap: .4rem; }
       .applicant-card__actions button { flex: 1; min-width: 90px; }
     }
