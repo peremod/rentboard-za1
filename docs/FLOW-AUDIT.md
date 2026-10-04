@@ -1815,6 +1815,79 @@ caused it.
 | Nothing drives the admin screens' button sizes — the a11y drive skips them without `ADMIN_EMAIL`/`ADMIN_PASSWORD`, so the global 44px change is unverified there | Medium — it is the same global rule, but "unverified" is the honest word |
 
 
+### 5.27 An admin ending an account on request — ✅ built in v1.94.0 (Phase 7i)
+
+The brief's "Admin Cannot Delete User Accounts". It was true, and §5.25 had
+already recorded why it mattered: a phone-only account has no password, so
+`/account/close` cannot confirm it. That screen tells the person to ask us, and
+there was nothing behind the asking. **POPIA s.24 is a right, not a feature
+request** — if the only self-service path needs a credential some accounts do
+not have, the operator has to be able to act on the request.
+
+What the admin surface actually had: `PATCH /admin/users/:id/active`, which
+suspends. Nothing else.
+
+| Decision | Why |
+|---|---|
+| A separate `DELETE /admin/users/:id`, not a flag on the suspend route | Suspension is reversible, keeps the email and is a moderation decision **we** make. Closure is irreversible, erases the email and is a decision the **owner** made that we carry out. One endpoint doing both with a flag is how somebody suspends an account and ends it |
+| The erasure is the **same code** as the owner's path | `AccountLifecycleService.erase` is now the one copy, called by both. Two erasures that start identical drift, and the one that drifts is the one nobody drives — so the day a column is added to the self-service path, the admin path would quietly stop erasing it |
+| The preview is **byte-for-byte** the owner's preview | Asserted as a string comparison in the drive. An admin acting on somebody's request should read what that person would have read; a separate admin-flavoured summary is a second thing to keep true, and the one that falls behind is the one shown to the operator who cannot ask the person what they expected |
+| A written request of at least 10 characters | After this runs the email, name and number are gone, so the audit row is the **only** lasting evidence it was asked for. "ok" is not evidence. Ten characters is not a quality bar — it is the shortest length at which somebody had to type a fragment rather than tap a key |
+| On the **detail** screen, not in the dashboard's user list | Suspension is inline in that list and belongs there. This erases a person, so it belongs where there is room to show what it will do before offering the button — the same reasoning that kept the owner's own closure off the settings screen |
+| The audit table holds **no identity** | No email, no name, no phone, no IP. An audit trail that keeps what the erasure removed defeats the erasure it audits. The user id suffices: the tombstone survives, so the id resolves — to "Former member". The drive asserts the column list by name, because this is the kind of table somebody helpfully adds a `userEmail` to later |
+
+**🔴 And the suspension toggle could have resurrected a closed account.**
+`setUserActive(id, true)` on a tombstone had nothing stopping it: it would set
+`isActive: true` on a row whose name, email and phone are gone. Sign-in still
+refuses it — `deletedAt` is checked on every path, and that is exactly why the
+erasure sets `isActive: false` as a *second* independent reason — so nobody
+could get in. But **the admin screen would have shown the account as active and
+the operator would have believed it.** A control that reports a state the system
+does not have is the defect this codebase keeps shipping. Refused now, and
+driven.
+
+**What falsification revealed about a guard I nearly called redundant.** An
+admin cannot close their own account here. Removed, the request still fails —
+the ADMIN-role check catches it, because the caller of this route is always an
+admin. But it fails saying *"use the database directly"*, which tells an admin
+to go and DELETE their own user row: the one action the entire tombstone design
+exists to prevent, because it cascades into other people's applications,
+conversations and tenancies. The guard is the difference between a correct
+instruction and one that advises the damage.
+
+### What the drives prove
+
+`scripts/admin-closure-drive.mjs` — 42 checks. `scripts/admin-closure-ui-drive.mjs`
+— 42 checks at four widths. Falsified by removing the suspend-restore guard
+(which produced "restoring a closed account returned 200" and "the closed
+account was reactivated"), removing the own-account guard, and adding a
+`userEmail` column to the audit table — three defects, four failures, each
+naming the real one.
+
+⚠️ **Both drives promote their own admin with one SQL statement.** Every other
+admin drive here reads `ADMIN_EMAIL`/`ADMIN_PASSWORD` and **skips** without
+them, which is how ninety-two checks in the smoke suite had never run once: a
+skipped check reads exactly like a passing one when you are scanning output. The
+guard checks in the smoke suite are also unconditional now — the guards on the
+most destructive route in the product should not be among the checks that only
+run when somebody remembers an env var.
+
+⚠️ **The admin screens had never been accessibility-audited**, which §5.26
+recorded as a gap. Running the a11y drive with an admin account takes it from 17
+portal pages to **27**, including `/admin/users/:id` — the only admin screen
+with a destructive form on it, and so exactly where a red-on-pink danger panel
+fails a contrast threshold while looking deliberate. All clean.
+
+### Gaps
+
+| Gap | Severity |
+|---|---|
+| Nothing notifies the person that their account was closed on their request. The address is erased in the same transaction, so there is nowhere to send it — correct, but it means the only confirmation is whatever the admin sends by hand from their own mailbox | Medium — an operator habit, not a feature |
+| The reason field is free text and the screen *asks* for it to be about the request rather than the person. Nothing enforces that, and nothing can | Low, and stated on the form |
+| `account_closures` rows are kept for ever, like the tombstones they point at. Nothing prunes them | Low — the same retention question §5.25 raised |
+| An admin closing an account still has to find it first, and the dashboard's user list does not show whether an account is already closed | Low — the detail screen says so plainly once opened |
+
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

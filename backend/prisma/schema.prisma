@@ -205,6 +205,10 @@ model User {
   @@index([email])
   @@index([role])
   @@map("users")
+  /// Phase 7i. The record of this account being ended, and the records of the
+  /// accounts this admin ended.
+  accountClosure    AccountClosure?  @relation("ClosedAccount")
+  closuresPerformed AccountClosure[] @relation("ClosuresByAdmin")
 }
 
 model LandlordProfile {
@@ -2225,6 +2229,65 @@ model ServiceProvider {
 
   @@index([category, active])
   @@map("service_providers")
+}
+
+/// Who ended an account, and why — Phase 7i.
+///
+/// ── Why a row and not a log line
+///
+/// `setUserActive` records a suspension with `logger.warn`, which is fine for a
+/// reversible action on a row that keeps its email. Closure is neither: the
+/// email, name and phone number are erased in the same transaction, so after it
+/// runs the log line is the ONLY trace that the account ever belonged to
+/// anybody — and logs rotate. An operator asked "who closed this account and on
+/// whose instruction" six months later needs an answer that is still there.
+///
+/// It also covers the owner's own closures, so this table is the complete
+/// record rather than the admin half of one. One code path writes it, which is
+/// the only way the two stay in step.
+///
+/// ── What it deliberately does NOT hold
+///
+/// No email, no name, no phone number, no IP. Keeping any of those would retain
+/// exactly the personal information the closure existed to erase — an audit
+/// trail that defeats the erasure it is auditing. The `userId` is enough: the
+/// tombstone row survives, so the id still resolves, and it resolves to
+/// "Former member".
+///
+/// `reason` is free text written by an admin about the REQUEST ("emailed from
+/// the registered address", "ticket 412"), never about the person. That is a
+/// judgement the admin screen states on the form rather than a rule the
+/// database can enforce.
+enum AccountClosureActor {
+  /// From /account/close, by the person themselves, with their password.
+  owner
+  /// By an admin, on a request they recorded — a phone-only account with no
+  /// password to confirm with, or a POPIA s.24 request made out of band.
+  admin
+}
+
+model AccountClosure {
+  id String @id @default(uuid())
+
+  /// One closure per account. The tombstone is permanent, so this is too.
+  userId String @unique
+  user   User   @relation("ClosedAccount", fields: [userId], references: [id], onDelete: Cascade)
+
+  actor AccountClosureActor
+
+  /// Null when the owner did it themselves.
+  closedByAdminId String?
+  closedByAdmin   User?   @relation("ClosuresByAdmin", fields: [closedByAdminId], references: [id], onDelete: SetNull)
+
+  /// Required for an admin closure, absent for the owner's own — their having
+  /// typed DELETE on their own account IS the reason.
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  @@index([closedByAdminId])
+  @@index([createdAt])
+  @@map("account_closures")
 }
 
 /// A file that must be removed from ImageKit, kept until it actually is.

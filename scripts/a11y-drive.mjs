@@ -784,7 +784,22 @@ if (!apiReachable) {
       session = null;
     }
     if (session) {
-      for (const path of ADMIN_PAGES) {
+      /**
+       * One account's detail screen, by id — Phase 7i.
+       *
+       * Not in ADMIN_PAGES because it needs a real id, and it is worth the few
+       * lines: it is the only admin screen with a destructive FORM on it (the
+       * closure section), which is exactly where a danger treatment — red text
+       * on a pink panel — fails a contrast threshold while looking deliberate.
+       * It reuses the landlord this drive already seeded, so no extra account
+       * is registered against the sixty-an-hour limiter.
+       */
+      const seeded = accounts.LANDLORD?.id;
+      const adminPaths = seeded ? [...ADMIN_PAGES, `/admin/users/${seeded}`] : ADMIN_PAGES;
+      if (!seeded) {
+        failures.push('admin user detail: no seeded landlord id, so the one admin screen with a destructive form was not audited');
+      }
+      for (const path of adminPaths) {
         // Per page, so one bad screen costs that screen and not the six
         // after it. A drive that stops at the first problem finds one
         // problem per run, which is one CI cycle per problem.

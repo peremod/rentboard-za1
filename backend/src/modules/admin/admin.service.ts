@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AccountLifecycleService } from '../account/account-lifecycle.service';
 
 /**
  * Admin oversight.
@@ -14,7 +15,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class AdminService {
   private readonly logger = new Logger(AdminService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private lifecycle: AccountLifecycleService,
+  ) {}
 
   /** Counts for the admin dashboard. One query set, no per-row work. */
   async getStats() {
@@ -263,6 +267,12 @@ export class AdminService {
         id: true, email: true, fullName: true, phone: true, role: true,
         isActive: true, isVerified: true, marketingEmails: true,
         authProvider: true, createdAt: true, lastLoginAt: true,
+        // Phase 7i. The screen branches on these: a paused account is not a
+        // suspended one, and an ended one has nothing left to offer a button
+        // for. Added to the SELECT at the same time as the frontend type,
+        // because a type claiming a field the API does not send is the same
+        // family of defect as a column whose name asserts something untrue.
+        deactivatedAt: true, deletedAt: true,
         landlordProfile: { select: { idVerified: true, rating: true, ratingCount: true, planTier: true } },
         tenantProfile: { select: { employmentStatus: true, incomeVerified: true, idVerified: true } },
       },
@@ -368,11 +378,61 @@ export class AdminService {
    * landlord's rooms come off the board but their applications and messages
    * survive, because tenants may still need that history in a dispute.
    */
+  /**
+   * What ending this account would do — Phase 7i.
+   *
+   * The same preview the owner is shown on /account/close, from the same code,
+   * so an admin acting on somebody's request reads what that person would have
+   * read. A separate admin-flavoured summary would be a second thing to keep
+   * true, and the one that fell behind would be the one shown to the operator
+   * who cannot ask the person what they expected.
+   */
+  async closurePreview(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, deletedAt: true, role: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.deletedAt) {
+      throw new BadRequestException('This account has already been ended.');
+    }
+    return this.lifecycle.previewDeletion(userId);
+  }
+
+  /**
+   * End a user's account on their request — Phase 7i.
+   *
+   * Delegates to `AccountLifecycleService`, which owns the single erasure used
+   * by both paths. Nothing about the tombstone, the cascade reasoning or the
+   * audit row is re-stated here, because a second copy is a second thing to
+   * forget to update.
+   */
+  async closeUserAccount(userId: string, adminId: string, reason: string) {
+    return this.lifecycle.closeOnBehalf(userId, adminId, { reason });
+  }
+
   async setUserActive(userId: string, isActive: boolean, adminId: string, reason?: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
     if (user.role === 'ADMIN') {
       throw new BadRequestException('Admin accounts cannot be suspended from here — use the database directly.');
+    }
+    /**
+     * ⚠️ A closed account cannot be suspended OR restored — Phase 7i.
+     *
+     * Without this, `setUserActive(id, true)` on a tombstone would set
+     * `isActive: true` on a row whose name, email and phone are gone. Sign-in
+     * still refuses it (`deletedAt` is checked on every path, and the whole
+     * point of setting `isActive: false` in the erasure was a second
+     * independent reason), so nobody could get in — but the admin screen would
+     * show the account as active and the operator would believe it. A control
+     * that reports a state the system does not have is the defect this codebase
+     * keeps shipping.
+     */
+    if (user.deletedAt) {
+      throw new BadRequestException(
+        'This account has been ended. Closing is irreversible — there is nothing to suspend or restore.',
+      );
     }
     if (!isActive && !reason) {
       throw new BadRequestException('A reason is required when suspending an account.');
