@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
-# Recreate and push the Mastande release tags v1.75.2 … v1.86.0.
+# Recreate and push the Mastande release tags.
+#
+# ⚠️ The range used to be written on this line, and it was wrong: it read
+# "v1.75.2 … v1.86.0" while the file held entries up to v1.95.0. A header that
+# has to be remembered is a header that goes stale, so the script now prints
+# its own count and range at startup, derived from the entries themselves.
+#
+# That matters more than tidiness. A run of an OLD copy of this file reports
+# "skipped 19" and stops at v1.87.0, looking exactly like a finished run — the
+# startup line is what tells you the file is behind rather than the work being
+# done.
 #
 # These tags were created inside an ephemeral cloud container whose
 # credentials are refused for refs/tags/* (HTTP 403), so they never reached
@@ -20,6 +30,50 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 echo "Fetching, so every tagged commit is present locally…"
 git fetch origin --quiet
+
+# ── What this copy of the file actually covers ──────────────────────────────
+#
+# Printed before anything runs, because an old copy of this script finishes
+# quietly and looks right: "Created 0 tag(s), skipped 19. Nothing to push." is
+# what a complete run looks like AND what a stale file looks like. The only
+# difference visible to a reader is the range, so the range gets printed.
+entries=$(grep -c '^tag_if_missing "' "$0")
+first=$(grep -o '^tag_if_missing "v[0-9.]*"' "$0" | head -1 | grep -o 'v[0-9.]*')
+last=$(grep -o '^tag_if_missing "v[0-9.]*"' "$0" | tail -1 | grep -o 'v[0-9.]*')
+echo "This file holds $entries tag entries, $first … $last."
+echo "If that range looks behind, pull before running: the tags are added by the"
+echo "same commits that make the releases."
+echo
+
+# ── Gaps in the version sequence ────────────────────────────────────────────
+#
+# ⚠️ v1.84.0 has no entry in this file and never did. It was tagged in a
+# container that was reclaimed, and the entry was never written — so the tag is
+# gone and cannot be honestly reconstructed from here: between v1.83.0 and
+# v1.85.0 there are three phase merges (5a/5d, 5b/5h, 5e/5f) and the commit that
+# ran the ninety-two checks, and nothing in the repository records which of them
+# the tag pointed at. Picking one would be inventing history.
+#
+# So this prints the gap rather than hiding it. A missing minor version in a
+# release history is a thing somebody should know about, and it went unnoticed
+# for ten releases because nothing looked.
+minors=$(grep -o '^tag_if_missing "v1\.[0-9]*\.' "$0" | grep -o '\.[0-9]*\.$' | tr -d '.' | sort -n -u)
+missing=""
+prev=""
+for m in $minors; do
+  if [[ -n "$prev" ]]; then
+    n=$((prev + 1))
+    while (( n < m )); do missing="$missing v1.$n.x"; n=$((n + 1)); done
+  fi
+  prev=$m
+done
+if [[ -n "$missing" ]]; then
+  echo "⚠️  No entry for:$missing"
+  echo "    Those releases were tagged in a container that was reclaimed before the"
+  echo "    entry was written. The tag is lost; the commits are not. Nothing here"
+  echo "    guesses which commit it was, because guessing would invent history."
+  echo
+fi
 
 created=0
 skipped=0
@@ -656,7 +710,15 @@ failures, including \"2 live providers have no phone check — the claim on the
 screen is false for them\"."
 
 echo
-echo "Created $created tag(s), skipped $skipped."
+# ⚠️ created + skipped must equal the entry count. If it does not, the run
+# stopped early — which `set -e` makes possible and which the old summary could
+# not have shown: "Created 0, skipped 19" was indistinguishable from a complete
+# run of a file holding 27 entries.
+echo "Created $created tag(s), skipped $skipped — of $entries entries in this file."
+if (( created + skipped != entries )); then
+  echo "⚠️  That does not add up: $((entries - created - skipped)) entr(y/ies) never ran."
+  echo "    The run stopped early. Nothing below this point was reached."
+fi
 if [ "$created" -gt 0 ]; then
   echo "Pushing ${#to_push[@]} tag(s)…"
   git push origin "${to_push[@]}"
