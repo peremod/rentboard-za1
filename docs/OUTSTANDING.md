@@ -456,11 +456,18 @@ carry 44px, because "Pause my account" and "Use my account again" measured 34px
 at all four widths and those buttons were built this phase. The drive asserts it
 at 360, 390, 768 and 1280.
 
-**Not fixed globally here, deliberately.** One line on `.btn` would raise every
-button in the app, which changes the vertical rhythm of every screen in the
-product — forms, cards, filter bars, the admin tables. That is its own change
-with the full drive suite behind it, not a footnote to a change about closing
-accounts. Say the word and it gets done as one, with the sweep.
+**✅ Fixed globally in v1.93.0**, with the sweep behind it. `.btn` carries
+`min-height: 44px` in `_spec.scss`, and `.link-btn` — which is not `.btn`, sets
+`padding: 0` on a `.82rem` font, and measured **17px** — carries a 44px
+inline-flex box. The trigger was needing the same local patch on three more
+screens in one sitting (the wizard actions, the add-a-property form, the
+applicant row): a fix applied four times is a fix in the wrong place.
+
+`min-height` rather than padding, so no button gets wider or re-wraps — it can
+only grow a box that was too short. Verified by: the layout drive at four
+widths, plus the mobile, nav, a11y, dashboard, properties, account-lifecycle and
+messages-inbox drives, the production build and the bundle budget, all clean
+after the change.
 
 ⚠️ Note how this was found: the previous version of that drive **computed** the
 smallest control height, including the pause button, and then never asserted it.
@@ -604,6 +611,18 @@ node scripts/dashboard-ui-drive.mjs      # 29 checks — that the task buttons
                                          # ARRIVE, not just that the string is
                                          # right, and that a landlord who never
                                          # grouped anything can reach their rent
+node scripts/account-lifecycle-drive.mjs # 48 checks — Phase 7g. Needs a FRESH
+                                         # API: it spends six of the ten delete
+                                         # attempts the endpoint allows per
+                                         # quarter hour, on purpose
+node scripts/account-lifecycle-ui-drive.mjs # 51 checks — pausing and closing on
+                                         # screen, at four widths, plus the
+                                         # settings screen's own step-up check
+node scripts/layout-ui-drive.mjs         # 130 checks — Phase 7h. The rendered
+                                         # box of every control a landlord
+                                         # presses: heights, gaps, computed
+                                         # backgrounds and page overflow at
+                                         # 360/390/768/1280
 ```
 
 ⚠️ **Rate limiting is the binding constraint on running these back to back.**

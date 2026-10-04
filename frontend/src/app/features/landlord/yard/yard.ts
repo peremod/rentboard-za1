@@ -304,6 +304,22 @@ const UNGROUPED = 'ungrouped';
                     {{ relisting() === group.property.id ? 'Relisting…' : '↻ Relist all' }}
                   </button>
                 }
+                <!-- ⚠️ Item 21. Saving used to close the form and say NOTHING.
+                     The failure path set an inline error; the success path set
+                     editing to null and reloaded, so a landlord who had just
+                     typed their house rules pressed Save, watched the form
+                     vanish, and had no way to know whether it took. The
+                     create-room wizard already had a "Changes saved" panel for
+                     exactly this; this screen did not.
+                     role="status" so it is announced, and it NAMES the property,
+                     because this screen lists several and a bare "Saved" over a
+                     list of four says nothing about which. -->
+                @if (sharedSaved() === group.property.id) {
+                  <p class="muted yard-saved" role="status">
+                    ✅ Saved. {{ group.property.name }} is updated — the house rules and
+                    shared facilities apply to every room at this address.
+                  </p>
+                }
                 <button type="button" class="link-btn" (click)="editShared(group.property)">
                   Shared details
                 </button>
@@ -391,13 +407,20 @@ const UNGROUPED = 'ungrouped';
                receipts under every yard would bury both. -->
           @if (group.property) {
             <div class="yard-expenses">
+              <!-- A disclosure that says whether it is open. It was a real
+                   button already, so it was keyboard-reachable; what it did not
+                   do was tell a screen reader that pressing it reveals the
+                   expenses, or that they are now revealed. -->
               <button type="button" class="link-btn"
+                      [attr.aria-expanded]="openExpenses() === group.property.id"
+                      [attr.aria-controls]="'expenses-' + group.property.id"
                       (click)="toggleExpenses(group.property.id)">
                 {{ openExpenses() === group.property.id ? '▾' : '▸' }} Money spent
                 @if (yardSpend(group.property.id); as spent) { <span class="muted">— {{ spent | zarCents: 'exact' }} this month</span> }
               </button>
 
               @if (openExpenses() === group.property.id) {
+                <div [id]="'expenses-' + group.property.id">
                 @if (loadingExpenses()) {
                   <p class="muted">Loading…</p>
                 } @else {
@@ -467,6 +490,7 @@ const UNGROUPED = 'ungrouped';
                     </div>
                   </form>
                 }
+                </div>
               }
             </div>
           }
@@ -642,6 +666,13 @@ export class Yard implements OnInit {
   protected readonly editing = signal<string | null>(null);
   protected readonly savingShared = signal(false);
   protected readonly sharedError = signal<string | null>(null);
+  /**
+   * Which property was just saved — item 21.
+   *
+   * The property id rather than a boolean, because this screen lists several
+   * and the confirmation names the one that changed.
+   */
+  protected readonly sharedSaved = signal<string | null>(null);
   protected readonly relisting = signal<string | null>(null);
 
   // ── Expenses ──────────────────────────────────────────────────────────────
@@ -869,6 +900,7 @@ export class Yard implements OnInit {
       name: property.name,
       addressLine: property.addressLine ?? '',
     };
+    this.sharedSaved.set(null);
     this.editing.set(property.id);
   }
 
@@ -876,6 +908,7 @@ export class Yard implements OnInit {
     if (this.savingShared()) return;
     this.savingShared.set(true);
     this.sharedError.set(null);
+    this.sharedSaved.set(null);
 
     const amenities = this.form.sharedAmenities
       .split(',')
@@ -903,6 +936,11 @@ export class Yard implements OnInit {
         next: () => {
           this.savingShared.set(false);
           this.editing.set(null);
+          // Item 21. Held until the landlord next opens an edit form rather
+          // than cleared on a timer: a confirmation that disappears by itself
+          // is one a slow reader never sees, and this one is the only evidence
+          // the save happened.
+          this.sharedSaved.set(id);
           this.reload();
         },
         error: () => {
