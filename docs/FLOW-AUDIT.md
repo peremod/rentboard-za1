@@ -632,6 +632,10 @@ one nobody can find.
 an **advertiser**, not a landlord, so it does not touch "free to list, free to
 apply" — and it costs one nullable column now versus a migration later.
 
+⚠️ **It was writable until v1.98.0 (Phase 7m), which is a different thing.** See
+§5.31: "nothing reads it" was true and said in four places, while both DTOs
+accepted it and the landlord payload carried it.
+
 
 ### 5.10 Lease documents — ✅ built in v1.83.0 (Phase 4e)
 
@@ -1965,7 +1969,7 @@ than excusing anything that is not one.
 | Nothing expires a check. A phone call from 2024 renders with its date, which is honest, but no screen nags an admin to re-ring it and `lastCheckedAt` has no consumer yet | Medium — the data supports a staleness view; nothing builds one |
 | `tradeRegistration` is passed on as given and we say so. We do not verify it with PIRB or the Department of Labour, and could not from here | Low, and stated on screen |
 | A landlord cannot report that a tradesperson was bad. The reports table is about rooms and people, not providers, so the feedback loop that would keep this list honest over time does not exist | Medium — it is the natural next piece |
-| `sponsoredUntil` still exists and still nothing reads it. A paid placement in a list captioned "names we looked into" now has a sharper problem than before: a sponsored name needs a label saying so | Low now, a decision before any money |
+| ~~`sponsoredUntil` still exists and still nothing reads it~~ — **closed in v1.98.0, and it was worse than this row said.** It was writable, and in the landlord payload. See §5.31. The column remains; a paid placement in a list captioned "names we looked into" still needs a label saying so | Was Low; the write path was the real finding |
 
 
 ### 5.29 Contractor lead fees — ✅ recorded, 💰 not collected, in v1.96.0 (Phase 7k)
@@ -2082,7 +2086,7 @@ that hid the split.
 | A contractor cannot see what they are being billed for, because they have no account. A bill they cannot verify is a bill they can reasonably refuse | Medium — the same decision as above |
 | Nothing records whether a lead turned into work. A referral fee per *introduction* is what this bills; per *job* would need the contractor to tell us, which needs an account | Medium, and a pricing-model question before a code one |
 | A landlord cannot opt out of their taps being recorded, short of not pressing the button. The page says what happens; it does not offer a switch | Low — the record carries no identity to the contractor |
-| `sponsoredUntil` still exists and still nothing reads it. In a list captioned "names we looked into", a paid placement needs a label saying so | Low now, a decision before any money |
+| ~~`sponsoredUntil` still exists and still nothing reads it~~ — **closed in v1.98.0**; it was also writable and in the landlord payload. See §5.31. A paid placement still needs a label, and now also needs a contractor who can be billed — the same blocker as this section's | Folded into Outstanding §16 |
 
 
 ### 5.30 Inviting an applicant to a viewing — ✅ built in v1.97.0 (Phase 7l)
@@ -2186,6 +2190,101 @@ creates a viewing, and the panel passes.
 | No calendar view. The landlord sees a viewing on each applicant card and nowhere as a day's schedule | Low — the notes calendar is the precedent if it is wanted |
 | A landlord who proposes a time cannot change it; they cancel and offer another. That is two notices to the tenant where one would do | Low |
 
+
+### 5.31 `sponsoredUntil`: a write with no reader — ✅ closed in v1.98.0 (Phase 7m)
+
+The column has been on `ServiceProvider` since Phase 4, reserved for a paid
+placement in the contractor directory. Four separate comments said nothing reads
+it — the schema, the ordering method, the DTO and the frontend model — and all
+four were true. The ordering method's comment even explains why it is kept out
+of the `ORDER BY`, and `services-drive.mjs` asserts that sponsoring a provider
+does not move it up the list.
+
+**None of that was the problem.** What no comment said is that it was writable:
+
+```
+PATCH /api/services/admin/:id  {"sponsoredUntil":"2027-12-31T00:00:00.000Z"}
+→ HTTP 200, echoed in the response, stored in the column
+```
+
+and the same call with `"1999-01-01"` was also accepted, because the only rule
+on it was `@IsISO8601()`. So an admin could sell a placement, record it, be told
+it worked, see the date come back, and have nothing whatsoever happen. This is
+the house defect — a control that only looks like a control — with money
+attached: the payment would have been real and the placement would not have
+existed.
+
+Three findings, all measured against the running API before anything changed:
+
+| Finding | Measured |
+|---|---|
+| The write succeeds and does nothing | `HTTP 200`, value echoed, row updated |
+| Any date is accepted | `1999-01-01` stored without complaint |
+| Every landlord receives the field | `sponsoredUntil` in the key list of every row of `GET /api/services` |
+
+The third is the one that mattered most, and it is subtler than it looks. The
+`ordered()` SELECT is this codebase's deliberate allowlist — it is the mechanism
+that keeps `checkedByAdminId` away from landlords — and `sponsoredUntil` was
+sitting in it. Nothing in `frontend/src/app` read it; the only reference was the
+interface declaration. So the decision not to sell placement was held by a
+comment in a backend method, while the data needed to defeat that decision was
+already in the browser and typed in the model. **One `.sort()` in a component
+turns the directory into an advertising surface** without touching the backend,
+the comment, or the drive that guards it.
+
+A live provider in the development database read *"sponsored until
+2026-11-03"* at the time of writing. `services-drive.mjs` had set it to test the
+ordering guard and never cleaned up — which is also how the old check came to be
+testing the wrong half of the behaviour.
+
+#### What changed
+
+- The field is off **both DTOs**. `forbidNonWhitelisted` is on globally, so a
+  write now fails with a **400 naming the property** instead of succeeding
+  quietly.
+- It is out of the **landlord payload** and out of the **frontend model**.
+- Existing values were **cleared as residue** — nothing put them there
+  deliberately, nothing can write them now, nothing reads them, and a date in
+  that column asserts a commercial arrangement that does not exist. The honest
+  migration, not the convenient one, as in Phase 7j.
+- The **column stays.** It was a cheap bet in Phase 4 and it is still cheap.
+
+#### What the drive now proves
+
+The old single check — PATCH a sponsorship, assert the order did not move —
+passed, and was testing a write that was itself the defect. Four checks now:
+the write is refused on `PATCH`, refused on `POST`, the field is absent from
+what a landlord receives, and the ordering guard is tested against a row that
+**really is sponsored**, set directly in the database because the API can no
+longer set it. That last part is the stronger version of the old check: it
+exercises the condition the guard exists for rather than one that is now
+impossible. The precondition is asserted, and the drive cleans up after itself.
+
+Falsified by reintroducing all three bugs at once — the field back on both DTOs,
+back in the SELECT, and `sponsoredUntil: 'desc'` first in the `ORDER BY`. Four
+failures, each naming its own bug.
+
+⚠️ **And a fault in one of the two new smoke checks, caught before it shipped.**
+Written as `if (type=="array" and length>0) then (… has …) else false end`, it
+reported **PASS on a 401 body** — a non-list goes down the `else` branch, which
+was the success branch. Third time in this repository, second in this file,
+which warns about it in its own header. Both the new check and the
+identically-shaped `checkedByAdminId` check beside it now require the list, check
+every row rather than the first, and fail on a body that is not a list of
+providers. Verified by feeding the expression five crafted bodies.
+
+#### What is still a decision
+
+Whether to sell placement at all. It needs two things this phase deliberately
+did not build:
+
+1. **A label.** A paid entry in a list captioned "names we have looked into"
+   must say it is paid, or the caption is false for that row.
+2. **A contractor who can be billed.** Phase 7k established the contractor is
+   not a user — no account, no email, no way to see or dispute a charge. Selling
+   placement has the *identical* blocker as selling leads.
+
+Those are one decision, not two, and it is **Outstanding §16**.
 
 ## 6. What "verified" means here
 

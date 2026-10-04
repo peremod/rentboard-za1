@@ -2198,7 +2198,15 @@ enum ServiceCategory {
 /// and a migration later. A paid placement in a directory landlords open when
 /// something is broken is a plausible revenue line that charges an ADVERTISER,
 /// not a landlord — so it does not touch "free to list, free to apply". Nothing
-/// reads it yet, and the ordering code says so where it would be read.
+/// reads it, and the ordering code says so where it would be read.
+///
+/// ⚠️ It was also WRITABLE until Phase 7m, which is a different and worse
+/// thing. Both DTOs accepted it with `@IsISO8601()` and no other rule, so
+/// `PATCH /api/services/admin/:id {"sponsoredUntil": …}` returned 200, echoed
+/// the date back and stored it — any date, 1999 included — while nothing acted
+/// on it. An admin could sell a placement and be told it had worked. It is off
+/// both DTOs now and a write fails with a 400, existing values were cleared as
+/// residue, and the column is no longer in the landlord payload either.
 model ServiceProvider {
   id String @id @default(uuid())
 
@@ -2302,7 +2310,10 @@ model ServiceProvider {
 
   leads ContractorLead[]
 
-  /// See the note above. Nothing reads this yet.
+  /// See the note above. Nothing reads this, nothing can write it, and it is
+  /// not in any payload. Kept for the revenue line it was reserved for, which
+  /// needs a visible "paid placement" label and a contractor who can actually
+  /// be billed before it is wired — docs/OUTSTANDING.md §16.
   sponsoredUntil DateTime?
 
   createdAt DateTime @default(now())

@@ -1192,10 +1192,34 @@ req GET /api/services "" "$LTOKEN"
 check "a landlord can read the directory" 200 "$STATUS" "$BODY"
 
 # Only outcomes reach a landlord, never which admin signed somebody off.
-if echo "$BODY" | jq -e 'if (type=="array" and length>0) then (.[0] | has("checkedByAdminId")) else false end' >/dev/null 2>&1; then
-  red "  FAIL  the directory leaks checkedByAdminId to landlords"; FAIL=$((FAIL+1))
-else
+# Same correction as the sponsorship check below, for the same reason: this one
+# also reported success on any body that was not a list, and also looked only at
+# the first row.
+if echo "$BODY" | jq -e 'type=="array" and length>0 and (map(select(has("checkedByAdminId"))) | length) == 0' >/dev/null 2>&1; then
   green "  PASS  the directory withholds which admin signed a provider off"; PASS=$((PASS+1))
+else
+  red "  FAIL  the directory leaks checkedByAdminId to landlords, or did not return a list of providers"; FAIL=$((FAIL+1))
+  grey "        $(echo "$BODY" | head -c 300)"
+fi
+
+# A sponsorship is not in the payload at all — Phase 7m.
+#
+# This asserts an ABSENT key, against the body of the request two lines up. The
+# column exists and nothing reads it; it used to be selected here anyway, so a
+# client-side sort was the one unguarded way to turn a directory captioned
+# "names we have looked into" into a paid placement. `has` is used rather than a
+# null comparison on purpose: null would pass while the field was still crossing
+# the wire.
+# ⚠️ Written the other way round first, and it PASSED on a 401 body: an
+# `if … else false` guard sends a non-list down the else branch, which was the
+# success branch. That is the third time in this repository, and the second in
+# this file. So the list is REQUIRED, the row count is required, and every row
+# is checked rather than only the first — a leak on row two is still a leak.
+if echo "$BODY" | jq -e 'type=="array" and length>0 and (map(select(has("sponsoredUntil"))) | length) == 0' >/dev/null 2>&1; then
+  green "  PASS  no sponsorship field reaches a landlord's browser"; PASS=$((PASS+1))
+else
+  red "  FAIL  the directory ships sponsoredUntil to landlords, or did not return a list of providers"; FAIL=$((FAIL+1))
+  grey "        $(echo "$BODY" | head -c 300)"
 fi
 
 # No listed provider is without a phone check. Asserted from the landlord-facing
@@ -1258,6 +1282,15 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
 
   req POST /api/services/admin/lead-rates '{"category":"plumber","amountCents":-500,"effectiveFrom":"2026-01-01T00:00:00.000Z"}' "$ADMIN_TOKEN"
   check "a negative lead fee is refused — that is a mistake, not a price" 400 "$STATUS" "$BODY"
+
+  # Selling a placement that does not exist — Phase 7m.
+  #
+  # This returned 200 and stored the date until this phase, so an admin could
+  # record a sponsorship, be told it worked, and have nothing happen. The 400
+  # comes from forbidNonWhitelisted now that the field is off both DTOs, which
+  # is the point: a write with no reader fails loudly rather than quietly.
+  req POST /api/services/admin '{"category":"cleaner","name":"Smoke Sponsored","phone":"082 111 3333","areas":["Tembisa"],"phoneConfirmedAt":"2026-09-18T10:00:00.000Z","sponsoredUntil":"2027-12-31T00:00:00.000Z"}' "$ADMIN_TOKEN"
+  check "a sponsorship cannot be recorded for a placement that does not exist" 400 "$STATUS" "$BODY"
 else
   skipped "the publish rule and the lead summary — set ADMIN_TOKEN to include them"
 fi

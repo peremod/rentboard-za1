@@ -79,11 +79,23 @@ export class ServicesService {
    * Worth stating because it is not obvious, and a drive asserting alphabetical
    * order called the correct behaviour a failure.
    *
-   * Deliberately NOT ordered by `sponsoredUntil`. That column
-   * exists for a future paid placement and nothing reads it yet; putting it in
-   * the ORDER BY now would quietly make the directory an advertising surface
-   * before anyone has decided it should be one, and the first paid entry would
-   * jump the queue with no label saying why.
+   * Deliberately NOT ordered by `sponsoredUntil`, and that column is no longer
+   * in the SELECT either — Phase 7m.
+   *
+   * ⚠️ Until this phase the decision lived only in this comment while the data
+   * sat in every landlord's browser. `sponsoredUntil` was selected here and
+   * typed in the frontend model, and nothing in `frontend/src/app` read it. So
+   * one `.sort()` in a component could have made the directory an advertising
+   * surface without touching this file, this comment, or the drive that guards
+   * it — the guard was a sentence, and the material to defeat it was already
+   * shipped.
+   *
+   * A paid placement is still a plausible line (it charges an ADVERTISER, not a
+   * landlord), and the column is still here for it. But it needs a label saying
+   * which entry is paid, in a list captioned "names we have looked into", and it
+   * needs a contractor who can be billed — which Phase 7k established does not
+   * exist. Both are docs/OUTSTANDING.md §16. Wiring it is a decision, so the
+   * decision now has to be made in code rather than being one sort call away.
    */
   private ordered(where: Prisma.ServiceProviderWhereInput) {
     return this.prisma.serviceProvider.findMany({
@@ -100,7 +112,7 @@ export class ServicesService {
        */
       select: {
         id: true, category: true, name: true, phone: true, whatsapp: true,
-        areas: true, note: true, active: true, sponsoredUntil: true, createdAt: true,
+        areas: true, note: true, active: true, createdAt: true,
         // The checks, which are the whole point of the screen's claim.
         phoneConfirmedAt: true, idCheckedAt: true, referenceCheckedAt: true,
         tradeRegistration: true, lastCheckedAt: true,
@@ -152,7 +164,6 @@ export class ServicesService {
         areas: dto.areas.map((a) => a.trim()).filter(Boolean),
         note: dto.note?.trim() || null,
         active: dto.active ?? false,
-        sponsoredUntil: dto.sponsoredUntil ? new Date(dto.sponsoredUntil) : null,
         phoneConfirmedAt,
         idCheckedAt: dto.idCheckedAt ? new Date(dto.idCheckedAt) : null,
         referenceCheckedAt: dto.referenceCheckedAt ? new Date(dto.referenceCheckedAt) : null,
@@ -176,9 +187,6 @@ export class ServicesService {
     if (dto.areas !== undefined) data.areas = dto.areas.map((a) => a.trim()).filter(Boolean);
     if (dto.note !== undefined) data.note = dto.note?.trim() || null;
     if (dto.active !== undefined) data.active = dto.active;
-    if (dto.sponsoredUntil !== undefined) {
-      data.sponsoredUntil = dto.sponsoredUntil ? new Date(dto.sponsoredUntil) : null;
-    }
 
     // ── The checks — Phase 7j ───────────────────────────────────────────────
     if (dto.phoneConfirmedAt !== undefined) {

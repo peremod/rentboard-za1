@@ -1,0 +1,45 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ⚠️  CLEARING A COLUMN NOTHING COULD READ AND NOTHING SHOULD HAVE WRITTEN
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+-- `service_providers.sponsoredUntil` has been on the model since Phase 4,
+-- reserved for a paid placement in the contractor directory. Nothing has ever
+-- read it. The ordering code says so, and a drive asserts that sponsoring a
+-- provider does not move it up the list.
+--
+-- What the comments did NOT say is that it was writable. Phase 7m measured it:
+--
+--   PATCH /api/services/admin/:id  {"sponsoredUntil": "2027-12-31T00:00:00Z"}
+--   → HTTP 200, echoed in the response, stored in this column
+--
+-- and the same call with "1999-01-01" was also accepted, because the only
+-- validation was @IsISO8601(). So an admin could sell a placement, record it,
+-- be told it worked, and have nothing happen. The money would have been real.
+--
+-- The field is off both DTOs now, and `forbidNonWhitelisted` turns that write
+-- into a 400 naming the property. The column stays — it was a cheap bet in
+-- Phase 4 and it is still cheap — but whatever is currently in it is residue:
+-- nothing put it there on purpose, nothing can put anything there now, and
+-- nothing reads it.
+--
+-- ── Why clear rather than keep
+--
+-- A date in this column asserts a commercial arrangement. There is no such
+-- arrangement: no placement has been sold, because no placement exists, and
+-- Phase 7k established that the contractor cannot be billed in-product at all
+-- (they are not a user — no account, no email, no way to see or dispute a
+-- bill). Every value here came from a drive that set it to test the ordering
+-- guard and never cleaned up after itself, which is how a live provider in the
+-- development database came to be "sponsored until 2026-11-03".
+--
+-- Leaving those dates in place would mean the next person to open the admin
+-- list sees sponsorships that were never agreed, for a feature that does not
+-- exist. That is the convenient migration, not the honest one — the same
+-- choice Phase 7j faced when the phone-check rule un-published every provider
+-- that had no recorded check.
+--
+-- If a placement is ever sold, it will need a label on the listing, a
+-- contractor who can be billed, and a deliberate write path. See
+-- docs/OUTSTANDING.md §16.
+
+UPDATE "service_providers" SET "sponsoredUntil" = NULL WHERE "sponsoredUntil" IS NOT NULL;
