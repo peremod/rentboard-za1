@@ -160,6 +160,126 @@ strip && strip.minHeight >= 44
   ? ok('…and the page itself does not scroll sideways')
   : bad(`the portal page overflows by ${await overflowOf(phone)}px at 390px`);
 
+// ── 3b. The strip is complete IN PRACTICE, not only in the DOM — Phase 7n ──
+//
+// Everything above this point was true before Phase 7n and the strip was still
+// unusable. Measured at 360px: 2251px of nav in a 359px window, so TWO of
+// fourteen items on screen and 1892px past the right edge — with no fade, no
+// mask and no visible scrollbar, opening scrolled to 0. "Who to call",
+// "Notices" and "Settings" were in there. `scrollable: true` was asserted and
+// said nothing about whether a person could tell, or get there.
+//
+// So: is there a cue, does the far end actually arrive, and is "you are here"
+// on screen when you land somewhere deep in the list.
+
+const cue = await phone.evaluate(() => {
+  const nav = document.querySelector('.portal-nav');
+  if (!nav) return null;
+  const s = getComputedStyle(nav);
+  return {
+    backgroundImage: s.backgroundImage,
+    layers: s.backgroundImage === 'none' ? 0 : s.backgroundImage.split(/,(?![^(]*\))/).length,
+    attachment: s.backgroundAttachment,
+  };
+});
+// Four layers: two covers that scroll with the content, two shadows pinned to
+// the element. Fewer than four cannot be self-regulating, and a static
+// gradient would promise more nav at the end of the strip.
+cue && cue.layers >= 4 && /local/.test(cue.attachment)
+  ? ok(`…with a scroll cue that fades out at the ends (${cue.layers} layers, attachment ${cue.attachment})`)
+  : bad(`the strip gives no sign that ${'' + (await phone.evaluate(() => { const n = document.querySelector('.portal-nav'); return n.scrollWidth - n.clientWidth; }))}px of nav is off-screen: ${JSON.stringify(cue)}`);
+
+// Every item is REACHABLE: scroll to the end and the last one is on screen.
+// This is the completeness claim, and nothing asserted it before — a strip
+// clipped by a parent would have passed every check above.
+// ⚠️ `behavior: 'instant'`, and a wait before measuring.
+//
+// Written as `nav.scrollLeft = nav.scrollWidth` followed by an immediate read
+// in the same evaluate, this check FAILED and reported that the last item
+// could not be reached — a product bug that did not exist. The strip now sets
+// `scroll-behavior: smooth` (for revealActive), so a programmatic scroll is
+// animated and reading scrollLeft back in the same tick gives the value it
+// started at. The scroll was fine; the measurement was taken before it landed.
+await phone.evaluate(() => {
+  const nav = document.querySelector('.portal-nav');
+  nav.scrollTo({ left: nav.scrollWidth, behavior: 'instant' });
+});
+await phone.waitForTimeout(400);
+const reach = await phone.evaluate(() => {
+  const nav = document.querySelector('.portal-nav');
+  const navBox = nav.getBoundingClientRect();
+  const links = [...nav.querySelectorAll('.portal-nav-link, .portal-nav-cta a')];
+  const last = links.at(-1);
+  const lb = last.getBoundingClientRect();
+  return {
+    total: links.length,
+    lastLabel: last.textContent.trim().split('\n')[0].trim(),
+    lastInView: lb.left >= navBox.left - 1 && lb.right <= navBox.right + 1,
+    scrolledTo: Math.round(nav.scrollLeft),
+  };
+});
+reach.lastInView
+  ? ok(`…and the far end of the strip really arrives: all ${reach.total} items reachable, last is "${reach.lastLabel}"`)
+  : bad(`the last nav item ("${reach.lastLabel}") cannot be scrolled into view — ${reach.total} items, scrolled to ${reach.scrolledTo}px`);
+
+// "You are here", on a screen far enough along the strip to prove it.
+// /tenant/passport measured at x=437 in a 359px window before this: a
+// highlight nobody can see is not an orientation cue.
+const deep = await signIn(browser, WEB, tenant.email, PASSWORD, { width: 360, height: 820 });
+await deep.goto(`${WEB}/tenant/passport`, { waitUntil: 'networkidle' });
+await deep.waitForSelector('.portal-nav .portal-nav-link');
+await deep.waitForTimeout(600);                 // scroll-behavior: smooth
+const here = await deep.evaluate(() => {
+  const nav = document.querySelector('.portal-nav');
+  const navBox = nav.getBoundingClientRect();
+  const marked = [...nav.querySelectorAll('.portal-nav-link.active')];
+  const cur = [...nav.querySelectorAll('.portal-nav-link[aria-current="page"]')];
+  const a = marked[0]?.getBoundingClientRect();
+  return {
+    labels: marked.map((m) => m.textContent.trim().split('\n')[0].trim()),
+    currentCount: cur.length,
+    inView: a ? a.left >= navBox.left - 1 && a.right <= navBox.right + 1 : false,
+    scrollLeft: Math.round(nav.scrollLeft),
+  };
+});
+here.labels.length === 1 && /passport/i.test(here.labels[0])
+  ? ok(`…and the strip marks the screen you are actually on ("${here.labels[0]}")`)
+  : bad(`on /tenant/passport the strip marks ${JSON.stringify(here.labels)} — it used to mark "Browse rooms" on all six tenant screens`);
+here.currentCount === 1
+  ? ok('…exactly one item, so a screen reader announces one current page')
+  : bad(`${here.currentCount} items carry aria-current="page" on one screen`);
+here.inView
+  ? ok(`…and it is scrolled into view rather than left off the edge (strip at ${here.scrollLeft}px)`)
+  : bad(`the active item is off-screen at 360px — the strip opens at ${here.scrollLeft}px and never moves`);
+
+// A section of the dashboard is its own "you are here" — and the route root
+// is not, when a section is named.
+//
+// ⚠️ This check exists because falsifying the one above could not reach the
+// rule it was meant to cover. /tenant/passport carries no fragment, so letting
+// an `exact` item match alongside a fragment one changed nothing there, and
+// the aria-current failure that run reported came entirely from the Browse
+// rooms bug. A rule with no check that can fail for it is not covered.
+const frag = await signIn(browser, WEB, landlord.email, PASSWORD, { width: 360, height: 820 });
+for (const [url, want] of [
+  ['/landlord/dashboard', 'Dashboard'],
+  ['/landlord/dashboard#drafts', 'Drafts'],
+  ['/landlord/dashboard#needs-attention', 'Needs you'],
+]) {
+  await frag.goto(`${WEB}${url}`, { waitUntil: 'networkidle' });
+  await frag.waitForSelector('.portal-nav .portal-nav-link');
+  await frag.waitForTimeout(500);
+  const marked = await frag.evaluate(() =>
+    [...document.querySelectorAll('.portal-nav .portal-nav-link[aria-current="page"]')]
+      .map((a) => a.textContent.trim().split('\n')[0].trim()));
+  marked.length === 1 && marked[0].includes(want)
+    ? ok(`${url} marks exactly "${want}"`)
+    : bad(`${url} marks ${JSON.stringify(marked)}, expected one item containing "${want}"`);
+}
+await frag.context().close();
+
+await deep.context().close();
+
 console.log('\n── 4. Log in and Get started stay in the header ────────────');
 
 for (const width of [360, 390, 430]) {

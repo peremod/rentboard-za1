@@ -677,11 +677,14 @@ node scripts/dashboard-drive.mjs         # 35 checks — Phase 7d. "Viewed 47 ti
 node scripts/onboarding-drive.mjs        # 35 checks — Phase 7f. The social card
                                          # (measured, not assumed) and the
                                          # first-run walkthrough
-node scripts/nav-ui-drive.mjs            # 46 checks — Phase 7e. The sidebar on
-                                         # every guarded screen, the mobile
-                                         # header CTAs at 360/390/430px, the
-                                         # footer, and three widths with no
-                                         # sideways scroll
+node scripts/nav-ui-drive.mjs            # 54 checks — Phase 7e and 7n. The
+                                         # sidebar on every guarded screen, the
+                                         # mobile header CTAs at 360/390/430px,
+                                         # the footer, three widths with no
+                                         # sideways scroll — and that the phone
+                                         # strip says it scrolls, that its far
+                                         # end is reachable, and that exactly
+                                         # one item is marked the current page
 node scripts/dashboard-ui-drive.mjs      # 29 checks — that the task buttons
                                          # ARRIVE, not just that the string is
                                          # right, and that a landlord who never

@@ -198,6 +198,48 @@
     padding: .5rem .75rem;
     border-bottom: 1px solid var(--border);
     -webkit-overflow-scrolling: touch;
+
+    // ── Say that it scrolls, because measurement said it did not ──────────
+    //
+    // Phase 7n. Measured at 360px: the strip is 2251px of nav in a 359px
+    // window, so a landlord sees TWO of fourteen items and 1892px sits off
+    // the right-hand edge. There was no cue of any kind — background-image
+    // computed to `none`, no mask, and a touch scrollbar is invisible by
+    // design — and it opens scrolled to 0. A strip that is complete in the DOM
+    // and looks finished at its edge is, to the person holding the phone, a
+    // nav with twelve items missing. "Who to call", "Notices" and "Settings"
+    // were all in there.
+    //
+    // The four-layer scroll-shadow technique, chosen because it is
+    // SELF-REGULATING: the two cover layers scroll with the content and sit
+    // over the two fixed shadow layers, so an edge shadow shows only while
+    // there is really more nav past it and fades out as you reach the end. A
+    // static gradient would promise more nav at the end of the strip.
+    //
+    // The covers are --ink2 because that is what this bar is filled with, and
+    // the shadows are LIGHT: this is a dark strip, and the usual black scroll
+    // shadow is invisible on it. The alpha-0 stops are written as ink2 and
+    // cream with zero alpha rather than `transparent`, which interpolates
+    // through transparent black and greys the middle of the fade.
+    background-color: var(--ink2);
+    background-image:
+      linear-gradient(to right, rgb(58, 50, 40) 40%, rgba(58, 50, 40, 0)),
+      linear-gradient(to left, rgb(58, 50, 40) 40%, rgba(58, 50, 40, 0)),
+      radial-gradient(farthest-side at 0 50%, rgba(250, 247, 240, .33), rgba(250, 247, 240, 0)),
+      radial-gradient(farthest-side at 100% 50%, rgba(250, 247, 240, .33), rgba(250, 247, 240, 0));
+    background-position: left center, right center, left center, right center;
+    background-repeat: no-repeat;
+    background-size: 40px 100%, 40px 100%, 14px 100%, 14px 100%;
+    background-attachment: local, local, scroll, scroll;
+
+    // A real scrollbar where the platform draws one, rather than leaning on
+    // the shadow alone.
+    scrollbar-width: thin;
+    // The active item is scrolled into view on navigation (PortalShell
+    // .revealActive); smooth so it reads as the strip moving rather than the
+    // nav changing.
+    scroll-behavior: smooth;
+    overscroll-behavior-x: contain;
     // ⚠️ min-width: 0, or the scroller is not a scroller.
     //
     // This is a GRID item in .portal-wrap, and a grid item's default

@@ -2286,6 +2286,106 @@ did not build:
 
 Those are one decision, not two, and it is **Outstanding §16**.
 
+### 5.32 The mobile nav strip was complete and unusable — ✅ fixed in v1.99.0 (Phase 7n)
+
+Phase 7e fixed **whether** the portal nav is drawn, after two screens shipped
+without it. Phase 7a fixed **what** it says, after six copies disagreed. Neither
+asked whether, on a phone, a person can actually use it — and the 46 checks in
+`nav-ui-drive.mjs` asserted `scrollable: true` and stopped there.
+
+Measured at 360px, before anything changed:
+
+| | Landlord | Tenant |
+|---|---|---|
+| Items in the strip | 14 | 12 |
+| **Visible without a swipe** | **2** | **2** |
+| Strip width in a 359px window | 2251px | 1896px |
+| **Off the right-hand edge** | **1892px** | **1537px** |
+| Scroll cue (`background-image`, mask, scrollbar) | **none, none, 1px** | same |
+| Opens scrolled to | 0px | 0px |
+
+So a landlord saw **Dashboard** and **Active listings** and a clean edge. "All
+applicants", "Messages", "My properties", "Verification", "Your public page",
+"Who to call", "Notices", "Settings" and the "+ List a room" call to action were
+all real, all in the DOM, all 44px tall, and all behind a swipe gesture with
+nothing on screen suggesting there was anywhere to swipe. `scrollable: true` was
+true and said nothing about whether a person could tell.
+
+Log out is the one item this did not strand: it is also in the phone header
+drawer, two taps away, which `nav-ui-drive` already asserted.
+
+**Two more faults found while measuring, neither of which the nav audit can
+see, because every link in the nav resolves to a real route** — the same blind
+spot that hid the footer's guarded links in Phase 7e:
+
+- 🔴 **`Browse rooms` was marked the current page on every tenant screen.** It
+  points at `/`, and `routerLinkActive` with `exact: false` treats `/` as a
+  prefix of every URL in the app. Measured on all six: Dashboard, Rent,
+  Passport, Messages, Notices and Settings each highlighted "Browse rooms"
+  alongside whatever else was right.
+- 🔴 **Every item naming a dashboard section lit up at once**, because
+  `routerLinkActive` does not look at the fragment. Five highlighted on the
+  tenant dashboard, four on the landlord one. A nav that says you are in five
+  places tells you nothing about which.
+
+#### What changed
+
+| Change | Why |
+|---|---|
+| A four-layer scroll shadow on the strip | **Self-regulating**: two cover layers scroll with the content over two shadow layers pinned to the element, so an edge fade appears only while there is really more nav past it. A static gradient would promise more nav at the end of the strip |
+| Light shadows, `--ink2` covers | This is a dark bar. The usual black scroll shadow is invisible on it — which is how it would have shipped looking fixed |
+| `PortalShell.isActive()` replaces `routerLinkActive` | One readable rule: a fragment item is active only for its own fragment, a route match is exact or a path-SEGMENT prefix (never a bare string prefix, which would match `/landlord/rooms-archive` against `/landlord/rooms`), and `exact` includes the fragment so exactly one item is ever current |
+| `aria-current="page"` on the active item | It had none. And exactly one, because two announce two current pages to a screen reader |
+| `revealActive()` scrolls the strip to the active item | `/tenant/passport` measured with its active item at x=437 in a 359px window. `scrollLeft` is assigned rather than `scrollIntoView()` called, because that walks up the ancestors and scrolls the page as well — jumping the content the person was reading |
+| `exact: true` on `Browse rooms` | One word, six screens |
+
+After: `/tenant/passport` opens with the strip scrolled to **610px** and
+"Renter's Passport" on screen, marked, alone.
+
+#### What the drive now proves
+
+Six new checks, where there were none for any of this:
+
+1. The strip carries a scroll cue of at least four layers with `local`
+   attachment — not merely "is scrollable".
+2. The far end **really arrives**: scrolled to the end, the last item is in
+   view. Nothing asserted this before, and a strip clipped by a parent would
+   have passed every earlier check.
+3. `/tenant/passport` marks the screen you are on, not "Browse rooms".
+4. Exactly one `aria-current="page"` per screen.
+5. The active item is scrolled into view at 360px.
+6. `/landlord/dashboard`, `#drafts` and `#needs-attention` each mark exactly
+   one item, and the right one.
+
+Falsified by reintroducing four bugs at once — cue removed, `Browse rooms` back
+to a prefix match, `revealActive` disabled, `exact` allowed to match with a
+fragment: four failures, the first reporting the measured 1928px.
+
+⚠️ **Check 6 exists because that falsification could not reach one of the four
+rules.** `/tenant/passport` carries no fragment, so letting an `exact` item
+match beside a fragment one changed nothing there, and the `aria-current` failure
+that run reported came entirely from the Browse rooms bug. The fragment rule had
+no check that could fail for it. Check 6 was added and falsified **on its own**:
+two failures, with the no-fragment case still passing, so it is not a check that
+merely fails at everything.
+
+⚠️ **And one of my own new checks reported a product bug that did not exist.**
+"The far end really arrives" failed, saying the last item could not be scrolled
+into view. The cause was `scroll-behavior: smooth`, which this phase added: a
+programmatic `scrollLeft` assignment is animated, so reading it back in the same
+tick gives the value it started from. The scroll was fine; the measurement was
+taken before it landed. It uses `behavior: 'instant'` and a wait now.
+
+#### Not changed, and named
+
+Two of fourteen items are still what fits at 360px, because the labels are words
+rather than icons. Showing more would mean truncating them or going
+icons-only, which is a redesign of a strip Phase 7e chose deliberately ("a
+horizontal scrolling row rather than a second drawer behind a second tap") and
+which `nav-ui-drive` asserts. The fade and the reveal make the existing pattern
+work; they do not make fourteen items fit on a 360px screen, and this document
+should not imply otherwise.
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461
