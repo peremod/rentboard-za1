@@ -30,8 +30,6 @@ const HOUSEMATE_LABELS: Record<Exclude<HousemateProfile, 'unstated'>, string> = 
 };
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { DialogService } from '../../../core/services/dialog.service';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
-import { landlordNav } from '../landlord-nav';
 import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 import { LeasePanel } from '../../../shared/components/lease-panel/lease-panel';
 import { LeaseDocuments } from '../../../shared/components/lease-documents/lease-documents';
@@ -65,11 +63,10 @@ const UNGROUPED = 'ungrouped';
   standalone: true,
   imports: [
     PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink,
-    ZarCentsPipe, PortalShell, LeasePanel, LeaseDocuments,
+    ZarCentsPipe, LeasePanel, LeaseDocuments,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Landlord" pageTitle="Your property">
 
       @if (loading()) {
         <p class="muted">Loading…</p>
@@ -556,7 +553,6 @@ const UNGROUPED = 'ungrouped';
           }
         </div>
       </ng-template>
-    </app-portal-shell>
   `,
 })
 export class Yard implements OnInit {
@@ -585,8 +581,6 @@ export class Yard implements OnInit {
   protected readonly propertyId = signal<string | null>(
     this.route.snapshot.paramMap.get('propertyId'),
   );
-
-  protected readonly navItems: PortalNavItem[] = landlordNav();
 
   protected readonly dash = this.properties.dashboard;
 
@@ -761,7 +755,6 @@ export class Yard implements OnInit {
       },
     });
   }
-
 
   /** First of the current month, matching how the API normalises a period. */
   private thisMonth(): string {

@@ -1,12 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { AuthService } from '../../../core/services/auth.service';
 import { NoticesService, Notice } from '../../../core/services/notices';
-import { landlordNav } from '../../landlord/landlord-nav';
-import { tenantNav } from '../../tenant/tenant-nav';
-import { ADMIN_NAV } from '../../admin/admin-nav';
 
 /**
  * Your notices — Phase 7g.
@@ -31,10 +27,9 @@ import { ADMIN_NAV } from '../../admin/admin-nav';
 @Component({
   selector: 'app-notices',
   standalone: true,
-  imports: [PortalShell, DatePipe],
+  imports: [DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems()" [roleLabel]="roleLabel()" pageTitle="Your notices">
       <section class="dash-section">
         <div class="notices-head">
           <h2 class="dash-section-title">Everything we have told you</h2>
@@ -95,7 +90,6 @@ import { ADMIN_NAV } from '../../admin/admin-nav';
           }
         </ul>
       </section>
-    </app-portal-shell>
   `,
   styles: `
     .notices-head {
@@ -131,16 +125,6 @@ export class Notices implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
   notices = inject(NoticesService);
-
-  roleLabel = () =>
-    this.auth.isAdmin() ? 'Admin' : this.auth.isLandlord() ? 'Landlord' : 'Tenant';
-
-  navItems = (): PortalNavItem[] =>
-    this.auth.isAdmin()
-      ? ADMIN_NAV
-      : this.auth.isLandlord()
-        ? landlordNav({ notices: this.notices.unreadCount() })
-        : tenantNav({ notices: this.notices.unreadCount() });
 
   /** Distinguished from "no notices" — see the template. */
   readonly loading = signal(true);

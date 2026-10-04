@@ -241,10 +241,39 @@
   .app-card { flex-direction: column; align-items: stretch; }
   .app-thumb { width: 100%; height: 120px; font-size: 2rem; }
 
-  // Nav is tight here: language and the secondary action move into the drawer
-  .nav-actions app-lang-switcher,
-  .nav-actions .btn-ghost { display: none; }
+  // Nav is tight here: the language switcher moves into the drawer.
+  .nav-actions app-lang-switcher { display: none; }
   .nav-links-lang { display: block; margin-top: .25rem; }
+
+  // ── Log in and Get started stay in the HEADER on a phone ───────────────
+  //
+  // They were `display: none` here, so a visitor's Log in was reachable only
+  // by opening the hamburger — two taps to the thing the header exists for,
+  // on the device most of this market uses. Get started (btn-primary) stayed,
+  // which made it worse: the header showed one half of a pair.
+  //
+  // Only for a VISITOR. A signed-in account's actions are Dashboard, List a
+  // room and Log out, and three buttons plus a logo plus a burger do not fit
+  // at 360px — those stay in the drawer, where the next rule puts them.
+  .nav-inner.is-signed-in .nav-actions .btn-ghost { display: none; }
+  .nav-inner:not(.is-signed-in) .nav-links-auth { display: none; }
+  // Tightened so the pair fits beside the logo without wrapping. Measured at
+  // 360, 390 and 430px by scripts/nav-ui-drive.mjs, which fails on any
+  // horizontal page scroll or on a tap target under 44px.
+  .nav-inner:not(.is-signed-in) .nav-actions {
+    gap: .35rem;
+    .btn { padding: .5rem .6rem; font-size: .75rem; }
+  }
+  // ⚠️ min-height, not padding. Tightening the padding to fit both CTAs beside
+  // the logo took them to 28px tall — and they were ALREADY 28px before that,
+  // because .btn-sm's padding alone does not reach the target. A 28px button on
+  // a phone is the one a thumb misses, and the two most important buttons on
+  // the public site were both under it. WCAG 2.5.8 wants 24px; 44px is what
+  // this product's own portal strip uses, so the header matches it.
+  //
+  // Found by scripts/nav-ui-drive.mjs measuring the rendered box rather than
+  // reading the rule, which is the only way this was ever going to surface.
+  .nav-actions .btn { min-height: 44px; }
   // The actions the header just hid, in the drawer where the comment above
   // always claimed they were. Stacked and full width: they are the primary
   // thing a returning visitor opens this menu for.

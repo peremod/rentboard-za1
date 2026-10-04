@@ -16,7 +16,14 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <nav class="nav">
-      <div class="nav-inner">
+      <!-- The auth state, on the element the responsive layer keys off.
+           CSS cannot ask AuthService whether anyone is signed in, and the two
+           cases want opposite things on a phone: a VISITOR must keep Log in and
+           Get started in the header (they are what the header is for), while a
+           signed-in landlord has Dashboard, List a room and Log out, which do
+           not fit beside a logo at 360px and belong in the drawer. One class,
+           so the rule can say which. -->
+      <div class="nav-inner" [class.is-signed-in]="auth.isAuthenticated()">
         <a class="nav-logo" routerLink="/">Mas<span>tande</span></a>
 
         <div class="nav-links" [class.open]="mobileOpen()">

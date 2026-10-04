@@ -6,8 +6,6 @@ import { environment } from '@env/environment';
 import { StorefrontService } from '../../../core/services/storefront.service';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { MyStorefront } from '../../../core/models/storefront.model';
-import { PortalShell } from '../../../shared/components/portal-shell/portal-shell';
-import { landlordNav } from '../landlord-nav';
 
 /**
  * The landlord's own view of their public page — Phase 5b.
@@ -30,10 +28,9 @@ import { landlordNav } from '../landlord-nav';
 @Component({
   selector: 'app-storefront-settings',
   standalone: true,
-  imports: [FormsModule, PortalShell],
+  imports: [FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Landlord" pageTitle="Your public page">
 
       <div class="insight-banner">
         🪧
@@ -126,7 +123,6 @@ import { landlordNav } from '../landlord-nav';
           }
         </section>
       }
-    </app-portal-shell>
   `,
   styles: [
     `
@@ -140,7 +136,6 @@ export class StorefrontSettings implements OnInit {
   private service = inject(StorefrontService);
   private uploads = inject(UploadsService);
 
-  navItems = landlordNav();
   readonly siteUrl = environment.siteUrl;
 
   readonly store = signal<MyStorefront | null>(null);

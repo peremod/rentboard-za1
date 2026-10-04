@@ -5,6 +5,7 @@ export const ACCOUNT_ROUTES: Routes = [
   {
     path: 'settings',
     loadComponent: () => import('./settings/account-settings').then((m) => m.AccountSettings),
+    data: { pageTitle: 'Account settings' },
     title: 'Account settings — Mastande',
   },
   {
@@ -13,6 +14,7 @@ export const ACCOUNT_ROUTES: Routes = [
     // own area, as on settings.
     path: 'notices',
     loadComponent: () => import('./notices/notices').then((m) => m.Notices),
+    data: { pageTitle: 'Your notices' },
     title: 'Your notices — Mastande',
   },
   {
@@ -26,6 +28,7 @@ export const ACCOUNT_ROUTES: Routes = [
      */
     path: 'messages',
     loadComponent: () => import('./messages/messages').then((m) => m.MessagesInbox),
+    data: { pageTitle: 'Your messages' },
     title: 'Your messages — Mastande',
   },
   { path: '', redirectTo: 'settings', pathMatch: 'full' },

@@ -4,8 +4,6 @@ import { ServiceDirectoryService } from '../../../core/services/service-director
 import {
   SERVICE_LABELS, ServiceCategory, ServiceProvider, whatsappLink,
 } from '../../../core/models/service-provider.model';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
-import { landlordNav } from '../landlord-nav';
 
 /**
  * Who to phone when something breaks.
@@ -20,10 +18,9 @@ import { landlordNav } from '../landlord-nav';
 @Component({
   selector: 'app-landlord-services',
   standalone: true,
-  imports: [FormsModule, PortalShell],
+  imports: [FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Landlord" pageTitle="Who to call">
 
       <div class="insight-banner">
         🔧
@@ -84,7 +81,6 @@ import { landlordNav } from '../landlord-nav';
           </section>
         }
       }
-    </app-portal-shell>
   `,
   styles: [
     `
@@ -115,7 +111,6 @@ import { landlordNav } from '../landlord-nav';
 })
 export class LandlordServices implements OnInit {
   private directory = inject(ServiceDirectoryService);
-  navItems: PortalNavItem[] = landlordNav();
 
   protected readonly providers = signal<ServiceProvider[]>([]);
   protected readonly loading = signal(true);

@@ -49,7 +49,28 @@ const loginVisibleBefore = await anon.locator('a[href="/auth/login"]:visible').c
 await anon.locator('.nav-burger').click();
 await anon.waitForTimeout(500);
 const loginVisibleAfter = await anon.locator('a[href="/auth/login"]:visible').count();
-loginVisibleAfter > 0 ? ok(`Log in is reachable on a 390px phone (drawer: ${loginVisibleAfter} visible)`) : bad('no visible Log in on mobile, even in the drawer');
+/**
+ * ⚠️ Rewritten in Phase 7e, not deleted: the rule it encoded has been
+ * superseded.
+ *
+ * As reported, the bug was "no way to log in on mobile" and the fix put Log in
+ * in the DRAWER, so this asserted only that it was reachable after a tap. The
+ * brief's item 23 asks for something stricter and better: Log in and Get
+ * started belong in the header itself, because they are what the header is for
+ * and a returning visitor should not have to find a hamburger first. So the
+ * check now requires it BEFORE the drawer is opened — the old assertion would
+ * pass on a header that showed neither.
+ *
+ * scripts/nav-ui-drive.mjs measures the pair at 360, 390 and 430px, with the
+ * tap target and the overcrowding. This keeps the originally-reported bug's own
+ * check next to the other four from that report.
+ */
+loginVisibleBefore > 0
+  ? ok(`Log in is in the HEADER on a 390px phone, before any tap (${loginVisibleBefore} visible)`)
+  : bad('Log in is not in the mobile header — item 23 wants it there, not behind the hamburger');
+loginVisibleAfter > 0
+  ? ok(`…and still reachable with the drawer open (${loginVisibleAfter} visible)`)
+  : bad('opening the drawer hides the header Log in');
 console.log(`     (before opening the drawer: ${loginVisibleBefore} visible)`);
 
 // ── 3. Pluralisation

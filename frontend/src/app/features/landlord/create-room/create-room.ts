@@ -26,18 +26,11 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="wizard">
-      <!-- The page's H1, and it had none — found by adding this screen to the
-           accessibility drive for Phase 6. Every step of the wizard opened with
-           an H2, so the heading outline of the most important form in the
-           landlord portal started at level two and the page never said what it
-           was. It has been like that since the wizard shipped; nothing audited
-           it, because the drive covered the dashboard and not the forms.
-
-           It names the flow, so a sub-lessor and an owner are not told they are
-           doing the same thing. -->
-      <h1 class="wizard__title">
-        {{ isSublet() ? 'Sublet a room in your place' : 'List a room' }}
-      </h1>
+      <!-- The wizard's own h1 used to be here. It is the layout's now, from the
+           route's pageTitle, which differs per route for exactly the reason the
+           old comment gave: 'List a room' for an owner and 'Sublet a room in
+           your place' for a sub-lessor, so the two are not told they are doing
+           the same thing. Phase 7e. -->
 
       <div class="wizard__steps">
         @for (s of [1,2,3,4]; track s) {

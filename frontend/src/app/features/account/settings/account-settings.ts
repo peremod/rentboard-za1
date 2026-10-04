@@ -1,10 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject, signal, effect } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
-import { ADMIN_NAV } from '../../admin/admin-nav';
-import { landlordNav } from '../../landlord/landlord-nav';
-import { tenantNav } from '../../tenant/tenant-nav';
 
 /**
  * Account settings, shared by landlords and tenants — the needs are identical,
@@ -16,10 +12,9 @@ import { tenantNav } from '../../tenant/tenant-nav';
 @Component({
   selector: 'app-account-settings',
   standalone: true,
-  imports: [FormsModule, ReactiveFormsModule, PortalShell],
+  imports: [FormsModule, ReactiveFormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems()" [roleLabel]="roleLabel()" pageTitle="Account settings">
 
       <section class="dash-section">
         <h2 class="dash-section-title">Your details</h2>
@@ -150,7 +145,6 @@ import { tenantNav } from '../../tenant/tenant-nav';
           </button>
         </form>
       </section>
-    </app-portal-shell>
   `,
   styles: [`
     .settings-form { max-width: 26rem; }
@@ -160,22 +154,11 @@ export class AccountSettings {
   private fb = inject(FormBuilder);
   auth = inject(AuthService);
 
-  roleLabel = () =>
-    this.auth.isAdmin() ? 'Admin' : this.auth.isLandlord() ? 'Landlord' : 'Tenant';
-
   /**
    * The sidebar follows the account's own area. An admin editing their profile
    * used to get the tenant sidebar, offering a dashboard they have no profile
    * for — the same confusion as the two dashboards in the navbar.
    */
-  /**
-   * The signed-in role's own navigation, not a fourth abbreviated copy of it.
-   * This page used to list three items for a landlord and three for a tenant,
-   * so opening your settings dropped most of your portal out of the sidebar.
-   */
-  navItems = (): PortalNavItem[] =>
-    this.auth.isAdmin() ? ADMIN_NAV : this.auth.isLandlord() ? landlordNav() : tenantNav();
-
   marketingOn = signal(true);
 
   profileForm = this.fb.group({

@@ -5,8 +5,6 @@ import { FormsModule } from '@angular/forms';
 import { AdminService, AdminStats, AdminUser, AdminKpis } from '../../../core/services/admin.service';
 import { PaymentsService, RefundDue } from '../../../core/services/payments.service';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
-import { ADMIN_NAV } from '../admin-nav';
 import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 
 /**
@@ -19,10 +17,9 @@ import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 @Component({
   selector: 'app-admin-dashboard',
   standalone: true,
-  imports: [PluralPipe, RouterLink, DatePipe, LowerCasePipe, FormsModule, PortalShell, ZarCentsPipe],
+  imports: [PluralPipe, RouterLink, DatePipe, LowerCasePipe, FormsModule, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems" roleLabel="Admin" avatarColour="var(--ink2)" pageTitle="Overview">
 
       @if (stats(); as s) {
         @if (s.moderation.pendingVerifications > 0) {
@@ -241,14 +238,11 @@ import { PluralPipe } from '../../../shared/pipes/plural.pipe';
           <p class="muted">No accounts matched.</p>
         }
       </section>
-    </app-portal-shell>
   `,
 })
 export class AdminDashboard implements OnInit {
   private adminService = inject(AdminService);
   private payments = inject(PaymentsService);
-
-  readonly navItems: PortalNavItem[] = ADMIN_NAV;
 
   stats = signal<AdminStats | null>(null);
   kpis = signal<AdminKpis | null>(null);

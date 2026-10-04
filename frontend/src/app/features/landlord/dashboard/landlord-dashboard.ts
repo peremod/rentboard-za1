@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { DatePipe } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { WhatsappDraftsService, WhatsappDraft } from '../../../core/services/whatsapp-drafts.service';
-import { NoticesService } from '../../../core/services/notices';
+import { PortalBadgesService } from '../../../core/services/portal-badges';
 import { ApplicationsService } from '../../../core/services/applications.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { RoomsService } from '../../../core/services/rooms.service';
@@ -10,8 +10,6 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { Room } from '../../../core/models/room.model';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
-import { landlordNav } from '../landlord-nav';
-import { PortalShell, PortalNavItem } from '../../../shared/components/portal-shell/portal-shell';
 import { LandlordInboxPanel } from '../../../shared/components/landlord-inbox/landlord-inbox';
 import { LandlordCalendar } from '../../../shared/components/landlord-calendar/landlord-calendar';
 import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
@@ -31,13 +29,11 @@ import { SurveyService } from '../../../core/services/survey';
   selector: 'app-landlord-dashboard',
   standalone: true,
   imports: [
-    RouterLink, ZarCentsPipe, DatePipe, PortalShell, ReviewPrompt, DisputePanel,
+    RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel,
     ReferralPanel, SurveyPrompt, LandlordInboxPanel, LandlordCalendar,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-portal-shell [navItems]="navItems()" roleLabel="Landlord"
-                      [primaryAction]="{ label: '+ List a Room', route: '/landlord/rooms/new' }" pageTitle="Your dashboard">
 
       <!-- A listing dictated over WhatsApp, waiting to be finished. Top of
            the page because the landlord sent it from their phone and is
@@ -324,7 +320,6 @@ import { SurveyService } from '../../../core/services/survey';
           }
         }
       </section>
-    </app-portal-shell>
   `,
   // Layout comes from the global spec + responsive layers. Scoped styles here
   // would be more specific than those and would break the breakpoints.
@@ -338,7 +333,7 @@ export class LandlordDashboard implements OnInit {
   private router = inject(Router);
   private dialogs = inject(DialogService);
   private surveys = inject(SurveyService);
-  notices = inject(NoticesService);
+  private badges = inject(PortalBadgesService);
   private applications = inject(ApplicationsService);
 
   /**
@@ -354,33 +349,19 @@ export class LandlordDashboard implements OnInit {
   billingEnabled = BILLING_ENABLED;
 
   /**
-   * How many applicants are waiting on this landlord — Phase 7c.
+   * How many applicants are waiting on this landlord.
    *
-   * ⚠️ This badge used to carry `totalApplicants()`, every application ever
-   * received. That number only goes up: a landlord who has dealt with all
-   * eleven of theirs still saw "11" beside the nav item for ever, and a badge
-   * that never clears is a badge people stop reading — at which point the one
-   * that matters is invisible too.
+   * ⚠️ Read from PortalBadgesService rather than fetched here — Phase 7e. The
+   * sidebar draws the same number, and while every screen built its own nav
+   * this screen was the only place that knew it; now the layout owns the
+   * sidebar, two fetches of one count would be two chances for the badge and
+   * the sentence under it to disagree on the same page.
    *
-   * It now means one thing, everywhere it is drawn: never opened, or they have
-   * said something since you last looked. The definition lives on the server in
-   * `ApplicationsService.inbox`, so the dashboard and the applicants screen
-   * cannot drift into two answers.
+   * Undefined means the request did not come back. Saying "nobody is waiting"
+   * then would be the page telling a landlord something untrue about their own
+   * applicants, which is the specific mistake Phase 7d was about.
    */
-  readonly applicantsWaiting = signal<number | undefined>(undefined);
-
-  /** Computed so the Applicants and Notices badges track the live totals. */
-  readonly navItems = computed<PortalNavItem[]>(() =>
-    landlordNav({
-      applicants: this.applicantsWaiting(),
-      drafts: this.draftRooms().length,
-      // Phase 7g. The badge is how the notices screen gets found at all, and
-      // for a landlord with no email address it is the only indication that
-      // anything happened — WhatsApp refuses free-form text outside its
-      // 24-hour window, so there may have been no other signal.
-      notices: this.notices.unreadCount(),
-    }),
-  );
+  readonly applicantsWaiting = this.badges.applicantsWaiting;
 
   rooms = signal<Room[]>([]);
   loading = signal(true);
@@ -404,14 +385,6 @@ export class LandlordDashboard implements OnInit {
     this.surveys.load().subscribe({ error: () => {} });
 
     this.whatsappDrafts.load().subscribe({ error: () => {} });
-    this.notices.refreshUnread().subscribe({ error: () => {} });
-    // The nav badge only. Left undefined on failure rather than set to 0: a
-    // zero would say "nothing is waiting on you", which is a different claim
-    // from "we could not find out".
-    this.applications.inbox({ sortBy: 'unread' }).subscribe({
-      next: (res) => this.applicantsWaiting.set(res.needsAttention),
-      error: () => {},
-    });
     this.roomsService.getLandlordRooms().subscribe({
       next: (rooms) => { this.rooms.set(rooms); this.loading.set(false); },
       error: () => this.loading.set(false),
@@ -577,7 +550,6 @@ export class LandlordDashboard implements OnInit {
       error: () => this.removing.set(null),
     });
   }
-
 
   /** my-rooms returns active, reserved and drafts together; split for display. */
   /** On the board, or reserved. Paused rooms get their own section. */

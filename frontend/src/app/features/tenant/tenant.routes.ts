@@ -5,6 +5,7 @@ export const TENANT_ROUTES: Routes = [
   {
     path: 'dashboard',
     loadComponent: () => import('./dashboard/tenant-dashboard').then((m) => m.TenantDashboard),
+    data: { pageTitle: 'Your dashboard' },
     title: 'Your Dashboard — Mastande',
   },
   {
@@ -14,6 +15,7 @@ export const TENANT_ROUTES: Routes = [
     // billing switch is how it stays invisible.
     path: 'passport',
     loadComponent: () => import('./passport-verify/passport-verify').then((m) => m.PassportVerify),
+    data: { pageTitle: "Renter's Passport" },
     title: "Renter's Passport — Mastande",
   },
   {
@@ -22,6 +24,7 @@ export const TENANT_ROUTES: Routes = [
     // say it, and the dispute existed only in the API.
     path: 'rent',
     loadComponent: () => import('./rent/rent').then((m) => m.TenantRent),
+    data: { pageTitle: 'Rent' },
     title: 'Rent — Mastande',
   },
   // ── Sub-letting — Phase 6, Option A ──────────────────────────────────────
@@ -39,19 +42,19 @@ export const TENANT_ROUTES: Routes = [
     path: 'sublet/new',
     loadComponent: () => import('../landlord/create-room/create-room').then((m) => m.CreateRoom),
     title: 'Sublet a room — Mastande',
-    data: { listerType: 'sublessor' },
+    data: { listerType: 'sublessor', pageTitle: 'Sublet a room in your place' },
   },
   {
     path: 'sublet/:roomId/edit',
     loadComponent: () => import('../landlord/create-room/create-room').then((m) => m.CreateRoom),
     title: 'Your sublet listing — Mastande',
-    data: { listerType: 'sublessor' },
+    data: { listerType: 'sublessor', pageTitle: 'Your sublet listing' },
   },
   {
     path: 'sublet/:roomId/applicants',
     loadComponent: () => import('../landlord/applicants/applicants').then((m) => m.Applicants),
     title: 'Applicants — Mastande',
-    data: { listerType: 'sublessor' },
+    data: { listerType: 'sublessor', pageTitle: 'Applicants' },
   },
   { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
 ];
