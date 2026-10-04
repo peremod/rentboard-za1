@@ -156,7 +156,9 @@ export class LeaseService {
         noticeGivenById: true,
         landlordId: true,
         rentCents: true,
-        room: { select: { id: true, title: true, status: true } },
+        // propertyId so a caller can build a link that actually resolves —
+        // the detail screen for a room's rent and lease is per property.
+        room: { select: { id: true, title: true, status: true, propertyId: true } },
         tenant: { select: { id: true, fullName: true } },
       },
       orderBy: [{ noticeGivenAt: 'asc' }, { leaseEndDate: 'asc' }],

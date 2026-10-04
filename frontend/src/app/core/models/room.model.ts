@@ -100,6 +100,17 @@ export interface Room {
   viewCount: number;
   applicationCount: number;
   relistCount: number;
+  /**
+   * Views in the last seven days, including today — Phase 7d.
+   *
+   * Present only on the landlord's own room list. `viewCount` beside it is the
+   * LIFETIME figure, which is the number the dashboard used to show: a room
+   * posted in June could read 200 views without one of them being this month,
+   * so it could not answer the only question a landlord with an empty room has.
+   * Always a number on that payload, 0 included, so the screen can tell "nobody
+   * looked" from "we did not find out".
+   */
+  viewsLast7Days?: number;
   letAt?: string | null;
 
   createdAt: string;

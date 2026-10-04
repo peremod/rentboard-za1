@@ -48,6 +48,21 @@ export async function registerUser(base, role, stamp = Date.now()) {
     fullName: `Drive ${role[0]}${role.slice(1).toLowerCase()}`,
     role,
   });
+  if (res.status === 429) {
+    /**
+     * ⚠️ Named, because the stack trace is misleading.
+     *
+     * v1.86.0 put a real limit on /auth/register — 60 per hour, counted in
+     * memory. Each drive registers between three and eight throwaway accounts,
+     * so running the suite of them back to back exhausts it and the next drive
+     * dies on its first line with "register LANDLORD failed: 429", which reads
+     * like a broken registration endpoint. It is the limiter working.
+     */
+    throw new Error(
+      `register ${role} hit the rate limit (429). /auth/register allows 60 per hour, counted in memory, `
+      + 'and the drives register several accounts each. Restart the API to clear the counters, or wait the hour out.',
+    );
+  }
   if (res.status >= 300) {
     throw new Error(`register ${role} failed: ${res.status} ${JSON.stringify(res.body).slice(0, 200)}`);
   }

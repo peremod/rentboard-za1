@@ -77,23 +77,42 @@ import { SurveyService } from '../../../core/services/survey';
            DOING, this is what is merely approaching. -->
       <app-landlord-calendar [headingLevel]="2"/>
 
-      <div class="insight-banner">
-        📊
-        <span>
-          You have <strong>{{ activeCount() }}</strong> active
-          {{ activeCount() === 1 ? 'room' : 'rooms' }} and
-          <strong>{{ totalApplicants() }}</strong> total
-          {{ totalApplicants() === 1 ? 'applicant' : 'applicants' }}.
-          Landlords who reply within 24 hours get far more viewings.
-        </span>
+      <!-- The two things a landlord comes here to start — Phase 7d.
+           Persistent and on the home screen, not nested inside a sub-screen.
+           The shell's header action is the same "List a room", and that is on
+           purpose: it scrolls away, and this does not. "Add a property" had no
+           entry point here at all, which is part of why grouping went unused
+           (Phase 7b). -->
+      <div class="dash-starts">
+        <a class="btn btn-primary" routerLink="/landlord/rooms/new">+ Add a room</a>
+        <a class="btn btn-outline" routerLink="/landlord/properties">+ Add a property</a>
+        <span class="dash-starts__note">Both are free. A property just groups the rooms at one address.</span>
       </div>
 
-      <div class="stat-row">
-        <div class="stat-box"><div class="val">{{ totalViews() }}</div><div class="lbl">Total views</div></div>
-        <div class="stat-box"><div class="val">{{ totalApplicants() }}</div><div class="lbl">Applications</div></div>
-        <div class="stat-box"><div class="val">{{ activeCount() }}</div><div class="lbl">Active rooms</div></div>
-        <div class="stat-box"><div class="val">{{ archivedRooms().length }}</div><div class="lbl">Previously let</div></div>
-      </div>
+      <!-- ⚠️ This replaced a four-box grid of bare numbers and a banner — Phase 7d.
+           The grid read "412 / 11 / 3 / 2" under the labels "Total views",
+           "Applications", "Active rooms", "Previously let", sitting directly
+           below a health paragraph written in sentences precisely because, in
+           its own words, a raw figure "invites a landlord to think something
+           has been measured".
+           Two things were wrong beyond the styling. "Total views" was a
+           LIFETIME counter, so a room posted in June could show 200 views
+           without one of them being this month — it could not answer the only
+           question a landlord with an empty room is asking. And the banner
+           asserted that "landlords who reply within 24 hours get far more
+           viewings", which is a measurement nobody here has made; it is now
+           advice, shown only when somebody is actually waiting. -->
+      <p class="dash-week">{{ weekSummary() }}</p>
+      @if (applicantsWaiting(); as waiting) {
+        @if (waiting > 0) {
+          <p class="dash-week dash-week--nudge">
+            Replying quickly is the one thing that is entirely yours to control —
+            an applicant who hears nothing has usually taken another room by the
+            end of the week.
+            <a routerLink="/landlord/applicants">See who is waiting</a>
+          </p>
+        }
+      }
 
       @if (!billingEnabled) {
         <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
@@ -152,6 +171,12 @@ import { SurveyService } from '../../../core/services/survey';
                   {{ room.rentCents | zarCents:'monthly' }} ·
                   <span [class]="'status-dot status-dot--' + room.status">● {{ room.status }}</span>
                 </div>
+                <!-- The brief's own example sentence, per room — and it needed
+                     a new table to be true: rooms.viewCount is a lifetime
+                     integer. See the room_view_days migration. -->
+                @if (room.status !== 'draft') {
+                  <div class="app-week">{{ roomWeek(room) }}</div>
+                }
               </div>
               <div class="portal-row-actions">
                 <a class="btn btn-sm btn-outline"
@@ -607,6 +632,74 @@ export class LandlordDashboard implements OnInit {
 
   totalApplicants() {
     return this.rooms().reduce((sum, r) => sum + r.applicationCount, 0);
+  }
+
+  /** Views across the live rooms in the last seven days — Phase 7d. */
+  weekViews() {
+    return this.rooms()
+      .filter((r) => r.status !== 'draft')
+      .reduce((sum, r) => sum + (r.viewsLast7Days ?? 0), 0);
+  }
+
+  /**
+   * How the week went, as a sentence — Phase 7d.
+   *
+   * Built here rather than in the template for the reason the health paragraph
+   * gives: the wording has to change with the data — singular and plural, "no
+   * live rooms", "nobody has looked" — and that logic belongs next to the
+   * numbers it describes rather than spread across four nested @if blocks.
+   *
+   * Every clause states its window. "Viewed 47 times" without "in the last
+   * seven days" is the lifetime figure this replaced, which is the number that
+   * cannot answer the question.
+   */
+  weekSummary(): string {
+    const live = this.rooms().filter((r) => r.status !== 'draft');
+    if (this.rooms().length === 0) {
+      return 'Nothing listed yet. Add a room and this is where you will see how it is doing.';
+    }
+    if (live.length === 0) {
+      const n = this.draftRooms().length;
+      return `You have ${n} ${n === 1 ? 'room' : 'rooms'} started and ${
+        n === 1 ? 'it is' : 'they are'
+      } not on the board yet, so nobody can see ${n === 1 ? 'it' : 'them'}.`;
+    }
+
+    const views = this.weekViews();
+    const waiting = this.applicantsWaiting();
+    const roomWord = live.length === 1 ? 'room' : 'rooms';
+
+    const first = views === 0
+      ? `Nobody has looked at your ${live.length} live ${roomWord} in the last seven days.`
+      : `Your ${live.length} live ${roomWord} ${live.length === 1 ? 'was' : 'were'} viewed ${views} ${
+          views === 1 ? 'time' : 'times'
+        } in the last seven days.`;
+
+    // `undefined` means the request for it did not come back. Saying "nobody is
+    // waiting" then would be the page telling a landlord something untrue about
+    // their own applicants, which is the specific mistake this phase is about.
+    if (waiting === undefined) return first;
+    if (waiting === 0) {
+      return `${first} Nobody is waiting on you right now.`;
+    }
+    return `${first} ${waiting} ${waiting === 1 ? 'person is' : 'people are'} waiting to hear from you.`;
+  }
+
+  /**
+   * One room's week, in the brief's own words.
+   *
+   * `applicationCount` is this letting cycle's applications, including ones
+   * already turned down — so it is phrased as "applied", a thing that happened,
+   * rather than "applicants", which reads as people still waiting.
+   */
+  roomWeek(room: Room): string {
+    const views = room.viewsLast7Days ?? 0;
+    const applied = room.applicationCount;
+    const seen = views === 0
+      ? 'Nobody has looked at this room this week'
+      : `Viewed ${views} ${views === 1 ? 'time' : 'times'} this week`;
+    if (applied === 0) return `${seen}. Nobody has applied yet.`;
+    return `${seen}. ${applied} ${applied === 1 ? 'person has' : 'people have'} applied.`;
   }
 
   totalViews() {

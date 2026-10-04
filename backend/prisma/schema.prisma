@@ -175,7 +175,7 @@ model User {
   applications    Application[]
   messagesSent    Message[]
   refreshTokens   RefreshToken[]
-  expenses        Expense[]             @relation("ExpensesRecorded")
+  expenses        Expense[]        @relation("ExpensesRecorded")
 
   @@index([email])
   @@index([role])
@@ -183,13 +183,13 @@ model User {
 }
 
 model LandlordProfile {
-  id                   String    @id @default(uuid())
-  userId               String    @unique
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  companyName          String?
-  planTier             PlanTier  @default(free)
-  planExpiresAt        DateTime?
-  idVerified           Boolean   @default(false)
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName   String?
+  planTier      PlanTier  @default(free)
+  planExpiresAt DateTime?
+  idVerified    Boolean   @default(false)
 
   /// Days after the 1st before an unpaid month triggers a reminder.
   ///
@@ -386,6 +386,8 @@ model Room {
   isFeatured    Boolean   @default(false)
   featuredUntil DateTime?
 
+  /// Lifetime page loads, never reset. Phase 7d added `viewDays` for the
+  /// question this cannot answer: whether anybody is looking NOW.
   viewCount        Int       @default(0)
   applicationCount Int       @default(0)
   relistCount      Int       @default(0)
@@ -404,6 +406,9 @@ model Room {
 
   /// Verification requests about this listing — currently only `sublet_right`.
   verifications VerificationRequest[]
+  /// Phase 7d. One row per day a room was looked at, so "viewed 47 times this
+  /// week" is a fact rather than a sentence from the design document.
+  viewDays      RoomViewDay[]
 
   @@index([status])
   @@index([province, city])
@@ -414,6 +419,28 @@ model Room {
   /// is one of the two headline Phase 6 filters.
   @@index([status, listerType])
   @@map("rooms")
+}
+
+/// How many times a room was looked at, by day — Phase 7d.
+///
+/// `Room.viewCount` is a lifetime integer, so the dashboard could say "200
+/// views" and not whether a single one of them was this month. A landlord's
+/// actual question is whether the listing is working now, and a number that
+/// only ever goes up cannot answer it.
+///
+/// No viewer identity, deliberately: a counter per room per day answers the
+/// question, and storing who looked would be collecting personal data for a
+/// purpose that does not need it (POPIA s.10).
+model RoomViewDay {
+  roomId String
+  room   Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  /// Calendar date in UTC, as every other day-grain figure here is keyed.
+  day    DateTime @db.Date
+  count  Int      @default(0)
+
+  @@id([roomId, day])
+  @@index([day])
+  @@map("room_view_days")
 }
 
 enum ApplicationStatus {
@@ -494,7 +521,7 @@ model AuthToken {
   /// that is per IP, so ten guesses per IP per fifteen minutes. A distributed
   /// attacker gets more than one IP; the person whose account it is gets one
   /// budget of guesses regardless.
-  attempts  Int       @default(0)
+  attempts Int @default(0)
 
   expiresAt DateTime
   usedAt    DateTime?
@@ -1368,7 +1395,7 @@ model VerificationRequest {
   /// checked and by whom. The row stays as audit; it simply stops evidencing
   /// anything about a live listing, which is correct, because there is none.
   roomId String?
-  room   Room?  @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  room   Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
 
   reviewedById String?
   reviewedAt   DateTime?
@@ -1532,14 +1559,12 @@ model LandlordWhatsappConfig {
   @@map("landlord_whatsapp_configs")
 }
 
-
 enum PassportStatus {
   pending
   active
   expired
   cancelled
 }
-
 
 /// Refresh tokens — opaque random values, only ever stored HASHED (sha256).
 /// Rotated on every use: presenting a token revokes it and issues a new one.
@@ -2080,7 +2105,7 @@ model Expense {
   roomId String?
   room   Room?   @relation(fields: [roomId], references: [id], onDelete: SetNull)
 
-  category ExpenseCategory
+  category    ExpenseCategory
   /// ZAR cents, like every other amount in this schema.
   amountCents Int
 
@@ -2480,24 +2505,19 @@ model Notice {
 
 /**
  * A sign-up in progress, by phone number, before any account exists — Phase 7g.
- *
  * ── Why this is not just a User row with phoneVerified: false
- *
  * That was the obvious shape and it is wrong. Creating the User first means
  * anybody who can type a number into a public endpoint creates an account for
  * somebody else's handset: a row with their number on it, countable in "users",
  * reachable by the deletion and notification machinery, and sitting in the way
  * when the real owner later tries to sign up. A sign-up attempt is not a person
  * agreeing to anything, so it does not get to be a person here.
- *
  * So the number is proven FIRST, in this table, and the User is created only at
  * the final step, by the person themselves, with their own acceptance of the
  * terms. Rows that never get that far are deleted (see the cron in
  * PhoneSignupService) — POPIA minimisation: an abandoned attempt leaves us
  * holding the mobile number of someone who never joined.
- *
  * ── It is also the consent record
- *
  * `consentAcceptedAt` with `userId` is the evidence that this account's owner
  * ticked the box themselves, which is the one thing an assisted sign-up must
  * never be able to fake. Kept for as long as the account exists and cascaded

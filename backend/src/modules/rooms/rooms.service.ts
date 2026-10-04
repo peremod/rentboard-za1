@@ -83,6 +83,20 @@ const PUBLIC_ROOM_DETAIL = {
   },
 } as const;
 
+
+/**
+ * Today, at midnight UTC — the key `RoomViewDay` rows are stored under.
+ *
+ * UTC rather than SAST, matching every other day-grain figure in this codebase
+ * (see CalendarService). South Africa is UTC+2 with no daylight saving, so a
+ * "day" here runs 02:00 to 02:00 local. A known skew, and the alternative is a
+ * timezone per room for a figure read as "this week".
+ */
+function utcDay(): Date {
+  const n = new Date();
+  return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()));
+}
+
 @Injectable()
 export class RoomsService {
   private readonly logger = new Logger(RoomsService.name);
@@ -242,7 +256,26 @@ export class RoomsService {
     }
 
     if (!isOwner) {
+      /**
+       * Two counters, and both are needed — Phase 7d.
+       *
+       * `viewCount` is the lifetime figure and stays as it was. `RoomViewDay`
+       * is the one the dashboard reads, because a number that only ever goes
+       * up cannot answer "is anybody looking at my room NOW", which is the
+       * question a landlord with a room that has not let is actually asking.
+       *
+       * Fire-and-forget, as the lifetime counter already was: a failed count
+       * must never stop somebody seeing a room. Written together so the two
+       * cannot drift by a different set of conditions later.
+       */
       this.prisma.room.update({ where: { id }, data: { viewCount: { increment: 1 } } }).catch(() => {});
+      this.prisma.roomViewDay
+        .upsert({
+          where: { roomId_day: { roomId: id, day: utcDay() } },
+          create: { roomId: id, day: utcDay(), count: 1 },
+          update: { count: { increment: 1 } },
+        })
+        .catch(() => {});
     }
     return room;
   }
@@ -725,11 +758,41 @@ export class RoomsService {
    * but not finished with. It was in neither query, so pausing a listing made
    * it vanish from the dashboard entirely and there was no way to resume it.
    */
-  getLandlordRooms(landlordId: string) {
-    return this.prisma.room.findMany({
+  async getLandlordRooms(landlordId: string) {
+    const rooms = await this.prisma.room.findMany({
       where: { landlordId, status: { in: ['active', 'reserved', 'paused', 'draft'] } },
       orderBy: { publishedAt: 'desc' },
     });
+
+    /**
+     * Views over the last seven days, per room — Phase 7d.
+     *
+     * One grouped query for the whole list rather than a count per room: a
+     * landlord with six rooms would otherwise cost six round trips for a
+     * sentence on the dashboard.
+     *
+     * Seven days INCLUDING today, so the window is "this week" in the sense a
+     * person means it — the last seven days, not since Monday, which would read
+     * as "nobody is looking" every Monday morning.
+     */
+    const since = new Date(Date.UTC(
+      new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate(),
+    ));
+    since.setUTCDate(since.getUTCDate() - 6);
+
+    const grouped = rooms.length
+      ? await this.prisma.roomViewDay.groupBy({
+          by: ['roomId'],
+          where: { roomId: { in: rooms.map((r) => r.id) }, day: { gte: since } },
+          _sum: { count: true },
+        })
+      : [];
+    const recent = new Map(grouped.map((g) => [g.roomId, g._sum.count ?? 0]));
+
+    // Zero rather than undefined for a room nobody has opened: the dashboard
+    // has a sentence for "nobody has looked at it this week", and it cannot
+    // tell that from "we did not find out" unless the field is always present.
+    return rooms.map((r) => ({ ...r, viewsLast7Days: recent.get(r.id) ?? 0 }));
   }
 
   /**

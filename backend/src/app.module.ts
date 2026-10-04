@@ -24,6 +24,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { TenanciesModule } from './modules/tenancies/tenancies.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { LandlordInboxModule } from './modules/landlord-inbox/landlord-inbox.module';
+import { TenantInboxModule } from './modules/tenant-inbox/tenant-inbox.module';
 import { StorefrontModule } from './modules/storefront/storefront.module';
 import { LandlordNotesModule } from './modules/landlord-notes/landlord-notes.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
@@ -128,6 +129,7 @@ import { MessagesModule } from './modules/messages/messages.module';
     // because of an unrelated refactor.
     StorageModule,
     LandlordInboxModule,
+    TenantInboxModule,
     StorefrontModule,
     LandlordNotesModule,
     ReviewsModule,

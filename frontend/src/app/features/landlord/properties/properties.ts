@@ -62,6 +62,20 @@ import { landlordNav } from '../landlord-nav';
                 You have {{ d.totals.rooms }} {{ d.totals.rooms === 1 ? 'room' : 'rooms' }} listed.
                 Grouping is optional — they work exactly as they are.
               </p>
+              <!-- ⚠️ The way to their own rent, in the branch where there is no
+                   list to put it in — Phase 7d.
+                   The "Not grouped" card below carries this link, and it only
+                   renders in the @else branch: a landlord with rooms and no
+                   properties got this empty state instead, so the one screen
+                   that shows rent, lease paperwork and expenses had no entry
+                   point for exactly the landlord Phase 7b promised did not have
+                   to group anything. Found by a drive asserting the card's
+                   href, which was not rendered at all. -->
+              <p>
+                <a class="prop-ungrouped-link" routerLink="/landlord/properties/ungrouped">
+                  See your rooms, their rent and their paperwork →
+                </a>
+              </p>
             }
             <button type="button" class="btn btn-primary" (click)="startCreate()">
               + Add your first property
@@ -117,7 +131,15 @@ import { landlordNav } from '../landlord-nav';
                  the other two, or this screen quietly says they own four. -->
             @if (d.ungrouped; as loose) {
               <li class="prop-card prop-card--loose">
-                <a class="prop-card__link" routerLink="/landlord/dashboard" fragment="active-listings">
+                <!-- Opens the same detail view the properties do, scoped to the
+                     rooms in no property — Phase 7d. It pointed at the dashboard
+                     before, which meant a landlord who had never grouped
+                     anything could not reach their own rent records, their lease
+                     paperwork or their expenses from anywhere: the only screen
+                     that renders them is reached by property id, and they had
+                     none. Grouping is optional by design, so it cannot be the
+                     price of seeing your own money. -->
+                <a class="prop-card__link" routerLink="/landlord/properties/ungrouped">
                   <div class="prop-card__img prop-card__img--none" aria-hidden="true">🏠</div>
                   <div class="prop-card__body">
                     <strong class="prop-card__name">Not grouped</strong>
@@ -132,6 +154,57 @@ import { landlordNav } from '../landlord-nav';
             }
           </ul>
         }
+
+        <!--
+          The reminder window — moved here in Phase 7d.
+
+          ⚠️ It was on the yard screen's landlord-wide view, and Phase 7b turned
+          the only route that rendered that view into a redirect. So this
+          control became unreachable from every screen in the product — which is
+          precisely the defect it was built to fix: PATCH
+          /properties/rent/settings had existed since rent tracking shipped
+          with no UI calling it, a screen was finally given to it, and then the
+          screen was taken away again by a reorganisation that did not notice.
+
+          It belongs here rather than on a property: the window is per LANDLORD,
+          because a month-end wage and a SASSA payment date want different
+          windows, and it would be a lie to offer it per address.
+        -->
+        <section class="dash-section rent-reminders" id="rent-reminders">
+          <h2 class="dash-section-title">Rent reminders</h2>
+          <p class="muted">
+            When a month is marked unpaid, we message the tenant once — after
+            this many days from the 1st. Set it to 0 to send nothing at all;
+            you can still record what was paid and what was not.
+          </p>
+          <div class="rent-reminders__row">
+            <label for="grace-days">
+              <span>Days after the 1st</span>
+              <input id="grace-days" type="number" min="0" max="28" name="graceDays"
+                     [(ngModel)]="graceDays"/>
+            </label>
+            <button type="button" class="btn btn-primary" [disabled]="savingGrace()"
+                    (click)="saveGraceDays()">
+              {{ savingGrace() ? 'Saving…' : 'Save' }}
+            </button>
+          </div>
+          @if (graceSaved()) {
+            <p class="muted" role="status">
+              @if (graceDays === 0) {
+                Reminders are off. Nothing is sent to your tenants.
+              } @else {
+                Saved — a reminder goes out {{ graceDays }}
+                {{ graceDays === 1 ? 'day' : 'days' }} after the 1st.
+              }
+            </p>
+          }
+          @if (graceError()) { <p class="field-error" role="alert">{{ graceError() }}</p> }
+          <p class="muted">
+            Reminders go to verified numbers only. A number typed into a profile
+            has not been checked, and "your rent is unpaid" sent to whoever holds
+            that number is not a message we will send.
+          </p>
+        </section>
 
         @if (creating()) {
           <form class="prop-form" (ngSubmit)="create()">
@@ -190,6 +263,15 @@ import { landlordNav } from '../landlord-nav';
     </app-portal-shell>
   `,
   styles: `
+    .prop-ungrouped-link { font-size: .9rem; font-weight: 600; }
+    .rent-reminders__row {
+      display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; margin: .75rem 0;
+    }
+    .rent-reminders__row label { display: flex; flex-direction: column; gap: .2rem; font-size: .8rem; }
+    .rent-reminders__row input {
+      font: inherit; padding: .4rem .5rem; border: 1px solid var(--border);
+      border-radius: 6px; width: 6rem;
+    }
     .prop-head {
       display: flex; align-items: center; justify-content: space-between;
       gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;
@@ -226,6 +308,36 @@ import { landlordNav } from '../landlord-nav';
   `,
 })
 export class Properties implements OnInit {
+
+  // ── Rent reminders — moved here in Phase 7d, see the template ─────────────
+  /**
+   * Seeded from the dashboard payload once it arrives, so the box shows what is
+   * actually set rather than the default. It read 3 unconditionally before, on
+   * a screen nobody could reach, so a landlord who had turned reminders OFF
+   * would have been shown "3" and told nothing.
+   */
+  protected graceDays = 3;
+  protected readonly savingGrace = signal(false);
+  protected readonly graceSaved = signal(false);
+  protected readonly graceError = signal<string | null>(null);
+
+  protected saveGraceDays() {
+    const days = Number(this.graceDays);
+    if (!Number.isInteger(days) || days < 0 || days > 28) {
+      this.graceError.set('Pick a whole number of days between 0 and 28.');
+      return;
+    }
+    this.graceError.set(null);
+    this.graceSaved.set(false);
+    this.savingGrace.set(true);
+    this.properties.setGraceDays(days).subscribe({
+      next: () => { this.savingGrace.set(false); this.graceSaved.set(true); },
+      error: (err) => {
+        this.savingGrace.set(false);
+        this.graceError.set(err?.error?.message ?? 'Could not save that.');
+      },
+    });
+  }
   private properties = inject(PropertiesService);
 
   readonly navItems: PortalNavItem[] = landlordNav();
@@ -247,7 +359,12 @@ export class Properties implements OnInit {
   private reload() {
     this.loading.set(true);
     this.properties.loadDashboard().subscribe({
-      next: (d) => { this.dash.set(d); this.loading.set(false); },
+      next: (d) => {
+        this.dash.set(d);
+        this.loading.set(false);
+        // What is actually set, not the default — see the field's own note.
+        this.graceDays = d.rentGraceDays;
+      },
       error: (err) => {
         this.loading.set(false);
         // Said as a failure, not as an empty list. "You have no properties"

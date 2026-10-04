@@ -1290,6 +1290,132 @@ number today" and the check read that as an enumeration leak. The cap refusal is
 identical whether or not the number is taken, so it leaks nothing — it simply
 cannot answer the question today, and now says so.
 
+### 5.22 The dashboard home, and what Phase 7b had quietly broken — ✅ rebuilt in v1.89.0 (Phase 7d)
+
+**The brief's three asks.** Lead the dashboard with "what needs my attention
+right now" in BOTH portals; audit every number against the plain-English
+principle and **confirm it is in the real components, not just in the design
+doc**; and put persistent "Add a room" / "Add a property" entry points on the
+landlord home.
+
+**The audit is the part that found things.** The landlord task inbox was already
+the top section (Phase 5a), and the health paragraph underneath it is a model of
+the plain-English principle — built server-side beside its numbers, every figure
+shipping with its denominator, anything computed from too little data saying so.
+Directly below it sat a four-box grid reading `412 / 11 / 3 / 2` under the labels
+"Total views", "Applications", "Active rooms", "Previously let". Two opposite
+designs, one above the other, and the grid was worse than terse:
+
+| Before | Now |
+|---|---|
+| "Total views: 412" — a LIFETIME counter. A room posted in June could read 200 views without one of them being this month | "Your 3 live rooms were viewed 47 times in the last seven days." Every clause states its window |
+| Nothing per room | Per room: "Viewed 12 times this week. 1 person has applied." — the brief's own example sentence, which needed a new table to be true |
+| "Landlords who reply within 24 hours get far more viewings" | Advice rather than a statistic, and shown only when somebody is actually waiting. Nobody here has measured that |
+| Tenant: three boxes, "Applications / Shortlisted / Awaiting reply", where the last two add up to the first | One sentence that distinguishes "nobody has opened it yet" from "read and not answered", which is the difference the tenant actually feels |
+| Tenant: no task list at all | `GET /tenant-inbox` and a "Needs you" section — an acceptance to answer, an unread message, a month the landlord has not recorded, a lease ending, a Passport about to lapse |
+| "List a Room" in the shell header, which scrolls away; no "Add a property" anywhere on the home | Both, persistent, on the home screen. The missing property entry point is part of why grouping went unused |
+
+**`room_view_days` is new, and it is the only new table in this phase.** One row
+per room per day, a counter rather than a row per view, and **no viewer
+identity** — the figure is "how many times", and storing who looked would be
+collecting personal data for a purpose that does not need it (POPIA s.10).
+`rooms.viewCount` is kept as the lifetime figure because several screens read
+it. The owner's own look is not counted, which was already true of the lifetime
+counter and is now asserted rather than assumed.
+
+🔴 **Three things Phase 7b had broken, all found by doing this work.**
+
+- **The two most important buttons on the dashboard went nowhere.** Every row of
+  the landlord task inbox carries its destination as a string from the API, and
+  they said `/landlord/yard#money` and `/landlord/yard#ending-soon`. Phase 7b
+  turned `/landlord/yard` into a redirect — correctly, for bookmarks — and **a
+  redirect drops the fragment**. So "Mark it" on an unpaid month and "Decide on
+  the lease" both put a landlord on a bare list of addresses with no explanation.
+  Nothing errored. Nothing could have caught it: the nav audit reads templates
+  and route tables, and these paths are string literals in the API.
+- **"Rent reminders" became unreachable from every screen in the product.** The
+  control whose own code comment records that it was built *because*
+  `PATCH /properties/rent/settings` had existed since rent tracking shipped with
+  no UI calling it. Phase 7b redirected the only route that rendered the view it
+  lived in, so it went straight back to being an API with no screen. It is now
+  on `/landlord/properties`, where the landlord-wide things belong.
+- **A landlord who never grouped their rooms could not reach their own rent.**
+  The only screen that renders rent, lease paperwork and expenses is reached as
+  `/landlord/properties/:propertyId`, and they have no property id; the
+  properties list sent their "Not grouped" card to the dashboard, and with no
+  properties at all they got the teaching empty state with no link in it.
+  Phase 7b insisted grouping is optional, so it cannot be the price of seeing
+  your own money. `/landlord/properties/ungrouped` is a real destination now,
+  and the empty state carries a way in.
+
+**And one the move itself had left behind:** "This month" rendered the
+landlord's PORTFOLIO totals inside one property's page, so opening one of four
+yards showed the rent and spend of all four under that yard's name. The comment
+at the top of the scoped branch had already written down why that must not
+happen — "a four-property total shown inside one property is the kind of
+half-true number this project keeps having to take back out" — and the section it
+described sat outside the branch it was describing.
+
+**The gate that would have caught all of it.** `scripts/nav-audit.mjs` now
+resolves **paths the API hands the browser**: it reads `actionPath` literals and
+path-returning helpers out of the backend, normalises `${…}` to a parameter,
+checks each against the same route table, and holds any path with a fragment to
+one extra rule — **a fragment on a route that only redirects can never arrive**.
+The app's own fragment links, including the nav items' separate `fragment:`
+property, are held to the same rule.
+
+⚠️ **My own tool was blind twice before it worked**, and both times it reported
+success. The harvester's regex was written as "anything that is not a quote",
+`[^'"\`\n]*` — and the one string this section exists to check,
+`/landlord/properties/${propertyId ?? 'ungrouped'}#money`, contains a single
+quote *inside* a template literal. So it skipped exactly that path and printed a
+green line. The second attempt matched only template literals, so when the
+broken `return '/landlord/yard#money'` was put back to prove the check could
+fail, the check stayed green and merely reported four paths instead of six. The
+exclusion set has to be the delimiter alone, hence one pattern per quote style —
+and the section now **fails** if it finds no fragment path at all, because the
+API is known to emit two. A check that silently stops looking is worse than no
+check: it reports success about something it never read.
+
+⚠️ **One API signature was shaped by the check rather than the other way round.**
+`propertyPath(id, section)` emitted `#${section}`, which the audit could only
+report as unverifiable. It is two near-identical functions now, `moneyPath` and
+`leasePath`, so the fragment is a literal in the string. Six lines, and the
+alternative was a check that says "cannot tell" about the exact thing it was
+written for.
+
+⚠️ **Three drive faults worth recording**, all of which made the drive describe
+a product that was fine:
+
+- The UI drive accepted an application on both of its rooms, which takes a room
+  **off the board** — so the landlord it had built had no live rooms, and it
+  reported the week sentence broken while the page correctly said "nothing
+  listed yet".
+- The tenant rent-wording check was pointed at the tenant whose month the same
+  drive marks **paid**, so there was no rent row to read and it reported the
+  wording wrong about a row that correctly did not exist.
+- Two figure checks in the money section **passed for the wrong reason**: with
+  only one month marked paid, a property's own rent and the landlord's portfolio
+  total were the same number, so breaking the scoping deliberately left both
+  green and only the sentence caught it. A third tenancy at a different rent
+  outside the property makes them able to fail. And one of them could not have
+  failed anyway: `"R7,500.00"` does not contain `"7500"`, because the comma is in
+  the way, so a formatted currency string has to be parsed rather than matched.
+
+**The accessibility drive now audits the dashboards with rows on them.** Phase
+7c had already given it a seed; this phase is the first release where the
+landlord dashboard, the tenant dashboard and the ungrouped property view were
+measured with real content rather than their empty states.
+
+**Rate limiting is now the binding constraint on the drives**, which is worth
+knowing before chasing a phantom. `/auth/register` allows 60 an hour and
+`/auth/login` 30 per 15 minutes, counted in memory; this phase's UI drive needs
+nine accounts. Running the suite of drives back to back exhausts it, and the
+failure reads as "register failed: 429" or "still on /auth/login" — an auth bug,
+to look at. `registerUser` now names the limiter and the remedy, and the UI
+drive reuses its signed-in pages for the phone-width pass rather than signing in
+twice more.
+
 ### Gaps
 
 | Gap | Severity |
@@ -1327,6 +1453,8 @@ the fixtures are expensive or the assertions are about a browser:
 | `notes-calendar-drive.mjs` | that a private note is private — from another landlord, the tenant AND an admin — and that calendar dates are days, not instants |
 | `storage-drive.mjs` | **that deleting really deletes** — it IS an ImageKit stub, so it checks a DELETE arrived, and that a 500 is not recorded as success |
 | `lease-docs-ui-drive.mjs` | both parties see the lease, and nothing on screen claims it was signed here |
+| `dashboard-drive.mjs` | that "viewed 47 times this week" has data under it and counts the right things, that the task buttons point somewhere that exists, and the tenant task list — including what it deliberately leaves out |
+| `dashboard-ui-drive.mjs` | that the task buttons ARRIVE (a click, not a string), that the numbers read as sentences with their window stated, that rent reminders is reachable at all, and that a landlord who never grouped anything can reach their own money |
 | `messages-inbox-drive.mjs` | who a WhatsApp reply is actually from, that `readAt` is written by something, and that two new surfaces onto private conversations are scoped by the WHERE clause rather than by a guard |
 | `messages-inbox-ui-drive.mjs` | that both navs lead somewhere, that the screen says which channel a reply leaves by, that a closed thread offers no box to type in, and that a failed request does not read as an empty inbox |
 | `a11y-drive.mjs` | 25 pages with CONTENT on them: heading order, accessible names, contrast at rest, on hover and on focus. It seeds a room, an application and a message first — before that it audited every portal screen empty and reported it green |

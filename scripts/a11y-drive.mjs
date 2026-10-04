@@ -112,6 +112,10 @@ const LANDLORD_PAGES = [
   // a clickable div precisely so it can be reached by keyboard — exactly the
   // thing this drive is for.
   '/account/messages',
+  // Phase 7d. The detail view for the rooms in no property — the screen a
+  // landlord who never grouped anything reaches their rent through. The seed
+  // below leaves this account with exactly that shape.
+  '/landlord/properties/ungrouped',
 ];
 const TENANT_PAGES = [
   '/tenant/dashboard', '/tenant/rent', '/tenant/passport',
