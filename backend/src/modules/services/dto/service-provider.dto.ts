@@ -46,11 +46,6 @@ export class CreateServiceProviderDto {
   @IsOptional() @IsBoolean()
   active?: boolean;
 
-  /** Present for the future paid-placement line. Nothing reads it yet. */
-  @ApiPropertyOptional()
-  @IsOptional() @IsISO8601()
-  sponsoredUntil?: string | null;
-
   // ── What was checked — Phase 7j ─────────────────────────────────────────
   //
   // ⚠️ Dates, not booleans. A check has a date or it is a rumour: "we verified
@@ -104,6 +99,21 @@ export class CreateServiceProviderDto {
   tradeRegistration?: string | null;
 }
 
+/**
+ * ⚠️ There is deliberately no `sponsoredUntil` on either DTO — Phase 7m.
+ *
+ * It was accepted on both, with `@IsISO8601()` and nothing else, and writing it
+ * returned HTTP 200 and stored the date. Nothing read it. So an admin could set
+ * a sponsorship — any date, 1999 included — be told it worked, see it come back
+ * in the response, and have nothing whatsoever happen. That is the shape of
+ * defect this codebase keeps shipping, with money attached: if a placement were
+ * ever sold, the payment would be real and the placement would not exist.
+ *
+ * `forbidNonWhitelisted` is on globally, so a write now fails with a 400 naming
+ * the property instead of succeeding quietly. The column stays on the model for
+ * the revenue line it was reserved for; see docs/OUTSTANDING.md §16 for what
+ * that line still needs.
+ */
 export class UpdateServiceProviderDto {
   @ApiPropertyOptional({ enum: CATEGORIES }) @IsOptional() @IsEnum(CATEGORIES)
   category?: ServiceCategory;
@@ -127,9 +137,6 @@ export class UpdateServiceProviderDto {
 
   @ApiPropertyOptional() @IsOptional() @IsBoolean()
   active?: boolean;
-
-  @ApiPropertyOptional() @IsOptional() @IsISO8601()
-  sponsoredUntil?: string | null;
 
   // ── What was checked — Phase 7j ─────────────────────────────────────────
   //

@@ -9,7 +9,7 @@
  *
  * Needs the API on :3000.
  */
-import { registerUser, apiCall } from './lib/drive-session.mjs';
+import { registerUser, apiCall, dbQuery } from './lib/drive-session.mjs';
 const API='http://localhost:3000';
 let fail=0; const ok=m=>console.log('  ✅ '+m); const bad=m=>{console.log('  ❌ '+m);fail++;};
 
@@ -79,7 +79,35 @@ await apiCall(API,'PATCH',`/api/services/admin/${p3.body.id}`,{active:true},A);
 const seen2 = await apiCall(API,'GET','/api/services',undefined,ll.token);
 (seen2.body||[]).some(x=>x.name==='Draft Locksmith') ? ok('switching it on makes it visible') : bad('still hidden after activation');
 
-// sponsoredUntil must not change the order — nothing reads it yet.
+// ── sponsorship: unreadable, unwritable, and not in the payload — Phase 7m ──
+//
+// This used to be one check: PATCH a sponsorship over the API and assert the
+// order did not move. It passed, and it was testing the wrong half. The write
+// it performed returned 200 and stored the date, which is the actual defect —
+// an admin could sell a placement, be told it worked, and have nothing happen.
+//
+// So now: the write is refused, the field is absent from what a landlord's
+// browser receives, and the ordering guard is tested against a row that really
+// IS sponsored — set in the database, because the API can no longer set it.
+// That last part is the stronger version of the old check: it exercises the
+// condition the guard exists for instead of a write that is now impossible.
+
+const sponsorWrite = await apiCall(API,'PATCH',`/api/services/admin/${p2.body.id}`,
+  {sponsoredUntil:new Date(Date.now()+864e5*30).toISOString()},A);
+sponsorWrite.status===400
+  ? ok('an admin cannot set a sponsorship that nothing would honour')
+  : bad(`setting sponsoredUntil returned ${sponsorWrite.status} — a write with no reader`);
+
+const sponsorOnCreate = await apiCall(API,'POST','/api/services/admin',{
+  category:'cleaner', name:'Sponsored On Create', phone:'0821234599', areas:['Tembisa'],
+  phoneConfirmedAt:'2026-09-18T10:00:00.000Z',
+  sponsoredUntil:new Date(Date.now()+864e5*30).toISOString(),
+},A);
+sponsorOnCreate.status===400
+  ? ok('…nor smuggle one in on create')
+  : bad(`creating with sponsoredUntil returned ${sponsorOnCreate.status}`);
+
+// Set it the only way left, and read the directory as a landlord.
 //
 // Compared BEFORE and AFTER rather than against an expected sequence: Prisma
 // orders an enum by its DECLARATION order, not alphabetically, so the correct
@@ -87,9 +115,29 @@ const seen2 = await apiCall(API,'GET','/api/services',undefined,ll.token);
 // assertion called a failure. The claim being tested is that sponsorship
 // changes nothing, so that is what is measured.
 const before = ((await apiCall(API,'GET','/api/services',undefined,ll.token)).body||[]).map(x=>x.id);
-await apiCall(API,'PATCH',`/api/services/admin/${p2.body.id}`,{sponsoredUntil:new Date(Date.now()+864e5*30).toISOString()},A);
+dbQuery(`UPDATE service_providers SET "sponsoredUntil" = NOW() + INTERVAL '30 days' WHERE id = '${p2.body.id}'`);
+const sponsoredList = (await apiCall(API,'GET','/api/services',undefined,ll.token)).body||[];
+const sponsoredRow = sponsoredList.find(x=>x.id===p2.body.id);
+
+// The precondition, asserted. A guard tested against a row that is not
+// actually sponsored proves nothing in either direction — the same fault as
+// the saved_rooms drive POSTing to a route that did not exist.
+const stored = dbQuery(`SELECT "sponsoredUntil" FROM service_providers WHERE id = '${p2.body.id}'`);
+/\d{4}-\d{2}-\d{2}/.test(stored)
+  ? ok(`a genuinely sponsored provider exists to test against (precondition: ${stored.slice(0,10)})`)
+  : bad('could not sponsor a provider in the database — the checks below prove nothing');
+
+sponsoredRow && !('sponsoredUntil' in sponsoredRow)
+  ? ok('a sponsored provider reaches the landlord with no sponsorship field at all')
+  : bad(`sponsoredUntil is in the landlord payload (${JSON.stringify(sponsoredRow?.sponsoredUntil)}) — one client-side sort away from a paid directory`);
+
 const after = ((await apiCall(API,'GET','/api/services',undefined,ll.token)).body||[]).map(x=>x.id);
-JSON.stringify(before)===JSON.stringify(after) ? ok('sponsoredUntil does not jump the queue') : bad(`order changed after sponsoring: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+JSON.stringify(before)===JSON.stringify(after) ? ok('…and does not jump the queue') : bad(`order changed after sponsoring: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+
+// Clean up after itself. The old version did not, which is how a live provider
+// in the development database came to read "sponsored until 2026-11-03" — the
+// drive set it to test the guard and walked away.
+dbQuery(`UPDATE service_providers SET "sponsoredUntil" = NULL WHERE id = '${p2.body.id}'`);
 
 // Delete, and the guard on it.
 const delByLandlord = await apiCall(API,'DELETE',`/api/services/admin/${p3.body.id}`,undefined,ll.token);

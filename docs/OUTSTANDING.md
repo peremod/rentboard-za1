@@ -545,7 +545,7 @@ step-up checks added later, and because the pattern to copy is here.
 
 ---
 
-## 16. 💰 Contractor lead fees: the record is built, collecting is your call
+## 16. 💰 Contractor money: lead fees and paid placement, both your call
 
 Phase 7k built everything up to the money and stopped. This is the decision
 waiting on you, and it is a product decision rather than a technical one.
@@ -592,13 +592,31 @@ a room or a tenant applying for one.
 the real argument for contractor accounts, and it is why this stopped where it
 did rather than wiring PayFast to a phone number.
 
-### Also undecided
+### The same decision covers paid placement
 
-`sponsoredUntil` has been on `ServiceProvider` since Phase 4 and **nothing
-reads it**. In a directory now captioned "names we have looked into", a paid
-placement needs a label saying it is one — otherwise the first sponsored entry
-jumps a queue that the page tells landlords is about trust. Worth settling
-before any money changes hands, not after.
+`sponsoredUntil` has been on `ServiceProvider` since Phase 4, reserved for a
+paid placement in the directory. This used to be a separate note headed "also
+undecided". It is not separate: **it is blocked on exactly what lead fees are
+blocked on.** A placement is sold to the contractor, and Phase 7k established
+the contractor is not a user — no account, no email, no way to see what they are
+being charged for or to disagree with it. Whatever answers the three options
+above answers this too.
+
+It also needs one thing lead fees do not: **a label.** A paid entry in a list
+captioned "names we have looked into" has to say it is paid, or the caption is
+false for that row. The directory's whole value is that a landlord can believe
+it when deciding whether to let a stranger into their tenant's room.
+
+⚠️ **Phase 7m found that the column was writable, and fixed that much.** Both
+DTOs accepted it with no rule but `@IsISO8601()`, so an admin could set a
+sponsorship — any date, 1999 included — get HTTP 200, see it stored, and have
+nothing happen; and it was being sent to every landlord's browser, where a
+single client-side sort would have made the directory an advertising surface
+without touching the backend decision that says not to. The write is a 400 now,
+the field is out of the payload, and existing values were cleared as residue.
+The column remains, for whenever this is decided. **Nothing about the decision
+itself has been pre-empted** — what changed is that wiring it up now has to be
+deliberate rather than one sort call away. See docs/FLOW-AUDIT.md §5.31.
 
 ---
 

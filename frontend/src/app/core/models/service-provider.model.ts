@@ -16,8 +16,11 @@ export interface ServiceProvider {
   areas: string[];
   note?: string | null;
   active: boolean;
-  /** Present for a future paid placement. Nothing reads it. */
-  sponsoredUntil?: string | null;
+  // ⚠️ No `sponsoredUntil` here — Phase 7m. The server used to send it and
+  // nothing in this app read it, which left a client-side sort as the one
+  // unguarded way to turn the directory into an advertising surface. It is out
+  // of the payload now. A paid placement needs a visible label first
+  // (docs/OUTSTANDING.md §16), and that is a decision, not a field.
   createdAt: string;
 
   // ── What was actually checked — Phase 7j ─────────────────────────────────
