@@ -1482,6 +1482,83 @@ A proximity window standing in for the structure of the thing being read is the
 third time this codebase has paid for it. A security check that cries wolf is
 the worst of the three: the fourth time it fires, somebody dismisses a real one.
 
+### 5.24 The social card, and showing somebody round once — ✅ built in v1.91.0 (Phase 7f)
+
+**Item 1 — the default OG image.** It existed, it is the right size (1200×630,
+45 KB — measured, not assumed), and `SeoService` did fall back to it correctly
+with `??`. Three things were wrong around it:
+
+- 🔴 `index.html` pointed at `https://umastande.co.za/...` — the **apex**. Per
+  `environment.prod.ts`'s own note the apex is a different box answering
+  `301 → https://www.umastande.co.za/`: a redirect to the site ROOT, not to the
+  file. A crawler following it asked for a PNG and would be handed the
+  homepage's HTML. That block is served from `index.csr.html`, the shell used
+  when server rendering is bypassed, so it is the fallback's fallback — the
+  place nobody looks.
+- 🔴 No `og:image:width`, `height`, `type` or `alt`. Facebook and WhatsApp use
+  the dimensions to choose a large card **without fetching the file first**, and
+  WhatsApp is the channel this service's own comment says matters most here:
+  landlords share room links over it constantly.
+- `SeoService` kept dimensions on the tags between client-side navigations, so a
+  route supplying its own image inherited the previous route's size. They are
+  removed when unknown now.
+
+⚠️ **The dimensions are stated only for the image whose size is a fact.** A
+room's own picture goes through an ImageKit transform asking for 1200×630, and
+whether `c-maintain_ratio` returns exactly that or merely fits inside it was
+**not verified in this container**. A wrong `og:image:height` is worse than
+none: the platform believes it and lays the card out around a size the file does
+not have. So callers may declare dimensions, neither existing caller does, and
+the drive asserts that a room photo ships none — which is what stops somebody
+later "improving" it into a guess.
+
+**Item 2 — the walkthrough.** Four steps, role-appropriate, skippable, and
+reachable again from account settings.
+
+| Decision | Why |
+|---|---|
+| The flag is `User.walkthroughSeenAt`, on the account | localStorage is the obvious choice and wrong twice over: a phone here is shared, borrowed and replaced, so a per-browser flag shows the tour to people who have seen it and hides it from people who have not — and under SSR there is no localStorage to read on the first paint |
+| A nullable timestamp, not a boolean | "Show me around again" clears it, so one record serves the first visit and the fifth. A boolean that only goes one way would need a second flag beside it |
+| Four steps | The brief says "the main features"; nine is a wall. Every step describes something the product actually does — none promises a feature behind a flag or waiting on a template approval |
+| Rendered by `PortalLayout` | The same reason the sidebar is (Phase 7e): one place, so a new portal screen cannot ship without it |
+| No step number is recorded | Somebody who closed it on step two has decided they have seen enough. Resuming them mid-tour later would be resuming something they walked away from |
+
+🔴 **The first-run experience had two bottom sheets at once.** The cookie notice
+is `position: fixed; bottom: 1rem; z-index: 9999` and the walkthrough sheet is
+also bottom-anchored, so **every brand-new account got the notice drawn over the
+tour's buttons**. Found by a drive whose click on "Next" was intercepted
+thirteen times by `.cookie-notice` — which is exactly what a thumb would have
+found. Raising the tour above it would be worse: that buries a notice about
+cookies under an advert for the product. So they are sequenced, notice first,
+and the sequencing needed the notice's state to move out of the component into
+`CookieNoticeService` — ⚠️ reusing **the same storage key**, because a new one
+would have re-shown the notice to everybody who had already dismissed it, a
+migration hidden inside a refactor.
+
+⚠️ **Escape did nothing.** It was bound as `(keydown.escape)` on the card, with
+`tabindex="-1"` and nothing ever focusing the card — so the event had nowhere to
+land. A modal that can only be left with a pointer is a trap, and on a phone the
+card is the whole screen. It is bound on the document now, and focus moves into
+the sheet on open, which a dialog should do regardless.
+
+⚠️ **"Show me around again" broke its own promise.** Clearing the stamp also
+cleared the local flag, so the tour opened instantly — on top of the button just
+pressed and over the message saying "it will open on your next screen". The copy
+was right; the code now keeps it.
+
+⚠️ **The accessibility drive passed for the wrong reason.** It audits sixteen
+portal pages, and the walkthrough is a modal over all of them — so the heading
+order and contrast it measured would have been the modal's, with the screen
+underneath unchecked and the run still green. It passed today only because it
+never dismisses the cookie notice, which holds the tour back: luck, not design.
+It now marks its accounts as shown round explicitly.
+
+**And the stale-binary trap caught me again.** `/auth/me` was returning no
+`walkthroughSeenAt` for two drive runs because the API was serving a `dist`
+built before the change, and a `kill` that reported success had not taken — the
+old process still held port 3000. CLAUDE.md lists this; checking `dist/` for the
+compiled symbol and the process list for the PID is what found it.
+
 ### Gaps
 
 | Gap | Severity |
@@ -1520,6 +1597,7 @@ the fixtures are expensive or the assertions are about a browser:
 | `storage-drive.mjs` | **that deleting really deletes** — it IS an ImageKit stub, so it checks a DELETE arrived, and that a 500 is not recorded as success |
 | `lease-docs-ui-drive.mjs` | both parties see the lease, and nothing on screen claims it was signed here |
 | `dashboard-drive.mjs` | that "viewed 47 times this week" has data under it and counts the right things, that the task buttons point somewhere that exists, and the tenant task list — including what it deliberately leaves out |
+| `onboarding-drive.mjs` | that the social card's image is a real 1200×630 file reached by a URL that works, that the fallback falls back and the unverifiable dimensions are NOT claimed, and that the walkthrough appears once per ACCOUNT, is role-appropriate, waits for the cookie notice, and can be left with Escape at 360px |
 | `nav-ui-drive.mjs` | that the portal sidebar is on every guarded screen and the same size on all of them, that the mobile header keeps both visitor CTAs at 360/390/430px with a 44px target, that the footer offers a visitor nothing it cannot open, and that nothing scrolls sideways at three widths |
 | `dashboard-ui-drive.mjs` | that the task buttons ARRIVE (a click, not a string), that the numbers read as sentences with their window stated, that rent reminders is reachable at all, and that a landlord who never grouped anything can reach their own money |
 | `messages-inbox-drive.mjs` | who a WhatsApp reply is actually from, that `readAt` is written by something, and that two new surfaces onto private conversations are scoped by the WHERE clause rather than by a guard |

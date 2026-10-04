@@ -59,6 +59,18 @@ export class AuthService {
   private readonly _accessToken = signal<string | null>(null);
 
   readonly user = this._user.asReadonly();
+
+  /**
+   * Merge a few fields into the signed-in user — Phase 7f.
+   *
+   * For the cases where one endpoint changes one property of the account and
+   * the whole user need not be refetched: the walkthrough stamp is the first.
+   * A no-op when nobody is signed in, so a late response after a logout cannot
+   * resurrect a user object.
+   */
+  patchUser(patch: Partial<User>): void {
+    this._user.update((u) => (u ? { ...u, ...patch } : u));
+  }
   readonly token = this._accessToken.asReadonly();
   readonly isAuthenticated = computed(() => !!this._user() && !!this._accessToken());
   readonly isLandlord = computed(() => this._user()?.role === 'LANDLORD');

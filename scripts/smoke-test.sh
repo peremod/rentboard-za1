@@ -3396,6 +3396,45 @@ fi
 req PATCH /api/properties/rent/settings '{"rentGraceDays":3}' "$LTOKEN"
 check "and a real window round-trips" 200 "$STATUS" "$BODY"
 
+# ── The first-run walkthrough (Phase 7f) ───────────────────────────────────
+#
+# ⚠️ The flag is on the ACCOUNT, not in the browser. localStorage is the
+# obvious choice and wrong twice over: a phone in this market is shared and
+# replaced, so a per-browser flag shows the tour to people who have seen it and
+# hides it from people who have not — and under SSR there is no localStorage to
+# read on the first paint. So what matters is that the stamp round-trips.
+head_ "First-run walkthrough"
+
+req GET /api/auth/me "" "$TTOKEN"
+if echo "$BODY" | jq -e 'has("walkthroughSeenAt")' >/dev/null 2>&1; then
+  green "  PASS  /auth/me carries walkthroughSeenAt, so the first paint knows without a second request"; PASS=$((PASS+1))
+else
+  red "  FAIL  /auth/me omits walkthroughSeenAt — the tour would flash a beat after the dashboard"; FAIL=$((FAIL+1))
+fi
+
+req POST /api/users/me/walkthrough-seen "" "$TTOKEN"
+check "an account can be marked as shown round" 200 "$STATUS" "$BODY"
+req GET /api/auth/me "" "$TTOKEN"
+if [[ "$(echo "$BODY" | jq -r '.walkthroughSeenAt')" != "null" ]]; then
+  green "  PASS  …and it sticks, so the tour does not return on the next login"; PASS=$((PASS+1))
+else
+  red "  FAIL  the stamp did not persist — the walkthrough will reappear every time"; FAIL=$((FAIL+1))
+fi
+
+# "Show me around again" clears the same record rather than keeping a second
+# piece of state, which is why it is a nullable timestamp and not a boolean.
+req POST /api/users/me/walkthrough-reset "" "$TTOKEN"
+check "and it can be asked for again" 200 "$STATUS" "$BODY"
+req GET /api/auth/me "" "$TTOKEN"
+if [[ "$(echo "$BODY" | jq -r '.walkthroughSeenAt')" == "null" ]]; then
+  green "  PASS  …by clearing the stamp, not by adding a second flag to keep in sync"; PASS=$((PASS+1))
+else
+  red "  FAIL  the reset did not clear walkthroughSeenAt"; FAIL=$((FAIL+1))
+fi
+
+req POST /api/users/me/walkthrough-seen "" ""
+check "a stranger cannot mark somebody as shown round" 401 "$STATUS" "$BODY"
+
 # ── Landlord survey (Phase 0) ──────────────────────────────────────────────
 #
 # The survey is seeded by prisma/seed.ts, so a database seeded without it

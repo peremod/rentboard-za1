@@ -40,6 +40,19 @@ export interface SeoInput {
   path?: string;
   /** Absolute image URL for social cards. Falls back to the site OG image. */
   image?: string;
+  /**
+   * The real pixel size of `image`, if the caller knows it.
+   *
+   * Declared rather than assumed. WhatsApp and Facebook trust these to lay the
+   * card out before fetching the file, so a figure that is merely the size
+   * ASKED FOR — not the size returned — produces exactly the broken card the
+   * tags are meant to prevent. Omit it and no dimensions are emitted, which is
+   * the safe default; see DEFAULT_IMAGE_SIZE for the one image whose size is a
+   * measured fact.
+   */
+  imageSize?: { width: number; height: number; type?: string };
+  /** Alt text for the social card. The default image carries its own. */
+  imageAlt?: string;
   /** 'website' for pages, 'article' for content. Room listings use 'website'. */
   type?: 'website' | 'article';
   /**
@@ -64,6 +77,24 @@ export interface SeoInput {
 }
 
 const DEFAULT_IMAGE = '/assets/images/og-default.png';
+/**
+ * The default card's real dimensions, and the reason they are stated.
+ *
+ * Measured from the file (1200×630), not copied from a convention. Facebook and
+ * WhatsApp use `og:image:width`/`height` to choose a large card without
+ * fetching the image first, and WhatsApp is the channel that matters most here
+ * — this service's own comment below says why.
+ *
+ * ⚠️ Emitted ONLY for this image. A caller's own picture goes through an
+ * ImageKit transform, and whether `c-maintain_ratio` with both dimensions set
+ * yields exactly 1200×630 or merely fits inside it was NOT verified in this
+ * container. A wrong `og:image:height` is worse than none: the platform
+ * believes it and lays the card out around a size the file does not have. So a
+ * caller may declare its own dimensions, and neither existing caller does.
+ */
+const DEFAULT_IMAGE_SIZE = { width: 1200, height: 630, type: 'image/png' };
+const DEFAULT_IMAGE_ALT =
+  'Mastande — rooms to rent in South Africa, direct from landlords';
 const FALLBACK_DESCRIPTION =
   'Find a room to rent direct from landlords across South Africa. Free to apply, always. No estate agent, no application fees.';
 
@@ -77,7 +108,17 @@ export class SeoService {
   apply(input: SeoInput): void {
     const description = input.description ?? FALLBACK_DESCRIPTION;
     const canonical = this.absolute(input.path ?? this.currentPath());
-    const image = input.image ?? this.absolute(DEFAULT_IMAGE);
+    /**
+     * ⚠️ `??`, not `||`, and that distinction is load-bearing.
+     *
+     * Both callers that pass an image build it conditionally and use
+     * `undefined` when there is no photo — checked, because `''` would survive
+     * `??` and ship an EMPTY og:image, which kills the preview outright rather
+     * than falling back to the default. If a future caller passes a blank
+     * string, this is where it would go wrong, so the empty case is folded in.
+     */
+    const image = input.image || this.absolute(DEFAULT_IMAGE);
+    const usingDefault = !input.image;
 
     if (input.title) this.titleService.setTitle(input.title);
     const title = input.title ?? this.titleService.getTitle();
@@ -106,6 +147,8 @@ export class SeoService {
     this.meta.updateTag({ property: 'og:description', content: description });
     this.meta.updateTag({ property: 'og:url', content: canonical });
     this.meta.updateTag({ property: 'og:image', content: image });
+    this.setImageMeta(usingDefault ? DEFAULT_IMAGE_SIZE : input.imageSize ?? null,
+                      input.imageAlt ?? (usingDefault ? DEFAULT_IMAGE_ALT : null));
     this.meta.updateTag({ property: 'og:type', content: input.type ?? 'website' });
     this.meta.updateTag({ property: 'og:site_name', content: 'Mastande' });
     // og:locale mirrors the page's actual language, and og:locale:alternate
@@ -120,6 +163,31 @@ export class SeoService {
     this.meta.updateTag({ name: 'twitter:title', content: title });
     this.meta.updateTag({ name: 'twitter:description', content: description });
     this.meta.updateTag({ name: 'twitter:image', content: image });
+  }
+
+  /**
+   * The card's dimensions and its alt text, or neither.
+   *
+   * Removed rather than left stale when unknown: a route that supplies its own
+   * image would otherwise inherit the previous route's dimensions on a
+   * client-side navigation, and a 1200×630 claim over a portrait photo is
+   * exactly the wrong-size-card failure these tags exist to prevent.
+   */
+  private setImageMeta(
+    size: { width: number; height: number; type?: string } | null,
+    alt: string | null,
+  ): void {
+    for (const [property, value] of [
+      ['og:image:width', size ? String(size.width) : null],
+      ['og:image:height', size ? String(size.height) : null],
+      ['og:image:type', size?.type ?? null],
+      ['og:image:alt', alt],
+    ] as const) {
+      if (value) this.meta.updateTag({ property, content: value });
+      else this.meta.removeTag(`property='${property}'`);
+    }
+    if (alt) this.meta.updateTag({ name: 'twitter:image:alt', content: alt });
+    else this.meta.removeTag("name='twitter:image:alt'");
   }
 
   /**

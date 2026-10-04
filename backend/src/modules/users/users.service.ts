@@ -58,4 +58,21 @@ export class UsersService {
     });
     return user;
   }
+
+  /**
+   * Stamp or clear the walkthrough — Phase 7f.
+   *
+   * Returns the new value rather than nothing, so the client can set its own
+   * state from what the server actually stored instead of assuming the write
+   * went through. The same reason the notices endpoints return their count.
+   */
+  async setWalkthroughSeen(userId: string, seen: boolean) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { walkthroughSeenAt: seen ? new Date() : null },
+      select: { walkthroughSeenAt: true },
+    });
+    return { walkthroughSeenAt: user.walkthroughSeenAt };
+  }
 }
+

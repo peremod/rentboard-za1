@@ -178,6 +178,7 @@ Full context: `docs/RUNBOOK.md` § Staging.
 | `20261003080000_phone_signup` | Creates `phone_signups`. Purely additive: no existing column, index or constraint is touched, so no downtime window is needed. |
 | `20261003170000_sublet_listings` | Adds `listerType` and `subletCheckedAt` to rooms, a `roomId` to verification requests, the three household enums and their Property columns, and a `sublet_right` verification type. Additive. |
 | `20261003220000_property_address_line` | One nullable column on `properties`. Landlord-private; never in a public payload. |
+| `20261004140000_walkthrough_seen` | One nullable timestamp on `users`. Purely additive and **not backfilled** — every existing account correctly reads as "never shown round", which they have not been. Stamping them all as seen would hide the walkthrough from exactly the people already here. |
 | `20261004090000_room_view_days` | Creates `room_view_days` (roomId + day + counter). Purely additive, and **it starts empty** — so for the first seven days after the deploy the dashboard honestly says "nobody has looked at your rooms in the last seven days" for rooms that were in fact being viewed before it existed. `rooms.viewCount`, the lifetime figure, is untouched. There is no backfill because there is nothing to backfill from: per-day view data has never been recorded. |
 
 **If skipped:** the API 500s on whichever endpoint needs a missing column.
@@ -437,7 +438,7 @@ gets built accordingly.
 ADMIN_EMAIL=<seeded admin> ADMIN_PASSWORD=<their password> \
   WHATSAPP_APP_SECRET=<the API's own> \
   RESEND_WEBHOOK_SECRET=<the API's own> \
-  ./scripts/smoke-test.sh          # 511 passed, 9 skipped without the three
+  ./scripts/smoke-test.sh          # 517 passed, 9 skipped without the three
                                    # secrets above; set them and five of those
                                    # become checks, leaving 4 named skips
 #
@@ -484,6 +485,9 @@ node scripts/a11y-drive.mjs              # 26 pages WITH CONTENT on them. Before
 node scripts/dashboard-drive.mjs         # 35 checks — Phase 7d. "Viewed 47 times
                                          # this week" now has data under it, and
                                          # the task buttons point somewhere real
+node scripts/onboarding-drive.mjs        # 35 checks — Phase 7f. The social card
+                                         # (measured, not assumed) and the
+                                         # first-run walkthrough
 node scripts/nav-ui-drive.mjs            # 46 checks — Phase 7e. The sidebar on
                                          # every guarded screen, the mobile
                                          # header CTAs at 360/390/430px, the

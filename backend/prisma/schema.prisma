@@ -54,7 +54,7 @@ enum PlanTier {
 
 /// Core user account — shared by tenants, landlords, and admins.
 model User {
-  id             String   @id @default(uuid())
+  id                String    @id @default(uuid())
   /// Optional since v1.85.0 (Phase 7g).
   ///
   /// Many township landlords are WhatsApp-first and do not use email at all.
@@ -67,11 +67,21 @@ model User {
   /// the migration. Nullable here, guaranteed non-empty as a pair there, because
   /// "at least one of two columns" is not something Prisma can express and is
   /// far too important to leave to whichever code path happens to run.
-  email          String?  @unique
-  passwordHash   String?
-  role           UserRole @default(TENANT)
-  fullName       String
-  avatarPath     String?
+  email             String?   @unique
+  passwordHash      String?
+  role              UserRole  @default(TENANT)
+  fullName          String
+  avatarPath        String?
+  /// When this account was last shown round the product — Phase 7f.
+  ///
+  /// Null means never. Server-side rather than in the browser: a phone here is
+  /// shared and replaced, so a per-browser flag shows the walkthrough to people
+  /// who have seen it and hides it from people who have not — and under SSR
+  /// there is no localStorage to read on the first paint anyway.
+  ///
+  /// Cleared by "Show me around again", which is why it is a nullable timestamp
+  /// and not a boolean that only ever goes one way.
+  walkthroughSeenAt DateTime?
   /// A login identifier since v1.85.0 (Phase 7g) — but NOT `@unique` here, and
   /// that is deliberate.
   ///
@@ -95,15 +105,15 @@ model User {
   /// index as drift on `migrate dev` and offer to remove it. Do not let it. This
   /// repository applies hand-written migrations with `migrate deploy`, where the
   /// extra index is left alone.
-  phone          String?
-  isVerified     Boolean  @default(false)
-  isActive       Boolean  @default(true)
+  phone             String?
+  isVerified        Boolean   @default(false)
+  isActive          Boolean   @default(true)
   /// 'email', 'magic_link', 'google', 'facebook', 'phone'. Kept as a string
   /// rather than an enum so adding a provider does not need a migration —
   /// 'phone' arrived in v1.85.1 and needed no schema change, which is the
   /// decision paying off.
-  authProvider   String   @default("email")
-  authProviderId String?
+  authProvider      String    @default("email")
+  authProviderId    String?
 
   /// Verified mobile number, for OTP sign-in over WhatsApp or SMS.
   ///
