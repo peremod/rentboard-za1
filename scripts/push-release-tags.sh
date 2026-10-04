@@ -743,6 +743,36 @@ they close their account.
 two lead counts into one: four failures. Three faults in the drives themselves
 are recorded, including one that only passed on a clean database."
 
+tag_if_missing "v1.97.0" "148b89f134b9f4c111dc22d4ec6e6d0095792376" "2026-10-04 20:50:36 +0000" "v1.97.0 — Phase 7l: invite an applicant to a viewing, without giving away the address
+
+Nothing in the product arranged a meeting. \`viewed\` on an application meant the
+landlord had opened it, and it read on both screens as though the room had been
+viewed — one more status asserting something that never happened.
+
+A viewing is now its own row: proposed, accepted, declined or cancelled, one
+open invitation per application, either side able to call it off. The meeting
+place is typed per invitation and never pre-filled, because Property.addressLine
+promises on its own form that it is never sent to an applicant. There is
+deliberately no useMyPropertyAddress flag to add later.
+
+The API drive asserts the saved address reaches neither the stored row, nor the
+tenant's notices, nor the tenant's API payload. Three CHECK constraints hold the
+same line in the database: a meeting place that is not blank, an answer that has
+a date, a cancellation that has a date.
+
+The tenant's panel carries the two lines that matter for somebody meeting a
+stranger at a room — tell somebody where you are going, and never pay anything
+before you have seen the room — linking the room's page, where reporting lives.
+It renders nothing when there is nothing booked, so a new tenant is not shown an
+empty queue, and the a11y drive seeds a viewing so the panel is measured rather
+than audited blank.
+
+35 + 41 drive checks at 360 / 390 / 768 / 1280. Falsified to five failures,
+including \"the private property address reached the tenant in a notice\". The
+first falsification could not fire — the DTO's MinLength refuses a blank meeting
+place before the service's fallback runs — and that is recorded rather than
+counted as a pass."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -758,7 +788,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-6])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-7])[.]'"
 else
   echo "Nothing to push."
 fi
