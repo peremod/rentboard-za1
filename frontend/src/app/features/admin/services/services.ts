@@ -7,6 +7,8 @@ import {
 } from '../../../core/models/service-provider.model';
 
 import { DialogService } from '../../../core/services/dialog.service';
+import { ContractorLeadSummary } from '../../../core/services/service-directory.service';
+import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 
 /**
  * Curating the contractor directory.
@@ -22,7 +24,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 @Component({
   selector: 'app-admin-services',
   standalone: true,
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule, DatePipe, ZarCentsPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -145,6 +147,141 @@ import { DialogService } from '../../../core/services/dialog.service';
             </div>
           }
         </section>
+
+        <!-- ── Leads, and what they come to — Phase 7k ──────────────────
+             ⚠️ A RECORD, not an invoice. Nothing here has been billed and
+             nothing has been paid, and this product cannot do either: a
+             contractor is not a user. No userId, no email — a name, a number
+             and the areas they cover. They cannot sign in, see a bill, accept
+             terms or dispute a charge. Collecting would need contractor
+             accounts first, which is a product and not a column.
+             The disclaimer is read out of the PAYLOAD rather than written
+             here, so a report or an export built on the same endpoint cannot
+             drift from what the screen says. -->
+        @if (leads(); as L) {
+          <section class="dash-section lead-section">
+            <h2 class="dash-section-title">Leads sent, and what they come to</h2>
+
+            <p class="lead-disclaimer" role="note">{{ L.disclaimer }}</p>
+
+            @if (L.noRatesConfigured) {
+              <!-- ⚠️ No price exists anywhere in the product: not a constant,
+                   not a default, not an env var. Until a rate is set, leads are
+                   counted and deliberately not priced. -->
+              <p class="lead-norates">
+                <strong>No lead fee has been set.</strong> Leads are being counted
+                and not priced — which is the honest state of a price nobody has
+                decided. Set one below when you have decided what it is.
+              </p>
+            } @else {
+              <ul class="lead-rates">
+                @for (r of L.rates; track r.category + r.effectiveFrom) {
+                  <li>
+                    {{ label(r.category) }}: <strong>{{ r.amountCents | zarCents: 'exact' }}</strong>
+                    a lead from {{ r.effectiveFrom | date: 'd MMM yyyy' }}
+                    @if (r.note) { <span class="muted">— {{ r.note }}</span> }
+                  </li>
+                }
+              </ul>
+            }
+
+            <table class="lead-table">
+              <caption class="muted">
+                Counted and priced are reported separately on purpose: "we sent
+                you eleven and are charging for four" is the honest sentence,
+                and one total hides which.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Who</th>
+                  <th scope="col">Agreed to pay?</th>
+                  <th scope="col">Priced</th>
+                  <th scope="col">Counted only</th>
+                  <th scope="col">Would come to</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of L.rows; track row.provider.id) {
+                  <tr>
+                    <td data-label="">
+                      {{ row.provider.name }}
+                      <span class="muted">{{ label(row.provider.category) }}</span>
+                    </td>
+                    <td data-label="Agreed to pay:">
+                      @if (row.agreedToLeadFees) {
+                        ✓ <span class="muted">{{ row.agreementNote }}</span>
+                      } @else if (agreeingId() === row.provider.id) {
+                        <!-- Inline, following the suspend-reason pattern on the
+                             admin dashboard rather than a new dialog type. They
+                             have no account to accept terms in, so what is typed
+                             here is the only record that they agreed — and the
+                             API refuses anything under ten characters for the
+                             same reason the closure reason does. -->
+                        <label class="lead-agree">
+                          <span class="muted">How did they agree?</span>
+                          <input type="text" [(ngModel)]="agreeNote" name="agreeNote"
+                                 placeholder="agreed on the phone, 2 Oct — happy to pay per lead"/>
+                        </label>
+                        <button type="button" class="btn btn-sm btn-primary"
+                                [disabled]="busy() === row.provider.id"
+                                (click)="saveAgreement(row.provider.id)">Save</button>
+                        <button type="button" class="link-btn"
+                                (click)="agreeingId.set(null)">Cancel</button>
+                      } @else {
+                        <button type="button" class="link-btn" [disabled]="busy() === row.provider.id"
+                                (click)="startAgreement(row.provider.id)">
+                          Record that they agreed
+                        </button>
+                      }
+                    </td>
+                    <td data-label="Priced:">{{ row.leads.billable }}</td>
+                    <td data-label="Counted only:">{{ row.leads.notBillable }}</td>
+                    <td data-label="Would come to:">
+                      @if (row.leads.billable) {
+                        {{ row.wouldOweCents | zarCents: 'exact' }}
+                      } @else {
+                        <span class="muted">—</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+
+            <form class="lead-rate-form" (ngSubmit)="saveRate()">
+              <h3 class="ac-sub">Set what a lead costs</h3>
+              <p class="muted">
+                From a date, and never edited afterwards — a lead keeps the rate
+                it was recorded under, so changing this cannot re-price what was
+                already sent.
+              </p>
+              <label>
+                <span>Trade</span>
+                <select [(ngModel)]="rateForm.category" name="rateCategory">
+                  @for (c of categories; track c) { <option [value]="c">{{ label(c) }}</option> }
+                </select>
+              </label>
+              <label>
+                <span>Rand per lead</span>
+                <input type="number" min="1" step="0.01" [(ngModel)]="rateForm.rand" name="rateRand"
+                       placeholder="what you have decided"/>
+              </label>
+              <label>
+                <span>From</span>
+                <input type="date" [(ngModel)]="rateForm.from" name="rateFrom"/>
+              </label>
+              <label>
+                <span>Why this number (optional)</span>
+                <input type="text" [(ngModel)]="rateForm.note" name="rateNote"/>
+              </label>
+              @if (rateError()) { <p class="field-error" role="alert">{{ rateError() }}</p> }
+              @if (rateSaved()) { <p class="muted" role="status">✅ Saved. It applies from the date you gave.</p> }
+              <button type="submit" class="btn btn-sm btn-primary" [disabled]="savingRate()">
+                {{ savingRate() ? 'Saving…' : 'Set this rate' }}
+              </button>
+            </form>
+          </section>
+        }
       }
   `,
   styles: [
@@ -168,6 +305,32 @@ import { DialogService } from '../../../core/services/dialog.service';
     .svc-checks--missing { color: var(--slate); }
     .svc-reg { font-size: .78rem; margin: 0 0 .5rem; }
     .svc-blocked { font-size: .78rem; color: var(--slate); line-height: 1.6; max-width: 26rem; }
+    .lead-section { border-left: 3px solid var(--gold); }
+    .lead-disclaimer {
+      font-size: .82rem; line-height: 1.7; max-width: 44rem;
+      padding: .6rem .8rem; margin: 0 0 .9rem;
+      background: rgba(201, 162, 39, .08); border-radius: var(--r4);
+    }
+    .lead-norates { font-size: .85rem; line-height: 1.7; max-width: 44rem; }
+    .lead-rates { font-size: .82rem; line-height: 1.8; margin: 0 0 .9rem; padding-left: 1.2rem; }
+    .lead-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+    .lead-table caption { text-align: left; font-size: .78rem; line-height: 1.6; max-width: 44rem; margin-bottom: .5rem; }
+    .lead-table th, .lead-table td { text-align: left; padding: .5rem .4rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .lead-table th { font-size: .76rem; text-transform: uppercase; letter-spacing: .04em; color: var(--slate); }
+    .lead-rate-form { display: grid; gap: .7rem; margin-top: 1.1rem; max-width: 26rem; }
+    .lead-rate-form label { display: grid; gap: .25rem; font-size: .85rem; font-weight: 600; }
+    .lead-rate-form input, .lead-rate-form select {
+      font: inherit; font-weight: 400; padding: .55rem .6rem; min-height: 44px;
+      border: 1.5px solid var(--border); border-radius: var(--r4);
+    }
+    @media (max-width: 768px) {
+      /* A five-column table on a phone is a horizontal scroller nobody reads.
+         The rows become blocks with their headings inline. */
+      .lead-table thead { display: none; }
+      .lead-table tr { display: grid; gap: .2rem; padding: .6rem 0; border-bottom: 1px solid var(--border); }
+      .lead-table td { border: none; padding: 0; }
+      .lead-table td::before { content: attr(data-label) ' '; font-weight: 600; color: var(--slate); }
+    }
       .provider__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
       .pill--off { background: rgba(26, 20, 16, 0.08); }
     `,
@@ -198,6 +361,7 @@ export class AdminServices implements OnInit {
 
   ngOnInit() {
     this.load();
+    this.loadLeads();
   }
 
   protected liveCount() {
@@ -274,6 +438,101 @@ export class AdminServices implements OnInit {
    * present would make "we rang them" and "we rang them, saw ID and called a
    * reference" look the same at a glance.
    */
+  // ── Leads — Phase 7k ───────────────────────────────────────────────────
+  protected readonly leads = signal<ContractorLeadSummary | null>(null);
+  protected rateForm = {
+    category: 'plumber' as ServiceCategory,
+    /**
+     * ⚠️ Empty, and there is no placeholder number.
+     *
+     * The brief said not to implement arbitrary pricing assumptions. An example
+     * amount in a form is the number somebody accepts, so the field starts
+     * blank and the placeholder says "what you have decided".
+     */
+    rand: null as number | null,
+    from: new Date().toISOString().slice(0, 10),
+    note: '',
+  };
+  protected readonly savingRate = signal(false);
+  protected readonly rateError = signal<string | null>(null);
+  protected readonly rateSaved = signal(false);
+
+  protected loadLeads() {
+    this.directory.leadSummary().subscribe({
+      next: (l) => this.leads.set(l),
+      error: () => this.leads.set(null),
+    });
+  }
+
+  protected saveRate() {
+    const rand = Number(this.rateForm.rand);
+    if (!Number.isFinite(rand) || rand <= 0) {
+      this.rateError.set('Enter what a lead costs, in rand.');
+      return;
+    }
+    this.savingRate.set(true);
+    this.rateError.set(null);
+    this.rateSaved.set(false);
+    this.directory.setLeadRate({
+      category: this.rateForm.category,
+      // Rand in, cents over the wire — the one conversion boundary.
+      amountCents: Math.round(rand * 100),
+      effectiveFrom: new Date(this.rateForm.from).toISOString(),
+      note: this.rateForm.note.trim() || undefined,
+    }).subscribe({
+      next: () => {
+        this.savingRate.set(false);
+        this.rateSaved.set(true);
+        this.rateForm.rand = null;
+        this.loadLeads();
+      },
+      error: (err) => {
+        this.savingRate.set(false);
+        this.rateError.set(err?.error?.message ?? 'Could not set that rate.');
+      },
+    });
+  }
+
+  protected readonly agreeingId = signal<string | null>(null);
+  protected agreeNote = '';
+
+  protected startAgreement(providerId: string) {
+    this.agreeNote = '';
+    this.error.set(null);
+    this.agreeingId.set(providerId);
+  }
+
+  /**
+   * Record that a contractor agreed to pay for leads.
+   *
+   * ⚠️ Typed in, not a one-tap toggle. They have no account to agree in, so
+   * the note is the only evidence the conversation happened — and the API
+   * refuses anything under ten characters for the same reason the closure
+   * reason does. Charging somebody for leads they never agreed to receive is
+   * not defensible, and nothing is counted as billable without this.
+   */
+  protected saveAgreement(providerId: string) {
+    const note = this.agreeNote.trim();
+    if (note.length < 10) {
+      this.error.set('Record how they agreed — it is the only evidence, because they have no account to agree in.');
+      return;
+    }
+    this.busy.set(providerId);
+    this.error.set(null);
+    this.directory.recordLeadFeesAgreed(providerId, note).subscribe({
+      next: () => {
+        this.busy.set(null);
+        this.agreeingId.set(null);
+        this.agreeNote = '';
+        this.loadLeads();
+      },
+      error: (err) => {
+        this.busy.set(null);
+        this.error.set(err?.error?.message ?? 'Could not record that.');
+      },
+    });
+  }
+
   protected checkRows(p: ServiceProvider) {
     return [
       { key: 'phoneConfirmedAt' as const, label: 'Rang the number and reached them', on: p.phoneConfirmedAt },

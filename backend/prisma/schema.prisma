@@ -209,6 +209,8 @@ model User {
   /// accounts this admin ended.
   accountClosure    AccountClosure?  @relation("ClosedAccount")
   closuresPerformed AccountClosure[] @relation("ClosuresByAdmin")
+  /// Phase 7k. Contractor numbers this landlord was handed. Nulled on closure.
+  contractorLeads ContractorLead[] @relation("ContractorLeads")
 }
 
 model LandlordProfile {
@@ -2270,6 +2272,32 @@ model ServiceProvider {
   lastCheckedAt   DateTime?
   checkedByAdminId String?
 
+  // ── Lead fees — Phase 7k ────────────────────────────────────────────────
+  //
+  // ⚠️ A contractor is NOT a user. No userId, no email, no password — a name,
+  // a phone number and the areas they cover. They cannot sign in, cannot see a
+  // bill, cannot accept terms and cannot dispute a charge inside this product.
+  //
+  // That decides the whole architecture: the platform can keep the RECORD of
+  // leads it sent and what they would come to at the agreed rate, and it
+  // cannot bill anybody. Collecting would need contractor accounts first — a
+  // portal, terms acceptance, a bill they can read and a way to disagree with
+  // it — which is a product, not a column.
+
+  /// When this person agreed to pay for leads, recorded by an admin.
+  ///
+  /// ⚠️ Nothing is counted as billable without it. Charging somebody for leads
+  /// they never agreed to receive is not defensible, and they cannot agree
+  /// in-product because they have no account — so an admin records that the
+  /// conversation happened, the way the closure reason records a request.
+  leadFeesAgreedAt DateTime?
+
+  /// What the agreement was, in the admin's words — "agreed R35 a lead on the
+  /// phone, 2 Oct". Free text about the AGREEMENT, never about the person.
+  leadFeesNote String?
+
+  leads ContractorLead[]
+
   /// See the note above. Nothing reads this yet.
   sponsoredUntil DateTime?
 
@@ -2337,6 +2365,125 @@ model AccountClosure {
   @@index([closedByAdminId])
   @@index([createdAt])
   @@map("account_closures")
+}
+
+/// What a lead costs, as data rather than as a number in the code — Phase 7k.
+///
+/// ── Why there is no default anywhere
+///
+/// The brief said: do not implement arbitrary pricing assumptions, identify
+/// where pricing should be configurable. This table IS that answer. There is no
+/// price in the source, no fallback, no environment variable holding "3500".
+/// Until somebody inserts a rate, leads are recorded with no fee and marked not
+/// billable — the product counts what it sent and declines to put a number on
+/// it, which is the honest state of a price nobody has decided.
+///
+/// ── Per category, because a plumber call-out is not a cleaner call-out
+///
+/// And effective-dated rather than mutable, so changing the price next month
+/// cannot re-bill last month. A lead snapshots the rate it was created under;
+/// this table is the history of what was agreed, not a single current value.
+model ContractorLeadRate {
+  id String @id @default(uuid())
+
+  category ServiceCategory
+
+  /// Cents, like every other amount in this schema. Cents only crosses the
+  /// wire and the database; rand is a display concern.
+  amountCents Int
+
+  /// From when this rate applies. Rates are never edited — a new row supersedes
+  /// an older one, and the old one stays because leads point at it.
+  effectiveFrom DateTime
+
+  /// Why this number, in the admin's words.
+  note String?
+
+  setByAdminId String?
+
+  createdAt DateTime @default(now())
+
+  leads ContractorLead[]
+
+  @@index([category, effectiveFrom])
+  @@map("contractor_lead_rates")
+}
+
+/// A landlord was handed this contractor's number — Phase 7k.
+///
+/// ── What a lead is here, and what it is not
+///
+/// It is a record that we passed a number on. It is NOT a job, not a booking
+/// and not a payment: the product's job still ends at the number, and whatever
+/// the landlord and the tradesperson agree is between them.
+///
+/// ── Deduplicated per landlord per day
+///
+/// A landlord tapping "call" five times while the plumber's phone rings is one
+/// lead, not five. The unique index is (provider, landlord, day) — Prisma
+/// cannot express an index over an expression, so the day is stored as its own
+/// column rather than derived from createdAt.
+///
+/// ── The landlord's identity, and why it is here
+///
+/// `room_view_days` stores a count and no viewer identity, deliberately, because
+/// a count was all anybody needed. Here identity is load-bearing twice over:
+/// deduplication needs to know same-landlord-or-different, and a contractor
+/// disputing "you billed me for twelve leads" can only be answered from rows
+/// that distinguish twelve landlords from one landlord twelve times.
+///
+/// It is never disclosed to the contractor — who has no account to see it in —
+/// and it is nulled when the landlord closes their account: the lead is a
+/// record involving a third party and stays, the person does not.
+///
+/// ── The fee is snapshotted
+///
+/// `feeCents` is copied from the rate in force when the lead was recorded, and
+/// `rateId` says which. A price change next month must not silently re-price
+/// what was already sent.
+model ContractorLead {
+  id String @id @default(uuid())
+
+  providerId String
+  provider   ServiceProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  /// Null once that landlord has closed their account. The lead survives; the
+  /// person does not.
+  landlordId String?
+  landlord   User?   @relation("ContractorLeads", fields: [landlordId], references: [id], onDelete: SetNull)
+
+  /// Which button the landlord pressed. Worth distinguishing: a WhatsApp tap
+  /// and a phone call are different kinds of contact and a contractor who
+  /// answers neither is a different problem from one nobody tried.
+  channel ContractorLeadChannel
+
+  /// The calendar day, for the dedupe index. UTC midnight.
+  leadDay DateTime @db.Date
+
+  /// Copied from the rate in force at the time, or null when no rate was
+  /// configured for this category. Null means "we counted it and will not put a
+  /// number on it", which is the honest state when no price has been agreed.
+  feeCents Int?
+
+  rateId String?
+  rate   ContractorLeadRate? @relation(fields: [rateId], references: [id], onDelete: SetNull)
+
+  /// False unless the provider had agreed to lead fees AND a rate existed.
+  /// Stored rather than derived, because the answer must not change later when
+  /// somebody agrees terms or sets a price.
+  billable Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@unique([providerId, landlordId, leadDay])
+  @@index([providerId, createdAt])
+  @@index([billable, createdAt])
+  @@map("contractor_leads")
+}
+
+enum ContractorLeadChannel {
+  call
+  whatsapp
 }
 
 /// A file that must be removed from ImageKit, kept until it actually is.

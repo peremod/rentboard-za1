@@ -1968,6 +1968,123 @@ than excusing anything that is not one.
 | `sponsoredUntil` still exists and still nothing reads it. A paid placement in a list captioned "names we looked into" now has a sharper problem than before: a sponsored name needs a label saying so | Low now, a decision before any money |
 
 
+### 5.29 Contractor lead fees — ✅ recorded, 💰 not collected, in v1.96.0 (Phase 7k)
+
+The brief said: *"Before implementing payments, inspect the existing
+contractor, lead, and user data models and determine the cleanest
+architecture"*, and *"do not implement arbitrary pricing assumptions; identify
+where pricing should be configurable."*
+
+Inspecting them answered the first question outright.
+
+### 💰 What the models say, and why nothing collects
+
+| | Finding |
+|---|---|
+| **A contractor is not a user** | `ServiceProvider` has no `userId` and no email. A name, a phone number, the areas they cover. They cannot sign in, cannot see a bill, cannot accept terms and cannot dispute a charge |
+| **There was no lead model at all** | Nothing recorded that a number had been passed on, so there was nothing to bill for either |
+| **PayFast exists, for one-off charges** | It takes a verification fee from a landlord who is signed in. Billing an accumulating balance to somebody with no account is a different arrangement entirely |
+
+So the honest scope is the **record**: what we passed on, to whom, on what day,
+and what it comes to at a rate somebody agreed. Invoicing happens outside the
+product, by a person, from those figures.
+
+**Collecting inside the product would need contractor accounts first** — a
+portal, terms acceptance, a bill they can read and a way to disagree with it.
+That is a product, not a column, and it is the owner's decision. Nothing here
+takes money, and the drives assert that: no `paid`, `invoiced` or `settled`
+column on a lead, and no `pay`, `invoice`, `checkout` or `charge` route under
+the services module. If somebody adds one, those checks fail and they have to
+come and change a check whose comment says why it exists.
+
+⚠️ **This does not touch "free to list, free to apply."** The money would come
+from a contractor receiving leads — a third party — never from a landlord
+listing a room or a tenant applying for one.
+
+### There is no price anywhere in the code
+
+Not a constant, not a default, not an environment variable, not an example in
+the API docs, not a placeholder in the form. `contractor_lead_rates` ships
+**empty**, and with no rate configured a lead is recorded with `feeCents` null
+and `billable` false — the product counts what it sent and declines to put a
+figure on it, which is the honest state of a price nobody has decided. The
+admin screen says exactly that rather than showing R0.00.
+
+| Decision | Why |
+|---|---|
+| Rates per category, effective-dated, **insert-only** | A plumber call-out is not a cleaner call-out. A new row supersedes an older one and the old one stays, because leads point at the rate they were created under: editing would re-price history, deleting would leave a lead claiming a figure from nowhere |
+| The fee is **snapshotted** on the lead | Tripling the rate next month must not re-price what was already sent, and a rate dated next month is deliberately not in force yet |
+| `billable` is **stored**, not derived | Somebody agreeing terms in November must not make October's leads billable retrospectively. Driven: the lead sent before the agreement stays unbillable |
+| Nothing is billable without **agreement AND a rate** | Charging somebody for leads they never agreed to receive is not defensible — and they cannot agree in-product, so an admin records how they agreed, in at least ten characters, the way the closure reason records a request |
+| One lead per landlord per **day** | A landlord tapping Call five times while the phone rings is one introduction. Enforced by a unique index rather than read-then-write, because two taps in the same second would both see nothing and both insert |
+| Only a **listed** provider generates a lead | A landlord cannot see an unlisted one, so billing for an introduction the directory was not making is indefensible |
+| Priced and counted-only are reported **separately** | "We sent you eleven and are charging for four" is the honest sentence. One total hides which |
+| The disclaimer is in the **payload** | Not only on the screen. A report, an export or a second admin surface reads it before it reads a number, so nothing built on top can mistake the figure for an amount owed on an invoice that exists. The UI drive asserts the screen's wording is byte-identical to the server's |
+
+### The landlord is told, and never charged
+
+Pressing Call records that we passed the number on. A landlord who found that
+out some other way would be right to feel something had been done behind their
+back, and POPIA s.18 requires telling them what is collected and why in any
+case. So the page says it in those words — including **"You are never
+charged"** and that we do not tell the tradesperson which landlord it was.
+
+The handler is **fire-and-forget**: the dialler must open whether or not the
+bookkeeping write succeeds. A failed lead record must never stand between
+somebody with a burst pipe and a plumber, and the drive checks the `tel:` link
+is untouched.
+
+### POPIA, and the one place identity is load-bearing
+
+`room_view_days` stores a count and no viewer identity, deliberately. Here the
+landlord's id is kept, and the reason is stated in the migration: deduplication
+needs same-landlord-or-different, and a contractor disputing "you billed me for
+twelve leads" can only be answered from rows that tell twelve landlords apart
+from one landlord twelve times. It is never disclosed to the contractor — who
+has no account to see it in — and **it is nulled when the landlord closes their
+account**: the lead is a record involving a third party and stays, the person
+does not. That is asserted in the account-lifecycle drive, both halves, because
+a check that only asserted the row survived would pass with the person still
+named in it.
+
+### What the drives prove
+
+`scripts/contractor-leads-drive.mjs` — 33 checks.
+`scripts/contractor-leads-ui-drive.mjs` — 43 checks at four widths.
+
+Falsified by inventing a default price and by folding the two lead counts into
+one: **4 failures**, naming the invented fee, a lead billable against somebody
+who never agreed, an earlier lead made billable retrospectively, and the total
+that hid the split.
+
+⚠️ **Three faults in my own drives, each of which reported something false:**
+
+- **The drive was not idempotent.** Rates are insert-only by design, so the
+  first run passed on an empty table and the second read back the rate the
+  first had set — "a lead is priced at the rate" failed with the fee from the
+  previous run. A drive that only passes on a clean database is one somebody
+  eventually fixes by weakening the assertion.
+- **The UI drive clicked the first provider on the page** and counted leads for
+  its own fixture, in a directory holding every provider the other drives had
+  created. It reported "pressing Call took the count from 0 to 0" while the
+  product was recording a lead correctly, against the contractor it was
+  actually told about.
+- **It cleared only the plumber rates** while asserting the "no lead fee has
+  been set" panel, which is a statement about the whole table. The locksmith
+  rates left behind by the other drive kept the panel hidden, and the check
+  reported the screen as silent about a state the fixture had never created.
+
+### Gaps
+
+| Gap | Severity |
+|---|---|
+| 💰 **Nothing collects.** Invoicing is a person reading the admin screen and sending an invoice from outside the product. That is the deliberate stopping point, and it is the main thing waiting on a decision | By design — see Outstanding §16 |
+| A contractor cannot see what they are being billed for, because they have no account. A bill they cannot verify is a bill they can reasonably refuse | Medium — the same decision as above |
+| Nothing records whether a lead turned into work. A referral fee per *introduction* is what this bills; per *job* would need the contractor to tell us, which needs an account | Medium, and a pricing-model question before a code one |
+| A landlord cannot opt out of their taps being recorded, short of not pressing the button. The page says what happens; it does not offer a switch | Low — the record carries no identity to the contractor |
+| `sponsoredUntil` still exists and still nothing reads it. In a list captioned "names we looked into", a paid placement needs a label saying so | Low now, a decision before any money |
+
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

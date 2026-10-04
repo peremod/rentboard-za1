@@ -1185,11 +1185,47 @@ check "a landlord CANNOT add a tradesperson" 403 "$STATUS" "$BODY"
 req POST /api/services/admin '{"category":"plumber","name":"Unauthenticated","phone":"082 000 0000","areas":["Tembisa"]}'
 check "adding a tradesperson requires auth" 401 "$STATUS"
 
+# ── Contractor lead fees (Phase 7k) ───────────────────────────────────────
+# ⚠️ NOTHING in this product collects money from a contractor, and these checks
+# are how that stays true. A contractor is not a user — no userId, no email — so
+# they cannot sign in, see a bill, accept terms or dispute a charge. The product
+# keeps the record; invoicing happens outside it, by a person.
+#
+# The guards need no admin token, deliberately.
+req POST "/api/services/$ROOM_ID/lead" '{"channel":"call"}'
+check "recording a lead requires a session" 401 "$STATUS"
+
+req GET /api/services/admin/leads "" "$LTOKEN"
+check "a landlord CANNOT read the lead summary" 403 "$STATUS" "$BODY"
+
+req POST /api/services/admin/lead-rates '{"category":"plumber","amountCents":100,"effectiveFrom":"2026-01-01T00:00:00.000Z"}' "$LTOKEN"
+check "a landlord CANNOT set a lead fee" 403 "$STATUS" "$BODY"
+
+# There is no route anywhere that takes a payment for leads. If somebody adds
+# one, these fail and they have to come and change a check that says why.
+for leadroute in pay invoice checkout charge; do
+  req POST "/api/services/admin/leads/$leadroute" '{}' "$LTOKEN"
+  check "there is no /services/admin/leads/$leadroute route" 404 "$STATUS"
+done
+
 if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req POST /api/services/admin '{"category":"plumber","name":"Smoke Unchecked","phone":"082 111 2222","areas":["Tembisa"],"active":true}' "$ADMIN_TOKEN"
   check "a provider cannot be listed before the number is rung" 400 "$STATUS" "$BODY"
+
+  req GET /api/services/admin/leads "" "$ADMIN_TOKEN"
+  check "an admin can read what the leads come to" 200 "$STATUS" "$BODY"
+  # The disclaimer is in the PAYLOAD, so an export cannot drift from the screen.
+  if echo "$BODY" | jq -e '.disclaimer | test("has been invoiced or paid"; "i")' >/dev/null 2>&1; then
+    green "  PASS  the summary says in its own payload that nothing was invoiced or paid"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the lead summary carries no disclaimer — an export could read the figure as an amount owed"; FAIL=$((FAIL+1))
+    grey "        $(echo "$BODY" | head -c 300)"
+  fi
+
+  req POST /api/services/admin/lead-rates '{"category":"plumber","amountCents":-500,"effectiveFrom":"2026-01-01T00:00:00.000Z"}' "$ADMIN_TOKEN"
+  check "a negative lead fee is refused — that is a mistake, not a price" 400 "$STATUS" "$BODY"
 else
-  skipped "the publish rule on the admin route — set ADMIN_TOKEN to include it"
+  skipped "the publish rule and the lead summary — set ADMIN_TOKEN to include them"
 fi
 
 # -- 18. Safety reports ----------------------------------------------------
