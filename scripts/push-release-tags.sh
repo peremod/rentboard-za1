@@ -620,6 +620,41 @@ prevent.
 skipped for want of a credential. And the admin screens were accessibility
 audited for the first time: 17 portal pages to 27."
 
+tag_if_missing "v1.95.0" "9bfb506caa3e2a74bef0a1fae3d241593746a210" "2026-10-04 17:06:27 +0000" "v1.95.0 — Phase 7j: making the directory's trust claim true
+
+The Who to Call page opened with \"People we have checked out and can pass on\",
+and its empty state read \"It is names we have checked, not an open directory\".
+ServiceProvider had no column, no table and no outcome recording that anybody
+had checked anything. Same family as a documentDeletedAt that deleted nothing,
+except this one faced the user and asked them to rely on it — on the axis this
+product competes on, in the moment a landlord decides whether to let a stranger
+into their tenant's room.
+
+Three named, dated outcomes now: we rang this number and reached them, we saw
+an identity document, we spoke to a landlord they have worked for. Plus a trade
+registration shown verbatim, with the caveat that we pass it on as given — a
+landlord checking it with PIRB themselves is the only thing that makes it worth
+storing. The screen lists which checks exist, so one check and three checks no
+longer read alike.
+
+Dates rather than booleans, because a check has a date or it is a rumour, and
+the admin supplies the date: a call made on Tuesday and recorded on Thursday is
+a Tuesday check.
+
+Nobody is listed until the number has been rung, enforced in the service and as
+a CHECK constraint, and evaluated against what the row will be rather than
+against the request. Only outcomes persist — no document is ever stored, the
+rule verification_requests already follows.
+
+The migration un-publishes every live provider, which is the honest migration
+rather than the convenient one: none of them had a recorded check.
+
+22 + 41 drive checks. The UI drive clears a stored outcome and reads the screen
+again, because if the lines were decoration nothing would change. Falsified by
+disabling the guard, dropping the constraint and leaking the admin id: seven
+failures, including \"2 live providers have no phone check — the claim on the
+screen is false for them\"."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -627,7 +662,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-4])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-5])[.]'"
 else
   echo "Nothing to push."
 fi
