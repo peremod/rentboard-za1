@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { ActivatedRoute, NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { PortalShell, PortalNavItem } from '../portal-shell/portal-shell';
+import { Walkthrough } from '../walkthrough/walkthrough';
 import { AuthService } from '../../../core/services/auth.service';
 import { PortalBadgesService } from '../../../core/services/portal-badges';
 import { landlordNav } from '../../../features/landlord/landlord-nav';
@@ -47,7 +48,7 @@ import { ADMIN_NAV } from '../../../features/admin/admin-nav';
 @Component({
   selector: 'app-portal-layout',
   standalone: true,
-  imports: [PortalShell, RouterOutlet],
+  imports: [PortalShell, RouterOutlet, Walkthrough],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-portal-shell [navItems]="navItems()" [roleLabel]="roleLabel()"
@@ -55,6 +56,12 @@ import { ADMIN_NAV } from '../../../features/admin/admin-nav';
                       [avatarColour]="avatarColour()">
       <router-outlet/>
     </app-portal-shell>
+
+    <!-- The first-run walkthrough — Phase 7f. Here rather than in each screen
+         for the same reason the sidebar is: one place, so a new portal screen
+         cannot ship without it. It renders nothing for an account that has
+         already been shown round, which is most of them most of the time. -->
+    <app-walkthrough/>
   `,
 })
 export class PortalLayout implements OnInit {

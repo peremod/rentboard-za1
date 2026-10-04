@@ -13,6 +13,15 @@ export interface User {
   avatarPath?: string | null;
   isVerified: boolean;
   createdAt?: string;
+  /**
+   * When this account was last shown round the product — Phase 7f.
+   *
+   * Null or absent means never, which is what the portal checks. Server-side
+   * rather than in the browser: a phone here is shared and replaced, so a
+   * per-browser flag shows the walkthrough to people who have seen it and
+   * hides it from people who have not.
+   */
+  walkthroughSeenAt?: string | null;
 }
 
 export interface AuthResponse {

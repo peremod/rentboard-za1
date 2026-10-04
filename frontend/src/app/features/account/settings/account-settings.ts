@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject, signal, effect } from '@angular/core';
 import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { WalkthroughService } from '../../../core/services/walkthrough.service';
 
 /**
  * Account settings, shared by landlords and tenants — the needs are identical,
@@ -12,7 +14,7 @@ import { AuthService } from '../../../core/services/auth.service';
 @Component({
   selector: 'app-account-settings',
   standalone: true,
-  imports: [FormsModule, ReactiveFormsModule],
+  imports: [FormsModule, ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -145,14 +147,61 @@ import { AuthService } from '../../../core/services/auth.service';
           </button>
         </form>
       </section>
+
+      <!-- The way back to the walkthrough — Phase 7f.
+           The brief asks for a way to reach it again, and clearing the stamp IS
+           that way: the portal shows the tour whenever the stamp is null, so
+           one record serves the first visit and the fifth. A separate "replay"
+           screen would be a second path to the same thing with its own state
+           to get wrong. -->
+      <section class="dash-section">
+        <h2 class="dash-section-title">Show me around again</h2>
+        <p class="muted settings-hint">
+          The short tour of what Mastande does. It appears once when you first
+          sign in; this brings it back on your next screen.
+        </p>
+        @if (tourReset()) {
+          <p class="muted" role="status">
+            Done — it will open on your next screen.
+            <a routerLink="/account/notices">Go there now</a>
+          </p>
+        } @else {
+          <button type="button" class="btn btn-outline"
+                  [disabled]="resettingTour()" (click)="replayTour()">
+            {{ resettingTour() ? 'Just a moment…' : 'Show me around again' }}
+          </button>
+        }
+        @if (tourError()) { <p class="field-error" role="alert">{{ tourError() }}</p> }
+      </section>
   `,
   styles: [`
     .settings-form { max-width: 26rem; }
+    .settings-hint { max-width: 32rem; line-height: 1.6; }
   `],
 })
 export class AccountSettings {
   private fb = inject(FormBuilder);
   auth = inject(AuthService);
+  private walkthrough = inject(WalkthroughService);
+
+  // ── "Show me around again" — Phase 7f ──────────────────────────────────
+  protected readonly resettingTour = signal(false);
+  protected readonly tourReset = signal(false);
+  protected readonly tourError = signal<string | null>(null);
+
+  protected replayTour() {
+    this.resettingTour.set(true);
+    this.tourError.set(null);
+    this.walkthrough.replay().subscribe({
+      next: () => { this.resettingTour.set(false); this.tourReset.set(true); },
+      error: (err) => {
+        this.resettingTour.set(false);
+        // Said out loud, with the data intact. A button that silently does
+        // nothing is the defect item 21 of this brief is about.
+        this.tourError.set(err?.error?.message ?? 'That did not work just now. Try again in a moment.');
+      },
+    });
+  }
 
   /**
    * The sidebar follows the account's own area. An admin editing their profile

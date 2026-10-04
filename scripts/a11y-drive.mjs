@@ -688,6 +688,24 @@ if (!apiReachable) {
     accounts.LANDLORD = await registerUser(API, 'LANDLORD', stamp);
     accounts.TENANT = await registerUser(API, 'TENANT', stamp);
 
+    /**
+     * ⚠️ Both accounts are marked as already shown round — Phase 7f.
+     *
+     * The first-run walkthrough is a full-screen sheet on a phone and a modal
+     * above the page on a desktop. Without this, every portal page in this
+     * drive would be audited with that sheet over it: the heading order would
+     * be the modal's, the contrast measured would be the modal's, and the
+     * screen underneath would go unchecked while the run reported green.
+     *
+     * It passed anyway today, for a reason that is luck rather than design —
+     * the cookie notice holds the walkthrough back and this drive never
+     * dismisses it. If that sequencing ever changes, this drive would quietly
+     * start auditing a modal. Stated, so it cannot.
+     */
+    for (const user of [accounts.LANDLORD, accounts.TENANT]) {
+      await apiCall(API, 'POST', '/api/users/me/walkthrough-seen', {}, user.token);
+    }
+
     const prop = await apiCall(API, 'POST', '/api/properties', {
       name: 'Ext 7 back rooms', suburb: 'Tembisa', city: 'Johannesburg', province: 'Gauteng',
     }, accounts.LANDLORD.token);

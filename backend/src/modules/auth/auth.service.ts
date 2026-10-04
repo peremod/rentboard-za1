@@ -39,6 +39,8 @@ export interface AuthResponse {
     phone?: string | null;
     phoneVerified?: boolean;
     marketingEmails?: boolean;
+    /** Null means this account has never been shown round — Phase 7f. */
+    walkthroughSeenAt?: Date | null;
   };
 }
 
@@ -235,6 +237,7 @@ export class AuthService {
               phone: replacement.user.phone,
               phoneVerified: replacement.user.phoneVerified,
               marketingEmails: replacement.user.marketingEmails,
+              walkthroughSeenAt: replacement.user.walkthroughSeenAt ?? null,
             },
           };
         }
@@ -287,6 +290,11 @@ export class AuthService {
         // empty phone field after every reload — the value had saved, but the
         // form had no way to read it back and it looked lost.
         phone: true, phoneVerified: true, marketingEmails: true,
+        // Phase 7f. On the payload rather than behind its own request, so the
+        // portal knows on the FIRST paint whether to show the walkthrough —
+        // a second round trip would mean it appears a beat after the dashboard,
+        // which reads as a glitch rather than a welcome.
+        walkthroughSeenAt: true,
       },
     });
   }
@@ -313,6 +321,9 @@ export class AuthService {
         phone: user.phone,
         phoneVerified: user.phoneVerified,
         marketingEmails: user.marketingEmails,
+        // Phase 7f. Null means this account has never been shown round, which
+        // is what a brand-new one wants to say on the very first paint.
+        walkthroughSeenAt: user.walkthroughSeenAt ?? null,
       },
     };
   }

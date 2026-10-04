@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
+import { CookieNoticeService, COOKIE_CONSENT_KEY as CONSENT_KEY } from '../../../core/services/cookie-notice';
 import { RouterLink } from '@angular/router';
 
 /** Stored acknowledgement. There are no optional categories to record. */
@@ -10,7 +11,6 @@ interface CookieAcknowledgement {
 
 // v2 deliberately re-shows the notice to anyone who saw the old consent
 // banner: what it told them was wrong.
-const CONSENT_KEY = 'rb_cookie_notice_v2';
 
 /**
  * Cookie notice.
@@ -66,12 +66,19 @@ const CONSENT_KEY = 'rb_cookie_notice_v2';
   `],
 })
 export class CookieConsentBanner implements OnInit {
-  showBanner = signal(false);
+  /**
+   * The signal moved to CookieNoticeService in Phase 7f.
+   *
+   * Not for tidiness: the walkthrough has to know whether this notice is still
+   * up, because both are fixed to the bottom of the screen and this one is at
+   * z-index 9999. A component signal cannot be read from a service, so every
+   * new account got the notice drawn over the tour's buttons.
+   */
+  protected notice = inject(CookieNoticeService);
+  protected readonly showBanner = this.notice.pending;
 
   ngOnInit() {
-    // Only in the browser: localStorage does not exist during prerender.
-    if (typeof localStorage === 'undefined') return;
-    this.showBanner.set(!localStorage.getItem(CONSENT_KEY));
+    this.notice.check();
   }
 
   /**
@@ -92,7 +99,13 @@ export class CookieConsentBanner implements OnInit {
       version: 2,
       timestamp: new Date().toISOString(),
     };
-    localStorage.setItem(CONSENT_KEY, JSON.stringify(record));
-    this.showBanner.set(false);
+    try {
+      localStorage.setItem(CONSENT_KEY, JSON.stringify(record));
+    } catch {
+      // Blocked site data. The notice still goes away for this visit — holding
+      // it up because we could not write a record would punish the person for
+      // their own browser setting.
+    }
+    this.notice.acknowledged();
   }
 }

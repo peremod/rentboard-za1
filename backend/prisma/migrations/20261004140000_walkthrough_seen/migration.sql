@@ -1,0 +1,20 @@
+-- Phase 7f: whether this account has been shown round the product once.
+--
+-- One nullable timestamp, and the shape is the decision.
+--
+-- The obvious implementation is localStorage, and it is wrong here twice over.
+-- A phone in this market is shared, replaced and borrowed, so a per-browser
+-- flag means the walkthrough returns to somebody who has already seen it and
+-- never reaches the person who has not. And the app renders on the server:
+-- localStorage cannot be read there, so the first paint would either flash the
+-- walkthrough at everybody or flash it at nobody.
+--
+-- A timestamp rather than a boolean because it answers the question a boolean
+-- cannot — WHEN — which is what tells us later whether people who were shown
+-- round in March behave differently from those shown round in October. Nothing
+-- reads it that way yet; it costs nothing to be able to.
+--
+-- Nullable, with no backfill: every existing account correctly reads as "not
+-- shown round", which they have not been. The alternative — stamping them all
+-- as seen — would hide a new feature from exactly the people already here.
+ALTER TABLE "users" ADD COLUMN "walkthroughSeenAt" TIMESTAMP(3);
