@@ -496,6 +496,48 @@ Verified: 517 smoke checks, 35 new drive checks, 26 accessibility pages, nav,
 route and env-parity audits clean, production build green, 123.7 KB under
 budget. Both headline defects reintroduced to confirm the drive fails on them."
 
+tag_if_missing "v1.92.0" "f1fe47bf9c931a9e8b5a99348fc9ee3e539c8908" "2026-10-04 14:51:15 +0000" "v1.92.0 — Phase 7g: pausing an account, and ending one
+
+DELETE FROM users looks like the implementation. The foreign keys say otherwise,
+and they were read out of postgres before anything was designed: a user row
+cascades into their rooms and so into other tenants' applications, saved rooms
+and reviews; into applications and so into messages, meaning both sides of every
+conversation; into tenancies and so into rent_periods, which is the tenant's own
+proof of payment; and into reviews they wrote about somebody else.
+
+A landlord closing their account would have erased their tenant's application,
+the tenant's rent history and the landlord's half of their conversation. POPIA
+s.24 is a right to have YOUR personal information deleted, not somebody else's,
+and not a right to destroy a record two parties share. So the row stays as a
+tombstone and the person goes: name, email, phone, photo, password hash,
+verification outcomes, notices and sessions, with the avatar leaving through the
+file_deletions queue rather than merely being unlinked.
+
+Pausing does not reuse isActive. That flag is the admin suspension, refused on
+every sign-in path, so reusing it would have shipped an account nobody could
+reopen. Because isActive stays true while paused, one shared PUBLIC_USER rule
+now covers the storefront, the sitemap, the OTP paths and the listing bot — a
+pause that leaves the shop window on is not a pause.
+
+A wrong password used to log you out, and not only on the new screen. The
+step-up checks answered 401, which the frontend reads as an expired token: it
+refreshed, retried with the same wrong password and then said the session had
+expired. That had been true of /account/settings since it shipped, where both
+forms carry an inline error written for a message that could never render. 403
+now, with an INLINE_ERRORS context token so the form reports it once.
+
+The smoke suite had a check there and it could not fail: 401 for a wrong
+password and 401 for no auth at all were the same assertion twice.
+
+And a 34px button on a screen built this phase, because the base .btn has no
+min-height. Fixed here; the app-wide measurement is in Outstanding 13, and the
+previous version of the drive had computed that height and never asserted it.
+
+48 API checks, falsified by replacing the tombstone with a real delete, which
+failed 14 of them naming every piece of cascade damage. 51 UI checks across
+360/390/768/1280, falsified by restoring the 401, which failed 7 and named both
+screens. 13 new smoke checks; 453 passed."
+
 echo
 echo "Created $created tag(s), skipped $skipped."
 if [ "$created" -gt 0 ]; then
@@ -503,7 +545,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[01])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-2])[.]'"
 else
   echo "Nothing to push."
 fi
