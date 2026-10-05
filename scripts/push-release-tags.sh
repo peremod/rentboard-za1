@@ -1131,6 +1131,51 @@ document should look like.
 
 45 drive checks at four widths. 596 smoke checks passed, 0 failed."
 
+tag_if_missing "v1.104.0" "cc165352a3f01ee1c2ce8478e45435fb4c1ab901" "2026-10-05 11:40:01 +0000" "v1.104.0 — the preflight passed on production, the migration went to localhost
+
+Production was 15 migrations behind and down on P2022 rooms.listerType. The
+preflight was run against it and was right about everything. The next command
+was the one the preflight's own closing line printed:
+
+  DATABASE_URL='<production>' node scripts/migration-preflight.mjs   # production
+  cd backend && npx prisma migrate deploy                            # localhost
+
+Twelve migrations went to localhost:5432/rentboard_dev, the output read 'All
+migrations have been successfully applied.', both commands exited 0, and the
+same P2022 was in the production log minutes later.
+
+Neither output was wrong. Each described the database it reached, and nothing
+compared them.
+
+Two causes, both already documented in this repository. An inline VAR=value
+prefix applies to that one command and does not carry across &&. And prisma
+migrate connects through directUrl, not url: schema.prisma declares
+directUrl = env(DIRECT_URL), so exporting only DATABASE_URL leaves DIRECT_URL
+resolving from backend/.env, and the run goes local with the production URL
+sitting in the environment.
+
+scripts/migrate-remote.sh already refused every part of this, and its header
+comment describes the staging version of the same mistake. OUTSTANDING section
+5 told the operator to call prisma directly. The control was not missing or
+broken; it was routed around by the document telling somebody what to run.
+
+A new section 0 reports the connection migrate deploy will actually use, and
+blocks when DIRECT_URL is unset, naming the host backend/.env would have sent
+the migration to instead.
+
+Three more defects, all legible in output already read: a count that did not add
+up (29 applied, 15 pending, of 34), a warning that fired on zero contractors,
+and ?schema=public making the script unrunnable against development or staging.
+
+And the replica the original was validated against had been built by deleting
+migration rows without dropping the objects those migrations create, so the
+rehearsal on it died on an error production cannot produce. The faithful one
+applies production's own 19 migrations to an empty database; all 15 then applied
+with every post-state assertion verified, and each check falsified.
+
+Production is still down. The migration needs a credential this environment
+does not hold and cannot reach."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1146,7 +1191,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-3][.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-4][.]'"
 else
   echo "Nothing to push."
 fi
