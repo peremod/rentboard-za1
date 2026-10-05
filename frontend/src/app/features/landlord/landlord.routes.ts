@@ -3,6 +3,34 @@ import { Routes } from '@angular/router';
 /** Landlord portal — guarded by [authGuard, landlordGuard] at the parent route in app.routes.ts. */
 export const LANDLORD_ROUTES: Routes = [
   {
+    /**
+     * Forms and templates, inside the portal — Phase 8a shipped these as a
+     * public route only, and the landlord nav pointed straight at it.
+     *
+     * ⚠️ A landlord who tapped "Forms and templates" left the portal. The
+     * public page has the site navbar and footer and no portal sidebar, so
+     * there was no way back to the dashboard, the applicants or anything else
+     * except the browser's back button. On a phone that reads as the app having
+     * dropped them on a different website.
+     *
+     * The components are reused rather than copied, exactly as the yard screen
+     * is reused for properties/:id — a second copy is the one that misses the
+     * next fix. `/templates` stays public and indexable, because somebody
+     * searching for a South African lease template is a landlord with rooms and
+     * no tools, which is the whole reason it is public.
+     */
+    path: 'templates',
+    loadComponent: () => import('../templates/templates-list').then((m) => m.TemplatesList),
+    data: { pageTitle: 'Forms and templates' },
+    title: 'Forms and templates — Mastande',
+  },
+  {
+    path: 'templates/:slug',
+    loadComponent: () => import('../templates/template-document').then((m) => m.TemplateDocument),
+    data: { pageTitle: 'Forms and templates' },
+    title: 'Template — Mastande',
+  },
+  {
     path: 'dashboard',
     loadComponent: () => import('./dashboard/landlord-dashboard').then((m) => m.LandlordDashboard),
     data: { pageTitle: 'Your dashboard' },

@@ -1,6 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { tap } from 'rxjs';
+import { NavigationEnd, Router } from '@angular/router';
+import { filter, take, tap } from 'rxjs';
 import { environment } from '@env/environment';
 import { AuthService } from './auth.service';
 import { CookieNoticeService } from './cookie-notice';
@@ -30,9 +31,28 @@ export class WalkthroughService {
   private api = environment.apiUrl;
   private auth = inject(AuthService);
   private cookieNotice = inject(CookieNoticeService);
+  private router = inject(Router);
 
   /** Closed in this tab, before the server has confirmed. */
   private readonly dismissed = signal(false);
+
+  /**
+   * "Show me around again" has been pressed and the tour is waiting for the
+   * next screen.
+   *
+   * ⚠️ Its own flag, because neither existing one can express this.
+   *
+   * `dismissed` cannot: a page load resets it to false, so on a freshly loaded
+   * settings page clearing the server stamp made the tour open INSTANTLY, over
+   * the button just pressed and the message explaining what would happen. And
+   * leaving `dismissed` set — which is what the code did for three releases —
+   * means `shouldShow()` returns false forever, so the button did nothing at
+   * all in-session: the tour only came back on a hard refresh.
+   *
+   * One bug was traded for the other because both were being carried on one
+   * signal. This is the missing state: armed, and not yet.
+   */
+  private readonly armedForNextScreen = signal(false);
 
   /**
    * Show it?
@@ -43,6 +63,7 @@ export class WalkthroughService {
    * avoid.
    */
   readonly shouldShow = computed(() => {
+    if (this.armedForNextScreen()) return false;
     if (this.dismissed()) return false;
     if (!this.auth.sessionResolved() || !this.auth.isAuthenticated()) return false;
     /**
@@ -71,19 +92,48 @@ export class WalkthroughService {
       .subscribe({ error: () => {} });
   }
 
-  /** "Show me around again", from account settings. */
+  /**
+   * "Show me around again", from account settings.
+   *
+   * ⚠️ This button did nothing for three releases, and the comment that used to
+   * sit here argued for the behaviour without noticing it.
+   *
+   * It cleared the server stamp and deliberately left `dismissed` set, on the
+   * reasoning that the tour would then "open on the next screen". But
+   * `shouldShow()`'s first line was `if (this.dismissed()) return false`, and
+   * nothing cleared that signal. In an Angular SPA the next screen is a route
+   * change, not a page load, so it survived every one. Anybody who had closed
+   * the tour earlier pressed the button, read that it would open on the next
+   * screen, and never saw it again without a hard refresh.
+   *
+   * Simply clearing `dismissed` is the other bug: on a freshly loaded settings
+   * page it is already false, so the tour opened instantly on top of the button
+   * — which is what the old comment was describing.
+   *
+   * `armedForNextScreen` holds the state neither signal could, and the promise
+   * is now kept literally: suppressed here, released on the first navigation to
+   * a DIFFERENT url. A same-page navigation — a query parameter, a fragment —
+   * does not count, or the tour lands back on this screen.
+   */
   replay() {
     return this.http.post<{ walkthroughSeenAt: string | null }>(
       `${this.api}/users/me/walkthrough-reset`, {},
-    ).pipe(tap((res) => this.auth.patchUser({ walkthroughSeenAt: res.walkthroughSeenAt })));
-    /**
-     * ⚠️ `dismissed` is deliberately NOT cleared here.
-     *
-     * The stamp is gone, so the tour will open on the next screen — which is
-     * what the settings page's own confirmation says. Clearing the local flag
-     * too made it open instantly, on top of the button that had just been
-     * pressed and over the message explaining what had happened. The copy
-     * promised the next screen; the code now keeps that promise.
-     */
+    ).pipe(
+      tap((res) => {
+        this.armedForNextScreen.set(true);
+        this.auth.patchUser({ walkthroughSeenAt: res.walkthroughSeenAt });
+        const from = this.router.url;
+        this.router.events
+          .pipe(
+            filter((e): e is NavigationEnd => e instanceof NavigationEnd),
+            filter((e) => e.urlAfterRedirects !== from),
+            take(1),
+          )
+          .subscribe(() => {
+            this.dismissed.set(false);
+            this.armedForNextScreen.set(false);
+          });
+      }),
+    );
   }
 }

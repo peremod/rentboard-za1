@@ -208,5 +208,56 @@ const missing = await p2.locator('body').innerText();
   : bad('an unknown slug renders something — a blank form with a print button is worse than a 404');
 await c2.close();
 
+console.log('\n── 6. Inside the portal, a landlord can get back ───────────');
+/**
+ * ⚠️ Phase 8a shipped /templates as a public route only, and pointed the
+ * landlord nav straight at it. A landlord who tapped "Forms and templates"
+ * left the portal: the public page has the site navbar and footer and no
+ * portal sidebar, so there was no way back to the dashboard, the applicants
+ * or anything else except the browser's back button. On a phone that reads as
+ * the app having dropped them on a different website.
+ *
+ * The components are now mounted twice — publicly, and at /landlord/templates
+ * inside the portal — which makes every absolute `routerLink="/templates"` in
+ * them a trapdoor back out. Those are relative now, and this section is what
+ * says so.
+ */
+{
+  const { apiCall, registerUser, signIn, PASSWORD } = await import('./lib/drive-session.mjs');
+  const API = 'http://localhost:3000';
+  const landlord = await registerUser(API, 'LANDLORD');
+  await apiCall(API, 'POST', '/api/users/me/walkthrough-seen', {}, landlord.token);
+  const page = await signIn(browser, WEB, landlord.email, PASSWORD, { width: 390, height: 900 });
+
+  await page.goto(`${WEB}/landlord/templates`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1500);
+
+  (await page.locator('.tpl-card').count()) === 4
+    ? ok('the portal copy lists all four templates')
+    : bad(`the portal list showed ${await page.locator('.tpl-card').count()} templates, not 4`);
+
+  (await page.locator('.portal-nav').count()) > 0
+    ? ok('…with the portal nav, so there is a way back to the rest of the portal')
+    : bad('the portal copy has no portal nav — the landlord is stranded again');
+
+  await page.locator('.tpl-card').first().click();
+  await page.waitForTimeout(1500);
+  page.url().includes('/landlord/templates/')
+    ? ok('…opening a template keeps them inside the portal')
+    : bad(`opening a template left the portal: ${new URL(page.url()).pathname}`);
+
+  const back = page.locator('a', { hasText: 'All templates' }).first();
+  (await back.count()) > 0
+    ? ok('…the document offers a way back to the list')
+    : bad('no "All templates" link on the document');
+  await back.click();
+  await page.waitForTimeout(1500);
+  new URL(page.url()).pathname === '/landlord/templates'
+    ? ok('…and it returns to the portal list, not the public one')
+    : bad(`"All templates" went to ${new URL(page.url()).pathname}, outside the portal`);
+
+  await page.context().close();
+}
+
 await browser.close();
 console.log(fail ? `\n❌ ${fail} failure(s)` : '\n✅ the templates print, warn, and fit on a phone');
