@@ -101,3 +101,16 @@ in this environment, say so by name rather than implying it was verified.
   minutes, counted in memory. The drives are heavy enough to exhaust it, and
   the failure reads as an auth bug. Restart the API to clear the counters.
 - Postgres may need `pg_ctlcluster 16 main start` before anything works.
+- `prisma migrate` connects through **`directUrl`**, not `url`. `schema.prisma`
+  declares `directUrl = env("DIRECT_URL")`, so exporting only `DATABASE_URL`
+  leaves `DIRECT_URL` coming from `backend/.env` — and the migration lands on
+  localhost while reporting "All migrations have been successfully applied."
+  That is how production stayed down for an extra hour on 5 October
+  (`docs/OUTSTANDING.md` § 5a). Migrate a remote database with
+  `scripts/migrate-remote.sh`, which refuses in that state, never with
+  `npx prisma migrate deploy` directly.
+- An inline `VAR=value cmd` prefix applies to **that one command**. In
+  `VAR=x node a.mjs && cmd-b`, `cmd-b` does not see `VAR`.
+- `psql` rejects the whole URI over `?schema=public` — a Prisma-only parameter —
+  with `invalid URI query parameter: "schema"`. Any script that hands a Prisma
+  connection string to `psql` has to strip it first.

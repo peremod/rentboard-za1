@@ -14,7 +14,7 @@
  *   P2022: The column `rooms.listerType` does not exist in the current database
  *
  * which is deployed code meeting a database that was never migrated to match
- * it. The repair is `prisma migrate deploy`, and running fourteen migrations
+ * it. The repair is `prisma migrate deploy`, and running fifteen migrations
  * against a live database is the moment to find out IN ADVANCE whether any of
  * them will fail halfway and leave it half-migrated — because the second half
  * of a failed migration run is a worse place to be than where it started.
@@ -49,26 +49,154 @@ const bad = (m) => { console.log('  ❌ ' + m); problems++; };
 const warn = (m) => { console.log('  ⚠️  ' + m); warnings++; };
 const ok = (m) => console.log('  ✅ ' + m);
 
-/** One line of SQL per call, as the repo's own notes insist. */
-function q(sql) {
+/**
+ * Prisma's connection string is not libpq's.
+ *
+ * ⚠️ `?schema=public` is a Prisma-only parameter and psql rejects the whole URI
+ * over it: `invalid URI query parameter: "schema"`. Since that is the form in
+ * `backend/.env`, this script could not reach development or staging AT ALL —
+ * it only ever worked against production, whose Neon URL happens to carry
+ * `sslmode` and `channel_binding`, which libpq does understand. A preflight
+ * that runs on exactly one of the three environments cannot be rehearsed
+ * anywhere before it is trusted on the one that matters.
+ *
+ * So: keep the parameters libpq knows, carry `schema` across as a search_path
+ * instead, and SAY which ones were dropped rather than dropping them quietly.
+ */
+const LIBPQ_PARAMS = new Set([
+  'application_name', 'channel_binding', 'client_encoding', 'connect_timeout',
+  'fallback_application_name', 'gssencmode', 'hostaddr', 'keepalives',
+  'keepalives_count', 'keepalives_idle', 'keepalives_interval', 'krbsrvname',
+  'load_balance_hosts', 'options', 'passfile', 'replication', 'require_auth',
+  'requirepeer', 'service', 'ssl_max_protocol_version',
+  'ssl_min_protocol_version', 'sslcert', 'sslcompression', 'sslcrl',
+  'sslcrldir', 'sslkey', 'sslmode', 'sslnegotiation', 'sslpassword',
+  'sslrootcert', 'sslsni', 'target_session_attrs', 'tcp_user_timeout',
+]);
+
+function splitConn(raw) {
+  let parsed;
   try {
-    return execSync(`psql "${URL}" -tAc ${JSON.stringify(sql)}`, {
+    parsed = new globalThis.URL(raw);
+  } catch {
+    return { psqlUrl: raw, schema: '', dropped: [], host: 'unparseable' };
+  }
+  const keep = new globalThis.URLSearchParams();
+  const lost = [];
+  let found = '';
+  for (const [k, v] of parsed.searchParams) {
+    if (LIBPQ_PARAMS.has(k)) keep.append(k, v);
+    else if (k === 'schema') found = v;
+    else lost.push(k);
+  }
+  const host = `${parsed.host}${parsed.pathname}`;
+  parsed.search = keep.toString();
+  return { psqlUrl: parsed.toString(), schema: found, dropped: lost, host };
+}
+
+const { psqlUrl, schema, dropped } = splitConn(URL);
+
+/** One line of SQL per call, as the repo's own notes insist. */
+function qOn(conn, sql) {
+  try {
+    return execSync(`psql "${conn.psqlUrl}" -tAc ${JSON.stringify(sql)}`, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: conn.schema && conn.schema !== 'public'
+        ? { ...process.env, PGOPTIONS: `-c search_path=${conn.schema}` }
+        : process.env,
     }).trim();
   } catch (e) {
     return { error: String(e.stderr ?? e.message ?? e).trim() };
   }
 }
 
+const primary = { psqlUrl, schema };
+const q = (sql) => qOn(primary, sql);
+
 console.log('\n═══ Migration preflight — READ ONLY ═══');
 console.log(`  Target: ${URL.replace(/:\/\/[^@]*@/, '://***@')}`);
+if (schema) console.log(`  Schema: ${schema}`);
+if (dropped.length) {
+  console.log(`  Note:   ignored Prisma-only parameter(s) psql rejects: ${dropped.join(', ')}`);
+}
 
 // ── Can we even reach it ────────────────────────────────────────────────
 const alive = q('SELECT 1');
 if (typeof alive === 'object') {
   console.log(`\n  ❌ Cannot reach that database:\n     ${alive.error.split('\n')[0]}`);
   process.exit(1);
+}
+
+// ── 0. The connection migrate deploy will ACTUALLY use ──────────────────
+//
+// ⚠️ This section exists because the script did not have it, and production
+// stayed down for it.
+//
+// `backend/prisma/schema.prisma` declares BOTH:
+//
+//     url       = env("DATABASE_URL")
+//     directUrl = env("DIRECT_URL")
+//
+// and `prisma migrate` connects through `directUrl`, not `url`. So a preflight
+// that reads only DATABASE_URL inspects a database the migration may never
+// touch. On the real incident the operator passed the production DATABASE_URL
+// to this script, which reported 15 pending migrations on production — then ran
+// `migrate deploy`, which took DIRECT_URL from `backend/.env` and applied twelve
+// migrations to `localhost:5432/rentboard_dev`. It printed "All migrations have
+// been successfully applied." Production never moved, and the P2022 the script
+// had just named by column was still in the logs afterwards.
+//
+// Nothing in the output contradicted that. Both commands succeeded. That is the
+// shape of failure this repository keeps producing: a check that passes on one
+// thing while the action lands on another.
+console.log('\n── 0. The connection `migrate deploy` would use ─────────────');
+
+const envFile = join(process.cwd(), 'backend', '.env');
+const envFallback = (() => {
+  if (!existsSync(envFile)) return '';
+  const line = execSync(`grep -m1 '^DIRECT_URL=' ${JSON.stringify(envFile)} || true`, {
+    encoding: 'utf8',
+  }).trim();
+  const raw = line.replace(/^DIRECT_URL=/, '').replace(/^["']|["']$/g, '');
+  return raw ? splitConn(raw).host : '';
+})();
+
+const directRaw = process.env.DIRECT_URL;
+if (!directRaw) {
+  bad('DIRECT_URL is not set in this shell, so this preflight cannot vouch for the run.');
+  console.log('     prisma/schema.prisma migrates through directUrl = env("DIRECT_URL").');
+  console.log('     With it unset, `prisma migrate deploy` falls back to backend/.env and');
+  console.log(
+    envFallback
+      ? `     would migrate:  ${envFallback}`
+      : '     would migrate whatever that file points at',
+  );
+  console.log(`     ...not:         ${splitConn(URL).host}`);
+  console.log('     Export BOTH variables (see the bottom of this report) and run again,');
+  console.log('     and migrate through `scripts/migrate-remote.sh`, which refuses to run');
+  console.log('     at all in this state instead of succeeding against the wrong database.');
+} else {
+  const direct = splitConn(directRaw);
+  const theirs = qOn(direct, 'SELECT current_database()');
+  const ours = q('SELECT current_database()');
+  if (typeof theirs === 'object') {
+    bad(`DIRECT_URL is set but unreachable: ${theirs.error.split('\n')[0]}`);
+  } else if (theirs !== ours) {
+    bad(`DATABASE_URL and DIRECT_URL point at DIFFERENT databases — "${ours}" vs "${theirs}".`);
+    console.log('     `migrate deploy` would apply to the second one. Everything below');
+    console.log('     describes the first. Fix the pair before running anything.');
+  } else {
+    const a = q('SELECT count(*) FROM _prisma_migrations');
+    const b = qOn(direct, 'SELECT count(*) FROM _prisma_migrations');
+    if (a !== b) {
+      bad(`Same database name "${ours}" but different migration history (${a} rows vs ${b}).`);
+      console.log('     These are two different databases that happen to share a name.');
+    } else {
+      ok(`DIRECT_URL reaches the same database — ${direct.host}`);
+      console.log(`     (queries below run over DATABASE_URL — ${splitConn(URL).host})`);
+    }
+  }
 }
 
 // ── 1. How far behind is it ─────────────────────────────────────────────
@@ -113,7 +241,35 @@ if (unfinished && typeof unfinished === 'string' && unfinished.length) {
   console.log('     Resolve that before applying anything else (prisma migrate resolve).');
 }
 
-console.log(`  ${onDisk.length} migrations in the repository, ${applied.size} applied, ${pending.length} pending.`);
+/**
+ * ⚠️ `applied.size` is NOT "how many of the repository's migrations are applied".
+ *
+ * `_prisma_migrations` holds a row per migration RUN, and a name in it need not
+ * exist on disk at all — a migration renamed or squashed in the repository
+ * leaves a row matching nothing. Printing that raw count beside the pending
+ * count produced a line that did not add up on the real production database
+ * (34 in the repository, 29 applied, 15 pending — 44 of 34), which is how this
+ * was found. The three numbers now reconcile by construction.
+ */
+const appliedFromRepo = onDisk.filter((m) => applied.has(m));
+const dbOnly = [...applied].filter((m) => !onDisk.includes(m)).sort();
+
+console.log(
+  `  ${onDisk.length} migrations in the repository: ` +
+    `${appliedFromRepo.length} applied, ${pending.length} pending.`,
+);
+if (dbOnly.length) {
+  warn(
+    `${dbOnly.length} migration(s) are recorded as applied but do NOT exist in this ` +
+      `checkout.`,
+  );
+  dbOnly.forEach((m) => console.log(`       ${m}`));
+  console.log('     They were renamed, squashed or applied from another branch. `migrate');
+  console.log('     deploy` ignores them and applies only the pending list above, but');
+  console.log('     `migrate status` will exit non-zero because of them — that is expected');
+  console.log('     here and is not a reason to stop. Confirm the names look like history');
+  console.log('     you recognise rather than a different project before you proceed.');
+}
 if (!pending.length) {
   ok('Nothing to apply — this database is up to date with the repository.');
 } else {
@@ -173,12 +329,26 @@ let changes = 0;
 if (pendingHas('service_provider_checks')) {
   changes++;
   const live = q(`SELECT count(*) FROM service_providers WHERE active = true`);
-  if (typeof live !== 'object') {
+  /**
+   * ⚠️ The `> 0` is the whole point of this branch.
+   *
+   * Without it this printed "0 contractor(s) are listed and ALL of them will be
+   * un-listed" on production — a warning about nothing, which also pushed the
+   * verdict to "1 thing(s) to know about first". An operator reading a preflight
+   * before touching a live database has to be able to trust that a ⚠️ means
+   * something; one that fires on an empty table teaches them to skim.
+   */
+  if (typeof live === 'object') {
+    warn('Could not count listed contractors.');
+  } else if (Number(live) > 0) {
     warn(`${live} contractor(s) are listed and ALL of them will be un-listed.`);
     console.log('     Phase 7j made "active" require a recorded phone check, and no existing row');
     console.log('     has one. This is deliberate — the directory tells landlords these names were');
     console.log('     checked, and none of them were — but "Who to call" will be empty afterwards');
     console.log('     until an admin rings each number and records it on /admin/services.');
+  } else {
+    changes--;
+    ok('No contractor is listed, so the phone-check requirement un-lists nobody.');
   }
 }
 
@@ -224,8 +394,44 @@ if (problems) {
   console.log(`  ❌ ${problems} thing(s) would stop the run. Fix those first.`);
   console.log('     Do NOT run migrate deploy until this comes back clean.');
 } else if (pending.length) {
+  /**
+   * ⚠️ This footer used to read:
+   *
+   *     Back the database up, then:  cd backend && npx prisma migrate deploy
+   *
+   * which is a command that CANNOT REACH the database this script just spent
+   * four sections inspecting. An inline `DATABASE_URL=… node script.mjs` prefix
+   * applies to that one command; the next command loads `backend/.env`. So the
+   * preflight passed on production, the operator pasted the line it printed,
+   * and twelve migrations went to `localhost:5432/rentboard_dev` — reporting
+   * "All migrations have been successfully applied." while production stayed
+   * down on the exact column this script had just named.
+   *
+   * A preflight that verifies one database and then hands over a command
+   * pointed at a different one is not a safeguard, it is a trap. The host is
+   * printed below so the `migrate status` line can be checked against it by
+   * eye before anything is written.
+   */
+  const host = splitConn(URL).host;
   console.log(`  ✅ ${pending.length} migration(s) can be applied.${warnings ? ` ${warnings} thing(s) to know about first.` : ''}`);
-  console.log('     Back the database up, then:  cd backend && npx prisma migrate deploy');
+  console.log('');
+  console.log('     Back this database up first — on Neon, create a branch from the current');
+  console.log('     head (instant, and the restore path if a migration goes wrong); with');
+  console.log('     pg_dump, the client major version must match the server or it refuses.');
+  console.log('');
+  console.log('     Then apply them with the wrapper, from the repository ROOT — not with');
+  console.log('     `npx prisma migrate deploy` directly:');
+  console.log('');
+  console.log("       export DATABASE_URL='<the URL you passed to this script>'");
+  console.log("       export DIRECT_URL='<the same database, the NON-pooler endpoint>'");
+  console.log('       bash scripts/migrate-remote.sh');
+  console.log('');
+  console.log(`     It prints the target (expect ${host}) and asks before`);
+  console.log('     applying anything, and it refuses outright if DATABASE_URL is unset, if');
+  console.log('     DIRECT_URL is unset, if either resolves to localhost, or if DIRECT_URL');
+  console.log('     is a `-pooler` host. A bare `npx prisma migrate deploy` has none of');
+  console.log('     those guards: it reads backend/.env for whichever variable you did not');
+  console.log('     export and reports success about the database it reached instead.');
 } else {
   console.log('  ✅ Nothing to do.');
 }
