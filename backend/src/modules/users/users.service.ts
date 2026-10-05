@@ -118,5 +118,38 @@ export class UsersService {
     });
     return { walkthroughSeenAt: user.walkthroughSeenAt };
   }
+
+  /**
+   * Put a screen's first-use hint away, for this account, for good.
+   *
+   * ⚠️ Idempotent by construction. The obvious write is "read the array, push,
+   * save", and two taps on the same button — a slow phone, a double tap — would
+   * then store the key twice. `hintsSeen` is a set in meaning and nothing else
+   * enforces that, so the duplicate is written at the database rather than
+   * guarded in JavaScript, where a second caller racing the first slips past.
+   */
+  async markHintSeen(userId: string, key: string) {
+    /**
+     * ⚠️ No `::uuid` cast on `id`. Prisma's `String @id @default(uuid())` is a
+     * TEXT column, so casting the parameter gave
+     * `operator does not exist: text = uuid` and every dismissal answered 500.
+     *
+     * It looked fine on screen for a whole drive run, because the client
+     * patches optimistically and the write is deliberately fire-and-forget: the
+     * panel closed on the tap, three sections of checks passed, and nothing was
+     * saved. Only re-reading it as a different browser caught it.
+     */
+    await this.prisma.$executeRaw`
+      UPDATE "users"
+         SET "hintsSeen" = array_append("hintsSeen", ${key})
+       WHERE id = ${userId}
+         AND NOT (${key} = ANY("hintsSeen"))`;
+
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { hintsSeen: true },
+    });
+    return { hintsSeen: user.hintsSeen };
+  }
 }
 

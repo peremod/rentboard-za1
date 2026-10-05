@@ -41,6 +41,8 @@ export interface AuthResponse {
     marketingEmails?: boolean;
     /** Null means this account has never been shown round — Phase 7f. */
     walkthroughSeenAt?: Date | null;
+    /** Screen keys whose first-use hint has been put away — Phase 8b. */
+    hintsSeen?: string[];
     /** Phase 7o. Derived from the hash; the hash itself never leaves the server. */
     hasPassword?: boolean;
     /** Non-null means the owner paused the account — Phase 7g. */
@@ -267,6 +269,17 @@ export class AuthService {
               phoneVerified: replacement.user.phoneVerified,
               marketingEmails: replacement.user.marketingEmails,
               walkthroughSeenAt: replacement.user.walkthroughSeenAt ?? null,
+              /**
+               * ⚠️ Here too. This is the refresh-reuse grace path — a third
+               * place that builds a user payload — and a field present on the
+               * other two and missing here comes back as `undefined` after one
+               * token refresh. Every screen's first-use hint would reappear for
+               * somebody who had already put them all away, on a path nobody
+               * drives because it only runs when a refresh token is replayed.
+               * `include: { user: true }` carries the column, so this is the
+               * mapping and nothing else.
+               */
+              hintsSeen: replacement.user.hintsSeen ?? [],
               deactivatedAt: replacement.user.deactivatedAt ?? null,
             },
           };
@@ -343,6 +356,10 @@ export class AuthService {
         // a second round trip would mean it appears a beat after the dashboard,
         // which reads as a glitch rather than a welcome.
         walkthroughSeenAt: true,
+        // Phase 8b. Same reasoning as walkthroughSeenAt above, and the same
+        // trap it was written to avoid: fetched separately, every screen's
+        // first-use hint would flash in a beat after the content it explains.
+        hintsSeen: true,
         // Phase 7g. The portal reads this on the first paint to offer waking
         // the account up, rather than leaving somebody signed in to a paused
         // account with nothing telling them why their rooms are gone.
@@ -378,6 +395,12 @@ export class AuthService {
         // Phase 7f. Null means this account has never been shown round, which
         // is what a brand-new one wants to say on the very first paint.
         walkthroughSeenAt: user.walkthroughSeenAt ?? null,
+        /**
+         * Phase 8b. On the sign-in payload AND on getMe, for the reason recorded
+         * below about hasPassword: a field on one shape and not the other is a
+         * bug that only shows on the path nobody drove.
+         */
+        hintsSeen: user.hintsSeen ?? [],
         /** Phase 7g. Non-null means the owner paused it; the portal offers to wake it. */
         deactivatedAt: user.deactivatedAt ?? null,
         /**

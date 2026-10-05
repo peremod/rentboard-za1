@@ -4,6 +4,7 @@ import { MessageThread } from '../../../shared/components/message-thread/message
 import { AuthService } from '../../../core/services/auth.service';
 import { MessagesService } from '../../../core/services/messages.service';
 import { MessageThreadSummary } from '../../../core/models/message.model';
+import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 
 /**
  * Your messages — Phase 7c.
@@ -41,9 +42,13 @@ import { MessageThreadSummary } from '../../../core/models/message.model';
 @Component({
   selector: 'app-messages',
   standalone: true,
-  imports: [MessageThread, DatePipe],
+  imports: [MessageThread, DatePipe, ScreenHint],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+      <app-screen-hint key="messages" heading="Every conversation, in one place">
+        A thread starts when somebody applies for your room, or you apply for theirs. Messages reach you on WhatsApp too, and a reply there lands back in the same conversation.
+      </app-screen-hint>
+
       <section class="dash-section">
         <div class="msg-head">
           <h2 class="dash-section-title">Every conversation</h2>

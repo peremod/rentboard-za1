@@ -1,0 +1,13 @@
+-- First-use hints, per screen, per account.
+--
+-- A text[] of screen keys the person has dismissed. Keys only: no timestamps,
+-- no order, no count. The product needs exactly one answer — "has this person
+-- put this hint away?" — and anything more is a record of where somebody went
+-- and when, which is behaviour this platform has no reason to hold (POPIA
+-- s.10, the same minimality argument as room_view_days storing a count per day
+-- and no viewer identity).
+--
+-- On "users" rather than a side table: it is a set of flags about the account,
+-- read with the session on every portal page. A join table would be a second
+-- query on the hot path for data that is never queried on its own.
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "hintsSeen" TEXT[] NOT NULL DEFAULT '{}';

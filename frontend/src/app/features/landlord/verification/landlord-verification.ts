@@ -6,6 +6,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { PaymentsService } from '../../../core/services/payments.service';
 import { ActivatedRoute } from '@angular/router';
 import { VerificationType, VerificationRequest } from '../../../core/models/verification.model';
+import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 
 /**
  * Landlord-facing verification.
@@ -19,9 +20,13 @@ import { VerificationType, VerificationRequest } from '../../../core/models/veri
 @Component({
   selector: 'app-landlord-verification',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, ScreenHint],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+      <app-screen-hint key="landlord-verification" heading="The badge is the main thing a tenant looks for">
+        Anyone can post a room anywhere, so a verified landlord stands out. We check your ID and your ownership once, delete the documents afterwards, and keep only the outcome.
+      </app-screen-hint>
+
 
       @if (verification.isIdentityVerified()) {
         <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">

@@ -7,6 +7,7 @@ import { PropertiesService } from '../../../core/services/properties.service';
 import { AnalyticsService } from '../../../core/services/analytics.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upload/photo-upload';
+import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 
 /**
  * Create-room wizard — 4 steps: basics → pricing/location → preferences → photos.
@@ -22,9 +23,13 @@ import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upl
 @Component({
   selector: 'app-create-room',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, PhotoUpload],
+  imports: [ReactiveFormsModule, RouterLink, PhotoUpload, ScreenHint],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+      <app-screen-hint key="landlord-rooms-new" heading="Listing is free, and stays free">
+        No fee to post, none to keep it up, no commission when you let it. Up to 20 photos. You can save and come back — nothing is published until you say so.
+      </app-screen-hint>
+
     <div class="wizard">
       <!-- The wizard's own h1 used to be here. It is the layout's now, from the
            route's pageTitle, which differs per route for exactly the reason the

@@ -3038,6 +3038,89 @@ than it is.
 
 36 checks pass across the four widths with the fixes in place.
 
+### 5.39 A deeper tour, and a hint on each screen — ✅ built in v1.107.0 (Phase 8b)
+
+The owner's report: *"the walkthrough is minimal, it doesn't go through all the
+features, it doesn't show how to use the features."*
+
+Both halves are real, and they are different problems.
+
+#### The tour was four cards, and that was argued for in a comment
+
+The comment said four is what somebody reads before they start tapping. It also
+said the temptation is to list everything. ⚠️ **Overruled by the person who uses
+this.** Four cards that skip grouping, viewings, rent and the forms leave a
+landlord believing the product does less than it does. Landlord 4 → 8, tenant
+4 → 6.
+
+⚠️ `onboarding-drive` asserted `dots === 4` and called it *"four steps, not a
+wall of nine"* — the design argument of the day written in as a test. An
+assertion that pins a product decision fails the moment the decision changes and
+says nothing about whether the thing works. It now asserts the shape: more than
+one card, a dot per card, Next walks to the end and stops.
+
+#### A tour cannot teach a screen, so hints do
+
+Nobody remembers a card about applicants when they reach the applicants screen a
+week later. `app-screen-hint` is one short panel at the top of a screen, the
+first time that account opens it, saying what the screen is for and the thing
+people get wrong on it. Nine screens.
+
+**Stored on the account, not in the browser** — the same two reasons
+`walkthroughSeenAt` is: a phone in this market is shared, borrowed and replaced,
+so a per-browser flag shows a hint to somebody who has read it and never reaches
+the person who has not; and the app renders on the server, where there is no
+localStorage on the first paint, so every hint would flash in a beat after the
+content it explains.
+
+`hintsSeen String[]` on `users`. **Keys only — no timestamps, no order, no
+count.** The product asks one question of it, and anything more is a record of
+where somebody went and when (POPIA s.10, the same minimality as
+`room_view_days` storing a count and no viewer).
+
+The key is **allowlisted server-side**, which is a size limit as much as a
+spelling check: `hintsSeen` is an unbounded `text[]` on the account, and an
+endpoint taking free text would let a signed-in client grow it until the row
+stopped loading.
+
+#### ⚠️ It answered 500 on every call and the screen looked perfect
+
+The first implementation cast `id = ${userId}::uuid`. Prisma's
+`String @id @default(uuid())` is a **TEXT** column, so every dismissal failed
+with `operator does not exist: text = uuid`.
+
+Three sections of the drive passed over it. The client patches optimistically
+and the write is deliberately fire-and-forget, so the panel closed on the tap,
+the hint stayed gone for the rest of that session, and nothing was ever stored.
+
+**Only section 4 caught it** — signing in again in a fresh browser context. That
+section exists because it is the one check a localStorage implementation cannot
+pass, and it turned out to be the only check that could see a 500.
+
+#### ⚠️ And the payload had to be in four places
+
+`hintsSeen` is on the `AuthResponse` interface, the `getMe` select and mapping,
+`buildAuthResponse`, **and the refresh-token-reuse grace path** — a third payload
+builder that only runs when a refresh token is replayed. A field present on the
+others and missing there comes back `undefined` after one refresh, and every
+hint reappears for somebody who had put them all away, on a path nobody drives.
+The same note about `hasPassword` is three lines below it in that file.
+
+#### Falsified
+
+A key typo'd in a template (`landlord-dashbord`) → *"1 key(s) the server would
+reject, so the hint never goes away"*, naming the file, **and** *"1 allowlisted
+key(s) no template uses"*. `hintsSeen` dropped from the sign-in payload →
+section 4's two checks fail. 13 checks pass with both in place; smoke 501.
+
+#### What the tour deliberately does NOT say
+
+No step describes confirming a move-in, because the standing rule is that no
+step promises something the app cannot do — and it cannot. See
+`docs/OUTSTANDING.md` §18: the entire tenancy lifecycle has no UI, so no tenancy
+can become active, no rent reminder can fire and no review can open. The tenant
+rent hint says only what is true today.
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

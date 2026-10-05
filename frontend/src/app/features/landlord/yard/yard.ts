@@ -33,6 +33,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 import { LeasePanel } from '../../../shared/components/lease-panel/lease-panel';
 import { LeaseDocuments } from '../../../shared/components/lease-documents/lease-documents';
+import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 
 /**
  * The yard dashboard.
@@ -61,12 +62,13 @@ const UNGROUPED = 'ungrouped';
 @Component({
   selector: 'app-yard',
   standalone: true,
-  imports: [
-    PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink,
-    ZarCentsPipe, LeasePanel, LeaseDocuments,
-  ],
+  imports: [PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink, ZarCentsPipe, LeasePanel, LeaseDocuments, ScreenHint],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+      <app-screen-hint key="landlord-property" heading="Everything about this address">
+        The rooms here, what each one brings in, the money you have spent on the place and the paperwork. "Shared details" is the house rules and facilities every room here inherits.
+      </app-screen-hint>
+
 
       @if (loading()) {
         <p class="muted">Loading…</p>

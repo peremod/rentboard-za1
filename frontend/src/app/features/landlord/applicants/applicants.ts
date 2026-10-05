@@ -14,6 +14,7 @@ import { ReviewList } from '../../../shared/components/review-list/review-list';
 import { ReviewsService } from '../../../core/services/reviews.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { TenantReferences } from '../../../core/models/review.model';
+import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 
 /**
  * Applicant manager — one room's full applicant list, with shortlist/accept/
@@ -24,9 +25,13 @@ import { TenantReferences } from '../../../core/models/review.model';
 @Component({
   selector: 'app-applicants',
   standalone: true,
-  imports: [DatePipe, FormsModule, RouterLink, MessageThread, ReviewList, TenantNotes],
+  imports: [DatePipe, FormsModule, RouterLink, MessageThread, ReviewList, TenantNotes, ScreenHint],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+      <app-screen-hint key="landlord-applicants" heading="Everyone who applied, across every room">
+        The ones still waiting on you come first. Shortlist to keep somebody in mind, invite them to view before you decide, and if you accept by mistake you have thirty minutes to undo it.
+      </app-screen-hint>
+
     <div class="applicants">
       <!-- Phase 6. A sub-lessor reaches this same screen from
            /tenant/sublet/:roomId/applicants, and a tenant account cannot open
