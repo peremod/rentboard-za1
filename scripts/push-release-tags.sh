@@ -1320,6 +1320,35 @@ The API side needed nothing: smoke already had seven checks on these endpoints.
 Still open: notice and updateLease have no caller, so the product can withdraw a
 notice it has no way to give."
 
+tag_if_missing "v1.109.0" "83f316b89a805aef61826180176f120f6ae5be48" "2026-10-05 20:27:04 +0000" "v1.109.0 — Phase 8d: a room can be put into a property, not only taken out
+
+Reported twice in one list: a room listed outside a property could not be added
+to one.
+
+The endpoint has existed since Phase 7b and was wired into the client service
+with nothing calling it. And unassignRoom HAD a caller, which is the whole
+character of the bug: the product could take a room out of a property and never
+put one back, so removing one by accident was unrecoverable and the feature read
+as broken rather than absent.
+
+The loose rooms are now offered on the property screen as 44px rows rather than
+tick boxes, with a button that names how many will move and refuses to be
+pressed into a no-op. The list comes from the ungrouped group the dashboard has
+carried all along, and success reloads rather than patching, because moving a
+room changes three numbers at once.
+
+Also: 'add your first property' set a signal and stopped, and the form renders
+1159px down a 780px screen, so the button scrolled nothing. The obvious check —
+the form is in the DOM — would have passed every day the bug existed, because
+the form always rendered. The drive asserts its position in the viewport.
+
+Third compile failure from a trap already recorded in CLAUDE.md: a backtick in a
+comment inside an inline template literal terminates the template.
+
+One fault of the drive's own, recorded: it assumed the first row rendered was
+the first room created, unassigned an already-loose room, and got a 200 that
+changed nothing."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1335,7 +1364,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-8][.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-9][.]'"
 else
   echo "Nothing to push."
 fi
