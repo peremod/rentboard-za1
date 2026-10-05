@@ -209,7 +209,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
         </section>
 
         @if (creating()) {
-          <form class="prop-form" (ngSubmit)="create()">
+          <form class="prop-form" id="new-property" (ngSubmit)="create()">
             <h2 class="dash-section-title">A new property</h2>
 
             <label>
@@ -408,6 +408,24 @@ export class Properties implements OnInit {
   startCreate() {
     this.createError.set(null);
     this.creating.set(true);
+
+    /**
+     * ⚠️ And then SHOW them the form.
+     *
+     * This set a signal and stopped. The form renders below the rent-reminder
+     * section, which on a phone is well past the fold, so pressing "Add your
+     * first property" scrolled nothing, revealed nothing, and looked exactly
+     * like a button that does not work. The owner reported it as such.
+     *
+     * A timeout rather than a lifecycle hook because the form does not exist
+     * until this signal has been through change detection; `scrollIntoView` on
+     * the same tick finds nothing and silently does nothing, which is the same
+     * defect wearing a different hat.
+     */
+    if (typeof document === 'undefined') return;
+    setTimeout(() => {
+      document.getElementById('new-property')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   create() {

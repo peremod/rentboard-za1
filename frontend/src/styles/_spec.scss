@@ -821,6 +821,20 @@ img{display:block;max-width:100%}
 .yard__count--alert{color:var(--terra);font-weight:700}
 .yard__empty{padding:1rem;margin:0;font-size:.82rem}
 
+/* Putting an existing room into a property — Phase 8d. */
+.yard-adopt{padding:.7rem 1rem 1rem;border-top:1px solid var(--border)}
+.yard-adopt__body{margin-top:.6rem;display:grid;gap:.5rem}
+.yard-adopt__note{margin:0;font-size:.78rem;line-height:1.5}
+/* The whole row is the target, not the 13px checkbox beside it: a tick box on
+   its own is the smallest thing on the screen and this list is read on a phone.
+   44px via padding so the label text stays vertically centred against it. */
+.yard-adopt__row{
+  display:flex;align-items:center;gap:.6rem;min-height:44px;
+  padding:.3rem .5rem;border:1.5px solid var(--border);border-radius:var(--r4);
+  background:var(--white);font-size:.85rem;cursor:pointer;
+}
+.yard-adopt__row input{width:20px;height:20px;flex:0 0 auto}
+
 /* ── A property's shared facilities, and what it has cost (item 22) ─────────
    ⚠️ None of these classes had ANY styles. Not one: not .yard-shared-form,
    .yard-shared-form__actions, .yard-expenses, .expense-list, .expense,
