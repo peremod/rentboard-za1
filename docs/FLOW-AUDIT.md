@@ -2386,6 +2386,119 @@ which `nav-ui-drive` asserts. The fade and the reveal make the existing pattern
 work; they do not make fourteen items fit on a 360px screen, and this document
 should not imply otherwise.
 
+### 5.33 A phone-only account could lock itself out — ✅ fixed in v1.100.0 (Phase 7o)
+
+Phase 7g gave a person with only a mobile number their own account: no email,
+no password, `authProvider: 'phone'`, the verified number as the single
+credential. It was bolted onto screens written for accounts that have an email
+address, and the consequences were never followed through. Measured on a real
+account created through the product's own three-step flow:
+
+| What a phone-only landlord did | What happened |
+|---|---|
+| `PATCH /api/users/me {"phone": ""}` | **HTTP 500** "Internal server error" |
+| `PATCH /api/users/me {"phone": <one digit out>}` | **HTTP 200**, and the account was gone |
+| Add an email address | 400 **"This account signs in with Google."** |
+| Change password | 400 **"This account signs in with Google and has no password to change."** |
+| Forgot password | 200, and it can send nothing |
+| Any phone-based recovery route | 404 — there were none |
+
+#### The lockout
+
+The 200 is the serious one. After it the account's phone is the number nobody
+holds, `phoneVerified` is false, there is no email and there is no password.
+Phone sign-in finds accounts by *verified* number, so it cannot find them.
+`forgot-password` needs an address they do not have. And asking for a sign-in
+code on the number actually in their hand answers:
+
+> 200 — "If that number has an account, a code is on its way on WhatsApp."
+
+and sends **nothing**, because that reply is deliberately identical whether or
+not the number has an account. So the product reassures them a code is coming,
+indefinitely, while they are locked out. One mistyped digit in a free-text
+field, no warning, no way back — for exactly the WhatsApp-first landlord phone
+sign-up was built for.
+
+The 500 is the database holding a line the application did not know about:
+`users_email_or_phone_required` refuses the row, Prisma throws, and the person
+gets no sentence they can act on.
+
+#### The Google messages
+
+Both guards were `if (!user.passwordHash)`, written when the only way to have no
+password was to have signed in with Google. Phase 7g added a second way and
+nobody revisited them. It was not merely a wrong sentence: adding an email is
+what lets a phone-only landlord pay the verification fee (Outstanding §11
+refuses PayFast without an address) and what makes the account recoverable if
+the number is lost, and that message was the only thing in the way.
+
+The settings screen could not have done better. Nothing in its payload said
+which kind of account it was, so it rendered `Currently <strong>{{ email }}</strong>`
+as "Currently" and an empty bold tag, asked for a password that does not exist,
+and showed a "Change password" form whose only possible answer was about Google.
+
+#### What changed
+
+| Change | Why |
+|---|---|
+| `updateProfile` refuses to touch the number when it is the only way in | A 400 with a sentence, where there was a 500 and a silent 200 |
+| A new `phone_change` token type with a `newPhone` column | The change is **proven before it lands**: the code goes to the new number and the account keeps the old one until it comes back, so a typo cannot be stored as the way in. The same shape as `newEmail` beside it |
+| The confirmed number arrives `phoneVerified: true` in the same write | The un-verified window *was* the lockout. The code came back from that number; asking them to prove it twice while the account has no way in is the bug |
+| A `consumeStepUp` code, single-use, that does not touch `phoneVerified` | The step-up credential for an account with no password. `confirmVerification` could not be reused: it also makes a different claim |
+| Both guards branch on `authProvider === 'google'` | A real Google account still gets the Google message; the drive asserts that, so the fix cannot go too far |
+| `hasPassword` on `/auth/me` **and** on the sign-in payload, derived, never the hash | The screen has to know which forms make sense |
+| The settings screen branches, and re-reads the account on init | "Add an email address", "Set a password", a WhatsApp code where a password box was, and the number named as the only way in |
+
+#### What the drives prove
+
+30 API checks and 25 UI checks. Falsified by reintroducing five bugs at once:
+**13 failures**, including the original 500 and the original 200-on-a-typo,
+reproduced exactly as they were measured before the fix.
+
+⚠️ **Three faults in my own work, each caught by something other than the check
+that should have caught it:**
+
+1. **A dead button, shipped and then caught.** `passwordReady` was written as a
+   `computed()` over the `FormGroup`. A FormGroup's value is not a signal, so
+   the computed had nothing to invalidate it and cached `false` from the empty
+   form — **"Change password" was disabled forever for every account that has
+   one.** A control that cannot be pressed, which is this codebase's own
+   recurring defect, introduced while fixing another one. The new UI drive did
+   not see it: it checked that the screen still *says* "Current password", not
+   that the button can be used. `account-lifecycle-ui-drive.mjs` caught it by
+   trying to click. Both drives assert pressability now.
+2. **`hasPassword` was only on `/auth/me`.** The settings screen defaults a
+   missing value to `true` so an older payload behaves as before — correct for
+   compatibility, and wrong for a brand-new phone-only account, whose sign-in
+   payload is a different shape. It believed that person had a password and
+   showed them the exact screen this phase exists to fix. The **UI drive caught
+   this and the API drive could not**, because the API was right.
+3. **Two skip messages blamed the wrong thing.** The drive derived codes against
+   the number it started with, so a failure in section 1 that moved the number
+   made derivation fail — and the skip then read "the code could not be derived"
+   and, in section 3, "so JWT_SECRET does not match the API". Neither was true.
+   A diagnostic that sends the next person to the wrong place is the same fault
+   as a check that passes for the wrong reason. It reads the current number now
+   and names both possibilities rather than picking one. A third skip blamed the
+   secret when the route name was simply wrong (`phone/request-verification`
+   does not exist; it is `phone/verify-number`).
+
+⚠️ **And the UI drive crashed instead of reporting.** A bare
+`waitForSelector('#code')` died with a TimeoutError when the cause was a 429
+from the sign-up throttle, exhausted by the drive's own earlier runs — the stack
+trace pointing at the register screen rather than the limiter. It catches and
+reports what the screen says now, and it makes **one** account per run with the
+session copied into a context per width, instead of five sign-ups against a
+twenty-an-hour limit.
+
+#### Still open
+
+| Gap | Severity |
+|---|---|
+| 🔴 Losing the number **entirely** — a stolen phone, a dead SIM — still has no route back. The confirmed change needs the old number to be in hand. Recovering without it means proving identity to a person, which is the admin and verification machinery, and is a decision rather than a patch | **Named, not built.** It is the honest half of "phone-only recovery" |
+| WhatsApp delivery is still the binding constraint: a code to a number that has not messaged the business in 24 hours needs the authentication template (Outstanding §7) | Blocking for this flow, as before |
+| Assisted sign-up — the third of 7g's remaining items — is not here. The existing flow already holds the control that matters (acceptance is bound to the handset that answered), so what is left is an audit trail of who helped, and that needs a decision about who may assist | Not built; see the note below |
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

@@ -356,9 +356,37 @@ The in-app notice channel is readable too, as of the same release — it had bee
 write-only since v1.85.0, which meant a phone-only landlord's notifications were
 recorded faithfully and shown to nobody.
 
-What is left of 7g is listed as its own items rather than as a decision:
-assisted sign-up mode, account recovery for a phone-only account, and adding an
-email later.
+**Two of the three remaining items are done in v1.100.0 (Phase 7o)**, and they
+turned out not to be features so much as a shipped lockout:
+
+- **Adding an email later** — it was refused with *"This account signs in with
+  Google"*, to people who have never seen Google, and that message was the only
+  thing between a phone-only landlord and both the verification fee (§11) and a
+  second way back in. It works now, with a code to the verified number as the
+  step-up instead of a password they do not have, and the address still
+  confirmed at the address before it is written.
+- **Phone-only recovery** — half of it. What was found was worse than a missing
+  feature: `PATCH /api/users/me {"phone": <one digit out>}` returned **200** and
+  ended the account, and clearing the number returned a **500**. The number is
+  now changed through a flow that proves the new one before the old one stops
+  working, and the profile field refuses to touch it when it is the only way in.
+  🔴 **The other half is not built and is named:** losing the number entirely —
+  stolen phone, dead SIM — still has no route back, because every route needs
+  the old number in hand. Recovering without it means proving identity to a
+  person, which is the admin and verification machinery, and is a decision
+  rather than a patch.
+- **Assisted sign-up** is the one still outstanding. The existing flow already
+  holds the control that matters: the code goes to the person's own handset and
+  the acceptance is recorded against the row that proved that number, so help
+  can reach as far as the handset and the consent stops at the person. What is
+  missing is only an audit trail of **who helped** — and that needs a decision
+  first, because there is no agent role in this product. ⚠️ Making it
+  open to any signed-in user would be a way to send sign-up codes to arbitrary
+  numbers. The defensible version is admin-recorded, the same shape as
+  admin-initiated account closure in Phase 7i: an admin starts it, the code
+  still goes to the person, the person still accepts, and
+  `PhoneSignup.assistedByAdminId` records it. **Say if that is the version you
+  want, or whether an agent should be a real role.**
 
 ---
 
@@ -677,6 +705,18 @@ node scripts/dashboard-drive.mjs         # 35 checks — Phase 7d. "Viewed 47 ti
 node scripts/onboarding-drive.mjs        # 35 checks — Phase 7f. The social card
                                          # (measured, not assumed) and the
                                          # first-run walkthrough
+node scripts/phone-only-drive.mjs       # 30 checks — Phase 7o. Needs
+                                         # JWT_SECRET: a code only goes out
+                                         # over WhatsApp, so it is recovered
+                                         # from the stored HMAC. The lockout,
+                                         # the two Google messages, and the
+                                         # confirmed number change
+node scripts/phone-only-ui-drive.mjs    # 25 checks — what the settings screen
+                                         # OFFERS such an account, at four
+                                         # widths. Makes its account through
+                                         # /auth/register-phone, because the
+                                         # session is a cookie and there is no
+                                         # email or password to sign in with
 node scripts/nav-ui-drive.mjs            # 54 checks — Phase 7e and 7n. The
                                          # sidebar on every guarded screen, the
                                          # mobile header CTAs at 360/390/430px,

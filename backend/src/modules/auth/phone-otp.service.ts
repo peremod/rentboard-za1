@@ -356,4 +356,174 @@ export class PhoneOtpService {
     this.logger.log(`Phone sign-in: user ${record.user.id}`);
     return record.user;
   }
+  // ── Phase 7o: a number change that is proven before it lands ─────────────
+
+  /**
+   * Send a code to a NEW number, without touching the account.
+   *
+   * ⚠️ This exists because changing a number used to be a free-text edit.
+   *
+   * `UsersService.updateProfile` accepted `phone` and un-verified it, which is
+   * correct for an account that has an email address and catastrophic for one
+   * that does not. Measured on a real phone-only account: one digit out, HTTP
+   * 200, and the account then pointed at a number nobody held with
+   * `phoneVerified: false`, no email and no password. Asking for a sign-in code
+   * on the number actually in the person's hand answered "a code is on its way"
+   * and sent nothing, because that reply is identical for a number with no
+   * account. Permanent, silent, self-inflicted, one keystroke.
+   *
+   * So the account keeps its working number until the new one answers. Nothing
+   * about the user row changes here — only an `auth_tokens` row carrying the
+   * number being proven.
+   */
+  async requestPhoneChange(userId: string, rawNewPhone: string) {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const phone = this.normalise(rawNewPhone);
+    if (!phone) {
+      throw new BadRequestException('Enter a valid South African mobile number, e.g. 082 123 4567');
+    }
+    if (phone === user.phone && user.phoneVerified) {
+      throw new BadRequestException('That is already the number on your account.');
+    }
+
+    // Numbers get recycled, and two accounts signing in on one number is a
+    // takeover. Checked here AND again at confirmation, because somebody else
+    // may verify it in between.
+    const taken = await this.prisma.user.findFirst({
+      where: { phone, phoneVerified: true, id: { not: userId } },
+    });
+    if (taken) {
+      throw new BadRequestException('That number is already in use on another account.');
+    }
+
+    const recent = await this.prisma.authToken.count({
+      where: {
+        userId,
+        type: 'phone_change',
+        createdAt: { gte: new Date(Date.now() - 15 * 60_000) },
+      },
+    });
+    if (recent >= 3) {
+      throw new BadRequestException('Too many codes requested. Please wait 15 minutes.');
+    }
+
+    // Spend any outstanding change, so two numbers cannot both be pending and
+    // the second code cannot confirm the first number.
+    await this.prisma.authToken.updateMany({
+      where: { userId, type: 'phone_change', usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    const code = String(crypto.randomInt(100000, 999999));
+    await this.prisma.authToken.create({
+      data: {
+        userId,
+        tokenHash: this.hash(code, phone),
+        type: 'phone_change',
+        newPhone: phone,
+        expiresAt: new Date(Date.now() + OTP_TTL_MINUTES * 60_000),
+      },
+    });
+
+    await this.whatsapp.sendOtp(phone, code, OTP_TTL_MINUTES);
+    this.logger.log(`Phone-change code sent to ${phone} for user ${userId}`);
+    return {
+      message: `Code sent to ${phone} on WhatsApp. Your account keeps its current number until you enter it.`,
+    };
+  }
+
+  /** The code came back from the new number, so the number is real. Switch it. */
+  async confirmPhoneChange(userId: string, code: string) {
+    const record = await this.prisma.authToken.findFirst({
+      where: { userId, type: 'phone_change', usedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!record || !record.newPhone || record.expiresAt < new Date()) {
+      throw new BadRequestException('That code is wrong or has expired. Request a new one.');
+    }
+    if (record.attempts >= MAX_ATTEMPTS) {
+      throw new BadRequestException('Too many wrong codes. Request a new one.');
+    }
+    if (this.hash(code.trim(), record.newPhone) !== record.tokenHash) {
+      // Counted per token, so a guesser gets one budget for this account
+      // regardless of how many IPs they have — the reason `attempts` exists.
+      await this.prisma.authToken.update({
+        where: { id: record.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new BadRequestException('That code is wrong or has expired. Request a new one.');
+    }
+
+    // Re-checked: somebody may have verified it since the code went out.
+    const taken = await this.prisma.user.findFirst({
+      where: { phone: record.newPhone, phoneVerified: true, id: { not: userId } },
+    });
+    if (taken) {
+      throw new BadRequestException('That number is no longer available.');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.authToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+      this.prisma.user.update({
+        where: { id: userId },
+        // ⚠️ `phoneVerified: true` in the same write as the number.
+        //
+        // The old path left it false and told the person to go and verify,
+        // which is the window the lockout lived in. The code came back FROM
+        // this number: it is proven, and a separate "now verify it" step would
+        // be asking them to prove it twice while the account has no way in.
+        data: { phone: record.newPhone, phoneVerified: true },
+      }),
+    ]);
+
+    this.logger.log(`Phone changed for user ${userId}`);
+    return {
+      phone: record.newPhone,
+      message: 'That is your number now. Use it to sign in from here on.',
+    };
+  }
+
+  /**
+   * Burn a code as proof the person holds the handset, and nothing else.
+   *
+   * The step-up credential for an account that has no password. `confirmVerification`
+   * cannot be reused for this: it also sets `phoneVerified`, which is a different
+   * claim, and it is the wrong shape for "prove it is you before I accept this
+   * email address".
+   *
+   * Single-use, like every other token here — spent whether or not the caller's
+   * own work then succeeds, because a code that survives a failed attempt is a
+   * code somebody can retry with.
+   */
+  async consumeStepUp(userId: string, code: string): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const phone = user.phone ? this.normalise(user.phone) : null;
+    if (!phone) {
+      throw new BadRequestException('There is no mobile number on this account to send a code to.');
+    }
+
+    const record = await this.prisma.authToken.findFirst({
+      where: { userId, type: 'phone_otp', usedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!record || record.expiresAt < new Date()) {
+      throw new BadRequestException('That code is wrong or has expired. Request a new one.');
+    }
+    if (record.attempts >= MAX_ATTEMPTS) {
+      throw new BadRequestException('Too many wrong codes. Request a new one.');
+    }
+    if (this.hash(code.trim(), phone) !== record.tokenHash) {
+      await this.prisma.authToken.update({
+        where: { id: record.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new BadRequestException('That code is wrong or has expired. Request a new one.');
+    }
+
+    await this.prisma.authToken.update({
+      where: { id: record.id },
+      data: { usedAt: new Date() },
+    });
+  }
+
 }

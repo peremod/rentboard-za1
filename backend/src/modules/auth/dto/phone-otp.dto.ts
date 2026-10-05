@@ -62,3 +62,21 @@ export class CompletePhoneSignupDto {
   @IsOptional() @IsString() @MaxLength(32)
   referralCode?: string;
 }
+
+/**
+ * Changing the number on an account — Phase 7o.
+ *
+ * Separate from `PhoneCodeDto` because this one is authenticated and is about a
+ * number that is NOT yet on the account. The code goes to the new number and
+ * the account keeps the old one until it comes back, so a mistyped digit cannot
+ * become the way in. It used to be a free-text field on the profile form, which
+ * on a phone-only account was a permanent lockout.
+ */
+export class RequestPhoneChangeDto {
+  @ApiProperty({ example: '0829876543', description: 'The number to move the account to' })
+  @IsString()
+  @Matches(/^(\+?27|0)[6-8]\d{8}$/, {
+    message: 'Enter a valid South African mobile number, e.g. 082 123 4567',
+  })
+  newPhone!: string;
+}

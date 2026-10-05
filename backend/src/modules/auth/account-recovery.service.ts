@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException, ForbiddenException } from '@ne
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { NoticeRouter } from '../notifications/notice-router.service';
+import { PhoneOtpService } from './phone-otp.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -34,6 +35,7 @@ export class AccountRecoveryService {
     private prisma: PrismaService,
     private notifications: NotificationsService,
     private notice: NoticeRouter,
+    private phoneOtp: PhoneOtpService,
   ) {}
 
   private hash(token: string) {
@@ -124,10 +126,61 @@ export class AccountRecoveryService {
   }
 
   /** Signed-in change. Requires the current password, so a hijacked session alone is not enough. */
-  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+    phoneCode?: string,
+  ) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+
+    /**
+     * ⚠️ "This account signs in with Google" was told to people who had never
+     * seen Google — Phase 7o.
+     *
+     * The guard was `if (!user.passwordHash)`, which was written when the only
+     * way to have no password was to have signed in with Google. Phase 7g added
+     * a second: an account created from a mobile number has no email and no
+     * password on purpose. Measured on a real one created through the product's
+     * own three-step flow, this endpoint answered:
+     *
+     *   400 "This account signs in with Google and has no password to change."
+     *
+     * They have no Google account to go and look at. And it was not merely a
+     * wrong sentence: it was the only thing standing between them and ever
+     * having a password, which is what makes an account recoverable by email
+     * later.
+     *
+     * So the branch is on WHICH kind of account it is, and a phone-only one
+     * sets a first password by proving it holds the handset instead.
+     */
     if (!user.passwordHash) {
-      throw new BadRequestException('This account signs in with Google and has no password to change.');
+      if (user.authProvider === 'google') {
+        throw new BadRequestException('This account signs in with Google and has no password to change.');
+      }
+      if (!user.phone || !user.phoneVerified) {
+        throw new BadRequestException(
+          'There is no password on this account and no verified number to send a code to. '
+          + 'Add and verify your mobile number first.',
+        );
+      }
+      if (!phoneCode) {
+        throw new BadRequestException(
+          'This account has no password yet. Ask for a code on WhatsApp and enter it to set one.',
+        );
+      }
+      await this.phoneOtp.consumeStepUp(userId, phoneCode);
+      const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+      await this.prisma.$transaction([
+        this.prisma.user.update({ where: { id: userId }, data: { passwordHash: hash } }),
+        // Any outstanding reset is dead, the same as a normal change below.
+        this.prisma.authToken.updateMany({
+          where: { userId, type: 'password_reset', usedAt: null },
+          data: { usedAt: new Date() },
+        }),
+      ]);
+      this.logger.log(`First password set for phone-only user ${userId}`);
+      return { message: 'Your password is set. You can sign in with it, or keep using WhatsApp.' };
     }
 
     const valid = await bcrypt.compare(currentPassword, user.passwordHash);
@@ -174,17 +227,49 @@ export class AccountRecoveryService {
    * Email change, step one. Confirmed at the new address; the old address is
    * notified so a takeover cannot silently move the account.
    */
-  async requestEmailChange(userId: string, newEmail: string, currentPassword: string) {
+  async requestEmailChange(
+    userId: string,
+    newEmail: string,
+    currentPassword: string,
+    phoneCode?: string,
+  ) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const normalised = newEmail.trim().toLowerCase();
 
+    /**
+     * ⚠️ The same false Google message, on the one path off a phone-only
+     * account — Phase 7o.
+     *
+     * Adding an email is what unlocks the verification fee for a phone-only
+     * landlord (Outstanding §11 refuses PayFast without an address) and what
+     * makes the account recoverable if the number is lost. This endpoint told
+     * them to change the address on a Google account they do not have.
+     *
+     * The step-up for an account with no password is a code to the verified
+     * number. The new address is still confirmed AT that address before it is
+     * written, which is the protection that matters here and is unchanged.
+     */
     if (!user.passwordHash) {
-      throw new BadRequestException('This account signs in with Google. Change the address on your Google account.');
+      if (user.authProvider === 'google') {
+        throw new BadRequestException('This account signs in with Google. Change the address on your Google account.');
+      }
+      if (!user.phone || !user.phoneVerified) {
+        throw new BadRequestException(
+          'Verify your mobile number first — it is how we check it is really you.',
+        );
+      }
+      if (!phoneCode) {
+        throw new BadRequestException(
+          'Ask for a code on WhatsApp and enter it, so we know it is you adding this address.',
+        );
+      }
+      await this.phoneOtp.consumeStepUp(userId, phoneCode);
+    } else {
+      const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+      // 403 for the same reason as changePassword above: the request is
+      // authenticated, the password typed into the form is what was refused.
+      if (!valid) throw new ForbiddenException('Your password is not correct.');
     }
-    const valid = await bcrypt.compare(currentPassword, user.passwordHash);
-    // 403 for the same reason as changePassword above: the request is
-    // authenticated, the password typed into the form is what was refused.
-    if (!valid) throw new ForbiddenException('Your password is not correct.');
     if (normalised === user.email) {
       throw new BadRequestException('That is already your email address.');
     }

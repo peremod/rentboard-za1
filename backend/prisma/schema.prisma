@@ -546,6 +546,24 @@ model AuthToken {
   /// token before it is written to the account.
   newEmail  String?
 
+  /// For number-change requests: the mobile being moved to — Phase 7o.
+  ///
+  /// ⚠️ The reason this column exists is that changing a number used to be a
+  /// free-text edit on the profile form, which un-verified it. On an account
+  /// with no email and no password that is the only credential, so one mistyped
+  /// digit was a permanent, silent lockout: the account pointed at a number
+  /// nobody held, and asking for a code on the real one answered "a code is on
+  /// its way" and sent nothing, because that reply is identical for a number
+  /// with no account.
+  ///
+  /// So a change is PROVEN BEFORE IT LANDS. The code goes to the new number,
+  /// the account keeps the old one until it comes back, and a typo can never be
+  /// stored as the way in — the same shape as `newEmail` beside it.
+  ///
+  /// A CHECK constraint ties this column to the `phone_change` type in both
+  /// directions.
+  newPhone  String?
+
   /// Wrong guesses against THIS token.
   ///
   /// Added because the service had a `MAX_ATTEMPTS = 5` constant that nothing
@@ -1272,6 +1290,8 @@ enum AuthTokenType {
   magic_link
   /// One-time code sent to a verified phone, over WhatsApp or SMS.
   phone_otp
+  /// Proving a NEW number before it replaces the one on the account — Phase 7o.
+  phone_change
 }
 
 enum AlertFrequency {

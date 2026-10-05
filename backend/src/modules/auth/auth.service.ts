@@ -41,6 +41,8 @@ export interface AuthResponse {
     marketingEmails?: boolean;
     /** Null means this account has never been shown round — Phase 7f. */
     walkthroughSeenAt?: Date | null;
+    /** Phase 7o. Derived from the hash; the hash itself never leaves the server. */
+    hasPassword?: boolean;
     /** Non-null means the owner paused the account — Phase 7g. */
     deactivatedAt?: Date | null;
   };
@@ -312,9 +314,24 @@ export class AuthService {
   }
 
   async getMe(userId: string) {
-    return this.prisma.user.findUniqueOrThrow({
+    /**
+     * ⚠️ `hasPassword` is DERIVED here and the hash never leaves — Phase 7o.
+     *
+     * The settings screen showed "Change password" and "Change email" to every
+     * account, because it had no way to know an account might have neither. An
+     * account created from a mobile number has no password and no address on
+     * purpose, and both of those forms refused it with "This account signs in
+     * with Google" — a provider it has never used. The screen could not do
+     * better: nothing in this payload said which kind of account it was.
+     *
+     * So it says now. A boolean, never `passwordHash`: the screen needs to know
+     * THAT there is a password, and has no business with the hash.
+     */
+    const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
       select: {
+        passwordHash: true,
+        authProvider: true,
         id: true, email: true, role: true, fullName: true,
         avatarPath: true, isVerified: true, createdAt: true,
         // phone and phoneVerified were missing, so account settings showed an
@@ -332,6 +349,8 @@ export class AuthService {
         deactivatedAt: true,
       },
     });
+    const { passwordHash, ...rest } = user;
+    return { ...rest, hasPassword: passwordHash !== null };
   }
 
   private async buildAuthResponse(user: any): Promise<AuthResponse & { refreshTokenId: string }> {
@@ -361,6 +380,22 @@ export class AuthService {
         walkthroughSeenAt: user.walkthroughSeenAt ?? null,
         /** Phase 7g. Non-null means the owner paused it; the portal offers to wake it. */
         deactivatedAt: user.deactivatedAt ?? null,
+        /**
+         * ⚠️ Here as well as on `getMe`, because one shape or the other is a bug.
+         *
+         * It was only on `getMe` at first, and the settings screen — which
+         * defaults a missing value to `true`, so an older payload behaves as it
+         * always did — therefore believed a brand-new phone-only account had a
+         * password. It showed that person "Current password" and hid the
+         * confirmed number change: the exact screen this phase existed to fix,
+         * restored by the payload it was fixed with. Caught by the UI drive; the
+         * API drive could not see it, because the API was right.
+         *
+         * Derived from the hash and never the hash itself, as on `getMe`.
+         */
+        hasPassword: user.passwordHash !== undefined
+          ? user.passwordHash !== null
+          : undefined,
       },
     };
   }

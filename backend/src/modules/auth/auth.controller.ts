@@ -17,7 +17,7 @@ import { PasswordlessService } from './passwordless.service';
 import { PhoneOtpService } from './phone-otp.service';
 import { PhoneSignupService } from './phone-signup.service';
 import {
-  PhoneCodeDto, VerifyPhoneDto, ConfirmNumberDto, CompletePhoneSignupDto,
+  PhoneCodeDto, VerifyPhoneDto, ConfirmNumberDto, CompletePhoneSignupDto, RequestPhoneChangeDto,
 } from './dto/phone-otp.dto';
 import { MagicLinkDto, VerifyMagicLinkDto } from './dto/passwordless.dto';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
@@ -329,7 +329,9 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Change password while signed in. Requires the current one.' })
   changePassword(@Body() dto: ChangePasswordDto, @CurrentUser() user: { id: string }) {
-    return this.recovery.changePassword(user.id, dto.currentPassword, dto.newPassword);
+    return this.recovery.changePassword(
+      user.id, dto.currentPassword ?? '', dto.newPassword, dto.phoneCode,
+    );
   }
 
   @Post('change-email')
@@ -338,7 +340,35 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Start an email change. Confirmed at the new address.' })
   requestEmailChange(@Body() dto: RequestEmailChangeDto, @CurrentUser() user: { id: string }) {
-    return this.recovery.requestEmailChange(user.id, dto.newEmail, dto.currentPassword);
+    return this.recovery.requestEmailChange(
+      user.id, dto.newEmail, dto.currentPassword ?? '', dto.phoneCode,
+    );
+  }
+
+  // ── Changing the number, proven before it lands — Phase 7o ───────────────
+  //
+  // ⚠️ Not a field on the profile form. It was one, and on an account whose
+  // number is the only credential a mistyped digit was a permanent lockout —
+  // see UsersService.updateProfile and PhoneOtpService.requestPhoneChange.
+
+  @Post('phone/change/request-code')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Send a code to a NEW number. The account keeps its current one until confirmed.',
+  })
+  requestPhoneChange(@Body() dto: RequestPhoneChangeDto, @CurrentUser() user: { id: string }) {
+    return this.phoneOtp.requestPhoneChange(user.id, dto.newPhone);
+  }
+
+  @Post('phone/change/confirm')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'The code came back from the new number, so switch to it' })
+  confirmPhoneChange(@Body() dto: ConfirmNumberDto, @CurrentUser() user: { id: string }) {
+    return this.phoneOtp.confirmPhoneChange(user.id, dto.code);
   }
 
   @Post('confirm-email-change')

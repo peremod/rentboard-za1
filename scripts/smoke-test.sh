@@ -1295,6 +1295,54 @@ else
   skipped "the publish rule and the lead summary — set ADMIN_TOKEN to include them"
 fi
 
+# -- 17e. A phone-only account can be looked after (Phase 7o) --------------
+head_ "17e. A phone-only account"
+
+# ⚠️ These do NOT create a phone-only account. A code only goes out over
+# WhatsApp, which is not connected here, so making one needs the database and
+# the API's own JWT_SECRET — that is scripts/phone-only-drive.mjs, and it is
+# where the behaviour is actually proven. What is checkable from here is that
+# the new surface exists, is guarded, and that an ordinary account was not
+# broken by the guard added for phone-only ones.
+
+req POST /api/auth/phone/change/request-code '{"newPhone":"0829876543"}'
+check "changing a number needs a session" 401 "$STATUS" "$BODY"
+
+req POST /api/auth/phone/change/confirm '{"code":"123456"}'
+check "confirming a number change needs a session" 401 "$STATUS" "$BODY"
+
+# The route EXISTS. A 404 here would mean the whole flow is unreachable and the
+# two 401s above would be passing on a missing route — which is how a dead
+# control passes a guard check.
+if [[ "$STATUS" != "404" ]]; then
+  green "  PASS  …and both routes exist rather than answering 404"; PASS=$((PASS+1))
+else
+  red "  FAIL  /auth/phone/change/confirm is a 404 — the 401s above prove nothing"; FAIL=$((FAIL+1))
+fi
+
+# `hasPassword` reaches the browser, because the settings screen branches on it
+# and defaults a missing value to "yes, it has one". Absent, a phone-only
+# account is shown a Current password box again.
+req GET /api/auth/me "" "$LTOKEN"
+if echo "$BODY" | jq -e 'has("hasPassword")' >/dev/null 2>&1; then
+  green "  PASS  /auth/me says whether the account has a password"; PASS=$((PASS+1))
+else
+  red "  FAIL  /auth/me carries no hasPassword — the settings screen has to guess"; FAIL=$((FAIL+1))
+  grey "        $(echo "$BODY" | head -c 200)"
+fi
+# And never the hash itself.
+if echo "$BODY" | jq -e 'has("passwordHash")' >/dev/null 2>&1; then
+  red "  FAIL  /auth/me ships the password hash"; FAIL=$((FAIL+1))
+else
+  green "  PASS  …and never the hash"; PASS=$((PASS+1))
+fi
+
+# The guard added for phone-only accounts must not touch an ordinary one. This
+# account has an email and a password, so its number is not the only way in and
+# clearing it is still its own business.
+req PATCH /api/users/me '{"phone":""}' "$LTOKEN"
+check "an account with an email can still clear its number" 200 "$STATUS" "$BODY"
+
 # -- 18. Safety reports ----------------------------------------------------
 head_ "18. Safety reports"
 if [[ -n "$ROOM_ID" ]]; then
