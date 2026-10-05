@@ -2,7 +2,9 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { RouterLink } from '@angular/router';
 import { DatePipe, LowerCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { AdminService, AdminStats, AdminUser, AdminKpis } from '../../../core/services/admin.service';
+import {
+  AdminService, AdminStats, AdminUser, AdminKpis, AssistedSignup,
+} from '../../../core/services/admin.service';
 import { PaymentsService, RefundDue } from '../../../core/services/payments.service';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { PluralPipe } from '../../../shared/pipes/plural.pipe';
@@ -171,6 +173,77 @@ import { PluralPipe } from '../../../shared/pipes/plural.pipe';
         </section>
       }
 
+      <!-- ── Assisted sign-up — Phase 7p ──────────────────────────────
+           On the overview rather than behind a new nav entry: it is a thing an
+           admin does while sitting with somebody, not a screen they go looking
+           for, and a new nav item is a new way to ship a dead link.
+
+           The code goes to THEIR handset. The screen says so, because this is
+           the control and a helper who does not know it will keep asking why
+           no code arrived on their own phone. -->
+      <section class="dash-section">
+        <h2 class="dash-section-title">
+          Help somebody sign up
+          @if (assisted().length) {
+            <span class="dash-count">({{ assisted().length }})</span>
+          }
+        </h2>
+
+        <div class="insight-banner">
+          📲
+          <span>
+            For a landlord sitting with you who has a phone and no email address.
+            <strong>The code goes to their handset, not yours</strong> — ask them to
+            read it out or type it in. They have to accept the Terms themselves on
+            the last step; you cannot do that part for them.
+          </span>
+        </div>
+
+        <div class="form-row">
+          <label for="assist-phone">Their mobile number</label>
+          <input id="assist-phone" type="tel" inputmode="tel" [(ngModel)]="assistPhone"
+                 placeholder="e.g. 082 123 4567" autocomplete="off"/>
+        </div>
+        <button type="button" class="btn btn-outline"
+                [disabled]="assisting() || assistPhone.trim().length < 10"
+                (click)="startAssisted()">
+          {{ assisting() ? 'Sending…' : 'Send them a code' }}
+        </button>
+
+        @if (assistMessage()) { <p class="field-hint">{{ assistMessage() }}</p> }
+        @if (assistError()) { <p class="field-error" role="alert">{{ assistError() }}</p> }
+
+        @if (assisted().length) {
+          <!-- Stored is not readable. This codebase has shipped a notice
+               channel nobody could read; a column recording who helped is an
+               audit trail only if somebody can see it. -->
+          @for (a of assisted(); track a.id) {
+            <div class="app-card">
+              <div class="app-info">
+                <div class="app-room">
+                  @if (a.becameAnAccount) {
+                    ✅ Finished — they accepted
+                    {{ a.theyAcceptedAt | date:'d MMM, HH:mm' }}
+                  } @else if (a.stillOpen) {
+                    ⏳ Waiting for {{ a.phone }}
+                  } @else {
+                    ⌛ Expired — {{ a.phone }} never finished
+                  }
+                </div>
+                <div class="app-location">
+                  Started {{ a.startedAt | date:'d MMM, HH:mm' }}
+                  @if (a.numberProvenAt && !a.becameAnAccount) {
+                    · number proven, Terms not accepted yet
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        } @else if (!loadingAssisted()) {
+          <p class="muted">You have not started any yet.</p>
+        }
+      </section>
+
       <section class="dash-section">
         <h2 class="dash-section-title">Accounts</h2>
 
@@ -259,13 +332,54 @@ export class AdminDashboard implements OnInit {
   refundError = signal<string | null>(null);
   refundErrorMessage = signal('');
 
+  // Assisted sign-up — Phase 7p.
+  assisted = signal<AssistedSignup[]>([]);
+  loadingAssisted = signal(true);
+  assisting = signal(false);
+  assistMessage = signal<string | null>(null);
+  assistError = signal<string | null>(null);
+  assistPhone = '';
+
   /** Arrow with sign, or nothing when there is no prior period to compare. */
   change(pct: number): string {
     if (pct === 0) return '';
     return pct > 0 ? `↑ ${pct}%` : `↓ ${Math.abs(pct)}%`;
   }
 
+  /**
+   * Start a sign-up for somebody sitting with the admin.
+   *
+   * ⚠️ The list is reloaded on success, not patched optimistically. What the
+   * server stores is the audit trail, and a screen that draws a row the server
+   * did not write is a record of help that may not have happened.
+   */
+  startAssisted() {
+    this.assisting.set(true);
+    this.assistMessage.set(null);
+    this.assistError.set(null);
+    this.adminService.startAssistedSignup(this.assistPhone.trim()).subscribe({
+      next: (res) => {
+        this.assisting.set(false);
+        this.assistMessage.set(`${res.message} ${res.theyMustAccept}`);
+        this.assistPhone = '';
+        this.loadAssisted();
+      },
+      error: (err) => {
+        this.assisting.set(false);
+        this.assistError.set(err?.error?.message ?? 'Could not send a code to that number.');
+      },
+    });
+  }
+
+  private loadAssisted() {
+    this.adminService.assistedSignups().subscribe({
+      next: (rows) => { this.assisted.set(rows); this.loadingAssisted.set(false); },
+      error: () => this.loadingAssisted.set(false),
+    });
+  }
+
   ngOnInit() {
+    this.loadAssisted();
     this.adminService.getKpis().subscribe({
       next: (k) => this.kpis.set(k),
       error: () => {},   // the overview must still render without them

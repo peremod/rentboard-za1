@@ -94,9 +94,18 @@ function assertRow(r, { width, where, minItems }) {
     return false;
   }
   const smallest = Math.min(...r.heights);
+  // ⚠️ "every BUTTON", not "every control" — Phase 7p.
+  //
+  // `measureRow`'s default childSel is `button, a.btn`, so this has never
+  // looked at a text input, and the sentence it printed said otherwise. v1.93.0
+  // closed Outstanding 13 by making .btn 44px app-wide and this line then
+  // reported every row clean — while 29 inputs across eight screens sat at
+  // 37px and lower, down to 30px on the board's own filter row, for three
+  // releases. A claim about controls measured over a subset of them is this
+  // codebase's own recurring defect. Section 9 below sweeps the inputs.
   smallest >= TAP
-    ? ok(`${width}px ${where}: every control clears ${TAP}px (smallest ${smallest}px)`)
-    : bad(`${width}px ${where}: a control is ${smallest}px tall — under the ${TAP}px tap target (WCAG 2.5.8). ${JSON.stringify(r.labels)} ${JSON.stringify(r.heights)}`);
+    ? ok(`${width}px ${where}: every button clears ${TAP}px (smallest ${smallest}px)`)
+    : bad(`${width}px ${where}: a button is ${smallest}px tall — under the ${TAP}px tap target (WCAG 2.5.8). ${JSON.stringify(r.labels)} ${JSON.stringify(r.heights)}`);
 
   const tightest = r.gaps.length ? Math.min(...r.gaps) : Infinity;
   tightest >= 8
@@ -600,6 +609,111 @@ console.log('\n── 21. The save that used to say nothing ──────�
         ? ok('…and the house rules are actually on the property, so the message is not a lie')
         : bad(`the confirmation appeared but the database holds ${JSON.stringify(rules)}`);
     }
+  }
+}
+
+// ── 9. Every text control is a tap target too — Phase 7p ────────────────
+//
+// ⚠️ This is the check whose absence let 29 sub-target inputs ship.
+//
+// Not a row: a sweep of every visible text control on the page, because the
+// defect was not in one row — it was the base rule, and a row-shaped check can
+// only ever find it on the rows somebody thought to list. Found by a 37px field
+// on a new admin form, three releases after the phase that was about exactly
+// this.
+//
+// Checkboxes and radios are excluded: they size themselves and their tap target
+// is the label they sit in.
+console.log('\n── 9. Text controls are tap targets too ─────────────────────');
+
+const CONTROL_PAGES = [
+  ['/', 'the board', false],
+  ['/auth/login', 'login', false],
+  ['/auth/register', 'register', false],
+  ['/auth/register-phone', 'phone sign-up', false],
+  ['/account/settings', 'account settings', true],
+  ['/landlord/rooms/new', 'the listing wizard', true],
+];
+
+/**
+ * ⚠️ One sign-in, its session copied per width.
+ *
+ * Written as `signIn(...)` per width per guarded page, this section added eight
+ * sign-ins to a drive that already had several — against a limiter of thirty
+ * logins per fifteen minutes. The drive then died at section 18 with "still on
+ * /auth/login", which reads as an auth bug and is the trap CLAUDE.md names. A
+ * fresh CONTEXT costs nothing and still paints at the target width from the
+ * start, which matters: a layout read at 360px after a 1280px paint has
+ * reported a desktop measurement as a phone one in this repo before.
+ */
+let sweepSession = await (async () => {
+  const p = await signIn(browser, WEB, landlord.email, PASSWORD, { width: 390, height: 900 });
+  const state = await p.context().storageState();
+  await p.context().close();
+  return state;
+})();
+
+/**
+ * ⚠️ The state is re-captured each time, because the refresh cookie ROTATES.
+ *
+ * Captured once and reused, this worked at the first width and failed at every
+ * one after it: the session is a refresh cookie, the app spends it on load, and
+ * the server issues a new one — so the second context presented a token that
+ * had already been rotated away and was signed out. Six checks reported "the
+ * copied session did not sign in", which is the guard below doing its job; the
+ * version before that guard would have measured the login form's two fields and
+ * called the page clean.
+ */
+for (const width of WIDTHS) {
+  for (const [path, label, needsAuth] of CONTROL_PAGES) {
+    const ctx = await browser.newContext({
+      viewport: { width, height: 900 },
+      ...(needsAuth ? { storageState: sweepSession } : {}),
+    });
+    const p = await ctx.newPage();
+    await p.goto(`${WEB}${path}`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(900);
+
+    // A guarded page that bounced to the login form would otherwise be measured
+    // as "two text controls, both fine" — a clean pass on the wrong screen.
+    if (needsAuth && /\/auth\/login/.test(new URL(p.url()).pathname)) {
+      bad(`${width}px ${label}: the copied session did not sign in, so nothing was measured`);
+      await ctx.close();
+      continue;
+    }
+
+    const m = await p.evaluate(() => {
+      const vis = (el) => !!el && getComputedStyle(el).display !== 'none'
+        && el.getBoundingClientRect().height > 0;
+      const controls = [...document.querySelectorAll(
+        "input:not([type='checkbox']):not([type='radio']), select, textarea",
+      )].filter(vis);
+      return {
+        count: controls.length,
+        under: controls
+          .filter((c) => c.getBoundingClientRect().height < 44)
+          .map((c) => ({
+            id: c.id || c.getAttribute('name') || c.type,
+            h: Math.round(c.getBoundingClientRect().height),
+          })),
+        smallest: controls.length
+          ? Math.round(Math.min(...controls.map((c) => c.getBoundingClientRect().height)))
+          : 0,
+      };
+    });
+
+    // The precondition, asserted. A sweep that found no controls would report
+    // a clean page forever — which is how a check stops being one.
+    if (m.count === 0) {
+      bad(`${width}px ${label}: no text controls found, so nothing was measured`);
+    } else if (m.under.length === 0) {
+      ok(`${width}px ${label}: ${m.count} text controls, smallest ${m.smallest}px`);
+    } else {
+      bad(`${width}px ${label}: ${m.under.length} of ${m.count} text controls under ${TAP}px — ${JSON.stringify(m.under)}`);
+    }
+    // Follow the rotation, so the next context presents the current cookie.
+    if (needsAuth) sweepSession = await ctx.storageState();
+    await ctx.close();
   }
 }
 

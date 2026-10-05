@@ -164,9 +164,25 @@ export class PhoneSignupService {
       return neutral;
     }
 
-    // Counted as rows in a window, not as a counter on a row: starting a fresh
-    // attempt must not hand anybody a fresh budget. Each message costs money and
-    // lands on a handset that may not be the requester's.
+    await this.assertCodeBudget(phone);
+    await this.issueCode(phone);
+
+    this.logger.log(`Signup code requested for ${phone}`);
+    return neutral;
+  }
+
+  /**
+   * The per-number code budget.
+   *
+   * Counted as rows in a window, not as a counter on a row: starting a fresh
+   * attempt must not hand anybody a fresh budget. Each message costs money and
+   * lands on a handset that may not be the requester's.
+   *
+   * ⚠️ Shared with the assisted path on purpose — Phase 7p. An admin helping
+   * somebody is still sending WhatsApp messages to a number that is not theirs,
+   * and a path that skipped this would be the way to send twenty.
+   */
+  private async assertCodeBudget(phone: string) {
     const [recent, today] = await Promise.all([
       this.prisma.phoneSignup.count({
         where: { phone, createdAt: { gte: new Date(Date.now() - 15 * 60_000) } },
@@ -183,14 +199,22 @@ export class PhoneSignupService {
         'Too many codes sent to this number today. Please try again tomorrow.',
       );
     }
+  }
 
+  /**
+   * Issues one code and sends it, recording who asked for it if anybody did.
+   *
+   * ONE live code at a time, spent in the same transaction as the new one is
+   * issued — so there is no instant with two valid codes and none with zero.
+   * Only rows still awaiting a code are touched: a row that has already been
+   * verified is holding a live ticket, and killing that would log somebody out
+   * of a sign-up they are halfway through for the sake of tidiness.
+   *
+   * Returns the code so the caller can see it was made; no caller sends it
+   * anywhere, and the assisted path deliberately does not put it in a response.
+   */
+  private async issueCode(phone: string, assistedByAdminId?: string) {
     const code = String(crypto.randomInt(100000, 999999));
-
-    // ONE live code at a time, spent in the same transaction as the new one is
-    // issued — so there is no instant with two valid codes and none with zero.
-    // Only rows still awaiting a code are touched: a row that has already been
-    // verified is holding a live ticket, and killing that would log somebody out
-    // of a sign-up they are halfway through for the sake of tidiness.
     await this.prisma.$transaction([
       this.prisma.phoneSignup.updateMany({
         where: { phone, userId: null, codeHash: { not: null } },
@@ -201,6 +225,7 @@ export class PhoneSignupService {
           phone,
           codeHash: this.hashCode(code, phone),
           expiresAt: new Date(Date.now() + CODE_TTL_MINUTES * 60_000),
+          ...(assistedByAdminId ? { assistedByAdminId } : {}),
         },
       }),
     ]);
@@ -209,8 +234,7 @@ export class PhoneSignupService {
       .sendOtp(phone, code, CODE_TTL_MINUTES)
       .catch((err) => this.logger.error(`Signup code send failed for ${phone}`, err));
 
-    this.logger.log(`Signup code requested for ${phone}`);
-    return neutral;
+    return code;
   }
 
   /**
@@ -421,4 +445,106 @@ export class PhoneSignupService {
     if (count) this.logger.log(`Pruned ${count} abandoned phone sign-up(s)`);
     return { pruned: count };
   }
+  // ── Assisted sign-up — Phase 7p ──────────────────────────────────────────
+
+  /**
+   * An admin starts a sign-up for somebody sitting in front of them.
+   *
+   * ⚠️ What this method does NOT return is the whole design.
+   *
+   * No code. No ticket. The admin who calls this gets a sentence and nothing
+   * they can act on alone, because the six-digit code goes to the person's own
+   * handset and `verify` will not hand out a ticket without it. So a helper can
+   * work the form on a borrowed phone, read out what to type, and explain the
+   * Terms — and the acceptance is still recorded by `complete` from the request
+   * the person themselves confirms, against the row their handset proved.
+   *
+   * Help reaches the handset. Consent stops at the person. This method cannot
+   * move that line, and that is why assisted sign-up needed a column rather
+   * than a flow.
+   *
+   * ── One deliberate difference from the public endpoint
+   *
+   * `requestCode` answers identically whether or not the number has an account,
+   * because "that number already has an account" tells somebody probing a list
+   * of numbers who is a landlord here. This one SAYS SO, to the admin only.
+   *
+   * That is not a leak being waved through: an admin can already read the user
+   * list, so nothing is disclosed that they could not look up — and withholding
+   * it would make assisting useless in the one case it most matters. Somebody
+   * who has an account and has forgotten needs to be signed in, not signed up,
+   * and a helper who cannot be told that will keep sending codes that are never
+   * sent. The public endpoint is unchanged, and the drive asserts it.
+   */
+  async requestCodeAssisted(rawPhone: string, adminId: string) {
+    const phone = this.requirePhone(rawPhone);
+
+    const existing = await this.prisma.user.findFirst({
+      where: { phone, phoneVerified: true },
+      select: { id: true, isActive: true },
+    });
+    if (existing) {
+      // Said plainly, and still without a name or an email address: what the
+      // helper needs is "sign them in instead", not a profile.
+      throw new BadRequestException(
+        existing.isActive
+          ? 'That number already has an account. Sign them in with a WhatsApp code instead — '
+            + 'there is nothing to set up again.'
+          : 'That number belongs to an account that is closed or paused. It cannot be signed up again.',
+      );
+    }
+
+    await this.assertCodeBudget(phone);
+    const code = await this.issueCode(phone, adminId);
+
+    this.logger.log(`Assisted signup started for ${phone} by admin ${adminId}`);
+    return {
+      message:
+        `A code is on its way to ${phone} on WhatsApp. It expires in ${CODE_TTL_MINUTES} minutes. `
+        + `Ask them to read it to you, or to type it in themselves — you cannot continue without it.`,
+      // Stated in the payload rather than only on the screen, so an integration
+      // reading this API is told the same thing a person is.
+      theyMustAccept:
+        'They have to accept the Terms and Privacy Policy themselves on the last step. '
+        + 'You cannot do that part for them.',
+      // Deliberately absent: `code` and `ticket`. See the note above.
+    };
+  }
+
+  /**
+   * The sign-ups one admin has started, newest first.
+   *
+   * Stored is not the same as readable — this codebase has shipped a notice
+   * channel nobody could read and a `Message.readAt` nobody wrote. A column
+   * recording who helped is an audit trail only if somebody can see it.
+   *
+   * ⚠️ No `codeHash` and no `ticketHash` in the select, and no phone number for
+   * a row that became an account: once there is a user, the number is on that
+   * account and this screen is about the ATTEMPT, not about the person. In
+   * flight, the number is what the admin is working on and is shown.
+   */
+  async assistedByAdmin(adminId: string) {
+    const rows = await this.prisma.phoneSignup.findMany({
+      where: { assistedByAdminId: adminId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true, phone: true, createdAt: true, expiresAt: true,
+        verifiedAt: true, consentAcceptedAt: true, userId: true,
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      // Masked once it is an account: the record is that help happened, and the
+      // number is readable on the account itself to anyone who should see it.
+      phone: r.userId ? null : r.phone,
+      startedAt: r.createdAt,
+      numberProvenAt: r.verifiedAt,
+      /** Null on every row the person did not finish themselves. */
+      theyAcceptedAt: r.consentAcceptedAt,
+      becameAnAccount: r.userId !== null,
+      stillOpen: r.userId === null && r.expiresAt > new Date(),
+    }));
+  }
+
 }

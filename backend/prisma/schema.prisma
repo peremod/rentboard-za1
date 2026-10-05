@@ -213,6 +213,10 @@ model User {
   contractorLeads ContractorLead[] @relation("ContractorLeads")
   /// Phase 7l. Viewings this person called off — either side may.
   viewingsCancelled RoomViewing[] @relation("ViewingsCancelled")
+
+  /// Sign-ups this admin started for somebody else — Phase 7p. SET NULL on
+  /// their own deletion, so the record of the help outlives the staff member.
+  phoneSignupsAssisted PhoneSignup[] @relation("PhoneSignupsAssisted")
 }
 
 model LandlordProfile {
@@ -2968,10 +2972,32 @@ model PhoneSignup {
   userId String? @unique
   user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  /// Which admin started this one for somebody — Phase 7p.
+  ///
+  /// ⚠️ This is the ONLY thing assisted sign-up adds, because the control that
+  /// makes it safe was already here: `complete` takes `acceptTerms` from the
+  /// request and records it against this row, and no helper can reach that step
+  /// without the code that went to the person's own handset. Help reaches the
+  /// handset; the consent stops at the person.
+  ///
+  /// Admin-recorded rather than open to any signed-in account: there is no agent
+  /// role in this product, and an open version would be a way to send sign-up
+  /// codes to arbitrary numbers with somebody else's name against the record.
+  ///
+  /// **Never in a user-facing payload.** Internal accountability, the same rule
+  /// as ServiceProvider.checkedByAdminId.
+  ///
+  /// SET NULL rather than cascade: an admin closing their own account must not
+  /// delete the sign-up records of the people they helped.
+  assistedByAdminId String?
+  assistedBy        User?   @relation("PhoneSignupsAssisted", fields: [assistedByAdminId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   /// The live-row lookup: newest unconsumed attempt for a number.
   @@index([phone, userId, createdAt])
+  /// "The sign-ups I started" — the screen that makes the record readable.
+  @@index([assistedByAdminId, createdAt])
   @@map("phone_signups")
 }

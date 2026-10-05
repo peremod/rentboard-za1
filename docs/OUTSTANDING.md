@@ -375,18 +375,20 @@ turned out not to be features so much as a shipped lockout:
   the old number in hand. Recovering without it means proving identity to a
   person, which is the admin and verification machinery, and is a decision
   rather than a patch.
-- **Assisted sign-up** is the one still outstanding. The existing flow already
-  holds the control that matters: the code goes to the person's own handset and
-  the acceptance is recorded against the row that proved that number, so help
-  can reach as far as the handset and the consent stops at the person. What is
-  missing is only an audit trail of **who helped** — and that needs a decision
-  first, because there is no agent role in this product. ⚠️ Making it
-  open to any signed-in user would be a way to send sign-up codes to arbitrary
-  numbers. The defensible version is admin-recorded, the same shape as
-  admin-initiated account closure in Phase 7i: an admin starts it, the code
-  still goes to the person, the person still accepts, and
-  `PhoneSignup.assistedByAdminId` records it. **Say if that is the version you
-  want, or whether an agent should be a real role.**
+- **Assisted sign-up** — done in v1.101.0 (Phase 7p), admin-recorded, as
+  decided. An admin starts it from the overview, the code goes to the person's
+  own handset, the person accepts the Terms themselves, and
+  `PhoneSignup.assistedByAdminId` records who helped. The reply hands the admin
+  no code and no ticket, which is the control: either would let them create an
+  account in somebody's name and tick the Terms for them. See FLOW-AUDIT §5.34.
+
+  **Phase 7g is now finished.** What remains across the phone-only work is one
+  named gap rather than an item: 🔴 losing the number **entirely** has no route
+  back, because every route needs the old number in hand. That needs identity
+  proved to a person — the admin and verification machinery — and is a decision.
+
+  ⚠️ **If an agent should ever be a real role** rather than an admin, the
+  column is already the right shape; what changes is who may write it.
 
 ---
 
@@ -459,7 +461,38 @@ gets built accordingly.
 
 ---
 
-## 13. ⚠️ Buttons are 34px, nearly everywhere — a decision, not a bug report
+## 13. ⚠️ Buttons were 34px nearly everywhere — and so were the INPUTS
+
+**Both halves are closed now, three releases apart, and the gap between them is
+the lesson.** Buttons went to 44px app-wide in v1.93.0. The inputs were not
+looked at, and nothing noticed until Phase 7p measured a new admin field at
+37px and then measured the rest:
+
+| Screen (360px) | Text controls under 44px | Smallest |
+| --- | --- | --- |
+| `/` | **12 of 12** | **30px** |
+| `/auth/login` | 2 of 2 | 37px |
+| `/auth/register` | 4 of 4 | 37px |
+| `/auth/register-phone` | 1 of 1 | 37px |
+| `/account/settings` | 6 of 6 | 37px |
+| `/landlord/rooms/new` | 2 of 3 | 35px |
+| `/landlord/properties` | 1 of 1 | 34px |
+| `/admin/dashboard` | 2 of 2 | 37px |
+
+⚠️ **`layout-ui-drive` printed "every control clears 44px" the whole time.** Its
+`measureRow` selector is `button, a.btn`, so it had never looked at a text box —
+a claim about controls measured over a subset of them, in the drive written for
+this exact problem. The sentence says "every **button**" now, and a new section 9
+sweeps every visible text control on six screens at four widths. Falsified by
+removing the global rule: 24 failures.
+
+Fixed in `styles.scss` with a normal-specificity `min-height: 44px` on
+`input:not([type=checkbox]):not([type=radio]), select, textarea` — the base look
+sits in `:where()` so components can win it, but a tap target is not a look.
+
+**The original note follows, for the buttons half.**
+
+---
 
 Found by the new width checks in `scripts/account-lifecycle-ui-drive.mjs`, then
 measured across the public pages:
@@ -705,6 +738,14 @@ node scripts/dashboard-drive.mjs         # 35 checks — Phase 7d. "Viewed 47 ti
 node scripts/onboarding-drive.mjs        # 35 checks — Phase 7f. The social card
                                          # (measured, not assumed) and the
                                          # first-run walkthrough
+node scripts/assisted-signup-drive.mjs  # 27 checks — Phase 7p. Needs
+                                         # JWT_SECRET. Mostly about what an
+                                         # admin CANNOT do: no code and no
+                                         # ticket in the reply, and the Terms
+                                         # still the person's to accept
+node scripts/assisted-signup-ui-drive.mjs # 21 checks — that the admin screen
+                                         # says whose handset the code goes to,
+                                         # at four widths
 node scripts/phone-only-drive.mjs       # 30 checks — Phase 7o. Needs
                                          # JWT_SECRET: a code only goes out
                                          # over WhatsApp, so it is recovered

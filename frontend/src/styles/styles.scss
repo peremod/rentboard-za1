@@ -106,6 +106,37 @@ a { color: $color-terracotta; }
   &::placeholder { color: $color-muted; }
 }
 
+// ── Tap target: every text control, not just every button ────────────────
+//
+// ⚠️ v1.93.0 closed Outstanding 13 by making `.btn` 44px app-wide, after the
+// third screen in one sitting needed the same local patch. Nobody looked at the
+// INPUTS. Measured at 360px in Phase 7p, 29 of them across the board, login,
+// register, phone sign-up, account settings, the listing wizard, my properties
+// and the admin overview: **all 29 under 44px**, from 37px down to 30px on the
+// board's own filter row. WCAG 2.5.8 is about pointer targets, and a text box
+// is one — on a cheap Android phone it is the thing a thumb has to find.
+//
+// The drives did not see it. `layout-ui-drive` reports "every control clears
+// 44px" and its selectors are buttons and `.link-btn`; a claim about controls
+// measured over a subset of them is this codebase's own recurring defect, and
+// it is why this went three releases past the phase that was about exactly it.
+//
+// Fixed here rather than on the one new field that found it, for the reason
+// v1.93.0 records: the third local patch is the signal the base rule is the
+// place. `min-height` rather than padding, so nothing re-wraps or gets wider.
+//
+// Normal specificity on purpose. The base look above sits in `:where()` so
+// component styles can win it; a tap target is not a look, and a component
+// deciding its own input should be 30px is the bug, not a preference.
+//
+// Checkboxes and radios are excluded — they size themselves below, and their
+// 44px target is the label they sit inside.
+input:not([type='checkbox']):not([type='radio']),
+select,
+textarea {
+  min-height: 44px;
+}
+
 // State styles apply to every control regardless of which rule set its base
 // look, so these keep normal specificity.
 input, select, textarea {
