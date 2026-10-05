@@ -920,6 +920,63 @@ deliberate rather than one sort call away. See docs/FLOW-AUDIT.md §5.31.
 
 ---
 
+## 17. 26 classes are used in a template and styled nowhere
+
+`scripts/css-coverage-audit.mjs` (v1.106.0) checks that every class a template
+uses has a rule in the shipped CSS. Switched on, it found **27 across 82
+components**. One — `.btn-danger`, which made a destructive button on five admin
+screens look identical to an ordinary one — was fixed immediately. The other 26
+are in `scripts/css-coverage-baseline.json`.
+
+⚠️ **A baseline, not an allowlist.** The audit names them on every run and fails
+on anything that is not among them, so a new one is caught the day it is
+written. The existing debt stays in sight and is burned down by deleting lines,
+which only goes one way. It is NOT permission — each line is a screen rendering
+some unstyled inline content to somebody.
+
+What this costs, from the two that were fixed: `.yard__actions` put "Shared
+details" and "Delete this property" on a landlord's phone as one unbroken
+string; `.form-error` rendered a failed save, `role="alert"` and all, as
+ordinary body text on four screens. Neither was visible to any other check here.
+
+The remaining 26, in `scripts/css-coverage-baseline.json`:
+
+| `.ac-sub` |
+| `.auth__alt` |
+| `.auth__form` |
+| `.auth__hint` |
+| `.btn-link` |
+| `.card` |
+| `.cover-note` |
+| `.detail__facts` |
+| `.detail__safety` |
+| `.detail__section` |
+| `.field` |
+| `.field-label` |
+| `.growth-table` |
+| `.landlord-trust` |
+| `.landlord-trust__state--none` |
+| `.landlord-trust__state--ok` |
+| `.lead-agree` |
+| `.linkish` |
+| `.notice-main` |
+| `.photo-upload` |
+| `.pill` |
+| `.referral-share` |
+| `.rent-reminders` |
+| `.shared-rules` |
+| `.shared-who` |
+| `.verify-facts` |
+
+Worth knowing before picking one up: a class that always appears beside another
+that does the styling (`class="muted something"`) is a hook, not a defect —
+those live in `ALLOWED` in the audit, each with a reason. These 26 are the ones
+with nothing carrying them.
+
+**Check it:** `npm run audit:css`, after a production build.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

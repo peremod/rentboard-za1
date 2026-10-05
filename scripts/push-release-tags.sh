@@ -1211,6 +1211,49 @@ Production is up: 15 migrations applied over the direct endpoint by the user,
 not from here. 'Who to call' is empty until an admin records a phone check per
 contractor at /admin/services, as predicted."
 
+tag_if_missing "v1.106.0" "7f6d9ad7f48d053292690e544624e8c130df2c99" "2026-10-05 15:07:16 +0000" "v1.106.0 — a class with no rule renders as unstyled inline content
+
+Three screenshots from a 360px handset: labels beside their inputs instead of
+above them, controls running off the right edge, and 'Shared detailsDelete this
+property' as one unbroken string.
+
+Most of it was a stale deploy — the label and width rules landed on 4 October in
+a commit that is not an ancestor of the master the site was built from, so they
+had never been live. Establishing that came before writing any CSS: a fix at
+that point would have changed nothing a landlord could see and left the real
+cause in place.
+
+Two were real and present on master. .yard__actions had NO rule at all, and it
+holds a harmless action next to a destructive one, so they rendered inline with
+no gap — the string in the screenshot, which deploying would not have fixed. And
+.form-error had no rule anywhere in the app: five uses across four components,
+two carrying role=alert, so a screen reader announced an error the screen showed
+as ordinary body text.
+
+One more the screenshots could not show: .btn-danger is used by seven components
+and written in the scoped styles of two, so five admin screens rendered a
+destructive button identical to an ordinary one.
+
+css-coverage-audit.mjs now asserts that every class a template uses has a rule
+in the shipped CSS. It reads the templates, so it cannot be fooled by a screen
+nobody opened. Its own first version skipped components with a styles block,
+which hid four of btn-danger's five victims. It found 27 bare classes across 82
+components; the 26 that remain are a baseline file rather than an allowlist,
+because 27 invented reasons is how a check reads green over its own findings.
+
+yard-layout-drive.mjs measures the screen at 360/390/768/1280 with both forms
+open. Nothing here could have caught the original: the drive written for this
+problem never opens this screen, and the drive that opens it measures no widths.
+The new drive then produced the same defect itself — pointed at a redirecting
+route, three of its four checks passed over an empty set. Fixed to skip rather
+than pass when there is nothing to measure.
+
+It found what the screenshots did not: at 360 and 390 the two card actions wrap,
+and the first fix left 5.6px between a destructive control and a harmless one.
+
+Falsified both directions, including the finding that removing the label rule
+alone does not break the stacking check, because width:100% carries it."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1226,7 +1269,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-5][.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-6][.]'"
 else
   echo "Nothing to push."
 fi

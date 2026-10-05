@@ -2937,6 +2937,107 @@ The migration itself was never run from this environment and could not be — no
 production credential, and `umastande.co.za` and `rentboard-api.onrender.com`
 both answer HTTP `000`, `connect_rejected` by the egress policy.
 
+### 5.38 "Shared detailsDelete this property" — ✅ fixed in v1.106.0
+
+A landlord sent three screenshots of `/landlord/properties/:id` on a 360px
+handset. The shared-details form had every label beside its input instead of
+above it, each control a different width, several running off the right edge.
+"Shared details" and "Delete this property" rendered as one unbroken string.
+
+#### Most of it was a stale deploy, and that had to be established first
+
+`.yard-shared-form label{display:grid}` and the `width:100%` on its controls
+landed on 4 October in `03cf375`, which is **not** an ancestor of the `c8e40cb`
+that `master` sat at. So those rules had never been on the live site. Verified
+rather than assumed: the rules are in the shipped bundle, present once, at top
+level, not inside a media query.
+
+⚠️ **Writing CSS at that point would have been the wrong move** — it would have
+looked like a fix, changed nothing a landlord could see, and left the real cause
+(nothing deploying) in place.
+
+#### But two of them were real, and present on master
+
+- **`.yard__actions` had no rule at all.** Not a wrong rule: none. It is the
+  second child of `.yard__head`, holding a harmless action and a destructive
+  one, and with no rule they rendered inline with no gap. That is the string in
+  the screenshot, and deploying would not have fixed it.
+- **`.form-error` had no rule anywhere in the app** — five uses across four
+  components, two of them carrying `role="alert"`. A screen reader announced an
+  error; the screen showed body text the same size and colour as the paragraph
+  above it. `.field-error` beside it has been styled all along, which is how it
+  survived: the names are one word apart and only one was ever written.
+
+#### And one the screenshots could not show
+
+`.btn-danger` is used by **seven** components and written in the scoped
+`styles:` of **two**. Angular's emulated encapsulation rewrites a scoped rule
+with an attribute selector, so it applies only where it is declared — admin
+verifications, disputes, reports, the dashboard and advertising were rendering a
+**destructive** button identical to an ordinary one. In the template
+`class="btn btn-sm btn-danger"` reads exactly like an affordance. Promoted to
+the global stylesheet so the variant means one thing everywhere.
+
+#### The check: `scripts/css-coverage-audit.mjs`
+
+Every class a template uses must have a rule in the shipped CSS. It reads the
+templates, so it cannot be fooled by a screen nobody opened — the same shape as
+`nav-audit`. Wired into CI after the production build, and `npm run audit:css`.
+
+⚠️ **Its own first version had the blind spot that hid the worst case**: it
+skipped any component with a `styles:` block, on the reasoning that such a
+component styles itself. Having a block says nothing about whether *this* class
+is in it, and skipping them hid four of `.btn-danger`'s five victims. Each
+component is now checked against the global bundle **plus** its own styles.
+
+Switched on it found 27 bare classes across 82 components. ⚠️ **A baseline file,
+not an allowlist**: writing 27 invented reasons into an allowlist to get a green
+tick is how a check reads green over its own findings forever. The 26 that
+remain are named on every run and the audit fails on anything not among them —
+a one-way ratchet, and the list is debt in `docs/OUTSTANDING.md` §17.
+
+#### The measurement: `scripts/yard-layout-drive.mjs`
+
+The screen at 360 / 390 / 768 / 1280 with **both forms open**, because a form
+collapsed by default is a form no check ever sees. No horizontal scroll; every
+labelled control under its label rather than beside it; nothing past its own
+right edge; 44px on every control; and an 8px floor between adjacent card
+actions.
+
+⚠️ **Nothing here could have caught the original.** `layout-ui-drive` is the
+drive written for this exact problem and its screen list is `/`,
+`/account/settings`, the three auth screens and `/landlord/rooms/new` — it
+creates a property and an expense through the API on the way past and never
+opens the screen that shows them. `properties-ui-drive` opens the screen and has
+no widths, no overflow check and no tap-target check at all.
+
+⚠️ **And the new drive produced the defect it was written to find.** Pointed at
+`/landlord` — which redirects to the dashboard — the card never rendered, and
+three of its four form checks reported ✅ anyway, because
+`[].filter(...).length === 0` is true. Sixteen green ticks over a screen that
+was never on the page. The count is asserted first now and the measurements are
+skipped, not passed, when there is nothing to measure. A second fault in the
+same drive put the string `undefined` in the URL, because `apiCall` answers
+`{status, body}` and it read `.id` off the envelope.
+
+#### What it found that the screenshots did not
+
+At 360 and 390 the two card actions wrap onto separate rows, and the first fix
+left **5.6px** between them — a destructive control six pixels under a harmless
+one, both 44px tall. The same mis-tap, rotated ninety degrees. Row gap widened
+to `.6rem`.
+
+Falsified in both directions. With `.yard__actions` removed: `display: block`,
+gap **0px** — the screenshot reproduced. With the label grid and the `width:100%`
+removed: *"6 control(s) sit BESIDE their label: What you call this place, Street
+address (optional), House rules, Shared facilities, People already living here,
+Who lives here"* — also the screenshot. ⚠️ Removing the label rule **alone** did
+not break it, because `width:100%` on the controls stacks them independently;
+recorded because a half-falsification would have made the check look stronger
+than it is.
+
+36 checks pass across the four widths with the fixes in place.
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461
