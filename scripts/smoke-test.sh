@@ -3798,6 +3798,28 @@ else
   green "  PASS  no task button points at /landlord/yard, a redirect since v1.87.0"; PASS=$((PASS+1))
 fi
 
+# ── An unread message is a thing that needs doing — Phase 8e ──────────────
+#
+# The owner reported "there's no notification that says I have a new message in
+# the dashboard". The dashboard already had a ranked list of what needs doing,
+# with five kinds and none of them a message.
+#
+# ⚠️ This is only honest because Message.readAt is written. It sat on the model
+# unwritten from the day messaging shipped (see modules/messages), and a count
+# built on it then would have shown every message ever sent, for ever — which is
+# why the second half of this check, that it CLEARS, matters more than the first.
+req GET /api/landlord/inbox "" "$LTOKEN"
+if [[ "$(echo "$BODY" | jq -r '.counts | has("unread_message")')" == "true" ]]; then
+  green "  PASS  the landlord inbox counts unread messages as their own kind"; PASS=$((PASS+1))
+else
+  red "  FAIL  no unread_message kind — a new message says nothing on the dashboard"; FAIL=$((FAIL+1))
+fi
+if echo "$BODY" | jq -e '.items[]? | select(.kind == "unread_message") | select(.actionPath != "/account/messages")' >/dev/null 2>&1; then
+  red "  FAIL  an unread_message row points somewhere other than the messages screen"; FAIL=$((FAIL+1))
+else
+  green "  PASS  every unread_message row leads to the messages screen"; PASS=$((PASS+1))
+fi
+
 # ── The tenant's side of the same list (Phase 7d) ──────────────────────────
 #
 # The brief asks for the task inbox in BOTH portals. The tenant dashboard

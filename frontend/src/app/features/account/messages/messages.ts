@@ -161,6 +161,24 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
       display: flex; width: 100%; gap: 1rem; align-items: flex-start; justify-content: space-between;
       background: none; border: none; padding: .9rem 0; font: inherit; color: inherit;
       text-align: left; cursor: pointer;
+      /* ⚠️ white-space: normal, and this is the whole of the owner's report
+         that "the description of the room is not moving to the next line".
+
+         The base rule :where(button) in styles.scss sets white-space: nowrap —
+         right for a button that holds a short label, wrong for one used as a
+         ROW. white-space inherits, so every piece of text in here was on one
+         line: measured at 360px the room title wanted 502px in a 300px column
+         and the message preview 993px, and the document was 1012px wide in a
+         360px viewport.
+
+         font: inherit above does NOT reset it — font is family, size, weight,
+         style, variant and line-height, and nothing else. The note beside it
+         about colour is the same lesson learned once already on this element.
+
+         Zero specificity means a plain class wins, so this one declaration is
+         the whole fix. Any other button used as a container for wrapping text
+         has the same problem; recorded in OUTSTANDING. */
+      white-space: normal;
     }
     .msg-row__main { flex: 1; min-width: 0; }
     .msg-row__who { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
@@ -169,7 +187,20 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     .closed { font-size: .65rem; font-weight: 700; background: #F2EDE3; color: #3A3228; padding: .1rem .4rem; border-radius: 10px; }
     .msg-row__room { margin: .25rem 0 0; font-size: .85rem; }
     .msg-row__last { margin: .3rem 0 0; font-size: .8rem; display: flex; gap: .4rem; align-items: baseline; flex-wrap: wrap; }
-    .preview { color: var(--slate); overflow-wrap: anywhere; }
+    /* ⚠️ min-width: 0, and without it the whole page scrolled sideways.
+       (No backticks in here: a backtick inside this styles template literal
+       terminates it, which CLAUDE.md records and which just cost a fourth
+       compile failure.)
+       A flex item's automatic minimum size is its content, not zero, so this
+       span refused to shrink below the width of the last message on one line:
+       measured at 360px it was 993px wide inside a 300px container, and the
+       document was 1012px wide in a 360px viewport. overflow-wrap: anywhere
+       was already here and cannot help on its own — it breaks a long WORD
+       inside a box, it does not make the box narrower.
+       Horizontal page scroll and "text that becomes a single line hundreds of
+       characters wide" are both on the mobile checklist in CLAUDE.md; this was
+       one element producing both. */
+    .preview { color: var(--slate); overflow-wrap: anywhere; min-width: 0; }
     .msg-row__meta { margin: .3rem 0 0; font-size: .75rem; color: var(--slate); }
     .msg-row__chev { color: var(--slate); font-size: .7rem; flex-shrink: 0; }
     .msg-row__body { padding: 0 0 1rem; }

@@ -3269,6 +3269,74 @@ the database which room actually moved.
 16 checks. No regression in yard-layout (36), tenancy-lifecycle (26) or
 properties-ui.
 
+### 5.42 Three bugs in one report about messages — ✅ fixed in v1.110.0 (Phase 8e)
+
+The owner's item 3 read as one complaint and was three unrelated faults.
+
+#### "The description of the room is not moving to the next line"
+
+`:where(button)` in `styles.scss` sets `white-space: nowrap`. `.msg-row__head`
+is a `<button>` wrapping the whole conversation row, and `white-space` inherits,
+so every piece of text in the row was pinned to one line. Measured at 360px:
+
+| | wanted | had |
+|---|---|---|
+| `P.msg-row__room` | 502px | 300px |
+| `SPAN.preview` | 993px | 300px |
+| the document | 1012px | 360px viewport |
+
+⚠️ `font: inherit` does not reset it — `font` is family, size, weight, style,
+variant and line-height. The note beside this element about `color` is the same
+lesson, learned once already.
+
+Fixed with one zero-specificity-beating declaration. The app-wide risk is
+recorded as `docs/OUTSTANDING.md` §20.
+
+#### "The send button is not properly laid out"
+
+A consequence of the first: the composer sat on a page that scrolled sideways.
+Measured after the fix — Send is 44px, on screen at 343 of 360 — and nothing was
+changed in the composer itself. **Reporting a fix here would have been a
+fabricated finding.**
+
+#### "No notification that says I have a new message in the dashboard"
+
+The dashboard already carries a ranked list of what needs doing, and its
+component says *"a new kind needs no change here"*. It had five kinds and none
+of them was a message. So an unread message is now a **row** beside the
+applicant who has waited nine days — same urgency scale (negated waiting time),
+its own destination, said in words — rather than a dot to interpret.
+
+⚠️ Only honest because `Message.readAt` is written. It sat on the model unwritten
+from the day messaging shipped, and a count built on it then would have shown
+every message ever sent, for ever. That is why the check that it **clears**
+matters more than the check that it appears.
+
+#### ⚠️ A bounding-box sweep cannot see this bug
+
+Every element's `getBoundingClientRect()` was inside the viewport. The overflow
+only appears as `scrollWidth > clientWidth`. A layout check that measures boxes
+— which is what every drive here did — would have passed all the way through.
+
+#### Three faults of my own, found while fixing it
+
+1. **A fourth compile failure from the backtick trap.** The explanatory comment
+   used backticks inside the `styles` template literal. CLAUDE.md records this,
+   Phase 8d caused the third, this caused the fourth. Both comments now say so
+   in place.
+2. **The drive read the badge after section 2 had already cleared it.** Opening
+   a thread marks messages read — correctly — and section 2 clicks the row to
+   reach the composer. The first run failed five checks and reported the feature
+   missing while it worked. Section 3 owns its own conversation now.
+3. **And its last check passed vacuously.** "Zero after reading" is trivially
+   true when the feature does not exist: falsifying by deleting the producer
+   left five checks red and that one green, over a count that was zero before
+   and after. It refuses to run unless the count was up first.
+
+27 checks across 360/390/768/1280. Falsified both halves: the wrap fix removed
+reproduces `P.msg-row__room 502>300` and a 1012px document; the inbox producer
+removed takes the dashboard row with it. Smoke 503.
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461
