@@ -3121,6 +3121,82 @@ step promises something the app cannot do — and it cannot. See
 can become active, no rent reminder can fire and no review can open. The tenant
 rent hint says only what is true today.
 
+### 5.40 Moving in and moving out — ✅ built in v1.108.0 (Phase 8c)
+
+The owner reported the rent screen as confusing: *"how a tenant's move is
+confirmed."* It was not wording. **The rent screen was describing a tenancy that
+had never begun, and could not begin.**
+
+#### What was actually wrong
+
+`applications.service.ts` opens a `Tenancy` the moment a landlord accepts, with
+its own comment: *"It stays 'pending' until someone confirms the move-in."*
+`confirm-start`, `cancel` and `end` have existed since Phase 4, are
+either-party, and are wired into `tenancies.service.ts` on the client.
+
+**Nothing called any of them.** Counted before: `confirmStart` 0, `cancel` 0,
+`end` 0, `notice` 0, `updateLease` 0 — and `withdrawFlag` 1, which is how a
+complete dead lifecycle hid behind one live method.
+
+The consequences stacked up in order, and only the first is obvious:
+
+1. No tenancy could become `active`.
+2. `rent.service.ts` selects `tenancy: { status: 'active' }`, so **no rent
+   reminder could ever fire, for anybody**.
+3. Reviews open when a tenancy is ended, so **none could ever be written**.
+4. Notice, renewal and move-out were unreachable.
+
+This is the same family as `sponsoredUntil` and `assignRooms`, and the largest
+instance so far: not one control, but the middle of the product's life cycle.
+
+#### One component, both sides
+
+Either party may confirm, cancel or end — the API's own comment says why:
+requiring both would leave a tenancy stuck forever whenever one side stops
+logging in. So `app-tenancy-lifecycle` serves a landlord and a tenant and only
+the wording changes, on the landlord dashboard, the tenant dashboard and the
+tenant rent screen.
+
+Two constraints came straight from the API's refusals, so the form cannot offer
+what the server will reject — a 400 for a date the form allowed is the product
+arguing with itself:
+
+- the move-in picker's `max` is today (*"A move-in date cannot be in the future.
+  Confirm once the tenant has moved in."*);
+- the move-out picker's `min` is the start date.
+
+⚠️ **It says out loud that it is not money.** Confirming a move-in records that
+somebody moved in and nothing else. "Confirm" beside a rand figure is exactly
+how a person comes to believe this platform handled their deposit, so the panel
+says Mastande never holds rent or a deposit, on the panel, not in a tooltip.
+
+#### Falsified
+
+Removing the mount reproduces the shipped state exactly: *"the landlord is NOT
+asked about it on their dashboard — so no tenancy can become active, no rent
+reminder can fire, no review can open."*
+
+⚠️ That falsification also found a fault in the drive: it failed the right check
+and then **died on a 30-second `textContent` timeout**, the crash-instead-of-
+report fault this repository keeps producing. It now stops at the missing panel
+and says so once, because the absence IS the finding.
+
+26 checks: both sides confirming, ending opening the review window, a letting
+that fell through opening none, and a sweep of every control on the panel at
+360 / 390 / 768 / 1280.
+
+#### What the API side needed: nothing
+
+`scripts/smoke-test.sh` already had seven checks on these endpoints, including
+the future-date refusal. The API was never the broken part, and padding the
+smoke suite to look busy would have been the wrong kind of thorough.
+
+#### Still open
+
+`notice` and `updateLease` still have no caller — see `docs/OUTSTANDING.md` §18.
+`withdrawNotice` has one, so the product can withdraw a notice it has no way to
+give. Neither blocks rent or reviews.
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

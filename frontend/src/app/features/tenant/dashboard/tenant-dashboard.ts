@@ -19,16 +19,19 @@ import { RoomCard } from '../../../shared/components/room-card/room-card';
 import { TenantInboxPanel } from '../../../shared/components/tenant-inbox/tenant-inbox';
 import { ViewingInvitations } from '../../../shared/components/viewing-invitations/viewing-invitations';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
+import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/tenancy-lifecycle';
 
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations, ScreenHint],
+  imports: [RouterLink, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations, ScreenHint, TenancyLifecycle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="tenant-dashboard" heading="Where you stand, on everything you applied for">
         Each application says what has happened and what is next. Applying is free, always, and you can withdraw at any point.
       </app-screen-hint>
+
+      <app-tenancy-lifecycle/>
 
 
       <!-- The dashboard's question, answered first — Phase 7d.

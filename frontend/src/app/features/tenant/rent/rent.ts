@@ -7,6 +7,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { Tenancy } from '../../../core/models/tenancy.model';
 import { LeaseDocuments } from '../../../shared/components/lease-documents/lease-documents';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
+import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/tenancy-lifecycle';
 
 /**
  * The tenant's side of rent tracking.
@@ -36,12 +37,14 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 @Component({
   selector: 'app-tenant-rent',
   standalone: true,
-  imports: [DatePipe, FormsModule, ZarCentsPipe, LeaseDocuments, ScreenHint],
+  imports: [DatePipe, FormsModule, ZarCentsPipe, LeaseDocuments, ScreenHint, TenancyLifecycle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="tenant-rent" heading="This is your landlord's record, and your answer to it">
         Your landlord marks each month here. Mastande does not hold your rent or your deposit and cannot see whether you paid — so if a month is marked wrong, say so on it: your answer is kept beside theirs, neither one overwrites the other, and it stops the reminders for that month.
       </app-screen-hint>
+
+      <app-tenancy-lifecycle/>
 
 
       <div class="insight-banner">
