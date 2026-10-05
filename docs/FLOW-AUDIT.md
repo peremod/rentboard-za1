@@ -2879,12 +2879,63 @@ database it blocks naming both; a planted duplicate verified number trips the
 blocker and prints the SQL to find it; removing the planted rows makes the
 "applied but not in this checkout" warning go away.
 
-#### Still open
+#### ⚠️ And the fix raised a false blocker on the same database — v1.105.0
 
-**Production is still down.** The migration needs the production `DIRECT_URL`,
-which this environment does not hold, and there is no network path to it from
-here — `umastande.co.za` and `rentboard-api.onrender.com` both answer HTTP `000`,
-`connect_rejected` by the egress policy. Stated rather than worked around.
+Run against production with both variables exported, v1.104.0 printed:
+
+```
+❌ Same database name "neondb" but different migration history ([object Object] rows vs 30).
+34 migrations in the repository: 0 applied, 34 pending.
+⚠️  1 migration(s) are recorded as applied but do NOT exist in this checkout.
+       [object Object]
+```
+
+and exited 1 with "Do NOT run migrate deploy until this comes back clean."
+
+The operator overrode it and the migration succeeded. **Had the blocker been
+believed, production would have stayed down** — which is the failure §5.37's own
+§4 comment was written about, reintroduced one commit later in a new section.
+
+Reproduced locally on a healthy database: over that connection
+`to_regclass('public._prisma_migrations')` answered `t` while
+`SELECT count(*) FROM _prisma_migrations` answered `relation
+"_prisma_migrations" does not exist`, and `users` did the same. The session's
+`search_path` did not include `public`. An earlier run over the same pooled
+endpoint worked, so it is session-dependent — consistent with a pooled server
+connection reused with an altered `search_path`. **Why Neon's pooler did that is
+not established and cannot be from this environment.**
+
+What made an unreadable table look like a verdict was this script, twice over:
+
+- **Unqualified table names.** Every query carries the schema now, and
+  `PGOPTIONS` forces the `search_path` when the URL does not set its own
+  `options`. Qualification is the fix that does not depend on knowing the cause.
+- **`q()` returns `{error}` and the code treated it as a string.**
+  `String({error})` is `"[object Object]"`. It went into the applied-migration
+  Set, was counted as a row total, and was interpolated into a blocker. Every
+  number in §1 was derived from a failed query and none of it looked like an
+  error.
+
+Falsified both ways: the production condition reproduced byte-for-byte against
+the committed v1.104.0 script — `[object Object]`, "0 applied, 34 pending",
+exit 1 — and clean on v1.105.0; and a genuinely unreadable table (`REVOKE
+SELECT`) now reports "This is the SCRIPT failing, not a verdict about the
+database" and names `prisma migrate status` as the fallback.
+
+**A false blocker and a missing check are the same defect.** One stops a repair,
+the other permits a break. This script has now produced one of each, four days
+apart, and both were found by somebody running it rather than by anything in
+this repository.
+
+#### Outcome
+
+All 15 applied to production on 5 October over the direct endpoint. No redeploy
+was needed. ⚠️ "Who to call" is empty until an admin records a phone check per
+contractor at `/admin/services`.
+
+The migration itself was never run from this environment and could not be — no
+production credential, and `umastande.co.za` and `rentboard-api.onrender.com`
+both answer HTTP `000`, `connect_rejected` by the egress policy.
 
 ## 6. What "verified" means here
 

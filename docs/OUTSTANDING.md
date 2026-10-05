@@ -138,7 +138,16 @@ configuration problem, not a routing one.
 
 ---
 
-## 5. 🔴 Production is DOWN on a missing migration — run this first
+## 5. ✅ Production was down on a missing migration — applied 5 October
+
+**Resolved.** All 15 pending migrations were applied to the production Neon
+database on 5 October through `scripts/migrate-remote.sh`, over the direct
+(non-pooler) endpoint. `rooms.listerType` and `users.walkthroughSeenAt` exist and
+the room queries stopped erroring with no redeploy. ⚠️ **"Who to call" is now
+empty** until an admin records a phone check per contractor at `/admin/services`
+— the expected, deliberate side effect of
+`20261004180000_service_provider_checks`. The section is kept because the
+procedure and the two incidents in § 5a are the record.
 
 **The symptom, from the production API log on 5 October:**
 
@@ -255,6 +264,51 @@ Two causes, and both of them were in this repository's own documentation:
 `scripts/migrate-remote.sh` already refused all of this, for the staging version
 of the same mistake, and § 5b already documented it. § 5 was written without
 reference to either and told the operator to call `prisma` directly.
+
+### ⚠️ And then the fix raised a false blocker on the same database
+
+The v1.104.0 preflight was run against production with both variables exported
+and printed:
+
+```
+❌ Same database name "neondb" but different migration history ([object Object] rows vs 30).
+34 migrations in the repository: 0 applied, 34 pending.
+⚠️  1 migration(s) are recorded as applied but do NOT exist in this checkout.
+       [object Object]
+```
+
+and exited 1 with **"Do NOT run migrate deploy until this comes back clean."**
+The operator overrode it, `prisma migrate status` gave the correct answer, and
+the migration succeeded. **Had the blocker been believed, production would have
+stayed down** — the same failure as § 5 § 4's "do NOT migrate" verdict, which
+that section's own comment was written to prevent, reintroduced one commit later.
+
+The cause, reproduced locally on a healthy database: over that pooled connection
+`to_regclass('public._prisma_migrations')` answered `t` while
+`SELECT count(*) FROM _prisma_migrations` answered `relation
+"_prisma_migrations" does not exist`, and `users` did the same. The session's
+`search_path` did not include `public`. An earlier run over the same pooled
+endpoint had worked, so it is session-dependent — consistent with a pooled
+server connection reused with an altered `search_path`. **Why Neon's pooler did
+that is not established**, and cannot be from this environment.
+
+Two defects of this script's own, which is what made an unreadable table look
+like a verdict:
+
+1. **Unqualified table names.** Every query now carries the schema, and the
+   `search_path` is forced through `PGOPTIONS` when the URL does not set its own
+   `options`. Qualification is the fix that does not depend on knowing the cause.
+2. **`q()` returns `{error}` and the code treated it as a string.**
+   `String({error})` is `"[object Object]"`, which went into the applied-migration
+   Set, was counted as a row total, and was interpolated into a blocker. A check
+   that cannot read its input now says so and names `prisma migrate status` as
+   the fallback, rather than inventing an answer.
+
+Falsified both ways: the exact production condition (a `search_path` without
+`public`) reproduced byte-for-byte against the committed v1.104.0 script —
+`[object Object]`, "0 applied, 34 pending", exit 1 — and passes clean on
+v1.105.0; and a genuinely unreadable table (`REVOKE SELECT`) now reports
+"This is the SCRIPT failing, not a verdict about the database."
 
 **Fixed in v1.104.0:**
 

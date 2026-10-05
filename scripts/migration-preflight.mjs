@@ -79,7 +79,7 @@ function splitConn(raw) {
   try {
     parsed = new globalThis.URL(raw);
   } catch {
-    return { psqlUrl: raw, schema: '', dropped: [], host: 'unparseable' };
+    return { psqlUrl: raw, schema: '', sch: 'public', hasOwnOptions: false, dropped: [], host: 'unparseable' };
   }
   const keep = new globalThis.URLSearchParams();
   const lost = [];
@@ -91,28 +91,59 @@ function splitConn(raw) {
   }
   const host = `${parsed.host}${parsed.pathname}`;
   parsed.search = keep.toString();
-  return { psqlUrl: parsed.toString(), schema: found, dropped: lost, host };
+  return {
+    psqlUrl: parsed.toString(),
+    schema: found,
+    sch: found || 'public',
+    hasOwnOptions: keep.has('options'),
+    dropped: lost,
+    host,
+  };
 }
 
 const { psqlUrl, schema, dropped } = splitConn(URL);
 
 /** One line of SQL per call, as the repo's own notes insist. */
+/**
+ * ⚠️ Every table reference below is schema-qualified, and the search_path is
+ * forced, because a run against production came back as if the database were
+ * empty: `to_regclass('public._prisma_migrations')` answered `t` while
+ * `SELECT count(*) FROM _prisma_migrations` answered `relation
+ * "_prisma_migrations" does not exist`, and `users` did the same.
+ *
+ * That combination means the connection could see the tables but was not
+ * resolving unqualified names to `public` — a session handed over with a
+ * different search_path, which a pooled connection can do and which an earlier
+ * run over the same pooled endpoint did not do. The script read that as "0 of
+ * 34 applied" and raised a BLOCKER on the one database that had to be migrated.
+ * Had the operator believed it, production would have stayed down.
+ *
+ * Qualification is the fix that does not depend on knowing why. PGOPTIONS is
+ * belt and braces; a URL that carries its own `options` parameter wins over it
+ * in libpq, so it is left alone there and the qualification carries the weight.
+ */
 function qOn(conn, sql) {
+  const env = conn.hasOwnOptions
+    ? process.env
+    : { ...process.env, PGOPTIONS: `-c search_path=${conn.sch}` };
   try {
     return execSync(`psql "${conn.psqlUrl}" -tAc ${JSON.stringify(sql)}`, {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: conn.schema && conn.schema !== 'public'
-        ? { ...process.env, PGOPTIONS: `-c search_path=${conn.schema}` }
-        : process.env,
+      env,
     }).trim();
   } catch (e) {
     return { error: String(e.stderr ?? e.message ?? e).trim() };
   }
 }
 
-const primary = { psqlUrl, schema };
+/** A q() result is either a string or an {error} — never let one become data. */
+const isErr = (v) => typeof v !== 'string';
+
+const primary = splitConn(URL);
 const q = (sql) => qOn(primary, sql);
+/** Schema qualifier for this script's own queries. */
+const T = `"${primary.sch}"`;
 
 console.log('\n═══ Migration preflight — READ ONLY ═══');
 console.log(`  Target: ${URL.replace(/:\/\/[^@]*@/, '://***@')}`);
@@ -180,16 +211,37 @@ if (!directRaw) {
   const direct = splitConn(directRaw);
   const theirs = qOn(direct, 'SELECT current_database()');
   const ours = q('SELECT current_database()');
-  if (typeof theirs === 'object') {
+  if (isErr(theirs)) {
     bad(`DIRECT_URL is set but unreachable: ${theirs.error.split('\n')[0]}`);
+  } else if (isErr(ours)) {
+    bad(`DATABASE_URL is set but unreachable: ${ours.error.split('\n')[0]}`);
   } else if (theirs !== ours) {
     bad(`DATABASE_URL and DIRECT_URL point at DIFFERENT databases — "${ours}" vs "${theirs}".`);
     console.log('     `migrate deploy` would apply to the second one. Everything below');
     console.log('     describes the first. Fix the pair before running anything.');
   } else {
-    const a = q('SELECT count(*) FROM _prisma_migrations');
-    const b = qOn(direct, 'SELECT count(*) FROM _prisma_migrations');
-    if (a !== b) {
+    const a = q(`SELECT count(*) FROM ${T}._prisma_migrations`);
+    const b = qOn(direct, `SELECT count(*) FROM "${direct.sch}"._prisma_migrations`);
+    /**
+     * ⚠️ `isErr` first, and it is not pedantry.
+     *
+     * Without it an unreadable side was interpolated into the message as
+     * `[object Object]` and compared as if it were a row count, so a connection
+     * that could not read the table became "two different databases that happen
+     * to share a name" — a ❌ BLOCKER, printed over the production database
+     * that was down and needed migrating. A check that cannot tell must say it
+     * cannot tell. Fabricating a verdict from a failed query is worse than
+     * having no check, because it stops the repair.
+     */
+    if (isErr(a) || isErr(b)) {
+      const which = isErr(a) ? 'DATABASE_URL' : 'DIRECT_URL';
+      const why = (isErr(a) ? a : b).error.split('\n')[0];
+      warn(`Both URLs reach "${ours}", but the migration history could not be compared.`);
+      console.log(`     Reading _prisma_migrations over ${which} failed: ${why}`);
+      console.log('     That is NOT a reason to stop — it means this one comparison was');
+      console.log('     not made. Section 1 below reads over DATABASE_URL; if it reports a');
+      console.log('     pending list that matches `npx prisma migrate status`, proceed.');
+    } else if (a !== b) {
       bad(`Same database name "${ours}" but different migration history (${a} rows vs ${b}).`);
       console.log('     These are two different databases that happen to share a name.');
     } else {
@@ -206,15 +258,37 @@ const onDisk = readdirSync(MIGRATIONS_DIR)
   .filter((d) => /^\d/.test(d) && existsSync(join(MIGRATIONS_DIR, d, 'migration.sql')))
   .sort();
 
-const hasTable = q("SELECT to_regclass('public._prisma_migrations') IS NOT NULL");
+const hasTable = q(`SELECT to_regclass('${primary.sch}._prisma_migrations') IS NOT NULL`);
 if (hasTable !== 't') {
   bad('There is no _prisma_migrations table — Prisma has never migrated this database.');
   console.log('     Every migration below would be applied from scratch. Check you are pointed at the right database.');
 }
 
 const appliedRaw = hasTable === 't'
-  ? q(`SELECT string_agg(migration_name, ',' ORDER BY migration_name) FROM _prisma_migrations WHERE finished_at IS NOT NULL`)
+  ? q(`SELECT string_agg(migration_name, ',' ORDER BY migration_name) FROM ${T}._prisma_migrations WHERE finished_at IS NOT NULL`)
   : '';
+/**
+ * ⚠️ `String({error: …})` is `"[object Object]"`, and it went into this Set.
+ *
+ * Over a connection that could not read the table, the production run reported
+ * "0 applied, 34 pending" and listed `[object Object]` as a migration recorded
+ * in the database but missing from the checkout. Both statements were produced
+ * from a failed query. Every number in section 1 was wrong and none of it
+ * looked like an error.
+ */
+if (isErr(appliedRaw)) {
+  bad(`Could not read ${T}._prisma_migrations: ${appliedRaw.error.split('\n')[0]}`);
+  console.log('     Nothing below can be trusted, so nothing below is printed. Check that');
+  console.log('     DATABASE_URL reaches the right database and schema, then run again.');
+  console.log('\n═══════════════════════════════════════════════════════════');
+  console.log('  ❌ The preflight could not read the migration history.');
+  console.log('     This is the SCRIPT failing, not a verdict about the database.');
+  console.log('     `npx prisma migrate status` is the fallback — it reads the same table');
+  console.log('     through Prisma and will say whether migrations are pending.');
+  console.log('═══════════════════════════════════════════════════════════\n');
+  process.exit(1);
+}
+
 const applied = new Set(String(appliedRaw || '').split(',').filter(Boolean));
 const pending = onDisk.filter((m) => !applied.has(m));
 
@@ -234,7 +308,7 @@ const pending = onDisk.filter((m) => !applied.has(m));
  * they learn to skim past it and miss a real one.
  */
 const unfinished = hasTable === 't'
-  ? q(`SELECT string_agg(migration_name, ',') FROM _prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL`)
+  ? q(`SELECT string_agg(migration_name, ',') FROM ${T}._prisma_migrations WHERE finished_at IS NULL AND rolled_back_at IS NULL`)
   : '';
 if (unfinished && typeof unfinished === 'string' && unfinished.length) {
   bad(`A previous run left these UNFINISHED: ${unfinished}`);
@@ -291,7 +365,7 @@ if (pendingHas('phone_login_identity')) {
   checked++;
   // The partial unique index is the one real risk in the whole set: this column
   // has never been unique, so duplicates can already exist.
-  const dupes = q(`SELECT count(*) FROM (SELECT phone FROM users WHERE "phoneVerified" = true AND phone IS NOT NULL GROUP BY phone HAVING count(*) > 1) d`);
+  const dupes = q(`SELECT count(*) FROM (SELECT phone FROM ${T}.users WHERE "phoneVerified" = true AND phone IS NOT NULL GROUP BY phone HAVING count(*) > 1) d`);
   if (typeof dupes === 'object') {
     warn(`Could not check for duplicate verified numbers: ${dupes.error.split('\n')[0]}`);
   } else if (Number(dupes) > 0) {
@@ -307,7 +381,7 @@ if (pendingHas('phone_login_identity')) {
 
   // The email-or-phone CHECK is NOT VALID, so it does not test existing rows.
   // Worth reporting anyway: those accounts cannot sign in by either route.
-  const stranded = q(`SELECT count(*) FROM users WHERE email IS NULL AND phone IS NULL`);
+  const stranded = q(`SELECT count(*) FROM ${T}.users WHERE email IS NULL AND phone IS NULL`);
   if (typeof stranded !== 'object' && Number(stranded) > 0) {
     warn(`${stranded} account(s) have neither an email address nor a phone number.`);
     console.log('     The new constraint is NOT VALID so the migration still applies, but those');
@@ -328,7 +402,7 @@ let changes = 0;
 
 if (pendingHas('service_provider_checks')) {
   changes++;
-  const live = q(`SELECT count(*) FROM service_providers WHERE active = true`);
+  const live = q(`SELECT count(*) FROM ${T}.service_providers WHERE active = true`);
   /**
    * ⚠️ The `> 0` is the whole point of this branch.
    *
@@ -353,7 +427,7 @@ if (pendingHas('service_provider_checks')) {
 }
 
 if (pendingHas('sponsorship_residue')) {
-  const sponsored = q(`SELECT count(*) FROM service_providers WHERE "sponsoredUntil" IS NOT NULL`);
+  const sponsored = q(`SELECT count(*) FROM ${T}.service_providers WHERE "sponsoredUntil" IS NOT NULL`);
   if (typeof sponsored !== 'object' && Number(sponsored) > 0) {
     changes++;
     warn(`${sponsored} contractor(s) have a sponsoredUntil date, which will be cleared.`);
