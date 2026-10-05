@@ -3337,6 +3337,59 @@ only appears as `scrollWidth > clientWidth`. A layout check that measures boxes
 reproduces `P.msg-row__room 502>300` and a 1012px document; the inbox producer
 removed takes the dashboard row with it. Smoke 503.
 
+### 5.43 A sweep for the overflow a box check cannot see — ✅ built in v1.111.0 (Phase 8f)
+
+§5.42 fixed one row in one list. The rule that caused it — `:where(button)` sets
+`white-space: nowrap`, and `white-space` inherits — applies to **every button in
+the app**, so any other button used as a container for wrapping text has the
+same bug and nothing looked for it.
+
+`layout-ui-drive` section 10: ten screens, four widths, failing on any leaf whose
+`scrollWidth` exceeds its `clientWidth`.
+
+#### Why none of the existing sections could have found it
+
+They measure bounding boxes. Every element's `getBoundingClientRect()` on the
+broken messages screen sat **inside** the viewport; the overflow exists only as
+`scrollWidth > clientWidth`. Eight sections of that drive, four widths each,
+would have passed over it forever.
+
+#### ⚠️ Leaves only — a correction made after the first run
+
+The first version flagged any element wider than its box, and reported
+`app-ad-slot 332>328` on the board at both phone widths. That is a **deliberate
+full-bleed**: `.filter-panel .ad-slot` carries `margin-left/right: -.25rem` so
+an advert reaches the edges of the sheet "where side padding wastes scarce
+width". Nothing escaped the screen — the page-level check passed — and a check
+that cries wolf on a designed layout is one people learn to skim past.
+
+A leaf has no element children, so its `scrollWidth` is its own text. No bleed,
+no negative margin and no absolutely-positioned child can produce it. That is
+exactly the thing CLAUDE.md's mobile checklist names: "text that becomes a
+single line hundreds of characters wide".
+
+#### 🔴 And it passed on an empty screen
+
+Run against the reintroduced bug, the sweep reported `/account/messages` clean
+at all four widths — because this drive's landlord has no conversations, so the
+screen it visited was blank. **The same defect as the drive that created a
+property and never opened the screen showing it**, produced by the check written
+to find that class of thing.
+
+Two fixes, both preconditions rather than measurements:
+
+- the drive now writes a message, with a long room title and a long body,
+  because a short one wraps by accident and proves nothing;
+- every page must present at least five pieces of text, or the check fails as
+  "nothing was really measured" rather than passing over `[].filter(...)`.
+
+#### Falsified
+
+With the fix reverted: `span.preview 993>303` and `p.msg-row__room 537>303` at
+360 and 390, and the preview still caught at **1280**, where the page does not
+scroll sideways at all — so the sweep is strictly stronger than the page-level
+check it sits beside.
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461
