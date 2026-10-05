@@ -2719,6 +2719,71 @@ only defect, and reporting the rest would have been a fabricated finding.
 | The real owner cannot be warned before the fact when they have no email. Nothing can fix this; the record is the mitigation | **Named, unfixable** |
 | WhatsApp delivery still gates every code (Outstanding §7) | Blocking for this flow, as before |
 
+### 5.36 The four documents a landlord keeps asking for — ✅ built in v1.103.0 (Phase 8a)
+
+A lease agreement, a renewal addendum, a move-in inspection and a deposit
+receipt, free to download, print and sign.
+
+#### ⚠️ Two of these are contracts and two are not
+
+That distinction runs through the whole feature. A move-in inspection is a
+checklist and a deposit receipt is a receipt: get the wording clumsy and somebody
+is mildly inconvenienced. A lease and an addendum create binding obligations, and
+a wrong clause harms a landlord with four back rooms who trusted us.
+
+So `reviewState` is on the data, not in a comment. The two contracts ship
+`awaiting_legal_review` and say so on their own face — **in print as well as on
+screen** — against the same outstanding attorney review `/legal/sublet` is
+waiting on. They are still downloadable, deliberately: a landlord who cannot get
+one here takes a worse one off a search result with no warning on it at all.
+What they must not do is look finished.
+
+#### The check that matters most
+
+**A warning that disappears when the document is printed is a warning the person
+holding the paper never sees** — and printing is the entire point of the feature.
+So the drive applies the print stylesheet with `emulateMedia({ media: 'print' })`,
+which is the same cascade the browser uses to make the PDF, and asserts the
+warning is still visible. Falsified by `display: none` on `.tpl-warn` in the
+print block: it fires with *"the person holding the paper never sees it"*.
+
+The same check covers the footer disclaimer — Mastande is not a law firm,
+nothing is signed here, no deposits or rent are held — on all four, printed.
+
+#### Decisions
+
+| Decision | Why |
+|---|---|
+| **No PDF library** | The browser already has one, every Android phone reaches it through Chrome's Print → Save as PDF, and it renders fonts correctly on a device we cannot test. A server-side renderer is a dependency, a font-licensing question and a layout nobody here could check on the handset this product is built for |
+| The whole job is therefore **a print stylesheet** | A4, site chrome removed, sections that do not break across a page in the middle of a signature block |
+| Site chrome hidden **by selector**, globally | `app-navbar`, `app-footer`, `app-cookie-consent`, `.portal-nav` — not a class each page remembers to add. A printable page that forgot the class would print the navbar and the cookie notice onto a lease, and "each page remembers" is the exact shape of defect Phase 7e was about |
+| **Public**, not behind the portal | Somebody searching for a South African lease template is a landlord with rooms and no tools, which is who this is for — and a tenant should be able to see a blank inspection form before signing one |
+| Templates are **data**, not four components | Adding a fifth is a data entry |
+| Statutory references kept **few** | Only where the Act says something a landlord must act on. Padding a template with section numbers makes it look authoritative, which is the opposite of what an unreviewed document should look like |
+
+#### The one with the most value in it
+
+The **move-in inspection**, and it is also the lowest risk. The Rental Housing
+Act makes the joint inspection a statutory step, and the sharp end is that a
+landlord who does not do the outgoing inspection is treated as having agreed the
+room was in good order — so no deduction. A landlord who skips it has already
+lost the deposit argument and usually does not know it. The template says so in
+the landlord's own terms rather than citing the section at them.
+
+The **deposit receipt** carries the other thing small landlords routinely do not
+know: the deposit sits in an interest-bearing account and the interest belongs to
+the tenant. ⚠️ It is the **landlord's** receipt to their tenant and says so —
+Mastande does not hold deposits, and a template that read otherwise would be the
+money-custody line this codebase refuses to cross.
+
+#### Still open
+
+| Gap | Severity |
+|---|---|
+| 🔴 The lease and the addendum are **not attorney-reviewed**. They are marked, on screen and in print, and are the same review `/legal/sublet` needs | **Named and marked, not resolved** |
+| Nothing pre-fills a template from the landlord's own data — the names, address and room are all on the system. Useful, and a bigger decision for the contracts than the forms | Low, and deliberate for v1 |
+| The documents are not stored against a tenancy. `LeaseDocument` (Phase 4e) does that for a signed copy; these are blanks | By design |
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

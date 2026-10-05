@@ -49,10 +49,15 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
               <li><a routerLink="/landlord/properties">My properties</a></li>
               <li><a routerLink="/landlord/applicants">All applicants</a></li>
               <li><a routerLink="/landlord/services">Who to call</a></li>
+              <li><a routerLink="/templates">Forms and templates</a></li>
             } @else {
               <li><a routerLink="/auth/register">Post a room free</a></li>
               <li><a routerLink="/how-it-works">How it works</a></li>
               <li><a routerLink="/pricing">Pricing</a></li>
+              <!-- Phase 8a. In the VISITOR branch too: somebody searching for a
+                   lease template is a landlord with rooms and no account yet,
+                   which is the point of having it public. -->
+              <li><a routerLink="/templates">Free forms and templates</a></li>
             }
           </ul>
         </div>

@@ -489,3 +489,49 @@ fieldset {
   label { margin-bottom: $sp-2; }
   input, select, textarea { margin-bottom: 0; }
 }
+
+// ── Printing a page — Phase 8a ───────────────────────────────────────────
+//
+// Added for the document templates, and written globally because the rule is
+// the same wherever it applies: when somebody prints a page from this site they
+// want the content, not the navigation.
+//
+// The site chrome is hidden by SELECTOR rather than by a class each page
+// remembers to add. A printable page that forgot the class would print the
+// navbar, the cookie notice and the footer onto a lease — and "each page
+// remembers to do it" is the exact shape of defect Phase 7e was about.
+@media print {
+  app-navbar,
+  app-footer,
+  app-cookie-consent,
+  .cookie-notice,
+  .walkthrough,
+  .portal-nav,
+  .no-print {
+    display: none !important;
+  }
+
+  // Ink is the landlord's, not ours.
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .portal-main,
+  .section {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  // A link rendered as blue underlined text on a printed form is noise; the URL
+  // is not reachable from paper anyway.
+  a {
+    color: #000 !important;
+    text-decoration: none !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}

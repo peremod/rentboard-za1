@@ -238,7 +238,7 @@ refusal so the gap is visible rather than silent.
 
 ---
 
-## 8. ⚠️ Attorney review — privacy policy and PAIA manual
+## 8. ⚠️ Attorney review — privacy policy, PAIA manual, sublet page, and now two templates
 
 Both were **changed in v1.83.0** and need a South African attorney's eye. The
 PAIA manual is a statutory document.
@@ -273,6 +273,28 @@ Files: `frontend/src/app/features/legal/privacy-policy/privacy-policy.ts`,
 `frontend/src/app/features/legal/sublet/sublet.ts`.
 
 ---
+
+### Added by Phase 8a: the lease agreement and the renewal addendum
+
+`/templates/lease-agreement` and `/templates/lease-addendum` are **downloadable
+contracts** and carry the same open review. They ship marked
+`awaiting_legal_review`, which puts a warning on the screen **and on the printed
+page**, because a warning that vanishes into the PDF is one the person holding
+the paper never sees.
+
+They are downloadable on purpose rather than withheld: a landlord who cannot get
+one here takes a worse one off a search result with no warning on it at all.
+What they must not do is look finished — and the drive asserts the warning
+survives printing.
+
+The other two (`move-in-inspection`, `deposit-receipt`) are a checklist and a
+receipt, carry no such flag, and need no review.
+
+**When the attorney signs the two contracts off:** change `reviewState` to
+`'ready'` in `frontend/src/app/features/templates/template-content.ts`. That one
+word removes the banner from both the screen and the print. The drive asserts
+exactly two templates are flagged, so it will fail until it is updated with them
+— which is the point.
 
 ## 9. Delete the merged branches
 
@@ -756,6 +778,11 @@ node scripts/dashboard-drive.mjs         # 35 checks — Phase 7d. "Viewed 47 ti
 node scripts/onboarding-drive.mjs        # 35 checks — Phase 7f. The social card
                                          # (measured, not assumed) and the
                                          # first-run walkthrough
+node scripts/templates-ui-drive.mjs     # 45 checks — Phase 8a. The four
+                                         # printable documents, and the one
+                                         # that matters: the "not checked by a
+                                         # lawyer" warning SURVIVES printing,
+                                         # asserted under emulateMedia(print)
 node scripts/lost-number-drive.mjs      # 50 checks — Phase 7q. Needs
                                          # JWT_SECRET. Tests the CHECK
                                          # CONSTRAINTS with SQL as well as the

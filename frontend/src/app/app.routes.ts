@@ -92,6 +92,15 @@ const CONTENT_ROUTES: Routes = [
     loadChildren: () => import('./features/pages/pages.routes').then((m) => m.PAGES_ROUTES),
   },
   {
+    /**
+     * Phase 8a. Public and indexable on purpose: somebody searching for a South
+     * African lease template is a landlord with rooms and no tools, which is
+     * exactly who this is for.
+     */
+    path: 'templates',
+    loadChildren: () => import('./features/templates/templates.routes').then((m) => m.TEMPLATES_ROUTES),
+  },
+  {
     path: 'legal',
     loadChildren: () => import('./features/legal/legal.routes').then((m) => m.LEGAL_ROUTES),
   },

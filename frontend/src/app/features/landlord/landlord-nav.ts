@@ -80,6 +80,9 @@ export function landlordNav(badges: LandlordNavBadges = {}): PortalNavItem[] {
     // broken and you need a number.
     { label: 'Your public page', icon: '🪧', route: '/landlord/public-page' },
     { label: 'Who to call', icon: '🔧', route: '/landlord/services' },
+    // Phase 8a. The four documents a landlord keeps asking for. Points at the
+    // PUBLIC page rather than a portal copy, so there is one of them.
+    { label: 'Forms and templates', icon: '📄', route: '/templates' },
     // Phase 7g. Not optional furniture: for a landlord with no email address
     // this screen is the only place a notification can be read at all.
     { label: 'Notices', icon: '🔔', route: '/account/notices', badge: badges.notices },
