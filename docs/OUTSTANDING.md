@@ -154,17 +154,19 @@ room answer 500. The deployed API knows about `listerType`; the database has
 never been migrated to match it.
 
 `listerType` is added by `20261003170000_sublet_listings`, which is **migration
-21 of 34**. The database is therefore **14 migrations behind** the code running
-against it.
+21 of 34**. The preflight run against production on 5 October reported **15 pending**, so
+the database is 15 migrations behind the code running against it.
 
 ### Before you migrate — a read-only preflight
 
-Running fourteen migrations against a live database is the moment to find out
+Running fifteen migrations against a live database is the moment to find out
 *in advance* whether one of them will fail halfway, because a half-migrated
 production database is a worse place to be than the outage.
 
 ```bash
-DATABASE_URL='<the production connection string>' node scripts/migration-preflight.mjs
+export DATABASE_URL='<production, the -pooler endpoint>'
+export DIRECT_URL='<production, the NON-pooler endpoint>'
+node scripts/migration-preflight.mjs
 ```
 
 ⚠️ **Every statement in it is a SELECT.** It changes nothing, so it is safe to
@@ -173,9 +175,16 @@ reports which migrations are pending, anything in the existing data that would
 make the run fail, and anything that would deliberately change live rows. It
 exits non-zero if the run would break.
 
-Verified against a copy of a real database rolled back to production's exact
-state: it listed all 14, named the one blocker when one was planted, and gave
-the SQL to find the offending rows.
+**Both variables, and `export`, not an inline prefix.** See § 5a — the first
+attempt at this migration failed on exactly that, and reported success.
+
+Verified against a database built by applying production's own 19 migrations to
+an empty database, then migrating it forward: all 15 applied, `rooms.listerType`
+and `users.walkthroughSeenAt` appeared, no migration row was left unfinished,
+and the 3 contractors seeded into it came out un-listed as predicted. Each check
+was then falsified — a planted duplicate verified number tripped the blocker, a
+mismatched `DIRECT_URL` tripped § 0, and removing the planted rows made the
+"applied but not in this checkout" warning go away.
 
 ### Two things it will tell you about this particular run
 
@@ -193,19 +202,90 @@ the SQL to find the offending rows.
 
 ### Then
 
+Back it up first. The database is on **Neon**, so the backup is a branch from
+the current head — instant, and it is the restore path if a migration goes
+wrong. `pg_dump` also works but the client's major version must match the
+server's (18) or it refuses outright.
+
+Then, **from the repository root**:
+
 ```bash
-# Back it up first. Render has one-click backups; take one.
-cd backend && npx prisma migrate deploy
+export DATABASE_URL='<production, the -pooler endpoint>'
+export DIRECT_URL='<production, the NON-pooler endpoint>'
+bash scripts/migrate-remote.sh
 ```
+
+It prints which database it is about to migrate, shows the pending list, and
+asks before applying. It refuses if either variable is unset, if either resolves
+to localhost, or if `DIRECT_URL` is a `-pooler` host.
+
+⚠️ **Not `cd backend && npx prisma migrate deploy`.** That command has none of
+those guards. See § 5a.
 
 Nothing else is needed — the API does not need redeploying, it will simply stop
 erroring once the columns exist.
 
 ---
 
+## 5a. ⚠️ How the first attempt at § 5 silently migrated the wrong database
+
+On 5 October the preflight was run against production and correctly reported 15
+pending migrations. The next command was the one § 5 printed at the time:
+
+```bash
+DATABASE_URL='<production>' node scripts/migration-preflight.mjs   # ✅ production
+cd backend && npx prisma migrate deploy                            # ❌ localhost
+```
+
+Twelve migrations were applied to `localhost:5432/rentboard_dev` and the output
+read **"All migrations have been successfully applied."** Production never
+moved; the same `P2022` was in the log minutes later. Both commands exited 0 and
+nothing in either output contradicted the other.
+
+Two causes, and both of them were in this repository's own documentation:
+
+1. **An inline `VAR=… cmd` prefix applies to that one command.** It does not
+   carry to the next command in the chain.
+2. **`prisma migrate` connects through `directUrl`, not `url`.**
+   `backend/prisma/schema.prisma` declares `directUrl = env("DIRECT_URL")`, so
+   exporting only `DATABASE_URL` is not enough — `DIRECT_URL` still comes from
+   `backend/.env`, which is local. This is why `migrate deploy` printed
+   `rentboard_dev` even with the production `DATABASE_URL` in the environment.
+
+`scripts/migrate-remote.sh` already refused all of this, for the staging version
+of the same mistake, and § 5b already documented it. § 5 was written without
+reference to either and told the operator to call `prisma` directly.
+
+**Fixed in v1.104.0:**
+
+- § 0 of the preflight now blocks when `DIRECT_URL` is unset, naming the host
+  `backend/.env` would have sent the migration to instead; and blocks when
+  `DATABASE_URL` and `DIRECT_URL` resolve to different databases, or to two
+  databases that share a name but not a migration history.
+- The preflight's closing instructions now hand over `migrate-remote.sh` rather
+  than a bare `prisma migrate deploy`.
+
+Three further defects in the preflight, found by reading the production output
+it produced:
+
+- The run against production reported **"29 applied, 15 pending"** of 34 — which
+  does not add up. It was counting `_prisma_migrations` rows, including 10 names
+  that do not exist in this checkout. Those are now reported by name as their own
+  warning, and the three numbers reconcile by construction.
+- It warned **"0 contractor(s) are listed and ALL of them will be un-listed"**,
+  and counted that nothing as a thing to know about before migrating.
+- `?schema=public` is a Prisma-only query parameter and `psql` rejects the whole
+  URI over it, so the script **could not be run against development or staging at
+  all** — it worked on production only because that URL happens to carry
+  `sslmode` and `channel_binding`, which libpq understands. It now keeps the
+  libpq parameters, carries `schema` across as a `search_path`, and prints which
+  parameters it ignored.
+
+---
+
 ## 5b. Staging migrations — before any deploy
 
-Twenty-three migrations are in the repo. How many are unapplied on staging depends on
+Thirty-four migrations are in the repo. How many are unapplied on staging depends on
 when it was last migrated, so **ask rather than assume**:
 
 ```bash

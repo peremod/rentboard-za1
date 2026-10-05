@@ -2784,6 +2784,108 @@ money-custody line this codebase refuses to cross.
 | Nothing pre-fills a template from the landlord's own data — the names, address and room are all on the system. Useful, and a bigger decision for the contracts than the forms | Low, and deliberate for v1 |
 | The documents are not stored against a tenancy. `LeaseDocument` (Phase 4e) does that for a signed copy; these are blanks | By design |
 
+### 5.37 The preflight that passed on production while the migration went to localhost — ✅ fixed in v1.104.0
+
+Production was down on `P2022 rooms.listerType does not exist`, 15 migrations
+behind. `scripts/migration-preflight.mjs` was run against it and was right about
+everything: 15 pending, the column named, the contractor side effect named. Then
+the next command was the one the preflight's own closing line printed:
+
+```bash
+DATABASE_URL='<production>' node scripts/migration-preflight.mjs   # ✅ production
+cd backend && npx prisma migrate deploy                            # ❌ localhost
+```
+
+Twelve migrations were applied to `localhost:5432/rentboard_dev`. The output read
+"All migrations have been successfully applied." Both commands exited 0. The same
+`P2022` was in the production log minutes later.
+
+**Neither output was wrong.** Each described the database it reached. Nothing
+compared them, which is the defect: a check that passes on one thing while the
+action lands on another.
+
+#### Why it happened
+
+1. An inline `VAR=… cmd` prefix applies to that one command. It does not carry
+   across `&&`.
+2. **`prisma migrate` connects through `directUrl`, not `url`.**
+   `backend/prisma/schema.prisma` declares `directUrl = env("DIRECT_URL")`, so
+   exporting only `DATABASE_URL` leaves `DIRECT_URL` resolving from
+   `backend/.env` — and the migration goes local with the production URL sitting
+   in the environment.
+
+⚠️ I measured this wrong first. Exporting `DATABASE_URL` alone and seeing Prisma
+still print `rentboard_dev`, I concluded that `.env` overrides the process
+environment. It does not. Exporting both works; what looked like precedence was
+the second variable all along. Recorded because the wrong conclusion would have
+produced the wrong fix — editing `.env` by hand before a production migration.
+
+#### The safeguard that already existed
+
+`scripts/migrate-remote.sh` refuses an unset `DATABASE_URL`, an unset
+`DIRECT_URL`, a localhost target, and a `-pooler` host given as the direct one.
+It prints the target and asks before applying. Its header comment describes the
+**staging** version of this exact mistake, and `docs/OUTSTANDING.md` §5b
+documented it.
+
+§5 of that same file — which I wrote — told the operator to run `prisma migrate
+deploy` directly. **The control was not missing, bypassed by code, or broken. It
+was routed around by the document that told somebody what to run**, and all four
+of its guards still fire; re-verified by tripping each one.
+
+#### What changed
+
+A §0 that reports the connection `migrate deploy` will actually use. It blocks
+when `DIRECT_URL` is unset, **naming the host `backend/.env` would have sent the
+migration to instead**, and blocks when the two URLs resolve to different
+databases, or to two databases that share a name but not a migration history.
+The closing instructions hand over `migrate-remote.sh`.
+
+#### Three defects legible in the output the operator pasted back
+
+All three were in text I had already read without seeing them.
+
+- **"29 applied, 15 pending" of 34**, which does not add up. It counted
+  `_prisma_migrations` rows; production holds 10 names absent from this
+  checkout. Those are reported by name now and the numbers reconcile by
+  construction.
+- **"0 contractor(s) are listed and ALL of them will be un-listed"**, counted
+  toward "1 thing(s) to know about first". A ⚠️ that fires on an empty table is
+  how an operator learns to skim the one that matters.
+- **`?schema=public` is Prisma-only and `psql` rejects the whole URI over it**,
+  so the script could not run against development or staging at all. It worked on
+  production only because that URL carries `sslmode` and `channel_binding`, which
+  libpq understands. A preflight runnable in one of three environments cannot be
+  rehearsed anywhere before it is trusted on the one that matters.
+
+#### The replica that was not a replica
+
+Worse than any of them. The database the original script was validated against
+had been built by deleting migration rows from a fully-migrated database
+**without dropping the objects those migrations create**. So §2's "nothing would
+fail" was measured against a schema ahead of its own migration history, and the
+rehearsal on it died `P3018 relation "phone_signups" already exists` — an error
+production cannot produce, because production genuinely lacks the table.
+
+The faithful one applies production's own 19 migrations to an **empty** database.
+On that, with 3 DB-only rows planted throughout: all 15 applied,
+`rooms.listerType` and `users.walkthroughSeenAt` appeared, no migration row left
+unfinished, 3 seeded contractors came out un-listed and the one `sponsoredUntil`
+date cleared. `prisma migrate status` exits 1 on the DB-only rows — run, not
+assumed, because the new warning tells the operator to expect it.
+
+Falsified: `DIRECT_URL` unset blocks naming both hosts; pointed at another
+database it blocks naming both; a planted duplicate verified number trips the
+blocker and prints the SQL to find it; removing the planted rows makes the
+"applied but not in this checkout" warning go away.
+
+#### Still open
+
+**Production is still down.** The migration needs the production `DIRECT_URL`,
+which this environment does not hold, and there is no network path to it from
+here — `umastande.co.za` and `rentboard-api.onrender.com` both answer HTTP `000`,
+`connect_rejected` by the egress policy. Stated rather than worked around.
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461
