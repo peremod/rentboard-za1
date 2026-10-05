@@ -996,6 +996,82 @@ Phase 7g is finished with this. One named gap remains across the phone-only
 work: losing the number entirely has no route back, because every route needs
 the old number in hand. 585 smoke checks passed, 0 failed."
 
+tag_if_missing "v1.102.0" "435ef5a4f7780dc0628af2a2f25dc37d62f7d88e" "2026-10-05 07:37:41 +0000" "v1.102.0 — Phase 7q: lost-number recovery, and a CHECK constraint that passed on NULL
+
+The gap 7o named and 7p carried. Phase 7o made a number changeable with the new
+one proven first, which covers switching SIMs and covers nothing when the
+handset is gone: every route needs the old number in hand. A person with no
+email, no password and no phone had no way back to their own rooms, ever.
+
+This is the most dangerous path in the product. The account on the other side
+holds rooms, applications, tenancies, a rent record and conversations with
+tenants. Getting it wrong does not inconvenience somebody; it hands a stranger
+a landlord's entire history with the people living in their rooms.
+
+Two proofs, neither sufficient alone. A person proves identity to an admin
+offline and the admin records WHAT was checked and WHEN — named, dated
+outcomes, the VerificationRequest and contractor-check pattern. And the new
+handset answers a code, so an admin cannot type a number in and have it become
+the way in. The approval response carries no code, which the drive asserts.
+
+The narrowing that matters most: opening is refused outright when the account
+has an email address or a password, naming the safer route — then a password
+reset does the same job and nobody has to be trusted at all. The admin screen
+refuses it in those words and does not even render the form.
+
+What it cannot do is warn the real owner in time, and that is stated rather
+than implied. The notice is written the moment a request opens, to every
+channel the account has, and in the case this exists for there is no email and
+the owner cannot sign in to read a Notice. Nothing fixes that: a person with no
+email, no password and no phone has no channel left. The mitigation is the
+record — permanent, attributable to a named admin, reconstructable — plus a
+completion notice naming both numbers and what to do if it was not them, and
+the old number retired so the stolen handset cannot sign in afterwards.
+
+A second admin approval is the standard control here and is deliberately not
+required: Mastande is run by one person, so a two-admin rule would make the
+feature unusable by the only admin there is. Recorded as a decision rather than
+quietly skipped.
+
+Two of the six CHECK constraints passed on NULL. Written as
+length(btrim(column)) > 0, and btrim(NULL) is NULL, length(NULL) is NULL,
+NULL > 0 is NULL — and a CHECK constraint that evaluates to NULL is satisfied.
+So a refusal with no reason went straight in: the exact row the constraint
+existed to refuse, on this path. The sibling constraint for the identity note
+had the same hole and no test at all, which is why it slipped beside the one
+that did. Found because the drive tests the CONSTRAINTS with SQL rather than
+only the service that also enforces them; the service's checks were correct
+throughout, and a rule only the service holds is one direct UPDATE from being
+no rule. Falsifying the service's identity guard proved the layering: approving
+then returned 500, because the database still refused the write.
+
+50 API and 29 UI checks, falsified in two passes — five bugs, then three
+isolated — to 13 and 3 failures.
+
+Then the UI drive's whole-page button sweep found eleven sub-target controls,
+none of them on the new screen: the language switcher at 24px, the board's own
+filter pills at 22px, the save-heart at 32px on every room card, the phone
+hamburger at 32px which is the only navigation a phone has, the cookie notice's
+Got it at 30px on every first visit, the filter drawer's toggle and close, the
+desktop portal nav at 37px including Log out, and .auth__submit at 38px — the
+primary button on every auth form. The board had 25 of 34 buttons under target.
+
+Fourth pass at the same family: v1.93.0 did .btn, 7p did the inputs after 29 of
+them shipped under target, and each fix was described as app-wide while
+reaching only the selector it named. 7p's own fix moved the hole rather than
+closing it — it added a text sweep while the row helper went on measuring
+buttons a row at a time, so a button outside any listed row stayed invisible. A
+whole-page button sweep runs beside it now, falsified by reverting the rules to
+18 failures.
+
+One near-miss recorded: .auth__submit measured 38px with a cream background and
+grey text and has no CSS rule anywhere in the stylesheets, which reads exactly
+like btn-ghost-light. It was measured on an EMPTY form, where the button is
+correctly disabled; filled in it is terracotta on white. The height was the only
+defect, and reporting the rest would have been a fabricated finding.
+
+590 smoke checks passed, 0 failed."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1011,7 +1087,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[01][.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-2][.]'"
 else
   echo "Nothing to push."
 fi
