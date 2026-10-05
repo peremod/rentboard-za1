@@ -1288,6 +1288,38 @@ review can be written. Recorded as OUTSTANDING 18 for its own phase, and it
 changed what this phase could honestly say: no tour step describes confirming a
 move-in, because no step promises what the app cannot do."
 
+tag_if_missing "v1.108.0" "aa6db35c7517416bb70c2396843d84e0d3b7a93d" "2026-10-05 20:12:14 +0000" "v1.108.0 — Phase 8c: a tenancy can finally start and end
+
+The rent screen was confusing because it was describing a tenancy that had never
+begun, and could not begin.
+
+Accepting an applicant opens a tenancy that stays pending until someone confirms
+the move-in. confirm-start, cancel and end have existed since Phase 4, are
+either-party, and are wired into the client service. Nothing called any of them.
+withdrawFlag had the only caller, which is how a completely dead lifecycle hid
+behind one live method.
+
+The consequences stack, and only the first is obvious: no tenancy could become
+active; the rent reminder query selects on active, so no reminder could ever
+fire for anybody; reviews open when a tenancy ends, so none could be written;
+notice, renewal and move-out were unreachable.
+
+One component serves both sides, because either party may act — requiring both
+would leave a tenancy stuck whenever one side stops logging in. Two date
+constraints come straight from the API's own refusals, so the form cannot offer
+what the server will reject. And the panel says on its face that confirming a
+move-in is not about money, because 'confirm' beside a rand figure is how
+somebody comes to believe this platform handled their deposit.
+
+Falsified by removing the mount, which reproduces the shipped state exactly. That
+falsification also found the drive dying on a timeout instead of reporting, so it
+now stops at the missing panel and says it once.
+
+The API side needed nothing: smoke already had seven checks on these endpoints.
+
+Still open: notice and updateLease have no caller, so the product can withdraw a
+notice it has no way to give."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1303,7 +1335,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-7][.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-8][.]'"
 else
   echo "Nothing to push."
 fi
