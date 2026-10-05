@@ -138,7 +138,72 @@ configuration problem, not a routing one.
 
 ---
 
-## 5. Staging migrations — before any deploy
+## 5. 🔴 Production is DOWN on a missing migration — run this first
+
+**The symptom, from the production API log on 5 October:**
+
+```
+PrismaClientKnownRequestError:
+Invalid `prisma.room.findMany()` invocation:
+The column `rooms.listerType` does not exist in the current database.
+  code: 'P2022'  at RoomsService.findAll
+```
+
+Every room query fails, so the board, "My properties" and anything listing a
+room answer 500. The deployed API knows about `listerType`; the database has
+never been migrated to match it.
+
+`listerType` is added by `20261003170000_sublet_listings`, which is **migration
+21 of 34**. The database is therefore **14 migrations behind** the code running
+against it.
+
+### Before you migrate — a read-only preflight
+
+Running fourteen migrations against a live database is the moment to find out
+*in advance* whether one of them will fail halfway, because a half-migrated
+production database is a worse place to be than the outage.
+
+```bash
+DATABASE_URL='<the production connection string>' node scripts/migration-preflight.mjs
+```
+
+⚠️ **Every statement in it is a SELECT.** It changes nothing, so it is safe to
+point at production — which is the only database where the answer matters. It
+reports which migrations are pending, anything in the existing data that would
+make the run fail, and anything that would deliberately change live rows. It
+exits non-zero if the run would break.
+
+Verified against a copy of a real database rolled back to production's exact
+state: it listed all 14, named the one blocker when one was planted, and gave
+the SQL to find the offending rows.
+
+### Two things it will tell you about this particular run
+
+1. **No constraint can fail** on a database that already has
+   `20260929090000_phone_login_identity` applied. If yours does not, the partial
+   unique index on verified phone numbers is the one real risk — two accounts
+   sharing one verified number stops the run.
+2. ⚠️ **Every listed contractor will be un-listed.**
+   `20261004180000_service_provider_checks` runs
+   `UPDATE service_providers SET active = false`, because Phase 7j made `active`
+   require a recorded phone check and no existing row has one. This is
+   deliberate — the directory told landlords those names were checked and none
+   of them were — but **"Who to call" will be empty afterwards** until an admin
+   rings each number and records it on `/admin/services`.
+
+### Then
+
+```bash
+# Back it up first. Render has one-click backups; take one.
+cd backend && npx prisma migrate deploy
+```
+
+Nothing else is needed — the API does not need redeploying, it will simply stop
+erroring once the columns exist.
+
+---
+
+## 5b. Staging migrations — before any deploy
 
 Twenty-three migrations are in the repo. How many are unapplied on staging depends on
 when it was last migrated, so **ask rather than assume**:
@@ -778,6 +843,11 @@ node scripts/dashboard-drive.mjs         # 35 checks — Phase 7d. "Viewed 47 ti
 node scripts/onboarding-drive.mjs        # 35 checks — Phase 7f. The social card
                                          # (measured, not assumed) and the
                                          # first-run walkthrough
+
+# ⚠️ Not a drive — a read-only preflight you point at the database you are
+# about to migrate. Every statement is a SELECT, so it is safe against
+# production. Exits non-zero if the run would fail partway.
+DATABASE_URL=<target> node scripts/migration-preflight.mjs
 node scripts/templates-ui-drive.mjs     # 45 checks — Phase 8a. The four
                                          # printable documents, and the one
                                          # that matters: the "not checked by a
