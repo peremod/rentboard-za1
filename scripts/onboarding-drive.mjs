@@ -262,8 +262,36 @@ await tPage.waitForTimeout(1200);
 
 console.log('\n── 6. "Show me around again" brings it back ─────────────────');
 
-await tPage.goto(`${WEB}/account/settings`, { waitUntil: 'domcontentloaded' });
-await tPage.waitForTimeout(2000);
+/**
+ * ⚠️ Reach the settings screen IN-APP, because `page.goto` hides the defect.
+ *
+ * A full page load tears down the Angular app and rebuilds it, so the in-memory
+ * `dismissed` signal — set by skipping the tour a moment ago — comes back
+ * false. That is not the state a person is in: they skip the tour, tap
+ * Settings, and the signal is still true. With `goto` the whole section ran
+ * against a fresh app and could not see that the button did nothing.
+ *
+ * Proved by planting the original defect and watching this section stay green
+ * until this navigation was changed.
+ *
+ * Widened first: at 412px the three links to a given screen are an off-canvas
+ * drawer (which Playwright calls visible, at x = -1009), a hidden desktop one,
+ * and one behind the burger. What is asserted here is SPA navigation versus a
+ * reload, not nav chrome; the phone layout is section 7's job.
+ */
+await tPage.setViewportSize({ width: 1280, height: 900 });
+await tPage.waitForTimeout(600);
+if (await tPage.locator('.cookie-notice__ok').count()) {
+  await tPage.locator('.cookie-notice__ok').click();
+  await tPage.waitForTimeout(400);
+}
+const toSettings = tPage.locator('a[href="/account/settings"]:visible').first();
+(await toSettings.count()) > 0
+  ? ok('settings is reachable from a link, so the session carries across')
+  : bad('no in-app link to settings — this section cannot test the real path');
+await toSettings.click({ timeout: 15000 });
+await tPage.waitForURL((u) => u.pathname === '/account/settings', { timeout: 15000 });
+await tPage.waitForTimeout(1500);
 const replay = tPage.locator('button', { hasText: 'Show me around again' });
 (await replay.count()) === 1
   ? ok('account settings offers it again — the brief asks for a way back')
@@ -275,11 +303,72 @@ q(`SELECT "walkthroughSeenAt" IS NULL FROM users WHERE id = '${tenant.id}'`) ===
   ? ok('…and it clears the stamp rather than keeping a second piece of state')
   : bad('asking for it again did not clear the record');
 
-await tPage.goto(`${WEB}/tenant/dashboard`, { waitUntil: 'domcontentloaded' });
+/**
+ * ⚠️ NOT on this screen. The copy promises the next one.
+ *
+ * Clearing the stamp alone re-opens the tour instantly here, because a page
+ * load leaves `dismissed` false — so the modal lands on top of the button just
+ * pressed and over the sentence explaining what will happen. That is one of the
+ * two bugs this section now covers; the other is the tour never coming back at
+ * all. They were traded for each other for three releases because both were
+ * carried on one signal.
+ */
+(await tPage.locator('.wt-card').count()) === 0
+  ? ok('…and it does NOT open on top of the button that was just pressed')
+  : bad('the walkthrough opened on the settings screen, over its own button');
+
+/**
+ * ⚠️ Navigate the way a person does — by pressing a link, not `page.goto`.
+ *
+ * This assertion existed and passed for three releases while the button did
+ * nothing, because `page.goto` is a full page load: it tears down the Angular
+ * app and builds a new one, which resets the in-memory `dismissed` signal that
+ * `shouldShow()` checks first. A landlord pressing "Show me around again" and
+ * then tapping something in the nav gets a ROUTER navigation, no reload, and
+ * that signal survived it — so the tour never came back without a hard refresh.
+ *
+ * The drive was exercising a code path a person never takes. Clicking is the
+ * whole point of the check.
+ */
+/**
+ * The link has to be one a thumb can reach. At 412px the navbar's links are
+ * behind the burger, and the first run clicked a resolved-but-hidden <a> and
+ * sat on it until Playwright timed out — a drive failing for its own reasons
+ * while saying nothing about the product.
+ */
+// The cookie notice is fixed at z-index 9999 and sits over the foot of the
+// page; it has intercepted clicks in this repo before. Out of the way first.
+if (await tPage.locator('.cookie-notice__ok').count()) {
+  await tPage.locator('.cookie-notice__ok').click();
+  await tPage.waitForTimeout(400);
+}
+/**
+ * ⚠️ Navigate by PRESSING A LINK, not `page.goto`.
+ *
+ * This section's assertion passed for three releases while the button did
+ * nothing, because `page.goto` is a full page load: it tears down the Angular
+ * app and builds a new one, resetting the in-memory `dismissed` signal that
+ * `shouldShow()` tests first. A person pressing "Show me around again" and then
+ * tapping the nav gets a ROUTER navigation with no reload, and that signal
+ * survived every one — so the tour never came back without a hard refresh.
+ *
+ * Widened to 1280 for the click. What is being asserted is SPA navigation
+ * versus a reload, not nav chrome: at 412px the three dashboard links are the
+ * off-canvas drawer (Playwright calls it visible at x = -1009), a hidden
+ * desktop one, and one behind the burger — all of which made this fail for the
+ * drive's own reasons while saying nothing about the product. The walkthrough
+ * on a phone is section 7's job, and it does it at 360.
+ */
+const toDash = tPage.locator('a[href="/tenant/dashboard"]:visible').first();
+(await toDash.count()) > 0
+  ? ok('there is a nav link on screen to press, so this is navigation and not a reload')
+  : bad('no reachable in-app link to the dashboard — cannot test the way a person moves');
+await toDash.click({ timeout: 15000 });
+await tPage.waitForURL((u) => u.pathname === '/tenant/dashboard', { timeout: 15000 });
 await tPage.waitForTimeout(2500);
 (await tPage.locator('.wt-card').count()) === 1
-  ? ok('…so it opens on the next screen')
-  : bad('the walkthrough did not come back after being reset');
+  ? ok('…so it opens on the next screen, reached the way a person reaches it')
+  : bad('the walkthrough did not come back after being reset (in-app navigation)');
 
 console.log('\n── 7. On a phone, which for a modal is the whole question ───');
 

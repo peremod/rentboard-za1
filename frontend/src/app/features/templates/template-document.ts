@@ -24,7 +24,11 @@ import { SeoService } from '../../core/services/seo.service';
       <section class="section tpl-wrap">
         <!-- Screen only. None of this is on the printed page. -->
         <div class="tpl-bar no-print">
-          <a routerLink="/templates" class="btn btn-outline btn-sm">← All templates</a>
+          <!-- ⚠️ Relative, not "/templates". These components are mounted twice — the
+               public route and /landlord/templates inside the portal — and an absolute
+               link threw a landlord out of the portal from the one place they were
+               most likely to press. ".." resolves to whichever list they came from. -->
+          <a routerLink=".." class="btn btn-outline btn-sm">← All templates</a>
           <button type="button" class="btn btn-primary" (click)="print()">
             Save as PDF or print
           </button>
@@ -153,7 +157,7 @@ import { SeoService } from '../../core/services/seo.service';
       <section class="section">
         <h1>That template does not exist</h1>
         <p class="muted">
-          <a routerLink="/templates">See the templates we do have</a>.
+          <a routerLink="..">See the templates we do have</a>.
         </p>
       </section>
     }

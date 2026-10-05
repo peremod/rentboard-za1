@@ -33,7 +33,7 @@ import { SeoService } from '../../core/services/seo.service';
 
       <div class="tpl-grid">
         @for (t of templates; track t.slug) {
-          <a class="tpl-card" [routerLink]="['/templates', t.slug]">
+          <a class="tpl-card" [routerLink]="[t.slug]">
             <h2>{{ t.title }}</h2>
             <p class="tpl-card__purpose">{{ t.purpose }}</p>
             <p class="tpl-card__why">{{ t.why }}</p>

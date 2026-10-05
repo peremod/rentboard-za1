@@ -389,6 +389,7 @@ const NOT_IN_NAV = {
   'tenant/sublet/:roomId/applicants': 'opened from that listing in the dashboard section',
   'admin/users/:id': 'opened from a row in the admin user list',
   'landlord/properties/:propertyId': 'opened by tapping a property card on /landlord/properties',
+  'landlord/templates/:slug': 'opened by tapping a template card on /landlord/templates',
   // Deliberately NOT a nav item. An irreversible action does not belong in a
   // menu next to "Messages": it is a link at the foot of /account/settings,
   // asserted by scripts/account-lifecycle-ui-drive.mjs section 1, which also
