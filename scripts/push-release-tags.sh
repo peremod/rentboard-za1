@@ -1349,6 +1349,34 @@ One fault of the drive's own, recorded: it assumed the first row rendered was
 the first room created, unassigned an already-loose room, and got a 200 that
 changed nothing."
 
+tag_if_missing "v1.110.0" "f7b1bc99de08aa72c5b2c62d42036fa177447145" "2026-10-05 21:14:58 +0000" "v1.110.0 — Phase 8e: one report about messages, three unrelated faults
+
+The description of the room would not wrap because :where(button) sets
+white-space: nowrap and the conversation row IS a button, so it inherited to
+every piece of text inside. At 360px the room title wanted 502px in a 300px
+column and the document was 1012px wide in a 360px viewport. font: inherit does
+not reset white-space.
+
+A bounding-box sweep cannot see that bug: every element's rect sat inside the
+viewport, and the overflow shows only as scrollWidth greater than clientWidth.
+Every layout drive here measures boxes, so all of them would have passed through
+it forever. The app-wide risk is recorded rather than swept, because it is not
+swept.
+
+The send button was a consequence of the first, not a bug of its own. Measured
+after the fix and left alone: reporting a fix there would have been a fabricated
+finding.
+
+An unread message is now a row in the dashboard's existing list of what needs
+doing, beside the applicant who has waited nine days, rather than a dot to
+interpret. Only honest because Message.readAt is written now; a count built on
+it before would have shown every message ever sent, for ever, which is why the
+check that it clears matters more than the check that it appears.
+
+Three faults of my own, recorded: a fourth compile failure from the backtick
+trap, a drive that read the badge after its own earlier section had cleared it,
+and a check that passed vacuously over a count that was zero before and after."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1364,7 +1392,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-9][.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.](10[0-9]|110)[.]'"
 else
   echo "Nothing to push."
 fi
