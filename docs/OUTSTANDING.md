@@ -1118,7 +1118,7 @@ and falsifying it prints the 1159px.
 
 ---
 
-## 20. ⚠️ `:where(button)` sets `white-space: nowrap` on every button in the app
+## 20. ✅ `:where(button)` nowrap — fixed where it bit, and now swept app-wide
 
 Right for a button holding a short label. Wrong for one used as a **row or a
 card**, because `white-space` inherits: every piece of text inside such a button
@@ -1138,13 +1138,36 @@ had already learned once about `color`.
 **Fixed where it bit** (`.msg-row__head { white-space: normal }`, v1.110.0).
 Zero specificity means a plain class wins, so one declaration is the whole fix.
 
-**Not swept app-wide.** Any other button used as a container for wrapping text
-has the same problem, and nothing here looks for it. The cheap check would be a
-drive that walks the DOM comparing `scrollWidth` to `clientWidth` — ⚠️ a
-bounding-box sweep **cannot see this**: every element's
-`getBoundingClientRect()` sat inside the viewport, and only the scroll
-measurement showed the overflow. `scripts/messages-layout-drive.mjs` does it for
-the messages list; the other screens are unchecked.
+### ✅ Swept in v1.111.0 (Phase 8f)
+
+`layout-ui-drive` section 10 walks every screen it visits, at 360 / 390 / 768 /
+1280, and fails on any **leaf** whose `scrollWidth` exceeds its `clientWidth` —
+text that cannot wrap. Ten screens, including the dashboard, my properties,
+messages and all applicants.
+
+⚠️ A bounding-box sweep **cannot see this**. Every element's
+`getBoundingClientRect()` sat inside the viewport; the overflow exists only in
+the scroll measurement. Every other section of that drive measures boxes, which
+is why all of them passed over it.
+
+**Leaves only, and that is a correction.** The first version flagged any element
+wider than its box and reported `app-ad-slot 332>328` on the board — a
+deliberate full-bleed (`.filter-panel .ad-slot` carries `margin: 0 -.25rem` so
+an advert reaches the edges of the sheet). A designed bleed always reads as
+overflow, and a check that cries wolf on a deliberate layout is one people learn
+to skim. A leaf has no element children, so its overflow is its own text, and no
+bleed can produce it.
+
+**One screen was found clean because it was empty.** The sweep reported
+`/account/messages` fine with the bug reintroduced: this drive's landlord had no
+conversations. It now writes a message, with a long room title and a long body —
+a short one wraps by accident and proves nothing — and every page must present
+at least five pieces of text or the check fails as "nothing was really
+measured".
+
+Falsified: with the fix reverted it reports `span.preview 993>303` and
+`p.msg-row__room 537>303` at 360 and 390, and still catches the preview at 1280
+where the page does not scroll at all.
 
 ---
 

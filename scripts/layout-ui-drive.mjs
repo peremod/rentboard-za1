@@ -270,7 +270,11 @@ console.log('\n── 25. Accept and Reject are not 8px apart ──────
  * drive that measures nothing reports no defect.
  */
 const room = await apiCall(API, 'POST', '/api/rooms', {
-  roomType: 'shared_house', title: `Applicant room ${S}`,
+  roomType: 'shared_house',
+  // ⚠️ Long on purpose. `Applicant room 123` fits any column at any width, so a
+  // room title that cannot wrap would have gone unnoticed by section 10 — the
+  // same reason its message fixture is a full sentence.
+  title: `Applicant room ${S} with its own private entrance and a shared outside tap`,
   description: 'A clean room in a shared house, close to transport and the shops. Available now.',
   rentCents: 310000, province: 'Gauteng', city: 'Johannesburg',
   locationDisplay: 'Tembisa, Johannesburg',
@@ -285,6 +289,26 @@ const application = await apiCall(API, 'POST', '/api/applications',
 application.status === 201
   ? ok('a tenant has applied, so there is an applicant card to measure (precondition, asserted)')
   : bad(`the application fixture failed (${application.status}) — the checks below prove nothing`);
+
+/**
+ * ⚠️ And a MESSAGE, long enough to need wrapping.
+ *
+ * Section 10 swept /account/messages and reported it clean with the wrap bug
+ * reintroduced — because this landlord had no conversations, so the screen it
+ * visited was empty. A check that visits a screen with no data on it and calls
+ * it clean is the same defect as the drive that created a property and never
+ * opened the screen showing it.
+ *
+ * Deliberately a long sentence: a short message wraps by accident and proves
+ * nothing about whether it CAN.
+ */
+const firstMessage = await apiCall(API, 'POST', `/api/applications/${application.body?.id}/messages`, {
+  body: 'Good day, I saw your listing and I would like to know if the room is still '
+      + 'available and whether the rent includes the water and the electricity for the month.',
+}, applicant.token);
+firstMessage.status === 201
+  ? ok('…and written a message, so the conversation list has a row to measure')
+  : bad(`the message fixture failed (${firstMessage.status}) — section 10 would measure an empty screen`);
 
 /**
  * ⚠️ The card arrives COLLAPSED, and the first version of this drive did not
@@ -753,6 +777,118 @@ for (const width of WIDTHS) {
       bad(`${width}px ${label}: ${b.under.length} of ${b.count} buttons under ${TAP}px — ${JSON.stringify(b.under)}`);
     }
     // Follow the rotation, so the next context presents the current cookie.
+    if (needsAuth) sweepSession = await ctx.storageState();
+    await ctx.close();
+  }
+}
+
+// ── 10. Overflow a bounding box cannot see — Phase 8f ───────────────────
+//
+// ⚠️ This is the check whose absence let the messages list ship with the room
+// title and the message preview pinned to one line.
+//
+// `:where(button)` sets `white-space: nowrap` — right for a button holding a
+// short label, wrong for one used as a ROW, and white-space INHERITS. On
+// /account/messages the room title wanted 502px in a 300px column and the
+// preview 993px, and the document was 1012px wide in a 360px viewport.
+//
+// Every section above measures bounding boxes, and every one of them passed
+// over it: `getBoundingClientRect()` on each element sat inside the viewport.
+// The overflow exists only as `scrollWidth > clientWidth`. A box-shaped check
+// cannot find it, however many screens it visits.
+//
+// An element whose own `overflow-x` is auto or scroll is MEANT to scroll — the
+// portal nav on a phone, a wide table — so it is skipped. That is a rule rather
+// than a list of names, which is what keeps this from becoming the allowlist
+// where findings go to be forgotten.
+console.log('\n── 10. Text pinned to one line, which no box check can see ──');
+
+const OVERFLOW_PAGES = [
+  ...CONTROL_PAGES,
+  ['/landlord/dashboard', 'the dashboard', true],
+  ['/landlord/properties', 'my properties', true],
+  ['/account/messages', 'messages', true],
+  ['/landlord/applicants', 'all applicants', true],
+];
+
+for (const width of WIDTHS) {
+  for (const [path, label, needsAuth] of OVERFLOW_PAGES) {
+    const ctx = await browser.newContext({
+      viewport: { width, height: 900 },
+      ...(needsAuth ? { storageState: sweepSession } : {}),
+    });
+    const p = await ctx.newPage();
+    await p.goto(`${WEB}${path}`, { waitUntil: 'networkidle' });
+    await p.waitForTimeout(900);
+
+    if (needsAuth && /\/auth\/login/.test(new URL(p.url()).pathname)) {
+      bad(`${width}px ${label}: the copied session did not sign in, so nothing was measured`);
+      await ctx.close();
+      continue;
+    }
+
+    const m = await p.evaluate(() => {
+      const d = document.documentElement;
+      const over = [];
+      let leaves = 0;
+      for (const el of document.querySelectorAll('body *')) {
+        const cs = getComputedStyle(el);
+        // Meant to scroll sideways, or not rendered at all.
+        if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') continue;
+        if (cs.display === 'none' || el.getBoundingClientRect().height === 0) continue;
+        /**
+         * ⚠️ Leaves only — an element whose overflow is its OWN TEXT.
+         *
+         * The first version of this flagged any element wider than its box and
+         * reported `app-ad-slot 332>328` on the board at both phone widths.
+         * That is a deliberate full-bleed: `.filter-panel .ad-slot` carries
+         * `margin-left/right: -.25rem` so the advert reaches the edges of the
+         * sheet "where side padding wastes scarce width". A designed bleed
+         * always reads as overflow, the page-level check above already proves
+         * nothing escapes the screen, and a check that cries wolf on a
+         * deliberate layout is one people learn to skim.
+         *
+         * What this section is for is the other thing: text that cannot wrap.
+         * A leaf has no element children, so its scrollWidth is its own
+         * content — exactly `p.msg-row__room 502>300`, and no bleed can
+         * produce it.
+         */
+        if (el.children.length > 0) continue;
+        leaves++;
+        if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0) {
+          over.push({
+            el: `${el.tagName.toLowerCase()}.${(el.className || '').toString().trim().split(/\s+/)[0] || '—'}`,
+            want: el.scrollWidth,
+            have: el.clientWidth,
+          });
+        }
+      }
+      return { doc: d.scrollWidth, vw: d.clientWidth, over, leaves };
+    });
+
+    if (m.doc > m.vw + 1) {
+      bad(`${width}px ${label}: the page scrolls sideways (${m.doc} in ${m.vw})`);
+    } else {
+      ok(`${width}px ${label}: no horizontal page scroll`);
+    }
+
+    /**
+     * ⚠️ Nothing measured is not the same as nothing wrong. A screen that
+     * rendered empty — no data, a bounced session, a failed fixture — has no
+     * leaves, and `[].filter(...)` is clean every time.
+     */
+    if (m.leaves < 5) {
+      bad(`${width}px ${label}: only ${m.leaves} piece(s) of text on the page — nothing was really measured`);
+    } else if (m.over.length === 0) {
+      ok(`${width}px ${label}: ${m.leaves} pieces of text, none pinned wider than its box`);
+    } else {
+      const worst = m.over.sort((a, b) => (b.want - b.have) - (a.want - a.have)).slice(0, 4);
+      bad(
+        `${width}px ${label}: ${m.over.length} piece(s) of text cannot wrap — `
+        + worst.map((o) => `${o.el} ${o.want}>${o.have}`).join(', '),
+      );
+    }
+
     if (needsAuth) sweepSession = await ctx.storageState();
     await ctx.close();
   }
