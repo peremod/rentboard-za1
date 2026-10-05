@@ -133,6 +133,25 @@ img{display:block;max-width:100%}
    Additive and layout-neutral: opacity and cursor only, on disabled only. */
 .btn:disabled, .btn[disabled] { opacity: .5; cursor: not-allowed; box-shadow: none; transform: none; }
 .btn:disabled:hover, .btn[disabled]:hover { transform: none; box-shadow: none; }
+
+/* ⚠️ `.btn-danger` was used by SEVEN components and written in the scoped
+   `styles:` of TWO — close-account (v1.92.0) and admin-user-detail. Angular's
+   emulated encapsulation rewrites a scoped rule with an attribute selector, so
+   it applies to the component that declares it and nowhere else. The other
+   five — admin verifications, disputes, reports, the admin dashboard and
+   advertising — rendered a DESTRUCTIVE button identical to an ordinary one.
+   `class="btn btn-sm btn-danger"` reads, in the template, exactly like an
+   affordance; on those screens it was decoration.
+
+   Promoted here so the variant means the same thing everywhere it is written.
+   The two local copies still win inside their own components — same colour, so
+   nothing moves — and can go when somebody is next in those files. */
+.btn-danger{
+  background:#D63B3B;color:#fff;border:none;
+}
+.btn-danger:hover:not(:disabled){background:#BE3333}
+.btn-danger:disabled{opacity:.5;cursor:not-allowed}
+
 .btn-primary{background:var(--terra);color:#fff}
 /* Darkens on hover. --terra2 is the brand accent for text on dark; as a
    background under white text it is 3.56:1. See --terra-deep. */
@@ -775,6 +794,25 @@ img{display:block;max-width:100%}
 }
 .yard__head strong{display:block;font-size:.92rem}
 .yard__head .muted{font-size:.78rem}
+/* ⚠️ `.yard__actions` had no rule at all.
+   It is the second child of `.yard__head`, holding "Shared details" and
+   "Delete this property" — and with no rule they rendered as one unbroken
+   string, "Shared detailsDelete this property", with no gap to aim at between
+   a harmless action and a destructive one. Found on a real handset at 360px.
+
+   Wrapping matters as much as the gap: the head already carries a name and an
+   address, and three buttons held on one line push the card past the width of
+   the screen. The row gap is smaller than the column gap so wrapped buttons
+   stay visibly one group. */
+.yard__actions{
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;
+  /* ⚠️ The ROW gap was .35rem and the drive caught it at 360 and 390px, where
+     these wrap onto separate lines: 5.6px between "Shared details" and "Delete
+     this property", both 44px tall. A destructive control six pixels under a
+     harmless one is the same mis-tap the missing gap caused, rotated ninety
+     degrees. .6rem clears the 8px floor the drive now asserts. */
+  gap:.6rem .9rem;
+}
 .yard__counts{
   display:flex;flex-wrap:wrap;gap:.75rem;padding:.6rem 1rem;
   font-size:.78rem;color:var(--ink2);border-bottom:1px solid var(--border);

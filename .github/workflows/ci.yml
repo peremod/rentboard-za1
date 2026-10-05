@@ -112,6 +112,22 @@ jobs:
         # document does not depend on the data. Measured, not assumed.
         run: node scripts/bundle-budget.mjs
 
+      - name: CSS coverage — every template class has a rule
+        # A class used in a template and styled NOWHERE renders as unstyled
+        # inline content. That is how `.yard__actions` put "Shared details" and
+        # "Delete this property" on a landlord's phone as one unbroken string,
+        # and how `.form-error` rendered a failed save — `role="alert"` and all
+        # — as ordinary body text on four screens.
+        #
+        # Nothing else here can see it: the component renders, the class is
+        # present, the production build succeeds because an unused class is not
+        # an error, and a UI drive only measures the screens it visits. This
+        # reads the templates instead, so it cannot be fooled by a screen
+        # nobody opened.
+        #
+        # Runs after the production build above, because it reads the built CSS.
+        run: node scripts/css-coverage-audit.mjs
+
       # `if: !cancelled()` on the three steps below, and on three in the e2e
       # job. A job stops at its first failing step, so for ten runs the red
       # production build was also hiding everything after it — and when the

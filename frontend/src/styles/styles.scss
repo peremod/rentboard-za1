@@ -284,6 +284,29 @@ legend { font-weight: 600; margin-bottom: $sp-3; }
 .field-hint  { display: block; font-size: .78rem; color: $color-muted; margin: .35rem 0 0; line-height: 1.5; }
 .field-error { display: block; font-size: .78rem; color: $color-danger; margin: .35rem 0 0; line-height: 1.5; }
 
+// ⚠️ `.form-error` is the whole-form error banner — the one a landlord is meant
+// to NOTICE — and it had no rule anywhere in the app. Five uses across four
+// components (yard, properties, passport-verify, reference-respond), every one
+// of them rendering a failed save as ordinary body text the same size and
+// colour as the paragraph above it. Two of them carry `role="alert"`, so a
+// screen reader announced an error that a sighted person could not pick out.
+//
+// `.field-error` beside it has been styled all along, which is how this went
+// unnoticed: the names are one word apart and only one of them was ever
+// written. An alert that does not look like an alert is this codebase's own
+// recurring defect wearing different clothes.
+.form-error {
+  display: block;
+  margin: 0 0 $sp-4;
+  padding: .7rem .85rem;
+  font-size: .85rem;
+  line-height: 1.5;
+  color: $color-danger;
+  background: rgba($color-danger, .07);
+  border: 1.5px solid rgba($color-danger, .35);
+  border-radius: $r4;
+}
+
 // ── Accessibility floor ──────────────────────────────────────────────────
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

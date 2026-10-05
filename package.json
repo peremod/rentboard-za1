@@ -10,6 +10,7 @@
     "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install",
     "verify": "bash scripts/verify-build.sh",
     "audit": "npm run audit:routes && npm run audit:i18n && npm run audit:env",
+    "audit:css": "node scripts/css-coverage-audit.mjs",
     "audit:routes": "node scripts/route-audit.mjs",
     "audit:i18n": "node scripts/i18n-audit.mjs",
     "audit:i18n:strict": "node scripts/i18n-audit.mjs --strict",

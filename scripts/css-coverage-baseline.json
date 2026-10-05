@@ -1,0 +1,31 @@
+{
+  "note": "Classes used in a template with no rule anywhere. Debt, not permission — delete lines as they are fixed. A class NOT in here fails the audit.",
+  "classes": [
+    "ac-sub",
+    "auth__alt",
+    "auth__form",
+    "auth__hint",
+    "btn-link",
+    "card",
+    "cover-note",
+    "detail__facts",
+    "detail__safety",
+    "detail__section",
+    "field",
+    "field-label",
+    "growth-table",
+    "landlord-trust",
+    "landlord-trust__state--none",
+    "landlord-trust__state--ok",
+    "lead-agree",
+    "linkish",
+    "notice-main",
+    "photo-upload",
+    "pill",
+    "referral-share",
+    "rent-reminders",
+    "shared-rules",
+    "shared-who",
+    "verify-facts"
+  ]
+}
