@@ -1377,6 +1377,31 @@ Three faults of my own, recorded: a fourth compile failure from the backtick
 trap, a drive that read the badge after its own earlier section had cleared it,
 and a check that passed vacuously over a count that was zero before and after."
 
+tag_if_missing "v1.111.0" "26e187ed53969894a08463817c93a0d71cc4fa0b" "2026-10-05 22:02:32 +0000" "v1.111.0 — Phase 8f: a sweep for overflow no bounding-box check can see
+
+Phase 8e fixed one row in one list. The rule behind it applies to every button
+in the app, so any other button used as a container for wrapping text had the
+same bug and nothing looked for it.
+
+layout-ui-drive now walks ten screens at four widths and fails on any leaf whose
+scrollWidth exceeds its clientWidth. None of the existing sections could have
+found this: they measure bounding boxes, and every element on the broken screen
+sat inside the viewport. The overflow exists only in the scroll measurement.
+
+Leaves only, which is a correction made after the first run: flagging any
+element wider than its box reported a deliberate full-bleed advert on the board,
+and a check that cries wolf on a designed layout is one people learn to skim.
+
+And then it passed on an empty screen — the drive's landlord had no
+conversations, so the screen it swept was blank. The same defect as the drive
+that created a property and never opened the screen showing it, produced by the
+check written to find that class of thing. It now writes a message with a long
+title and a long body, and every page must present at least five pieces of text
+or the check fails as nothing really measured.
+
+Falsified: with the fix reverted it names both overflowing elements at the phone
+widths, and still catches one at 1280 where the page does not scroll at all."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1392,7 +1417,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.](10[0-9]|110)[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.](10[0-9]|11[01])[.]'"
 else
   echo "Nothing to push."
 fi
