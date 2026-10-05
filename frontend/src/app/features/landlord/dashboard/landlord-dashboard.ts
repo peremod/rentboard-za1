@@ -18,6 +18,7 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
 import { SurveyPrompt } from '../../../shared/components/survey-prompt/survey-prompt';
 import { SurveyService } from '../../../core/services/survey';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
+import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/tenancy-lifecycle';
 
 /**
  * Billing (Upgrade link, Boost button) is hidden behind BILLING_ENABLED —
@@ -29,12 +30,14 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 @Component({
   selector: 'app-landlord-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel, ReferralPanel, SurveyPrompt, LandlordInboxPanel, LandlordCalendar, ScreenHint],
+  imports: [RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel, ReferralPanel, SurveyPrompt, LandlordInboxPanel, LandlordCalendar, ScreenHint, TenancyLifecycle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-dashboard" heading="This is your whole letting, on one screen">
         Rooms you have listed, who is waiting on an answer, and what is due. The things that need you are at the top — if nothing is up there, nothing needs you today.
       </app-screen-hint>
+
+      <app-tenancy-lifecycle/>
 
 
       <!-- A listing dictated over WhatsApp, waiting to be finished. Top of

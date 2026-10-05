@@ -977,7 +977,7 @@ with nothing carrying them.
 
 ---
 
-## 18. 🔴 A tenancy can never start, end, or produce a review
+## 18. ✅ A tenancy can now start and end — notice and lease terms still cannot
 
 The owner reported the rent screen as confusing: *"how a tenant's move is
 confirmed."* It is not a wording problem.
@@ -1026,7 +1026,39 @@ it: a complete, correct, tested backend with no way in. It is the largest
 instance found so far, because it is not one control — it is the whole middle of
 the product's life cycle.
 
-### Deliberately not fixed in Phase 8b
+### ✅ Fixed in v1.108.0 (Phase 8c) — the three that mattered
+
+`app-tenancy-lifecycle` on the landlord dashboard, the tenant dashboard and the
+tenant rent screen. One component for both sides, because either party may act
+and two components would be the copy that misses the next fix.
+
+| Action | Before | Now |
+|---|---|---|
+| `confirmStart` | 0 | **1** |
+| `cancel` | 0 | **1** |
+| `end` | 0 | **1** |
+| `notice` | 0 | **0** 🔴 |
+| `updateLease` | 0 | **0** 🔴 |
+
+So a tenancy becomes `active`, **the rent reminder query can see it at all**,
+and ending it opens the 30-day review window. Driven from both sides and
+falsified by removing the mount, which reproduces the shipped state exactly:
+*"the landlord is NOT asked about it on their dashboard — so no tenancy can
+become active, no rent reminder can fire, no review can open."*
+
+### 🔴 Still with no UI
+
+- **`POST /api/tenancies/:id/notice`** — giving notice to leave. `withdrawNotice`
+  has a caller; the thing it withdraws cannot be given. A landlord or tenant can
+  only end a tenancy outright, with no notice period recorded first.
+- **`PATCH /api/tenancies/:id/lease`** — the agreed lease terms (fixed end date,
+  escalation). `Tenancy.leaseEndDate` is therefore always null, which is why the
+  renewal reminder has nothing to fire on.
+
+Both are smaller than what was fixed, and neither blocks rent or reviews. They
+are the remainder of this section, not a new one.
+
+### What was deliberately not fixed in Phase 8b
 
 Phase 8b was the walkthrough and the first-use hints, and this needs its own
 phase with its own drives. ⚠️ **It also changed what Phase 8b could honestly
