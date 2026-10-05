@@ -118,6 +118,13 @@ import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
         <p class="auth__foot">
           <a routerLink="/auth/forgot-password">Forgot your password?</a>
         </p>
+        <!-- Phase 7q. For an account with no email and no password the number is
+             the only way in, so "forgot your password" is no help at all and
+             this is the only line on the page that is. Without a link from
+             here the page exists and nobody who needs it can find it. -->
+        <p class="auth__foot">
+          <a routerLink="/auth/lost-number">Lost the phone you sign in with?</a>
+        </p>
         <p class="auth__foot">
           No account? <a routerLink="/auth/register">Register free</a>
         </p>

@@ -13,6 +13,19 @@ export const ADMIN_ROUTES: Routes = [
     title: 'Admin — Mastande',
   },
   {
+    /**
+     * Phase 7q. ⚠️ Its own screen rather than a section on the overview: it is
+     * a queue with a workflow (open, record what was checked, approve or
+     * refuse), and the one place in the product that can hand somebody's rooms
+     * and tenants to the wrong person. It should be somewhere an admin goes
+     * deliberately.
+     */
+    path: 'recoveries',
+    loadComponent: () => import('./recoveries/recoveries').then((m) => m.AdminRecoveries),
+    data: { pageTitle: 'Account recovery' },
+    title: 'Account recovery — Mastande admin',
+  },
+  {
     path: 'verifications',
     loadComponent: () => import('./verifications/admin-verifications').then((m) => m.AdminVerifications),
     data: { pageTitle: 'Verification queue' },

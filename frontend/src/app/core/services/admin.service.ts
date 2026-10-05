@@ -268,6 +268,46 @@ export interface AssistedSignup {
   stillOpen: boolean;
 }
 
+
+// ── Handing an account back when the phone is gone — Phase 7q ─────────────
+
+export interface RecoveryLookup {
+  found: boolean;
+  userId?: string;
+  fullName?: string;
+  role?: string;
+  memberSince?: string;
+  closed?: boolean;
+  hasEmail?: boolean;
+  hasPassword?: boolean;
+  /** False when a safer route exists. The screen refuses out loud when it is. */
+  recoverable?: boolean;
+  /** Set when there is a safer way in, and names it. */
+  saferRoute?: string | null;
+  liveRequest?: { id: string; status: string; newPhone: string; createdAt: string } | null;
+}
+
+export interface AccountRecovery {
+  id: string;
+  status: 'open' | 'approved' | 'recovered' | 'refused' | 'expired';
+  oldPhone: string;
+  newPhone: string;
+  /** Dates, not booleans: a check with no date is worth nothing in a dispute. */
+  idSeenAt: string | null;
+  idSeenNote: string | null;
+  knowledgeCheckedAt: string | null;
+  knowledgeCheckedNote: string | null;
+  approvedAt: string | null;
+  refusedAt: string | null;
+  refusedReason: string | null;
+  recoveredAt: string | null;
+  createdAt: string;
+  attempts: number;
+  user: { id: string; fullName: string; role: string };
+  openedByAdmin: { id: string; fullName: string } | null;
+  approvedByAdmin: { id: string; fullName: string } | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AdminService {
   private http = inject(HttpClient);
@@ -441,6 +481,49 @@ export class AdminService {
   /** The ones this admin started. Stored is not the same as readable. */
   assistedSignups() {
     return this.http.get<AssistedSignup[]>(`${this.api}/admin/phone-signups/assisted/mine`);
+  }
+
+  // ── Lost-number recovery — Phase 7q ──────────────────────────────────────
+  //
+  // ⚠️ There is no "move the number" call here, deliberately. Approving sends a
+  // code to the new handset and the person enters it themselves; nothing on
+  // this service can complete a hand-over.
+
+  recoveryLookup(phone: string) {
+    return this.http.get<RecoveryLookup>(
+      `${this.api}/admin/recoveries/lookup`, { params: { phone } },
+    );
+  }
+
+  recoveries(status?: string) {
+    return this.http.get<AccountRecovery[]>(
+      `${this.api}/admin/recoveries`, status ? { params: { status } } : {},
+    );
+  }
+
+  openRecovery(phone: string, newPhone: string, note: string) {
+    return this.http.post<{ id: string; status: string; message: string }>(
+      `${this.api}/admin/recoveries`, { phone, newPhone, ...(note ? { note } : {}) },
+    );
+  }
+
+  recordRecoveryCheck(id: string, idSeenNote: string, knowledgeCheckedNote: string) {
+    return this.http.post<{ id: string }>(`${this.api}/admin/recoveries/${id}/checked`, {
+      ...(idSeenNote ? { idSeenNote } : {}),
+      ...(knowledgeCheckedNote ? { knowledgeCheckedNote } : {}),
+    });
+  }
+
+  approveRecovery(id: string) {
+    return this.http.post<{ id: string; status: string; message: string }>(
+      `${this.api}/admin/recoveries/${id}/approve`, {},
+    );
+  }
+
+  refuseRecovery(id: string, reason: string) {
+    return this.http.post<{ id: string; status: string }>(
+      `${this.api}/admin/recoveries/${id}/refuse`, { reason },
+    );
   }
 
 }
