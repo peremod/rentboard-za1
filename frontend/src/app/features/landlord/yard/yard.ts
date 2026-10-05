@@ -577,6 +577,61 @@ const UNGROUPED = 'ungrouped';
           } @empty {
             <p class="muted yard__empty">No rooms here yet.</p>
           }
+
+          <!--
+            Put an existing room into this property — Phase 8d.
+
+            NOTE: no backticks in here. A backtick inside this inline template
+            literal terminates the template, which CLAUDE.md records as having
+            caused two compile failures already. This comment caused the third.
+
+            assignRooms has existed on the API and on properties.service.ts
+            since Phase 7b and NOTHING called it. unassignRoom had a caller, so
+            the product could take a room OUT of a property and never put one
+            back: a one-way door, and the owner hit it — "I listed a room that is
+            not in a grouped property, now I want to add it to a property and it
+            doesn't work".
+
+            Only on a real property (the ungrouped pseudo-group has no id to
+            assign to), and only when there is something to move.
+          -->
+          @if (group.property && ungroupedRooms().length) {
+            <div class="yard-adopt">
+              <button type="button" class="link-btn"
+                      [attr.aria-expanded]="adopting() === group.property.id"
+                      [attr.aria-controls]="'adopt-' + group.property.id"
+                      (click)="toggleAdopt(group.property.id)">
+                {{ adopting() === group.property.id ? '▾' : '▸' }}
+                Add a room you have already listed
+                <span class="muted">({{ ungroupedRooms().length }} not in a property)</span>
+              </button>
+
+              @if (adopting() === group.property.id) {
+                <div class="yard-adopt__body" [attr.id]="'adopt-' + group.property.id">
+                  <p class="muted yard-adopt__note">
+                    Moving a room here gives it this property's house rules and
+                    shared facilities. Nothing about the listing itself changes,
+                    and you can take it back out again.
+                  </p>
+                  @for (room of ungroupedRooms(); track room.id) {
+                    <label class="yard-adopt__row">
+                      <input type="checkbox" [checked]="picked().has(room.id)"
+                             (change)="togglePick(room.id)"/>
+                      <span>{{ room.title }}</span>
+                    </label>
+                  }
+                  @if (adoptError()) { <p class="field-error" role="alert">{{ adoptError() }}</p> }
+                  <button type="button" class="btn btn-primary btn-sm"
+                          [disabled]="!picked().size || adoptBusy()"
+                          (click)="adopt(group.property.id)">
+                    {{ adoptBusy()
+                        ? 'Moving…'
+                        : 'Move ' + picked().size + (picked().size === 1 ? ' room here' : ' rooms here') }}
+                  </button>
+                </div>
+              }
+            </div>
+          }
         </div>
       </ng-template>
   `,
@@ -609,6 +664,57 @@ export class Yard implements OnInit {
   );
 
   protected readonly dash = this.properties.dashboard;
+
+  // ── Put an existing room into this property — Phase 8d ──────────────────
+  protected readonly adopting = signal<string | null>(null);
+  protected readonly picked = signal<Set<string>>(new Set());
+  protected readonly adoptBusy = signal(false);
+  protected readonly adoptError = signal<string | null>(null);
+
+  /**
+   * The landlord's rooms that are in no property.
+   *
+   * Read from the dashboard payload that is already on the screen — it has
+   * carried `ungrouped` since Phase 7b. A second request for a list the client
+   * already holds is a second thing to keep in sync.
+   */
+  protected readonly ungroupedRooms = computed(() => this.dash()?.ungrouped?.rooms ?? []);
+
+  protected toggleAdopt(propertyId: string) {
+    this.adoptError.set(null);
+    this.picked.set(new Set());
+    this.adopting.set(this.adopting() === propertyId ? null : propertyId);
+  }
+
+  protected togglePick(roomId: string) {
+    const next = new Set(this.picked());
+    next.has(roomId) ? next.delete(roomId) : next.add(roomId);
+    this.picked.set(next);
+  }
+
+  protected adopt(propertyId: string) {
+    const ids = [...this.picked()];
+    if (!ids.length) return;
+    this.adoptBusy.set(true);
+    this.adoptError.set(null);
+    this.properties.assignRooms(propertyId, ids).subscribe({
+      next: () => {
+        this.adoptBusy.set(false);
+        this.adopting.set(null);
+        this.picked.set(new Set());
+        // Reload rather than patching locally: moving a room changes this
+        // property's counts, the ungrouped list and the rent split, and three
+        // local edits are three chances to disagree with the server.
+        this.properties.loadDashboard().subscribe({ error: () => {} });
+      },
+      error: (err) => {
+        this.adoptBusy.set(false);
+        // The server's own sentence — "One or more of those rooms is not
+        // yours." says the useful thing, and replacing it loses it.
+        this.adoptError.set(err?.error?.message ?? 'Those rooms did not move just now. Try again in a moment.');
+      },
+    });
+  }
 
   /**
    * The one group this screen shows when it is scoped to a property.

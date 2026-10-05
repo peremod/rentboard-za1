@@ -1021,7 +1021,7 @@ component calls any of them.** Counted:
 4. **Notice cannot be given**, so the renewal and move-out paths are unreachable
    too.
 
-This is the same shape as `assignRooms` (§ below) and `sponsoredUntil` before
+This is the same shape as `assignRooms` (§19) and `sponsoredUntil` before
 it: a complete, correct, tested backend with no way in. It is the largest
 instance found so far, because it is not one control — it is the whole middle of
 the product's life cycle.
@@ -1071,6 +1071,50 @@ the tenant can answer a month, and neither overwrites the other.
 that money changed hands, and `confirm-start` already exists and already lets
 either party do it. Building the screen for it does not touch rent custody,
 deposits or the execution of a document.
+
+---
+
+## 19. ✅ A room could be taken out of a property but never put back
+
+The owner, twice in one list: *"I listed a room that is not in a grouped
+property, but now I want to add it to a property — it doesn't work, or can't add
+it to a property."*
+
+`POST /api/properties/:id/rooms` — *"Move rooms into this yard"* — has existed
+since Phase 7b, with ownership checked as a set so a wrong id fails the call
+rather than being silently dropped. `assignRooms` was wired into
+`properties.service.ts` on the client. **Nothing called it.**
+
+⚠️ **And `unassignRoom` had a caller.** So the product shipped a one-way door: a
+room could be taken *out* of a property and never put back. That asymmetry is
+why it reads as broken rather than missing — a landlord who removes a room by
+accident cannot undo it.
+
+**Fixed in v1.109.0 (Phase 8d).** On the property screen: *"Add a room you have
+already listed (2 not in a property)"*, the loose rooms as 44px rows rather than
+13px tick boxes, and a button that names how many will move. The list comes from
+the `ungrouped` group the dashboard payload has carried all along — a second
+request for a list the client already holds is a second thing to keep in sync.
+
+| | Before | Now |
+|---|---|---|
+| `assignRooms` | 0 callers | **1** |
+| `unassignRoom` | 1 | 1 |
+
+Falsified by removing the section, which reports the shipped state in those
+words: *"there is no way to add an existing room to a property — a room could be
+taken OUT of a property and never put back."*
+
+### And the button that looked broken
+
+*"When I click add first property it should scroll down."* `startCreate()` set a
+signal and stopped. The form renders below the rent-reminder section — **1159px
+down a 780px screen**, measured — so the button scrolled nothing and revealed
+nothing.
+
+⚠️ The check that would have passed throughout is "the form is in the DOM",
+because it always was. The drive asserts its position in the viewport instead,
+and falsifying it prints the 1159px.
 
 ---
 

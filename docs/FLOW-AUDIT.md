@@ -3197,6 +3197,78 @@ smoke suite to look busy would have been the wrong kind of thorough.
 `withdrawNotice` has one, so the product can withdraw a notice it has no way to
 give. Neither blocks rent or reviews.
 
+### 5.41 A room could leave a property but never join one — ✅ built in v1.109.0 (Phase 8d)
+
+The owner's report, twice in one list: *"I listed a room that is not in a grouped
+property, but now I want to add it to a property — it doesn't work."*
+
+#### A one-way door
+
+`POST /api/properties/:id/rooms` — *"Move rooms into this yard"* — has existed
+since Phase 7b. It checks ownership **as a set**, so a wrong id fails the whole
+call rather than being quietly dropped: *"a landlord who pasted the wrong room
+should be told, not left believing it moved."* `assignRooms` was wired into
+`properties.service.ts`. **Nothing called it.**
+
+⚠️ **`unassignRoom` had a caller.** That asymmetry is the whole character of the
+bug: the product could take a room *out* of a property and never put one back,
+so removing a room by accident was unrecoverable, and the feature read as broken
+rather than absent.
+
+#### The screen
+
+On the property: *"Add a room you have already listed (2 not in a property)"*,
+collapsed, with the loose rooms as rows.
+
+- **The row is the target, not the checkbox.** A tick box is the smallest thing
+  on a phone screen; the row is 44px and the whole of it toggles.
+- **The button names the count** — "Move 1 room here" — because "Move" alone
+  beside a list of ticks does not say what is about to happen.
+- **Disabled until something is picked**, so it cannot be pressed into a no-op.
+- The list is the `ungrouped` group the dashboard payload has carried since
+  Phase 7b. A second request for a list the client already holds is a second
+  thing to keep in sync.
+- On success the dashboard is **reloaded, not patched** — moving a room changes
+  this property's counts, the ungrouped list and the rent split, and three local
+  edits are three chances to disagree with the server.
+
+#### The button that looked broken
+
+*"When I click add first property it should scroll down."* `startCreate()` set a
+signal and stopped. The form renders below the rent-reminder section — **1159px
+down a 780px screen**, measured when the fix was reverted — so pressing it
+scrolled nothing and revealed nothing.
+
+⚠️ The obvious check is "the form is in the DOM", and it would have passed every
+day the bug existed, because the form always rendered. The drive asserts its
+**position in the viewport**.
+
+⚠️ A timeout, not a lifecycle hook: the form does not exist until the signal has
+been through change detection, so `scrollIntoView` on the same tick finds
+nothing and silently does nothing — the same defect wearing a different hat.
+
+#### ⚠️ Third compile failure from the same trap
+
+The explanatory comment inside the template used backticks around
+`assignRooms`. CLAUDE.md records that **a backtick inside an inline template
+literal terminates the template**, and that it had caused two compile failures.
+This comment caused the third, and now says so in place.
+
+#### Falsified
+
+The section removed: *"there is no way to add an existing room to a property — a
+room could be taken OUT of a property and never put back."* The scroll removed:
+*"top 1159px of 780px"*.
+
+⚠️ One fault of the drive's own: it unassigned `roomIds[0]` on the assumption
+that the first row rendered is the first room created. The list is in the
+dashboard's order, so it unassigned a room that was already loose — a 200 that
+changed nothing, reading as a broken feature when it was a broken check. It asks
+the database which room actually moved.
+
+16 checks. No regression in yard-layout (36), tenancy-lifecycle (26) or
+properties-ui.
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461
