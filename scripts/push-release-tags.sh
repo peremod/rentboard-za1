@@ -871,6 +871,69 @@ redesign of a strip 7e chose deliberately and which the drive asserts. The fade
 and the reveal make that pattern work; they do not make fourteen items fit on a
 360px screen. 54 drive checks, 569 smoke passed, 0 failed."
 
+tag_if_missing "v1.100.0" "67f67ffb2b3f5ccca6d7a9de687ad99312986637" "2026-10-05 05:26:24 +0000" "v1.100.0 — Phase 7o: a phone-only account could lock itself out with one typo
+
+Two of the three items 7g left behind — adding an email later, and recovery for
+a phone-only account. Neither turned out to be a feature so much as a shipped
+lockout.
+
+Phase 7g gave a WhatsApp-first person their own account: no email, no password,
+the verified number as the single credential. It was bolted onto screens written
+for accounts that have an address. Measured on a real one made through the
+product's own three-step flow:
+
+  PATCH /api/users/me {\"phone\": \"\"}              -> HTTP 500
+  PATCH /api/users/me {\"phone\": <one digit out>}  -> HTTP 200, account gone
+
+After the second, the account points at a number nobody holds with
+phoneVerified false. Phone sign-in finds accounts by VERIFIED number, so it
+cannot find them. forgot-password needs an address they do not have. And asking
+for a sign-in code on the number actually in their hand answers 'a code is on
+its way on WhatsApp' and sends nothing, because that reply is deliberately
+identical for a number with no account. The product reassures them
+indefinitely while they are locked out. The 500 was the database CHECK refusing
+the row — a line the application did not know it was relying on.
+
+Both ways off such an account were refused with 'This account signs in with
+Google', to people who have never seen Google. Both guards were
+if (!user.passwordHash), written when Google was the only way to have no
+password; 7g added a second and nobody revisited them. Not merely a wrong
+sentence: adding an address is what lets a phone-only landlord pay the
+verification fee and what makes the account recoverable if the number is lost.
+
+The settings screen could not have done better. Nothing in its payload said
+which kind of account it was, so it rendered 'Currently' followed by an empty
+bold tag, asked for a password that does not exist, and offered a form whose
+only possible answer was about Google.
+
+Now: the profile field refuses to touch the number when it is the only way in.
+A phone_change token type with a newPhone column makes a change proven before
+it lands — the code goes to the new number and the account keeps the old one
+until it comes back — and the confirmed number arrives already verified,
+because the un-verified window was the lockout. A single-use step-up code is
+the credential where there is no password. Both guards branch on authProvider,
+so a real Google account still gets the real message. hasPassword is derived
+onto /auth/me and the sign-in payload, never the hash.
+
+30 API and 25 UI checks. Falsified by reintroducing five bugs at once: 13
+failures, including the original 500 and the original 200-on-a-typo reproduced
+exactly as they were measured.
+
+Three faults of my own are recorded, none caught by the check that should have
+caught it. A dead button shipped: passwordReady was a computed() over a
+FormGroup, whose value is not a signal, so it cached false and Change password
+was disabled for every account that has one — found by the account-lifecycle
+drive trying to click it, not by the new drive reading the screen. hasPassword
+was only on /auth/me, which restored the very screen this phase fixes for a
+new account; the UI drive caught that and the API drive could not, because the
+API was right. And two skip messages blamed JWT_SECRET for a number that had
+changed and for a route name that was wrong.
+
+Named rather than built: losing the number entirely — stolen phone, dead SIM —
+still has no route back, because every route needs the old number in hand.
+Assisted sign-up, the third of 7g's items, needs a decision about who may
+assist before it can be built. 575 smoke checks passed, 0 failed."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -886,7 +949,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]100[.]'"
 else
   echo "Nothing to push."
 fi
