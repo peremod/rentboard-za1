@@ -1072,6 +1072,65 @@ defect, and reporting the rest would have been a fabricated finding.
 
 590 smoke checks passed, 0 failed."
 
+tag_if_missing "v1.103.0" "dd9ed8496ec1555032ed2d20759caa551be47342" "2026-10-05 10:49:27 +0000" "v1.103.0 — Phase 8a: four printable documents a landlord keeps asking for
+
+A lease agreement, a renewal addendum, a move-in inspection and a deposit
+receipt, free to download, print and sign, at /templates.
+
+⚠️ Two of these are contracts and two are not, and that distinction runs through
+the whole feature. A move-in inspection is a checklist and a deposit receipt is a
+receipt: get the wording clumsy and somebody is mildly inconvenienced. A lease
+and an addendum create binding obligations, and if a clause is wrong the person
+harmed is a landlord with four back rooms who trusted us. Mastande is not a law
+firm.
+
+So reviewState is on the data rather than in a comment. The two contracts ship
+awaiting_legal_review, against the same open attorney review /legal/sublet is
+waiting on, and say so on their own face. They are still downloadable,
+deliberately: a landlord who cannot get one here will take a worse one off a
+search result with no warning on it at all. What they must not do is look
+finished.
+
+The check that matters most: a warning that disappears when the document is
+printed is a warning the person holding the paper never sees — and printing is
+the entire point of the feature. The drive applies the print stylesheet with
+emulateMedia print, the same cascade the browser uses to make the PDF, and
+asserts the warning is still visible. The same check covers the footer
+disclaimer on all four: not a law firm, nothing signed here, no deposits or rent
+held. Falsified by display none on the warning in the print block, plus flagging
+a form as a contract and dropping the nothing-is-signed line: eight failures,
+the key one reading 'the person holding the paper never sees it'.
+
+No PDF library was added. The browser already has one, every Android phone
+reaches it through Chrome's Print then Save as PDF, and it renders fonts
+correctly on a device nobody here can test. A server-side renderer would be a
+dependency, a font-licensing question and a layout we could not check on the
+handset this product is built for. So the whole job is a print stylesheet, and
+the site chrome is hidden BY SELECTOR globally rather than by a class each page
+remembers to add — a printable page that forgot the class would print the
+navbar and the cookie notice onto a lease, and 'each page remembers' is the
+exact shape of defect Phase 7e was about.
+
+Public rather than behind the portal: somebody searching for a South African
+lease template is a landlord with rooms and no tools, which is exactly who this
+is for.
+
+The inspection is the highest-value one and also the lowest risk. The Rental
+Housing Act makes the joint inspection a statutory step and treats a landlord
+who skips the outgoing one as having agreed the room was in good order, so no
+deduction — a landlord who skips it has already lost the deposit argument and
+usually does not know it. The deposit receipt carries the thing small landlords
+routinely do not know, that the deposit earns interest and the interest belongs
+to the tenant, and it is explicitly the LANDLORD's receipt to their own tenant:
+Mastande holds no deposits, and a template that read otherwise would cross the
+money-custody line this codebase refuses to cross.
+
+Statutory references are deliberately few. Padding a template with section
+numbers makes it look authoritative, which is the opposite of what an unreviewed
+document should look like.
+
+45 drive checks at four widths. 596 smoke checks passed, 0 failed."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1087,7 +1146,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-2][.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-3][.]'"
 else
   echo "Nothing to push."
 fi
