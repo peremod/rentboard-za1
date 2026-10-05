@@ -1254,6 +1254,40 @@ and the first fix left 5.6px between a destructive control and a harmless one.
 Falsified both directions, including the finding that removing the label rule
 alone does not break the stacking check, because width:100% carries it."
 
+tag_if_missing "v1.107.0" "dcd4570ce096a8b42cb009df75a1e306f3ef95da" "2026-10-05 19:34:19 +0000" "v1.107.0 — Phase 8b: a deeper tour, and a first-use hint on every screen
+
+The report was that the walkthrough is minimal and does not show how to use the
+features. Two different problems.
+
+The tour was four cards and that was argued for in a comment. Overruled by the
+person who uses this: four cards that skip grouping, viewings, rent and the
+forms leave a landlord believing the product does less than it does. Landlord
+four to eight, tenant four to six. The drive asserted exactly four and called it
+'not a wall of nine' — the design argument of the day written in as a test. It
+asserts the shape now.
+
+A tour cannot teach a screen, so there is now one short panel at the top of nine
+screens, the first time an account opens each. Stored on the account rather than
+the browser, for the two reasons the walkthrough stamp is: a phone here is
+shared, borrowed and replaced, and SSR has no localStorage on the first paint.
+Keys only, no timestamps, and allowlisted server-side — which is a size limit as
+much as a spelling check, since the column is an unbounded text array.
+
+It answered 500 on every call and the screen looked perfect. The id column is
+TEXT and the query cast it to uuid. Three sections of the drive passed over it,
+because the client patches optimistically and the write is fire-and-forget. Only
+signing in again in a fresh browser caught it — a check written because it is
+the one a localStorage implementation cannot pass, and the only one that could
+see a 500.
+
+Found while writing it, and bigger than it: a tenancy can never start, end or
+produce a review. Accepting an applicant opens a pending tenancy, and every
+endpoint that would move it on is wired into the client with no component
+calling it. No tenancy becomes active, so no rent reminder can fire and no
+review can be written. Recorded as OUTSTANDING 18 for its own phase, and it
+changed what this phase could honestly say: no tour step describes confirming a
+move-in, because no step promises what the app cannot do."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1269,7 +1303,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-6][.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-7][.]'"
 else
   echo "Nothing to push."
 fi

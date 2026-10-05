@@ -38,6 +38,16 @@ export interface User {
    * hides it from people who have not.
    */
   walkthroughSeenAt?: string | null;
+
+  /**
+   * Screen keys whose first-use hint this account has put away — Phase 8b.
+   *
+   * Optional, and `?? []` wherever it is read: an older cached session, or the
+   * refresh-reuse path before it carried the field, answers `undefined`, and
+   * treating that as "has seen everything" would hide every hint from the
+   * person who has seen none of them.
+   */
+  hintsSeen?: string[];
   /**
    * Non-null means the owner paused their own account — Phase 7g.
    *

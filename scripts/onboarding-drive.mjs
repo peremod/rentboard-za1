@@ -203,11 +203,23 @@ const steps = (await page.locator('.wt-card').innerText()).replace(/\s+/g, ' ');
   ? ok('…and not the tenant’s — a landlord being sold somebody else’s feature learns nothing')
   : bad('a landlord is shown the Renter’s Passport step');
 
-// Step through it. Four cards, and Next must stop at the last one.
+/**
+ * Step through it. Next must stop at the last card, whatever the count.
+ *
+ * ⚠️ This asserted exactly four and called it "not a wall of nine", which was
+ * the design argument of the day written in as a test. The owner overruled it
+ * in Phase 8b — four cards cannot teach a screen, and skipping grouping,
+ * viewings, rent and the forms left a landlord believing the product does less
+ * than it does. An assertion that pins a product decision fails the moment the
+ * decision changes, and says nothing about whether the thing WORKS.
+ *
+ * What is worth asserting is the shape: there is more than one card, there is a
+ * dot per card, and Next walks to the end and then stops.
+ */
 const dots = await page.locator('.wt-dot').count();
-dots === 4
-  ? ok(`…four steps, not a wall of nine (${dots} dots)`)
-  : bad(`the walkthrough has ${dots} steps`);
+dots > 1
+  ? ok(`…with one dot per card (${dots})`)
+  : bad(`the walkthrough has ${dots} step(s) — a tour of one card is not a tour`);
 
 for (let i = 1; i < dots; i++) await page.locator('.wt-actions button', { hasText: 'Next' }).click();
 await page.waitForTimeout(400);

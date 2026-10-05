@@ -977,6 +977,71 @@ with nothing carrying them.
 
 ---
 
+## 18. 🔴 A tenancy can never start, end, or produce a review
+
+The owner reported the rent screen as confusing: *"how a tenant's move is
+confirmed."* It is not a wording problem.
+
+**Accepting an applicant opens a tenancy that nothing can ever move forward.**
+
+`applications.service.ts` opens a `Tenancy` the moment a landlord accepts, with
+its own comment: *"It stays 'pending' until someone confirms the move-in."*
+`TenancyStatus` is `pending → active → ended`, and `confirmStart` is a real,
+working, either-party endpoint:
+
+```
+POST /api/tenancies/:id/confirm-start   "Confirm the tenant moved in — either party may confirm"
+POST /api/tenancies/:id/cancel          "The letting fell through before move-in. No reviews follow."
+POST /api/tenancies/:id/end             "End an active tenancy. This is what opens reviews."
+POST /api/tenancies/:id/notice          notice to leave
+PATCH /api/tenancies/:id/lease          the agreed terms
+```
+
+Every one of them is wired into `tenancies.service.ts` on the client. **No
+component calls any of them.** Counted:
+
+| Action | Components calling it |
+|---|---|
+| `confirmStart` | **0** |
+| `cancel` | **0** |
+| `end` | **0** |
+| `notice` | **0** |
+| `updateLease` | **0** |
+| `withdrawFlag` | 1 |
+
+### What that costs, in order
+
+1. **Every tenancy is stuck on `pending`.** There is no way, anywhere in the
+   product, to say the tenant moved in.
+2. **No rent reminder can ever fire.** `rent.service.ts` selects
+   `tenancy: { status: 'active' }`. There are no active tenancies, so the
+   reminder job has nothing to find — and the rent screen is describing a
+   tenancy that never began. That is what reads as confusing, and it is.
+3. **No review can ever be written.** Reviews open when a tenancy is `end`ed.
+4. **Notice cannot be given**, so the renewal and move-out paths are unreachable
+   too.
+
+This is the same shape as `assignRooms` (§ below) and `sponsoredUntil` before
+it: a complete, correct, tested backend with no way in. It is the largest
+instance found so far, because it is not one control — it is the whole middle of
+the product's life cycle.
+
+### Deliberately not fixed in Phase 8b
+
+Phase 8b was the walkthrough and the first-use hints, and this needs its own
+phase with its own drives. ⚠️ **It also changed what Phase 8b could honestly
+say**: the walkthrough's standing rule is that no step describes something the
+app cannot do, so there is no tour step about confirming a move-in, and the
+tenant rent hint says only what is true today — the landlord keeps the record,
+the tenant can answer a month, and neither overwrites the other.
+
+**Not a money question.** Confirming that somebody moved in is not confirming
+that money changed hands, and `confirm-start` already exists and already lets
+either party do it. Building the screen for it does not touch rent custody,
+deposits or the execution of a document.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

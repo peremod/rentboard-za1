@@ -21,13 +21,13 @@
  * So: the yard dashboard, at 360 / 390 / 768 / 1280, with both forms OPEN —
  * because a form that is collapsed by default is a form no check ever sees.
  *
- * Needs the API on :3000, the app on :4300, and a DATABASE_URL.
+ * Needs the API on :3000, the app on :4200, and a DATABASE_URL.
  */
 import { chromium } from '@playwright/test';
 import { apiCall, registerUser, signIn, PASSWORD } from './lib/drive-session.mjs';
 
 const API = 'http://localhost:3000';
-const WEB = process.env.WEB ?? 'http://localhost:4300';
+const WEB = process.env.WEB ?? 'http://localhost:4200';
 const WIDTHS = [360, 390, 768, 1280];
 const TARGET = 44;
 const MIN_GAP = 8;

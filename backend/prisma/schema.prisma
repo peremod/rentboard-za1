@@ -82,6 +82,13 @@ model User {
   /// Cleared by "Show me around again", which is why it is a nullable timestamp
   /// and not a boolean that only ever goes one way.
   walkthroughSeenAt DateTime?
+
+  /// Screen keys whose first-use hint this account has put away.
+  ///
+  /// Keys only — no timestamps, no order. "Has this person dismissed this
+  /// hint?" is the only question asked of it, and storing when they saw each
+  /// screen would be a movement trail nothing reads (POPIA s.10).
+  hintsSeen         String[]  @default([])
   /// A login identifier since v1.85.0 (Phase 7g) — but NOT `@unique` here, and
   /// that is deliberate.
   ///

@@ -18,11 +18,27 @@ interface Step {
 /**
  * Four steps, not nine.
  *
- * The brief asks for "the main features", and the temptation is to list
- * everything. Four is what somebody reads before they start tapping, and each
- * one here is a thing this product actually does — no step describes a feature
- * that is behind a flag or waiting on a template approval, because a tour that
- * promises something the app cannot do is worse than no tour.
+ * ⚠️ Four was the original count, and the owner overruled it — Phase 8b.
+ *
+ * The argument for four was that it is what somebody reads before they start
+ * tapping. The report from the person who actually uses this was the opposite:
+ * "the walkthrough is minimal, it doesn't go through all the features, it
+ * doesn't show how to use the features." Four cards cannot teach a screen, and
+ * four cards that skip grouping, viewings, rent and the forms leave a landlord
+ * believing the product does less than it does.
+ *
+ * So the tour is wider, and the teaching moved to where it can land: a
+ * first-use hint at the top of each screen the first time that account opens
+ * it (`app-screen-hint`, Phase 8b). The tour says what exists; the hint says
+ * what this screen is for, at the moment somebody is looking at it. Neither
+ * does the other's job, which is why four steps felt thin and eight would have
+ * felt long without them.
+ *
+ * What has NOT changed: every step is a thing this product actually does. No
+ * step describes a feature behind a flag or waiting on a template approval,
+ * because a tour that promises something the app cannot do is worse than no
+ * tour. ⚠️ That rule is why there is no step about confirming a move-in: the
+ * endpoint exists and nothing in the UI calls it (docs/OUTSTANDING.md §18).
  */
 const LANDLORD_STEPS: Step[] = [
   {
@@ -64,6 +80,46 @@ const LANDLORD_STEPS: Step[] = [
       + 'documents afterwards, and keep only the outcome.',
     route: '/landlord/verification',
     linkLabel: 'Get verified',
+  },
+  {
+    icon: '🏘️',
+    title: 'Rooms at one address belong together',
+    body:
+      'A property groups the rooms at one address, so you set the house rules and '
+      + 'what everyone shares once instead of typing them into every room. It is '
+      + 'optional — rooms without one work exactly the same.',
+    route: '/landlord/properties',
+    linkLabel: 'My properties',
+  },
+  {
+    icon: '📅',
+    title: 'Agree a viewing without losing it in the chat',
+    body:
+      'Invite an applicant to view before you decide. They answer yes or no, it '
+      + 'sits on both your screens with the date, and nobody has to scroll back '
+      + 'through a conversation to find what was agreed.',
+    route: '/landlord/applicants',
+    linkLabel: 'See applicants',
+  },
+  {
+    icon: '📒',
+    title: 'Rent, written down in one place',
+    body:
+      'Mark each month paid, unpaid, part-paid or waived, room by room. This is '
+      + 'your own record — Mastande never holds your rent or your deposit — and '
+      + 'your tenant can answer a month they disagree with, beside your note.',
+    route: '/landlord/properties',
+    linkLabel: 'Open a property',
+  },
+  {
+    icon: '📄',
+    title: 'The paperwork, free to print',
+    body:
+      'A lease, a renewal, a move-in inspection and a deposit receipt, ready to '
+      + 'download and sign on paper. The inspection is the one that decides a '
+      + 'deposit argument later, and most people skip it.',
+    route: '/landlord/templates',
+    linkLabel: 'Forms and templates',
   },
 ];
 
@@ -107,6 +163,26 @@ const TENANT_STEPS: Step[] = [
       + 'Mastande never handles the money — this is a record, not a payment.',
     route: '/tenant/rent',
     linkLabel: 'Rent',
+  },
+  {
+    icon: '📅',
+    title: 'A viewing you can both look up',
+    body:
+      'When a landlord invites you to see a room, it arrives here with the date '
+      + 'and the place. Say yes or no, and it stays on the screen for both of you '
+      + 'instead of being buried in the chat.',
+    route: '/tenant/dashboard',
+    linkLabel: 'Your applications',
+  },
+  {
+    icon: '💬',
+    title: 'Messages reach you on WhatsApp too',
+    body:
+      'A thread starts when you apply for a room. We send it to WhatsApp as well, '
+      + 'and a reply there lands back in the same conversation, so you do not have '
+      + 'to keep the site open to hear back.',
+    route: '/account/messages',
+    linkLabel: 'Open messages',
   },
 ];
 

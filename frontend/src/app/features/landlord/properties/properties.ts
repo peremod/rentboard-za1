@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import { PropertiesService } from '../../../core/services/properties.service';
 import { YardDashboard, YardGroup } from '../../../core/models/property.model';
 import { SA_PROVINCES } from '../../../core/models/room.model';
+import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 
 /**
  * My properties — Phase 7b.
@@ -34,9 +35,13 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
 @Component({
   selector: 'app-properties',
   standalone: true,
-  imports: [RouterLink, FormsModule, NgOptimizedImage],
+  imports: [RouterLink, FormsModule, NgOptimizedImage, ScreenHint],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+      <app-screen-hint key="landlord-properties" heading="A property groups the rooms at one address">
+        Set the house rules and what everyone shares once, instead of typing them into every room. It is optional — rooms without a property work exactly the same.
+      </app-screen-hint>
+
 
       @if (loading()) {
         <p class="muted">Loading…</p>

@@ -17,6 +17,7 @@ import { DisputePanel } from '../../../shared/components/dispute-panel/dispute-p
 import { ReferralPanel } from '../../../shared/components/referral-panel/referral-panel';
 import { SurveyPrompt } from '../../../shared/components/survey-prompt/survey-prompt';
 import { SurveyService } from '../../../core/services/survey';
+import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 
 /**
  * Billing (Upgrade link, Boost button) is hidden behind BILLING_ENABLED —
@@ -28,12 +29,13 @@ import { SurveyService } from '../../../core/services/survey';
 @Component({
   selector: 'app-landlord-dashboard',
   standalone: true,
-  imports: [
-    RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel,
-    ReferralPanel, SurveyPrompt, LandlordInboxPanel, LandlordCalendar,
-  ],
+  imports: [RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel, ReferralPanel, SurveyPrompt, LandlordInboxPanel, LandlordCalendar, ScreenHint],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+      <app-screen-hint key="landlord-dashboard" heading="This is your whole letting, on one screen">
+        Rooms you have listed, who is waiting on an answer, and what is due. The things that need you are at the top — if nothing is up there, nothing needs you today.
+      </app-screen-hint>
+
 
       <!-- A listing dictated over WhatsApp, waiting to be finished. Top of
            the page because the landlord sent it from their phone and is

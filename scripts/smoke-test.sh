@@ -3926,6 +3926,40 @@ fi
 # piece of state, which is why it is a nullable timestamp and not a boolean.
 req POST /api/users/me/walkthrough-reset "" "$TTOKEN"
 check "and it can be asked for again" 200 "$STATUS" "$BODY"
+
+# ── Per-screen first-use hints — Phase 8b ────────────────────────────────
+#
+# The walkthrough says what the product is; a hint says what THIS screen is
+# for, the first time an account opens it. Stored on the account for the same
+# reason as the stamp above: a phone here is shared, borrowed and replaced.
+req POST /api/users/me/hints/landlord-dashboard "" "$TTOKEN"
+check "a screen's first-use hint can be put away" 200 "$STATUS" "$BODY"
+
+# ⚠️ Assert the KEY is in the array, not merely that the array is non-empty.
+# The first version of this endpoint answered 500 on every call (a ::uuid cast
+# on a TEXT id) and the screen still looked right, because the client patches
+# optimistically and the write is fire-and-forget. Only re-reading it caught it.
+req GET /api/auth/me "" "$TTOKEN"
+if [[ "$(echo "$BODY" | jq -r '[.hintsSeen[]? | select(. == "landlord-dashboard")] | length')" == "1" ]]; then
+  green "  PASS  …and it is actually stored, not just hidden on the client"; PASS=$((PASS+1))
+else
+  red "  FAIL  hintsSeen does not contain the key — the hint returns on every visit"; FAIL=$((FAIL+1))
+fi
+
+# Twice is once. `hintsSeen` is a set in meaning and nothing but the write
+# enforces that, so a double tap on a slow phone must not store it twice.
+req POST /api/users/me/hints/landlord-dashboard "" "$TTOKEN"
+req GET /api/auth/me "" "$TTOKEN"
+if [[ "$(echo "$BODY" | jq -r '[.hintsSeen[]? | select(. == "landlord-dashboard")] | length')" == "1" ]]; then
+  green "  PASS  …and pressing it twice stores it once"; PASS=$((PASS+1))
+else
+  red "  FAIL  a second dismissal duplicated the key in hintsSeen"; FAIL=$((FAIL+1))
+fi
+
+# An unknown key is refused by name, so a typo in a template is a 400 that
+# says which key rather than a hint that silently never goes away.
+req POST /api/users/me/hints/not-a-screen "" "$TTOKEN"
+check "an unknown hint key is refused" 400 "$STATUS" "$BODY"
 req GET /api/auth/me "" "$TTOKEN"
 if [[ "$(echo "$BODY" | jq -r '.walkthroughSeenAt')" == "null" ]]; then
   green "  PASS  …by clearing the stamp, not by adding a second flag to keep in sync"; PASS=$((PASS+1))

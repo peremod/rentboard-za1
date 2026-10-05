@@ -1,7 +1,8 @@
-import { Controller, Patch, Post, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Patch, Post, Body, Param, UseGuards, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { isScreenHint } from './screen-hints';
 import { UsersService } from './users.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -29,6 +30,25 @@ export class UsersController {
    * would only invite a later version to resume them in the middle of
    * something they walked away from.
    */
+  /**
+   * Put one screen's first-use hint away.
+   *
+   * One key per call rather than a whole array: the client never sends the set
+   * it believes in, so it cannot overwrite a dismissal made on another device
+   * with a stale copy. The response carries the authoritative set back.
+   */
+  @Post('me/hints/:key')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: "Record that this account has put a screen's first-use hint away" })
+  markHint(@Param('key') key: string, @CurrentUser() user: { id: string }) {
+    if (!isScreenHint(key)) {
+      // Named, so a typo in a template is a 400 that says which key, rather
+      // than a hint that silently never goes away.
+      throw new BadRequestException(`"${key}" is not a screen hint. See SCREEN_HINTS.`);
+    }
+    return this.usersService.markHintSeen(user.id, key);
+  }
+
   @Post('me/walkthrough-seen')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Record that this account has been shown round, so it is not shown again' })
