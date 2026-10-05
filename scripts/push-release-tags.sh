@@ -1176,6 +1176,41 @@ with every post-state assertion verified, and each check falsified.
 Production is still down. The migration needs a credential this environment
 does not hold and cannot reach."
 
+tag_if_missing "v1.105.0" "e3949d5784e5c204c65d078a0268379513871754" "2026-10-05 11:54:38 +0000" "v1.105.0 — the preflight raised a false blocker on the database that needed migrating
+
+v1.104.0's new section 0 was run against production and printed 'Same database
+name neondb but different migration history ([object Object] rows vs 30)', '0
+applied, 34 pending' of 34, '[object Object]' as a migration name, and exited 1
+with 'Do NOT run migrate deploy until this comes back clean.'
+
+The operator overrode it, prisma migrate status gave the correct answer, and the
+15 migrations applied. Had the blocker been believed, production would have
+stayed down. That is the failure the section 4 comment in this same file exists
+to prevent, reintroduced one commit later in a new section.
+
+A false blocker and a missing check are the same defect. One stops a repair, the
+other permits a break. This script has now produced one of each, and both were
+found by somebody running it rather than by anything in this repository.
+
+Cause, reproduced locally and byte-for-byte identical to the production output:
+over that pooled connection to_regclass of the qualified table answered true
+while an unqualified SELECT on it did not exist, and users did the same. The
+session's search_path did not include public. An earlier run over the same
+pooled endpoint worked, so it is session-dependent. Why Neon's pooler did that
+is not established and cannot be from this environment.
+
+What turned an unreadable table into a verdict was this script, twice over.
+Every table reference was unqualified; all of them carry the schema now and
+PGOPTIONS forces the search_path where the URL does not set its own options. And
+q() returns an error object the code treated as a string, so a failed read
+became a migration name, a row count and a blocker. It now stops, says it is the
+script failing rather than a verdict about the database, and names prisma
+migrate status as the fallback.
+
+Production is up: 15 migrations applied over the direct endpoint by the user,
+not from here. 'Who to call' is empty until an admin records a phone check per
+contractor at /admin/services, as predicted."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1191,7 +1226,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-4][.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[0-5][.]'"
 else
   echo "Nothing to push."
 fi
