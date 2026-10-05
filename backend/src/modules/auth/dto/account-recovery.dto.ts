@@ -1,5 +1,7 @@
-import { IsEmail, IsString, MinLength, MaxLength, Matches } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsEmail, IsOptional, IsString, Length, Matches, MaxLength, MinLength,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /** Same policy as registration — a reset must not be a way to set a weak password. */
 const STRONG_PASSWORD = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
@@ -23,9 +25,28 @@ export class ResetPasswordDto {
 }
 
 export class ChangePasswordDto {
-  @ApiProperty()
-  @IsString()
-  currentPassword!: string;
+  /**
+   * ⚠️ Optional since Phase 7o, and the reason is not laziness.
+   *
+   * An account created from a mobile number has no password at all, so there is
+   * no current one to type. It used to be told "this account signs in with
+   * Google", which was false and was also the only thing between that person
+   * and ever having a password. They set a first one with `phoneCode` instead —
+   * the handset is the credential they do have.
+   *
+   * The service decides which is required from the account, not from which
+   * field arrived: an account WITH a password still cannot skip it by sending a
+   * phone code.
+   */
+  @ApiPropertyOptional({ description: 'Required when the account has a password.' })
+  @IsOptional() @IsString()
+  currentPassword?: string;
+
+  @ApiPropertyOptional({
+    description: 'A code sent to the verified number. For an account with no password yet.',
+  })
+  @IsOptional() @IsString() @Length(6, 6, { message: 'The code is 6 digits' })
+  phoneCode?: string;
 
   @ApiProperty()
   @IsString() @MinLength(8) @MaxLength(128) @Matches(STRONG_PASSWORD, { message: PASSWORD_MESSAGE })
@@ -38,9 +59,20 @@ export class RequestEmailChangeDto {
   @MaxLength(255)
   newEmail!: string;
 
-  @ApiProperty({ description: 'Confirms it is really you — a hijacked session alone is not enough' })
-  @IsString()
-  currentPassword!: string;
+  @ApiPropertyOptional({
+    description: 'Confirms it is really you — a hijacked session alone is not enough. '
+      + 'Required when the account has a password.',
+  })
+  @IsOptional() @IsString()
+  currentPassword?: string;
+
+  @ApiPropertyOptional({
+    description: 'A code sent to the verified number, for a phone-only account — Phase 7o. '
+      + 'Adding an address is what lets such an account pay the verification fee and be '
+      + 'recovered if the number is lost, and it used to be refused with a message about Google.',
+  })
+  @IsOptional() @IsString() @Length(6, 6, { message: 'The code is 6 digits' })
+  phoneCode?: string;
 }
 
 export class ConfirmEmailChangeDto {

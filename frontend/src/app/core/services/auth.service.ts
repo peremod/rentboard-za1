@@ -206,6 +206,18 @@ export class AuthService {
     );
   }
 
+  /**
+   * Re-read the account from the server — Phase 7o.
+   *
+   * Needed because `hasPassword` and `email` change what the settings screen
+   * even offers: setting a first password turns "Set a password" into "Change
+   * password" and makes the free-text number field safe again. Patching the
+   * signal by hand would mean two places deciding the same thing.
+   */
+  refreshMe() {
+    return this.http.get<User>(`${this.api}/auth/me`).pipe(tap((user) => this._user.set(user)));
+  }
+
   /** Sends a code to verify the number already on the account. */
   requestPhoneVerification() {
     return this.http.post<{ message: string }>(`${this.api}/auth/phone/verify-number`, {});
@@ -299,16 +311,43 @@ export class AuthService {
    * and not reported under the field at all, because the person had already
    * been sent to the login page.
    */
-  changePassword(currentPassword: string, newPassword: string) {
+  changePassword(currentPassword: string, newPassword: string, phoneCode?: string) {
     return this.http.post<{ message: string }>(`${this.api}/auth/change-password`, {
-      currentPassword, newPassword,
+      currentPassword, newPassword, ...(phoneCode ? { phoneCode } : {}),
     }, { context: inlineErrors() });
   }
 
-  requestEmailChange(newEmail: string, currentPassword: string) {
+  requestEmailChange(newEmail: string, currentPassword: string, phoneCode?: string) {
     return this.http.post<{ message: string }>(`${this.api}/auth/change-email`, {
-      newEmail, currentPassword,
+      newEmail, currentPassword, ...(phoneCode ? { phoneCode } : {}),
     }, { context: inlineErrors() });
+  }
+
+  // ── Changing the number, proven before it lands — Phase 7o ───────────────
+  //
+  // Not part of the profile form. It was a free-text field there, and on an
+  // account whose number is the only credential one mistyped digit was a
+  // permanent lockout: the account pointed at a number nobody held and a
+  // request for a code on the real one answered "a code is on its way" and
+  // sent nothing.
+
+  /** Sends a code to a NEW number. The account keeps its current one. */
+  requestPhoneChange(newPhone: string) {
+    return this.http.post<{ message: string }>(
+      `${this.api}/auth/phone/change/request-code`, { newPhone }, { context: inlineErrors() },
+    );
+  }
+
+  confirmPhoneChange(code: string) {
+    return this.http
+      .post<{ phone: string; message: string }>(
+        `${this.api}/auth/phone/change/confirm`, { code }, { context: inlineErrors() },
+      )
+      .pipe(tap((res) => {
+        const current = this._user();
+        // Verified in the same write on the server, so the signal says so too.
+        if (current) this._user.set({ ...current, phone: res.phone, phoneVerified: true });
+      }));
   }
 
   /**

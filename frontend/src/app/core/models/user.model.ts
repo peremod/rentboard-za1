@@ -2,7 +2,12 @@ export type UserRole = 'TENANT' | 'LANDLORD' | 'ADMIN';
 
 export interface User {
   id: string;
-  email: string;
+  /**
+   * ⚠️ Optional since Phase 7g: an account created from a mobile number has
+   * none. Code that renders this must handle its absence — the settings screen
+   * read "Currently <strong>{{ email }}</strong>" and rendered an empty bold.
+   */
+  email?: string | null;
   role: UserRole;
   fullName: string;
   phone?: string | null;
@@ -12,6 +17,17 @@ export interface User {
   marketingEmails?: boolean;
   avatarPath?: string | null;
   isVerified: boolean;
+  /**
+   * Whether this account has a password at all — Phase 7o.
+   *
+   * Derived on the server from `passwordHash`; the hash itself never leaves it.
+   * False for an account created from a mobile number, which is why the
+   * settings screen offered it a "Change password" form that could only ever
+   * answer with a message about Google.
+   */
+  hasPassword?: boolean;
+  /** 'email', 'google', 'phone', 'magic_link'. Decides which forms make sense. */
+  authProvider?: string;
   createdAt?: string;
   /**
    * When this account was last shown round the product — Phase 7f.
