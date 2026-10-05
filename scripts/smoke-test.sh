@@ -1343,6 +1343,71 @@ fi
 req PATCH /api/users/me '{"phone":""}' "$LTOKEN"
 check "an account with an email can still clear its number" 200 "$STATUS" "$BODY"
 
+# -- 17f. Assisted sign-up (Phase 7p) --------------------------------------
+head_ "17f. Assisted sign-up"
+
+# ⚠️ These cannot complete an assisted sign-up: the code goes out over WhatsApp
+# and recovering it needs the database and the API's own JWT_SECRET. That is
+# scripts/assisted-signup-drive.mjs, where the consent rule is actually proven.
+# What is checkable here is who may start one, and — the control that matters —
+# that the reply hands the starter nothing they could finish with alone.
+
+req POST /api/admin/phone-signups/assisted '{"phone":"0821234567"}'
+check "a stranger cannot start a sign-up in somebody else's name" 401 "$STATUS" "$BODY"
+
+req POST /api/admin/phone-signups/assisted '{"phone":"0821234567"}' "$LTOKEN"
+check "nor can an ordinary signed-in landlord" 403 "$STATUS" "$BODY"
+
+req GET /api/admin/phone-signups/assisted/mine "" "$LTOKEN"
+check "nor read what anybody has started" 403 "$STATUS" "$BODY"
+
+# A 404 here would mean the whole surface is unreachable and the guards above
+# are passing on missing routes — a dead control clearing a guard check.
+if [[ "$STATUS" != "404" ]]; then
+  green "  PASS  …and the routes exist rather than answering 404"; PASS=$((PASS+1))
+else
+  red "  FAIL  /admin/phone-signups/assisted/mine is a 404 — the guards above prove nothing"; FAIL=$((FAIL+1))
+fi
+
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  SMOKE_ASSIST="08215$(( RANDOM % 90000 + 10000 ))"
+  SMOKE_ASSIST="${SMOKE_ASSIST:0:10}"
+  req POST /api/admin/phone-signups/assisted "{\"phone\":\"$SMOKE_ASSIST\"}" "$ADMIN_TOKEN"
+  check "an admin can start one" 200 "$STATUS" "$BODY"
+
+  # ⚠️ The control. An admin handed the code or a ticket could create an
+  # account in somebody else's name and tick the Terms for them.
+  if echo "$BODY" | jq -e 'has("code") or has("ticket")' >/dev/null 2>&1; then
+    red "  FAIL  the assisted reply hands the admin a code or a ticket — they could finish without the person"; FAIL=$((FAIL+1))
+    grey "        $(echo "$BODY" | head -c 200)"
+  else
+    green "  PASS  …and is handed no code and no ticket"; PASS=$((PASS+1))
+  fi
+  # Six consecutive digits anywhere in the body would be a code under another
+  # key name, which `has()` cannot see.
+  if echo "$BODY" | jq -r '.message // ""' | grep -qE '\b[0-9]{6}\b'; then
+    red "  FAIL  the assisted reply contains six consecutive digits — likely the code"; FAIL=$((FAIL+1))
+  else
+    green "  PASS  …and no six-digit code appears in the message either"; PASS=$((PASS+1))
+  fi
+  if echo "$BODY" | jq -e '.theyMustAccept | test("accept the Terms"; "i")' >/dev/null 2>&1; then
+    green "  PASS  …and the payload itself says the person must accept the Terms"; PASS=$((PASS+1))
+  else
+    red "  FAIL  nothing in the reply says the acceptance is the person's"; FAIL=$((FAIL+1))
+  fi
+
+  req GET /api/admin/phone-signups/assisted/mine "" "$ADMIN_TOKEN"
+  check "an admin can read back what they started" 200 "$STATUS" "$BODY"
+  if echo "$BODY" | jq -e 'type=="array" and length>0 and (map(select(.theyAcceptedAt != null and .becameAnAccount == false)) | length) == 0' >/dev/null 2>&1; then
+    green "  PASS  …and nothing claims acceptance without an account to show for it"; PASS=$((PASS+1))
+  else
+    red "  FAIL  a record claims acceptance with no account, or the list is not an array"; FAIL=$((FAIL+1))
+    grey "        $(echo "$BODY" | head -c 300)"
+  fi
+else
+  skipped "starting an assisted sign-up — set ADMIN_TOKEN to include it"
+fi
+
 # -- 18. Safety reports ----------------------------------------------------
 head_ "18. Safety reports"
 if [[ -n "$ROOM_ID" ]]; then

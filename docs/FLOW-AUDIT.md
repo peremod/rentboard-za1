@@ -2499,6 +2499,100 @@ twenty-an-hour limit.
 | WhatsApp delivery is still the binding constraint: a code to a number that has not messaged the business in 24 hours needs the authentication template (Outstanding §7) | Blocking for this flow, as before |
 | Assisted sign-up — the third of 7g's remaining items — is not here. The existing flow already holds the control that matters (acceptance is bound to the handset that answered), so what is left is an audit trail of who helped, and that needs a decision about who may assist | Not built; see the note below |
 
+### 5.34 Assisted sign-up, and 29 inputs nobody measured — ✅ v1.101.0 (Phase 7p)
+
+The last of the three items Phase 7g left behind. It needed almost no flow,
+because the control that makes it safe was already there and the service's own
+header said so: `complete` takes `acceptTerms: true` from the request and
+records *when* against the row the handset proved. A helper cannot reach that
+step without the six-digit code, and the code goes to the person's own phone.
+
+**Help reaches the handset. Consent stops at the person.** What was missing was
+only the record of who helped.
+
+#### Admin-recorded, and why not anybody
+
+There is no agent role in this product, and inventing one would be a product
+decision smuggled into a migration. Worse: an assisted start open to any
+signed-in account is a way to send sign-up codes to arbitrary numbers **with
+somebody else's name against the record** — harassment with an audit trail
+pointing at the wrong person. So it is admin-only, the same shape as
+admin-initiated account closure in Phase 7i.
+
+| Decision | Why |
+|---|---|
+| The reply carries **no code and no ticket** | The whole design. An admin handed either could create an account in somebody's name and tick the Terms for them, and the record would say they were helped. The drive asserts the six digits appear nowhere in the response under any key |
+| The admin **is** told a number already has an account | A deliberate divergence from the public endpoint, which answers identically either way. An admin can already read the user list, so nothing is disclosed they could not look up — and withholding it makes assisting useless in the case it matters most: somebody who has an account and has forgotten needs signing in, not signing up. The refusal still names nobody. **The public endpoint is unchanged, and the drive asserts that too** |
+| The per-number code budget is shared with the public path | An admin helping is still sending WhatsApp messages to a number that is not theirs. A path that skipped it would be the way to send twenty |
+| `assistedByAdminId` is `ON DELETE SET NULL` | An admin closing their own account must not delete the sign-up records of the people they helped |
+| The admin's own list drops the number once it became an account | The record is that help happened; the number then lives on the account, where whoever should see it can |
+| It lives on the admin overview, not a new nav entry | A thing done while sitting with somebody, not a screen to go looking for — and a new nav item is a new way to ship a dead link |
+
+The screen says both halves out loud ("**the code goes to their handset, not
+yours**", "they have to accept the Terms themselves"), and that wording is a
+check: an admin who does not know it will watch their own phone, decide the
+feature is broken, and the next thing they try is typing the landlord's details
+in themselves.
+
+27 API checks and 21 UI checks. Falsified by reintroducing four bugs at once —
+the code in the response, the admin guard dropped, the admin id not recorded,
+the public endpoint leaking: **11 failures**.
+
+#### 🔴 And 29 inputs under the tap target, found by accident
+
+The UI drive measured the new admin field at **37px**. Measuring the rest of the
+app at 360px found every text control under WCAG 2.5.8's 44px:
+
+| Screen | Inputs | Smallest |
+|---|---|---|
+| The board | 12 | **30px** |
+| Login | 2 | 37px |
+| Register | 4 | 37px |
+| Phone sign-up | 1 | 37px |
+| Account settings | 6 | 37px |
+| The listing wizard | 3 | 35px |
+| My properties | 1 | 34px |
+| Admin overview | 2 | 37px |
+
+**All 29 under.** v1.93.0 closed Outstanding §13 by making `.btn` 44px app-wide
+after the third screen in one sitting needed the same local patch — and nobody
+looked at the inputs. On a cheap Android phone the text box is the thing a thumb
+has to find.
+
+⚠️ **The drive that should have caught it said it had.** `layout-ui-drive`
+prints *"every control clears 44px"*, and `measureRow`'s selector is
+`button, a.btn`. A claim about controls, measured over a subset of them, for
+three releases after the phase that was about exactly this. The sentence now
+says "every **button**", and a new section 9 sweeps every visible text control
+on six screens at four widths — a sweep rather than a row, because a row-shaped
+check can only find this on the rows somebody thought to list. Falsified by
+removing the global rule: **24 failures**, naming each control and its height.
+
+Fixed in the base rule rather than on the field that found it, for the reason
+v1.93.0 records. `min-height`, so nothing re-wraps; normal specificity, because
+a tap target is not a look and a component deciding its own input should be 30px
+is the bug, not a preference.
+
+#### ⚠️ Three faults in the drives, one of them a trap I then walked into
+
+1. **A one-shot `storageState()` does not survive a rotating refresh cookie.**
+   Reusing one captured session across four widths worked at the first and was
+   signed out at every one after: the app spends the cookie on load and the
+   server issues a new one. Six checks reported "the copied session did not sign
+   in" — the login-bounce guard doing its job. Without that guard the sweep
+   would have measured the **login form's two fields** and called the page clean.
+   The state is re-captured per context now, following the rotation.
+2. **Then the fix broke the page it came from.** Chaining the state left the
+   original page holding a token rotated away three contexts earlier, so a later
+   section was signed out — and it sat on `click("Send me a code")` until
+   Playwright's 30-second timeout and died with a stack trace instead of saying
+   so. Third crash-instead-of-report this session. That section builds its own
+   context from the current state and checks it is signed in first.
+3. **Eight extra sign-ins against a thirty-per-fifteen-minutes limiter.** The
+   new sweep signed in per page per width, and the drive died at section 18 with
+   "still on /auth/login" — which reads as an auth bug and is the trap CLAUDE.md
+   names.
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

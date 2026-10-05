@@ -170,7 +170,17 @@ console.log('\n── 3. The controls are there to use, at four widths ───
  * measurement as a phone one in this repo before. A fresh CONTEXT per width
  * paints at that width from the start and costs nothing.
  */
-const sessionState = await made.ctx.storageState();
+/**
+ * ⚠️ Re-captured each time: the refresh cookie ROTATES.
+ *
+ * A single `storageState()` reused across contexts worked at the first width
+ * and was signed out at every one after it — the app spends the cookie on load
+ * and the server issues a new one, so the second context presents a token
+ * already rotated away. Found in layout-ui-drive, where the login-bounce guard
+ * reported it; this drive passed only because of ordering, which is luck rather
+ * than a check.
+ */
+let sessionState = await made.ctx.storageState();
 for (const width of [360, 390, 768, 1280]) {
   const ctx = await browser.newContext({
     viewport: { width, height: 900 },
@@ -208,29 +218,56 @@ for (const width of [360, 390, 768, 1280]) {
   m.overflow <= 1
     ? ok(`${width}px: no sideways scroll`)
     : bad(`${width}px: the page overflows by ${m.overflow}px`);
+  sessionState = await ctx.storageState();
   await ctx.close();
 }
 
 console.log('\n── 3b. And the phone-only forms can actually be used ────────');
-await page.goto(`${WEB}/account/settings`, { waitUntil: 'networkidle' });
-await page.waitForTimeout(1200);
+
+/**
+ * ⚠️ A FRESH context from the current session, not the page from section 1.
+ *
+ * Section 3 above chains `sessionState` through each width because the refresh
+ * cookie rotates — which leaves the original page holding a token rotated away
+ * three contexts ago. Reusing it here meant /account/settings bounced to the
+ * login form, and the first version then sat on
+ * `click('button:has-text("Send me a code")')` until Playwright's 30s timeout
+ * and died with a stack trace, instead of saying "signed out". Crashing rather
+ * than reporting is the fault CLAUDE.md names, and this is the third time this
+ * session.
+ */
+const useCtx = await browser.newContext({ viewport: { width: 390, height: 900 }, storageState: sessionState });
+const usePage = await useCtx.newPage();
+await usePage.goto(`${WEB}/account/settings`, { waitUntil: 'networkidle' });
+await usePage.waitForTimeout(1500);
+
+if (/\/auth\/login/.test(new URL(usePage.url()).pathname)) {
+  bad('section 3b: the session did not carry over, so the forms were not exercised');
+} else {
+const sendBtn = usePage.locator('button:has-text("Send me a code")').first();
+if (await sendBtn.count() === 0) {
+  bad('there is no "Send me a code" control on the settings screen');
+} else {
 // Ask for the code, type six digits, and check the submit wakes up. The code
 // itself is wrong on purpose: what is measured here is the control, not the API.
-await page.locator('button:has-text("Send me a code")').first().click();
-await page.waitForTimeout(1500);
-const codeBoxes = await page.locator('input[autocomplete="one-time-code"]').count();
+await sendBtn.click();
+await usePage.waitForTimeout(1500);
+const codeBoxes = await usePage.locator('input[autocomplete="one-time-code"]').count();
 codeBoxes > 0
   ? ok(`asking for a code reveals the box to type it in (${codeBoxes})`)
   : bad('no one-time-code input appeared after asking for a code');
 if (codeBoxes > 0) {
-  await page.locator('#emStepCode').fill('123456');
-  await page.locator('#newEmail').fill(`ui${S}@example.co.za`);
-  await page.waitForTimeout(300);
-  const emBtn = page.locator('button:has-text("Send confirmation")');
+  await usePage.locator('#emStepCode').fill('123456');
+  await usePage.locator('#newEmail').fill(`ui${S}@example.co.za`);
+  await usePage.waitForTimeout(300);
+  const emBtn = usePage.locator('button:has-text("Send confirmation")');
   await (await emBtn.isEnabled())
     ? ok('…and "Send confirmation" becomes pressable with an address and a code')
     : bad('"Send confirmation" stays disabled with both filled in');
 }
+}
+}
+await useCtx.close();
 
 console.log('\n── 4. An account WITH a password still sees its own forms ────');
 const normal = await registerUser(API, 'LANDLORD');

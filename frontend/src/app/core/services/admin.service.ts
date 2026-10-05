@@ -248,6 +248,26 @@ export interface AdEnquiry {
   createdAt: string;
 }
 
+
+/** A sign-up an admin started for somebody else — Phase 7p. */
+export interface AssistedSignup {
+  id: string;
+  /**
+   * Null once it became an account.
+   *
+   * The record is that help happened; the number then lives on the account,
+   * where anyone who should see it can. Not a UI nicety — the server drops it,
+   * so this is the shape, not a choice the screen makes.
+   */
+  phone: string | null;
+  startedAt: string;
+  numberProvenAt: string | null;
+  /** Null on every one the person did not finish themselves. */
+  theyAcceptedAt: string | null;
+  becameAnAccount: boolean;
+  stillOpen: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AdminService {
   private http = inject(HttpClient);
@@ -405,4 +425,22 @@ export class AdminService {
       { status, reviewNote },
     );
   }
+  // ── Assisted sign-up — Phase 7p ──────────────────────────────────────────
+  //
+  // ⚠️ The response carries no code and no ticket, by design: a helper cannot
+  // reach the last step without the code that went to the person's own handset,
+  // and that step takes the acceptance from the person.
+
+  /** Starts a sign-up for somebody. The code goes to THEIR number. */
+  startAssistedSignup(phone: string) {
+    return this.http.post<{ message: string; theyMustAccept: string }>(
+      `${this.api}/admin/phone-signups/assisted`, { phone },
+    );
+  }
+
+  /** The ones this admin started. Stored is not the same as readable. */
+  assistedSignups() {
+    return this.http.get<AssistedSignup[]>(`${this.api}/admin/phone-signups/assisted/mine`);
+  }
+
 }

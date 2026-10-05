@@ -1,9 +1,12 @@
-import { Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ThrottlerGuard, Throttle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PhoneSignupService } from './phone-signup.service';
+import { PhoneCodeDto } from './dto/phone-otp.dto';
 
 /**
  * The sign-up queue: visible, and prunable on demand.
@@ -76,5 +79,37 @@ export class PhoneSignupAdminController {
   })
   prune() {
     return this.signups.pruneAbandoned();
+  }
+  // ── Assisted sign-up — Phase 7p ─────────────────────────────────────────
+  //
+  // ⚠️ Admin-only, and that is the product decision: there is no agent role
+  // here, and an assisted start open to any signed-in account would be a way
+  // to send sign-up codes to arbitrary numbers with somebody else's name on
+  // the record.
+  //
+  // The response carries no code and no ticket. A helper cannot reach the last
+  // step without the code that went to the person's own handset, and that last
+  // step takes the acceptance from the person. Help reaches the handset;
+  // consent stops at the person.
+
+  @Post('assisted')
+  @UseGuards(ThrottlerGuard)
+  // Thirty an hour per admin. Generous for a person sitting with landlords all
+  // morning, and far below what a script would want — and the per-NUMBER
+  // budget in the service applies on top, so one number cannot be hammered
+  // even by an admin who is within this.
+  @Throttle({ default: { limit: 30, ttl: 60 * 60 * 1000 } })
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: "Start a sign-up for somebody: the code goes to THEIR handset",
+  })
+  startAssisted(@Body() dto: PhoneCodeDto, @CurrentUser() admin: { id: string }) {
+    return this.signups.requestCodeAssisted(dto.phone, admin.id);
+  }
+
+  @Get('assisted/mine')
+  @ApiOperation({ summary: 'The sign-ups this admin started, and which were finished' })
+  mine(@CurrentUser() admin: { id: string }) {
+    return this.signups.assistedByAdmin(admin.id);
   }
 }
