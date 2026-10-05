@@ -3,7 +3,8 @@ export type InboxKind =
   | 'lease_ending'
   | 'notice_given'
   | 'rent_unmarked'
-  | 'rent_disputed';
+  | 'rent_disputed'
+  | 'unread_message';
 
 /**
  * One thing waiting on the landlord.

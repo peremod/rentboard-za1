@@ -8,7 +8,8 @@ export type InboxKind =
   | 'lease_ending'
   | 'notice_given'
   | 'rent_unmarked'
-  | 'rent_disputed';
+  | 'rent_disputed'
+  | 'unread_message';
 
 /**
  * One thing to do, with everything the row needs to be acted on in place.
@@ -131,19 +132,20 @@ export class LandlordInboxService {
    * anyway. Run concurrently, so the inbox costs one round trip's latency.
    */
   async inbox(landlordId: string): Promise<{ items: InboxItem[]; counts: Record<InboxKind, number> }> {
-    const [applications, upcoming, rentGaps] = await Promise.all([
+    const [applications, upcoming, rentGaps, unread] = await Promise.all([
       this.waitingApplications(landlordId),
       this.leaseItems(landlordId),
       this.rentItems(landlordId),
+      this.unreadMessages(landlordId),
     ]);
 
-    const items = [...applications, ...upcoming, ...rentGaps].sort((a, b) => a.urgency - b.urgency);
+    const items = [...applications, ...upcoming, ...rentGaps, ...unread].sort((a, b) => a.urgency - b.urgency);
 
     // Counted per kind so the screen can say "3 applicants waiting" in a header
     // without re-deriving it from the list and getting the plural wrong.
     const counts = {
       application_waiting: 0, lease_ending: 0, notice_given: 0,
-      rent_unmarked: 0, rent_disputed: 0,
+      rent_unmarked: 0, rent_disputed: 0, unread_message: 0,
     } as Record<InboxKind, number>;
     for (const i of items) counts[i.kind]++;
 
@@ -162,6 +164,75 @@ export class LandlordInboxService {
    * applicants, and resurfacing them would ask a landlord to answer people who
    * applied to a room that has since been let and freed twice.
    */
+  /**
+   * Somebody wrote to you and you have not opened it — Phase 8e.
+   *
+   * ── Why it belongs HERE and not in a badge of its own
+   *
+   * The owner's report was "there's no notification that says I have a new
+   * message in the dashboard". The obvious answer is a red dot somewhere. This
+   * screen already has a ranked list of what needs doing, and its component
+   * says a new kind needs no change to it — so an unread message becomes a row
+   * beside the applicant who has waited nine days, carrying its own
+   * destination, rather than a dot the landlord has to interpret.
+   *
+   * ⚠️ This is only honest because `Message.readAt` is now written. It sat on
+   * the model unwritten from the day messaging shipped — the defect
+   * `messages.service.ts` records beside the fix — and an unread count built on
+   * it then would have counted every message ever sent, for ever.
+   *
+   * One row per conversation, not per message: five messages from one person is
+   * one thing to do.
+   */
+  private async unreadMessages(landlordId: string): Promise<InboxItem[]> {
+    const grouped = await this.prisma.message.groupBy({
+      by: ['applicationId'],
+      where: {
+        readAt: null,
+        // Never your own. Marking your own words unread is meaningless, and it
+        // is the same reasoning the read-marking itself uses.
+        senderId: { not: landlordId },
+        application: { room: { landlordId } },
+      },
+      _count: { _all: true },
+      _min: { createdAt: true },
+    });
+    if (!grouped.length) return [];
+
+    const applications = await this.prisma.application.findMany({
+      where: { id: { in: grouped.map((g) => g.applicationId) } },
+      select: {
+        id: true,
+        room: { select: { id: true, title: true } },
+        tenant: { select: { fullName: true } },
+      },
+    });
+    const byId = new Map(applications.map((a) => [a.id, a]));
+
+    return grouped.flatMap((g) => {
+      const app = byId.get(g.applicationId);
+      if (!app) return [];
+      const count = g._count._all;
+      const oldest = g._min.createdAt ?? new Date();
+      const waitingDays = -daysUntil(oldest);
+      return [{
+        kind: 'unread_message' as const,
+        // Same scale as a waiting applicant: negated waiting time, so a message
+        // unanswered for nine days outranks a lease ending in nine.
+        urgency: -waitingDays,
+        title: `${app.tenant.fullName} sent you ${count === 1 ? 'a message' : `${count} messages`}`,
+        detail: waitingDays > 0
+          ? `Unanswered for ${waitingDays} ${waitingDays === 1 ? 'day' : 'days'}`
+          : 'Came in today',
+        entityId: app.id,
+        roomTitle: app.room.title,
+        daysUntil: null,
+        actionLabel: 'Read and reply',
+        actionPath: '/account/messages',
+      }];
+    });
+  }
+
   private async waitingApplications(landlordId: string): Promise<InboxItem[]> {
     const rows = await this.prisma.application.findMany({
       where: {

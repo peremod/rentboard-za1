@@ -1118,6 +1118,36 @@ and falsifying it prints the 1159px.
 
 ---
 
+## 20. ⚠️ `:where(button)` sets `white-space: nowrap` on every button in the app
+
+Right for a button holding a short label. Wrong for one used as a **row or a
+card**, because `white-space` inherits: every piece of text inside such a button
+is pinned to one line.
+
+Found as the owner's report that *"the description of the room is not moving to
+the next line"* in the messages list. `.msg-row__head` is a `<button>` wrapping
+the whole row, so at 360px the room title wanted **502px in a 300px column**, the
+message preview **993px**, and the document was **1012px wide in a 360px
+viewport** — horizontal page scroll and "a single line hundreds of characters
+wide", both on the mobile checklist in CLAUDE.md, from one inherited declaration.
+
+⚠️ `font: inherit` does **not** reset it. `font` is family, size, weight, style,
+variant and line-height, and nothing else — the same lesson this exact element
+had already learned once about `color`.
+
+**Fixed where it bit** (`.msg-row__head { white-space: normal }`, v1.110.0).
+Zero specificity means a plain class wins, so one declaration is the whole fix.
+
+**Not swept app-wide.** Any other button used as a container for wrapping text
+has the same problem, and nothing here looks for it. The cheap check would be a
+drive that walks the DOM comparing `scrollWidth` to `clientWidth` — ⚠️ a
+bounding-box sweep **cannot see this**: every element's
+`getBoundingClientRect()` sat inside the viewport, and only the scroll
+measurement showed the overflow. `scripts/messages-layout-drive.mjs` does it for
+the messages list; the other screens are unchecked.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

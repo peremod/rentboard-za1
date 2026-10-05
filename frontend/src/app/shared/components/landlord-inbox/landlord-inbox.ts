@@ -14,6 +14,7 @@ const ICONS: Record<InboxKind, string> = {
   lease_ending: '📅',
   application_waiting: '👤',
   rent_unmarked: '🧾',
+  unread_message: '💬',
 };
 
 /**
