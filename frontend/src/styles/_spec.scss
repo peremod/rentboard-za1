@@ -252,10 +252,25 @@ img{display:block;max-width:100%}
 }
 .filter-check input{accent-color:var(--terra)}
 .filter-pill-wrap{display:flex;flex-wrap:wrap;gap:.4rem}
+/* ⚠️ 22px before Phase 7q — the board's own filters, and the smallest tap
+   targets on the busiest page in the product.
+
+   Fourth instance of the same family. v1.93.0 made `.btn` 44px app-wide,
+   Phase 7p did the inputs, Phase 7q did the hamburger, the cookie notice and
+   the language switcher — and none of those rules reach a `.filter-pill`,
+   because it is none of those things. Found by a whole-page BUTTON sweep,
+   which exists because a row-shaped check only ever finds what somebody
+   thought to list.
+
+   `display:inline-flex` with centring, so min-height makes the pill taller
+   without pushing its label off centre. The filter row is therefore taller on
+   a phone than it was, which is the correct trade: these are the controls a
+   person uses to find a room at all. */
 .filter-pill{
   padding:.28rem .65rem;border-radius:var(--r-full);
   font-size:.72rem;font-weight:600;border:1.5px solid var(--border);
   cursor:pointer;transition:all .12s;color:var(--slate);background:var(--white);
+  min-height:44px;display:inline-flex;align-items:center;justify-content:center;
 }
 .filter-pill.active,.filter-pill:hover{
   border-color:var(--terra);color:var(--terra);background:rgba(192,78,40,.06);
@@ -312,9 +327,12 @@ img{display:block;max-width:100%}
 .badge-featured{background:var(--gold);color:#fff}
 .badge-new{background:var(--sage);color:#fff}
 .badge-reserved{background:var(--slate);color:#fff}
+/* ⚠️ 32px before Phase 7q, on every room card on the board — eleven of them
+   on one screen at 360px. An icon button has no text to make it big, so both
+   dimensions are set rather than a min-height. */
 .save-btn{
   position:absolute;top:.65rem;right:.65rem;
-  width:32px;height:32px;border-radius:50%;
+  width:44px;height:44px;border-radius:50%;
   background:rgba(255,255,255,.92);border:none;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   font-size:1.1rem;transition:all .15s;color:var(--slate);
@@ -500,11 +518,20 @@ img{display:block;max-width:100%}
 }
 .portal-user-name{font-size:.9rem;font-weight:700;color:var(--cream)}
 .portal-user-role{font-size:.72rem;color:rgba(250,247,240,.45)}
+/* ⚠️ 37px on DESKTOP before Phase 7q, including "Log out".
+
+   The ≤900px block gives these 44px because the sidebar becomes a phone strip
+   there, and the desktop rule was never given the same. A desktop pointer is
+   not a thumb, so this is the least severe of the seven tap targets this phase
+   found — but a 37px row in a column of 44px rows is also just untidy, and the
+   drive measures every width. Already a flex with centring, so min-height only
+   grows the row. */
 .portal-nav-link{
   display:flex;align-items:center;gap:.75rem;
   padding:.65rem 1.25rem;font-size:.88rem;font-weight:500;
   color:rgba(250,247,240,.55);cursor:pointer;transition:all .15s;
   border-left:3px solid transparent;
+  min-height:44px;
 }
 .portal-nav-link:hover,.portal-nav-link.active{
   color:var(--cream);background:rgba(255,255,255,.06);

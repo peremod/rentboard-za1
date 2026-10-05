@@ -214,6 +214,13 @@ model User {
   /// Phase 7l. Viewings this person called off — either side may.
   viewingsCancelled RoomViewing[] @relation("ViewingsCancelled")
 
+  /// Lost-number recoveries — Phase 7q. The first is this account's own
+  /// (cascades with it); the other two are ones this admin handled, SET NULL on
+  /// their deletion so the record outlives the staff member.
+  recoveries         AccountRecovery[] @relation("RecoveredAccount")
+  recoveriesOpened   AccountRecovery[] @relation("RecoveriesOpened")
+  recoveriesApproved AccountRecovery[] @relation("RecoveriesApproved")
+
   /// Sign-ups this admin started for somebody else — Phase 7p. SET NULL on
   /// their own deletion, so the record of the help outlives the staff member.
   phoneSignupsAssisted PhoneSignup[] @relation("PhoneSignupsAssisted")
@@ -2345,6 +2352,98 @@ model ServiceProvider {
 
   @@index([category, active])
   @@map("service_providers")
+}
+
+/// Getting back in when the phone itself is gone — Phase 7q.
+///
+/// ⚠️ The most dangerous path in this product. Read the migration header before
+/// changing anything here.
+///
+/// An account made from a mobile number has no email and no password. Phase 7o
+/// made the number changeable with the new one proven first, which covers
+/// switching SIMs and covers nothing when the handset is gone: every route needs
+/// the old number in hand. This is that case, and the account on the other side
+/// holds rooms, applications, tenancies, a rent record and conversations with
+/// tenants.
+///
+/// Two proofs, neither sufficient alone: a PERSON proves identity to an admin
+/// offline and the admin records what was checked and when, and the NEW HANDSET
+/// answers a code. And the narrowing that matters most — the flow is refused
+/// when the account has an email or a password, because then there is a
+/// self-service way in and nobody needs to be trusted.
+///
+/// ⚠️ It cannot warn the real owner in time, and that is stated rather than
+/// implied. The notice is written the moment a request opens, to every channel
+/// the account has — and in the case this exists for there is no email and the
+/// owner cannot sign in to read a Notice. The mitigation is the record, not the
+/// warning: permanent, attributable, reconstructable.
+///
+/// Only outcomes persist: `idSeenNote` is what the admin saw, in their words,
+/// and there is deliberately no documentPath — the VerificationRequest rule
+/// (POPIA s.19).
+model AccountRecovery {
+  id String @id @default(uuid())
+
+  userId String
+  user   User   @relation("RecoveredAccount", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Canonical +27. Proven by a code before it replaces anything.
+  newPhone String
+  /// What the account had when the request opened. The user row will not hold
+  /// it afterwards, and an audit that cannot say what was replaced is not one.
+  oldPhone String
+
+  status AccountRecoveryStatus @default(open)
+
+  openedByAdminId String?
+  openedByAdmin   User?   @relation("RecoveriesOpened", fields: [openedByAdminId], references: [id], onDelete: SetNull)
+
+  /// ⚠️ An approval without this is refused by a CHECK constraint, not only by
+  /// the service. Dates rather than booleans: "we verified them" with no date
+  /// is worth nothing in a dispute two years later.
+  idSeenAt   DateTime?
+  /// What was seen, in the admin's words. Never the document itself.
+  idSeenNote String?
+
+  /// They answered things only the account's owner could — which rooms, which
+  /// tenant, what the rent is. Optional, and worth recording when it happened.
+  knowledgeCheckedAt   DateTime?
+  knowledgeCheckedNote String?
+
+  approvedByAdminId String?
+  approvedByAdmin   User?   @relation("RecoveriesApproved", fields: [approvedByAdminId], references: [id], onDelete: SetNull)
+  approvedAt        DateTime?
+
+  refusedAt     DateTime?
+  refusedReason String?
+
+  /// HMAC of the code sent to the new number, same scheme as every other code
+  /// here. Cleared when spent.
+  codeHash      String?
+  codeExpiresAt DateTime?
+  attempts      Int       @default(0)
+
+  recoveredAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One live request per account is a PARTIAL unique index in the migration —
+  /// Prisma cannot express "unique where status in (…)".
+  @@index([status, createdAt])
+  @@index([newPhone])
+  @@map("account_recoveries")
+}
+
+enum AccountRecoveryStatus {
+  /// Somebody has asked. Nothing has been checked or moved.
+  open
+  /// Identity was checked and recorded; a code is on its way to the new number.
+  approved
+  /// The new handset answered. The account points at it now.
+  recovered
+  refused
+  expired
 }
 
 /// Who ended an account, and why — Phase 7i.

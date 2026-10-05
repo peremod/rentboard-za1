@@ -4,6 +4,8 @@ import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { PhoneSignupAdminController } from './phone-signup-admin.controller';
+import { LostNumberAdminController, LostNumberPublicController } from './lost-number.controller';
+import { LostNumberService } from './lost-number.service';
 import { AuthService } from './auth.service';
 import { AccountRecoveryService } from './account-recovery.service';
 import { PasswordlessService } from './passwordless.service';
@@ -34,7 +36,15 @@ import { GoogleStrategy } from './strategies/google.strategy';
       }),
     }),
   ],
-  controllers: [AuthController, PhoneSignupAdminController],
+  controllers: [
+    AuthController,
+    PhoneSignupAdminController,
+    // Phase 7q. Two controllers for one service: every admin route is guarded,
+    // and the one the person recovering uses cannot be — they have no session,
+    // which is the premise.
+    LostNumberAdminController,
+    LostNumberPublicController,
+  ],
   providers: [
     AuthService,
     AccountRecoveryService,
@@ -43,6 +53,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
     PhoneSignupService,
     JwtStrategy,
     GoogleStrategy,
+    LostNumberService,
   ],
   exports: [AuthService, JwtModule],
 })

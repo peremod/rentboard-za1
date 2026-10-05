@@ -624,7 +624,7 @@ console.log('\n── 21. The save that used to say nothing ──────�
 //
 // Checkboxes and radios are excluded: they size themselves and their tap target
 // is the label they sit in.
-console.log('\n── 9. Text controls are tap targets too ─────────────────────');
+console.log('\n── 9. Every control on the page is a tap target ─────────────');
 
 const CONTROL_PAGES = [
   ['/', 'the board', false],
@@ -710,6 +710,47 @@ for (const width of WIDTHS) {
       ok(`${width}px ${label}: ${m.count} text controls, smallest ${m.smallest}px`);
     } else {
       bad(`${width}px ${label}: ${m.under.length} of ${m.count} text controls under ${TAP}px — ${JSON.stringify(m.under)}`);
+    }
+
+    /**
+     * ⚠️ And every BUTTON on the page, not only the ones in a listed row.
+     *
+     * Section 9's text sweep was added in Phase 7p after 29 inputs shipped
+     * under target. It did not close the hole, it moved it: `assertRow` still
+     * measured buttons a row at a time, so a button outside any row anybody
+     * had listed was invisible. Phase 7q then found three that way — the phone
+     * HAMBURGER at 32px, which is the only navigation a phone has; the cookie
+     * notice's "Got it" at 30px, which every first visit meets; and the
+     * language switcher at **24px**, the smallest target in the app. All three
+     * app-wide, all three neither a `.btn` nor an input, so neither of the two
+     * previous app-wide fixes reached them.
+     *
+     * Found by accident on a new admin screen whose own controls were fine.
+     * This is the sweep that would have found them on purpose.
+     */
+    const b = await p.evaluate(() => {
+      const vis = (el) => !!el && getComputedStyle(el).display !== 'none'
+        && el.getBoundingClientRect().height > 0;
+      const buttons = [...document.querySelectorAll('button, a.btn, [role="button"]')].filter(vis);
+      return {
+        count: buttons.length,
+        under: buttons
+          .filter((c) => c.getBoundingClientRect().height < 44)
+          .map((c) => ({
+            txt: (c.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 20) || c.className || c.tagName,
+            h: Math.round(c.getBoundingClientRect().height),
+          })),
+        smallest: buttons.length
+          ? Math.round(Math.min(...buttons.map((c) => c.getBoundingClientRect().height)))
+          : 0,
+      };
+    });
+    if (b.count === 0) {
+      bad(`${width}px ${label}: no buttons found, so nothing was measured`);
+    } else if (b.under.length === 0) {
+      ok(`${width}px ${label}: ${b.count} buttons, smallest ${b.smallest}px`);
+    } else {
+      bad(`${width}px ${label}: ${b.under.length} of ${b.count} buttons under ${TAP}px — ${JSON.stringify(b.under)}`);
     }
     // Follow the rotation, so the next context presents the current cookie.
     if (needsAuth) sweepSession = await ctx.storageState();

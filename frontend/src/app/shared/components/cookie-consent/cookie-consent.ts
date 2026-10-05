@@ -62,6 +62,10 @@ interface CookieAcknowledgement {
     .cookie-notice__ok {
       width: 100%; padding: .5rem; border-radius: 4px; border: none;
       background: var(--terra); color: #fff; font-weight: 700; cursor: pointer;
+      /* 30px before Phase 7q. Every first visit meets this button, and it is
+         the only way to get the notice off the screen. Not a .btn, so the
+         app-wide 44px rule never reached it. */
+      min-height: 44px;
     }
   `],
 })

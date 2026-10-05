@@ -4,6 +4,9 @@ import { PortalNavItem } from '../../shared/components/portal-shell/portal-shell
 export const ADMIN_NAV: PortalNavItem[] = [
   { label: 'Overview', icon: '📊', route: '/admin/dashboard', exact: true },
   { label: 'Verifications', icon: '📄', route: '/admin/verifications' },
+  // Phase 7q. Handing an account back when its owner lost the phone they sign
+  // in with. The only path that can give somebody's rooms and tenants away.
+  { label: 'Account recovery', icon: '🔑', route: '/admin/recoveries' },
   { label: 'Reports', icon: '🚩', route: '/admin/reports' },
   { label: 'Disputes', icon: '⚖️', route: '/admin/disputes' },
   { label: 'Advertising', icon: '📢', route: '/admin/advertising' },

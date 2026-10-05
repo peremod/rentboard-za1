@@ -25,6 +25,17 @@ export const AUTH_ROUTES: Routes = [
     title: 'Signing in — Mastande',
   },
   {
+    /**
+     * Phase 7q. ⚠️ This page cannot START a recovery — there is no safe
+     * self-service way to hand an account over. It is where the new handset
+     * answers the code, and otherwise it explains what to do, because somebody
+     * who lands here needs telling rather than a form that cannot help them.
+     */
+    path: 'lost-number',
+    loadComponent: () => import('./lost-number/lost-number').then((m) => m.LostNumber),
+    title: 'Lost the phone you sign in with? — Mastande',
+  },
+  {
     path: 'forgot-password',
     loadComponent: () => import('./forgot-password/forgot-password').then((m) => m.ForgotPassword),
     title: 'Reset your password — Mastande',

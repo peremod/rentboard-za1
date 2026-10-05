@@ -1408,6 +1408,69 @@ else
   skipped "starting an assisted sign-up — set ADMIN_TOKEN to include it"
 fi
 
+# -- 17g. Handing an account back when the phone is gone (Phase 7q) --------
+head_ "17g. Lost-number recovery"
+
+# ⚠️ This cannot complete a recovery: the code goes out over WhatsApp and
+# recovering it needs the database and the API's own JWT_SECRET. That is
+# scripts/lost-number-drive.mjs, which also tests the CHECK constraints
+# directly — one of them turned out to pass on NULL. What is checkable from
+# here is who may touch it at all, and that the narrowing exists.
+
+req POST /api/admin/recoveries '{"phone":"0821234567","newPhone":"0829876543"}'
+check "a stranger cannot open a hand-over" 401 "$STATUS" "$BODY"
+
+req POST /api/admin/recoveries '{"phone":"0821234567","newPhone":"0829876543"}' "$LTOKEN"
+check "nor can an ordinary signed-in landlord" 403 "$STATUS" "$BODY"
+
+req GET /api/admin/recoveries "" "$LTOKEN"
+check "nor read the queue" 403 "$STATUS" "$BODY"
+
+req GET "/api/admin/recoveries/lookup?phone=0821234567" "" "$LTOKEN"
+check "nor look an account up by its number" 403 "$STATUS" "$BODY"
+
+# A 404 would mean the guards above are passing on missing routes.
+if [[ "$STATUS" != "404" ]]; then
+  green "  PASS  …and the routes exist rather than answering 404"; PASS=$((PASS+1))
+else
+  red "  FAIL  /admin/recoveries/lookup is a 404 — the guards above prove nothing"; FAIL=$((FAIL+1))
+fi
+
+# The public half: the one route the person recovering uses. It must exist and
+# must not be a way to probe which numbers are mid-recovery.
+req POST /api/auth/lost-number/confirm '{"phone":"0829876543","code":"000000"}'
+check "the public confirm route exists and refuses a made-up code" 400 "$STATUS" "$BODY"
+if echo "$BODY" | jq -e '.message | test("wrong or has expired"; "i")' >/dev/null 2>&1; then
+  green "  PASS  …with the same sentence whichever way it failed"; PASS=$((PASS+1))
+else
+  red "  FAIL  the refusal distinguishes 'no request' from 'wrong code' — that says whose account is mid-recovery"; FAIL=$((FAIL+1))
+  grey "        $(echo "$BODY" | head -c 200)"
+fi
+
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  # ⚠️ The narrowing. The landlord account this suite uses has an email AND a
+  # password, so the dangerous path must refuse it and name the safer one.
+  req GET "/api/admin/recoveries/lookup?phone=0821234567" "" "$ADMIN_TOKEN"
+  check "an admin can look a number up" 200 "$STATUS" "$BODY"
+
+  req GET /api/admin/recoveries "" "$ADMIN_TOKEN"
+  check "…and read the queue" 200 "$STATUS" "$BODY"
+  if echo "$BODY" | jq -e 'type=="array"' >/dev/null 2>&1; then
+    green "  PASS  …as a list"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the recovery queue is not a list"; FAIL=$((FAIL+1))
+  fi
+
+  # Only outcomes persist: no column for the document itself, ever.
+  if echo "$BODY" | jq -e '(map(select(has("documentPath") or has("idDocumentPath"))) | length) == 0' >/dev/null 2>&1; then
+    green "  PASS  …and carries no document path — only outcomes persist"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the recovery queue carries a document path; a stored ID outlives its use"; FAIL=$((FAIL+1))
+  fi
+else
+  skipped "the admin half of lost-number recovery — set ADMIN_TOKEN to include it"
+fi
+
 # -- 18. Safety reports ----------------------------------------------------
 head_ "18. Safety reports"
 if [[ -n "$ROOM_ID" ]]; then

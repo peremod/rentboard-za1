@@ -2593,6 +2593,132 @@ is the bug, not a preference.
    "still on /auth/login" — which reads as an auth bug and is the trap CLAUDE.md
    names.
 
+### 5.35 Lost-number recovery — ✅ built in v1.102.0 (Phase 7q)
+
+The gap named in §5.33 and carried through 7p. Phase 7o made a number
+changeable with the new one proven first, which covers switching SIMs and
+covers nothing when the handset is gone: every route needs the old number in
+hand. A person with no email, no password and no phone had no way back to their
+own rooms, ever.
+
+⚠️ **This is the most dangerous path in the product.** The account on the other
+side holds rooms, applications, tenancies, a rent record and conversations with
+tenants. Getting it wrong does not inconvenience somebody; it hands a stranger
+a landlord's entire history with the people living in their rooms.
+
+#### Two proofs, neither sufficient alone
+
+1. **A person proves identity to an admin**, offline, and the admin records
+   **what** was checked and **when** — named, dated outcomes, the pattern the
+   contractor checks and `VerificationRequest` already use. An approval with no
+   recorded check is refused by a **CHECK constraint**, not only by the service.
+2. **The new handset answers a code.** An admin cannot type a number in and have
+   it become the way in; somebody has to be holding that phone. The approval
+   response carries no code, and the drive asserts it.
+
+#### The narrowing that matters most
+
+`open` **refuses outright when the account has an email address or a password**,
+and names the safer route. Then a password reset does the same job and nobody
+has to be trusted at all. The admin screen refuses it in those words — "Do not
+use this" — and does not even render the form. The dangerous path stays as small
+as it can be.
+
+#### ⚠️ What it cannot do, stated rather than implied
+
+**It cannot warn the real owner in time.** The notice is written the moment a
+request opens, to every channel the account has — and in the case this exists
+for there is no email and the owner cannot sign in to read a Notice. The warning
+lands only once they are back in, after the fact. There is no honest way around
+it: a person with no email, no password and no phone has no channel left.
+
+So the mitigation is the **record**, not the warning. Every recovery is
+permanent, attributable to a named admin, and reconstructable; the recovered
+account is told, naming the old and the new number and what to do if it was not
+them; and the old number is **retired**, so the stolen handset cannot sign in
+afterwards.
+
+**A second admin approval** is the standard control here and is deliberately not
+required: this platform is run by one person, so a two-admin rule would make the
+feature unusable by the only admin there is. Recorded as a decision in
+`docs/OUTSTANDING.md` rather than quietly skipped — the column to add is obvious
+if the team ever has two people.
+
+#### 🔴 A CHECK constraint that passed on NULL
+
+Two of the six constraints were written as:
+
+```sql
+CHECK ("refusedAt" IS NULL OR length(btrim("refusedReason")) > 0)
+```
+
+`btrim(NULL)` is NULL, `length(NULL)` is NULL, `NULL > 0` is NULL — and **a
+CHECK constraint that evaluates to NULL is satisfied.** So a refusal with no
+reason went straight in, which is the exact row the constraint existed to
+refuse, on the most dangerous path in the product. `id_check_has_a_note` had the
+same hole and **no test at all**, which is why it went unnoticed beside the one
+that did.
+
+Found because the drive tests the **constraints** with SQL rather than only the
+service that also enforces them. The service's own checks were correct
+throughout; a rule only the service holds is one direct `UPDATE` from being no
+rule. Both now compare the column to NULL explicitly, and both have checks for
+the NULL case and the blank case.
+
+`room_viewings_meeting_place_not_blank` uses the same idiom and is sound only
+because its column is `NOT NULL` — luck rather than design, and recorded so the
+next person writing one knows the trap.
+
+The strongest evidence the layering works came from falsifying it: with the
+service's identity-check guard removed, approving returned **500** instead of a
+sentence, because the database still refused the write.
+
+#### 🔴 And then the drive found seven sub-target controls, none of them mine
+
+The UI drive measures every button on the page, and the new admin screen's own
+controls were fine. These were not:
+
+| Control | Height | Where |
+|---|---|---|
+| Language switcher | **24px** | Every page, header |
+| `.filter-pill` | **22px** | The board's province and room-type filters |
+| `.quick-chip` | 30px | "Available now" on the board |
+| Cookie notice "Got it" | 30px | Every first visit |
+| `.save-btn` (heart) | 32px | Every room card — eleven on one 360px screen |
+| `.nav-burger` | 32px | **The only navigation a phone has** |
+| `.filter-toggle-btn` | 34px | Below 900px, the only way to reach the filters |
+| `.filter-drawer-close` | 38px | The X on the phone filter drawer |
+| `.auth__submit` | 38px | **The primary button on every auth form** |
+| `.auth__magic` | 38px | The two ways in for somebody with no password |
+| `.portal-nav-link` | 37px | Desktop sidebar, including Log out |
+
+**The board had 25 of 34 buttons under target.** Login, register and phone
+sign-up each had their primary submit at 38px.
+
+This is the fourth pass at the same family: v1.93.0 made `.btn` 44px app-wide,
+7p did the inputs after 29 of them shipped under target, 7q did these. Each time
+the previous fix was described as app-wide and each time it reached only the
+selector it named. ⚠️ **7p's own fix moved the hole rather than closing it**: it
+added a text-control sweep while `assertRow` went on measuring buttons a row at
+a time, so a button outside any listed row stayed invisible. A whole-page
+**button** sweep now runs beside the text one, on six screens at four widths.
+Falsified by reverting the rules: 18 failures naming each control and height.
+
+⚠️ **One near-miss worth recording.** `.auth__submit` measured 38px with a
+cream background and grey text, and has no CSS rule anywhere in the
+stylesheets — which reads exactly like `btn-ghost-light`, the class that had
+never had any effect. It was measured on an **empty** form, where the button is
+correctly disabled. Filled in, it is terracotta on white. The height was the
+only defect, and reporting the rest would have been a fabricated finding.
+
+#### Still open
+
+| Gap | Severity |
+|---|---|
+| A single admin can complete a hand-over. Two-admin approval is the standard control and would make the feature unusable for a one-person team — a decision, not an oversight | By decision; see Outstanding |
+| The real owner cannot be warned before the fact when they have no email. Nothing can fix this; the record is the mitigation | **Named, unfixable** |
+| WhatsApp delivery still gates every code (Outstanding §7) | Blocking for this flow, as before |
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

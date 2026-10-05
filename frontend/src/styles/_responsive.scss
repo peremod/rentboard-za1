@@ -24,6 +24,18 @@
   line-height: 1;
   cursor: pointer;
   padding: .25rem .5rem;
+  // ⚠️ 32px before Phase 7q, and it is THE ONLY NAVIGATION A PHONE HAS.
+  //
+  // Third instance of the same family: v1.93.0 made `.btn` 44px app-wide,
+  // Phase 7p did the inputs, and this is neither — so neither rule reached it.
+  // Found by a whole-page button sweep on a new admin screen, which caught it
+  // along with the cookie notice's "Got it" (30px) and the language switcher
+  // (24px). A row-shaped check could not: this button is in the header, not in
+  // any row anybody listed.
+  //
+  // min-width as well, because an icon button has no text to make it wide.
+  min-height: 44px;
+  min-width: 44px;
 }
 .nav-links-lang { display: none; }
 // The drawer's copy of the auth actions. Hidden on desktop, where the header
@@ -36,6 +48,9 @@
   align-items: center;
   gap: .5rem;
   padding: .5rem .9rem;
+  // 34px before Phase 7q, and below 900px this is the ONLY way to reach the
+  // filters at all — the sidebar is a drawer behind it.
+  min-height: 44px;
   border: 1.5px solid var(--border);
   border-radius: var(--r8);
   background: var(--white);
@@ -106,7 +121,11 @@
     h3 { font-size: 1rem; font-weight: 700; color: var(--ink); margin-bottom: 0; text-transform: none; letter-spacing: 0; }
   }
   .filter-drawer-close {
-    display: block;
+    // 38px before Phase 7q. An X on a drawer is the control somebody reaches
+    // for when they have changed their mind, and both dimensions need setting
+    // because a single glyph gives it no size of its own.
+    display: flex; align-items: center; justify-content: center;
+    min-width: 44px; min-height: 44px;
     background: none; border: none;
     font-size: 1.25rem; cursor: pointer; color: var(--slate);
     &:hover { background: none; box-shadow: none; transform: none; }
@@ -749,10 +768,21 @@
     content: ''; flex: 1; height: 1px; background: var(--border);
   }
 }
+/* ⚠️ `.auth__submit` is the primary button on EVERY auth form — log in, create
+   an account, sign up by phone, reset a password, recover a lost number — and
+   it measured 38px with `min-height: 0`. It has no rule of its own anywhere in
+   the stylesheets (its terracotta comes from elsewhere), so this adds the one
+   thing it needs and nothing else, to avoid fighting whatever gives it its
+   colour. Phase 7q. */
+.auth__submit { min-height: 44px; }
+
 .auth__magic {
   width: 100%; padding: .7rem; border-radius: var(--r8);
   border: 1.5px solid var(--border); background: var(--white);
   color: var(--ink); font-weight: 600; font-size: .88rem; cursor: pointer;
+  /* 38px before Phase 7q. This is "email me a sign-in link" and "use my phone
+     number instead" — the two ways in for somebody who has no password. */
+  min-height: 44px;
 
   &:hover:not(:disabled) { border-color: var(--terra); color: var(--terra); }
   &:disabled { opacity: .5; cursor: not-allowed; }
@@ -878,6 +908,9 @@
   align-items: center;
   gap: .3rem;
   padding: .45rem .9rem;
+  // 30px before Phase 7q. Already an inline-flex with centring, so a
+  // min-height grows it without moving the label.
+  min-height: 44px;
   font-size: .85rem;
   font-weight: 600;
   background: var(--card);

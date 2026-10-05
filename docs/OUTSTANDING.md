@@ -382,13 +382,31 @@ turned out not to be features so much as a shipped lockout:
   no code and no ticket, which is the control: either would let them create an
   account in somebody's name and tick the Terms for them. See FLOW-AUDIT §5.34.
 
-  **Phase 7g is now finished.** What remains across the phone-only work is one
-  named gap rather than an item: 🔴 losing the number **entirely** has no route
-  back, because every route needs the old number in hand. That needs identity
-  proved to a person — the admin and verification machinery — and is a decision.
+  **Phase 7g is finished, and so is the gap it left.** Lost-number recovery is
+  built in v1.102.0 (Phase 7q): an admin looks the account up, records what
+  identity document they saw, and approves — which sends a code to the new
+  handset that the person enters themselves. Two proofs, neither sufficient
+  alone, and the whole flow is refused when the account has an email or a
+  password, because then a password reset does the same job and nobody has to be
+  trusted. See FLOW-AUDIT §5.35.
+
+  💰 **One decision is yours, and it is not urgent.** A single admin can
+  complete a hand-over. The standard control is a **second admin's approval**,
+  and it is deliberately not required: Mastande is run by one person, so a
+  two-admin rule would make the feature unusable by the only admin there is. If
+  the team ever has two people, say so and it is one column plus one check
+  (`approvedByAdminId` must differ from `openedByAdminId`).
+
+  ⚠️ **And one thing nothing can fix, named rather than implied:** the real
+  owner cannot be warned before the fact. The notice is written the moment a
+  request opens, to every channel the account has — and in this case there is no
+  email and they cannot sign in to read a Notice. A person with no email, no
+  password and no phone has no channel left. The mitigation is the record:
+  permanent, attributable to a named admin, and reconstructable in a dispute.
 
   ⚠️ **If an agent should ever be a real role** rather than an admin, the
-  column is already the right shape; what changes is who may write it.
+  assisted-signup column is already the right shape; what changes is who may
+  write it.
 
 ---
 
@@ -738,6 +756,15 @@ node scripts/dashboard-drive.mjs         # 35 checks — Phase 7d. "Viewed 47 ti
 node scripts/onboarding-drive.mjs        # 35 checks — Phase 7f. The social card
                                          # (measured, not assumed) and the
                                          # first-run walkthrough
+node scripts/lost-number-drive.mjs      # 50 checks — Phase 7q. Needs
+                                         # JWT_SECRET. Tests the CHECK
+                                         # CONSTRAINTS with SQL as well as the
+                                         # service, which is how it found two
+                                         # that passed on NULL
+node scripts/lost-number-ui-drive.mjs   # 29 checks — that both screens say
+                                         # what they can and cannot do, and
+                                         # that approve stays off until a check
+                                         # is written down
 node scripts/assisted-signup-drive.mjs  # 27 checks — Phase 7p. Needs
                                          # JWT_SECRET. Mostly about what an
                                          # admin CANNOT do: no code and no
