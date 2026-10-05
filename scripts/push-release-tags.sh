@@ -934,6 +934,68 @@ still has no route back, because every route needs the old number in hand.
 Assisted sign-up, the third of 7g's items, needs a decision about who may
 assist before it can be built. 575 smoke checks passed, 0 failed."
 
+tag_if_missing "v1.101.0" "814278233172032da552d999e821f5dffa1492c6" "2026-10-05 06:49:32 +0000" "v1.101.0 — Phase 7p: assisted sign-up recorded, and 29 inputs nobody had measured
+
+The last of the three items Phase 7g left behind, and it needed a column rather
+than a flow. The control that makes helping safe was already there, and the
+service's own header said so: complete takes acceptTerms from the request and
+records when against the row the handset proved, and a helper cannot reach that
+step without the six-digit code, which goes to the person's own phone.
+
+Help reaches the handset. Consent stops at the person. What was missing was only
+the record of who helped.
+
+Admin-recorded rather than open to any signed-in account. There is no agent role
+in this product, and an open version would be a way to send sign-up codes to
+arbitrary numbers with somebody else's name against the record — the same shape
+as admin-initiated account closure in Phase 7i.
+
+The reply carries no code and no ticket, and that is the whole design: an admin
+handed either could create an account in somebody's name and tick the Terms for
+them, and the record would say they were helped. The drive asserts the six
+digits appear nowhere in the response under any key, and the smoke suite greps
+the message for six consecutive digits as well, because has('code') cannot see a
+code under another name.
+
+One deliberate divergence from the public endpoint: the admin IS told when a
+number already has an account. Withholding it makes assisting useless in the
+case it matters most, since somebody who has an account and has forgotten needs
+signing in rather than signing up, and an admin can already read the user list.
+The refusal names nobody, and the public endpoint is unchanged — which the drive
+asserts too.
+
+27 API and 21 UI checks, falsified four-at-once to 11 failures.
+
+Then the UI drive measured the new admin field at 37px, so the rest of the app
+was measured at 360px: every text control under WCAG 2.5.8's 44px. Twenty-nine
+of twenty-nine, from 37px down to 30px on the board's own filter row, across the
+board, login, register, phone sign-up, account settings, the listing wizard, my
+properties and the admin overview. v1.93.0 closed Outstanding 13 by making .btn
+44px app-wide after the third local patch; nobody looked at the inputs.
+
+The drive that should have caught it said it had. layout-ui-drive prints 'every
+control clears 44px' and measureRow's selector is button, a.btn — a claim about
+controls measured over a subset of them, for three releases, in the drive
+written for this exact problem. It says 'every button' now, and a new section 9
+sweeps every visible text control on six screens at four widths, because a
+row-shaped check can only find this on the rows somebody thought to list.
+Falsified by removing the global rule: 24 failures, naming each control and its
+height.
+
+Three faults in my own drives are recorded, and the second was the fix for the
+first. A one-shot storageState() does not survive a rotating refresh cookie:
+reused across four widths it worked at the first and was signed out at every one
+after, and without the login-bounce guard the sweep would have measured the
+login form's two fields and called the page clean. Chaining the state then left
+the original page holding a token rotated away three contexts earlier, and that
+section sat on a click until Playwright's thirty-second timeout and died with a
+stack trace instead of saying so. And the sweep signed in per page per width,
+eight extra logins against a thirty-per-fifteen-minutes limiter.
+
+Phase 7g is finished with this. One named gap remains across the phone-only
+work: losing the number entirely has no route back, because every route needs
+the old number in hand. 585 smoke checks passed, 0 failed."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -949,7 +1011,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]100[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.]10[01][.]'"
 else
   echo "Nothing to push."
 fi
