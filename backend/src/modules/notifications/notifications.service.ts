@@ -280,19 +280,6 @@ export class NotificationsService {
     );
   }
 
-  /** Sent when a Google-only account asks for a password reset. */
-  async sendGoogleOnlyAccountEmail(to: string, d: { fullName: string }) {
-    await this.send(
-      to,
-      'About your Mastande sign-in',
-      `<p>Hi ${d.fullName},</p>
-       <p>Someone asked to reset the password for this address, but your account signs in with Google,
-       so there is no password to reset.</p>
-       <p><a href="${this.frontend}/auth/login">Continue with Google</a></p>`,
-      { template: 'google_only_account' },
-    );
-  }
-
   /** Security notice — the point is that an unexpected one is a warning. */
   async sendPasswordChangedEmail(to: string, d: { fullName: string }) {
     await this.send(

@@ -3390,6 +3390,65 @@ With the fix reverted: `span.preview 993>303` and `p.msg-row__room 537>303` at
 scroll sideways at all — so the sweep is strictly stronger than the page-level
 check it sits beside.
 
+### 5.44 "Continue with Google" removed — ✅ v1.112.0 (Phase 8g)
+
+The owner is not paying for it. One button, and one thing to get right.
+
+#### Removing a way in means checking the way out
+
+⚠️ **I overstated this at first.** `requestPasswordReset` refuses an account with
+no `passwordHash` and sends "you sign in with Google" instead, and account
+settings refuses `authProvider === 'google'` outright — so the first reading was
+that deleting the button strands every Google account, the same family as the
+phone-only lockout in §5.33.
+
+That was wrong, and reading one more file showed it: **`requestMagicLink` never
+gated on a password at all.** Any active account with an address gets a link, and
+"✉️ Email me a sign-in link instead" is on the same screen, under the form. Two
+passwordless routes, in fact — the other is "💬 Use my phone number instead".
+Nobody is stranded.
+
+#### What WAS wrong after the removal
+
+The "you sign in with Google" email. True while the button existed; after it
+went, it pointed somebody at a door that is not there, which is worse than
+saying nothing. `requestPasswordReset` now issues a real token for an account
+with no password — owning the inbox is the proof a reset has always rested on,
+and `resetPassword` writes `passwordHash` unconditionally, so it sets a FIRST
+password as happily as it replaces one. A Google account that does this comes out
+an ordinary email account.
+
+`sendGoogleOnlyAccountEmail` had no other caller and was deleted rather than left
+as a method nothing reaches.
+
+#### Left in place on purpose
+
+The route, the strategy and the two secrets. An account that signed up through
+Google still exists and a callback in flight must not meet a 404 — and
+⚠️ **deleting the code would not stop the billing**, which lives in Google Cloud.
+`docs/OUTSTANDING.md` §21 has the SQL for deciding when the rest can go.
+
+#### ⚠️ Three faults in my own drive, all the same shape
+
+1. It matched `/email me a link/` and failed on a working screen, because the
+   button reads "Email me a sign-in **link instead**".
+2. It then asserted exactly one `.auth__magic` and failed again, because there
+   are **two**.
+3. Both are checks built on remembered copy and a guessed count, which report the
+   product broken when it is fine — the mirror of a check that passes when it is
+   not, and the same cost: a drive people learn to ignore.
+
+#### Falsified
+
+Button restored → the first two checks fail. The old refusal restored → the reset
+check fails, while **"forgot password is accepted (200)" still passes**, because
+the endpoint answers identically whether or not the address exists. That is why
+the assertion reads the `auth_tokens` row and not the HTTP reply.
+
+12 checks. Smoke 503, onboarding green, build clean. ⚠️ `phone-only-ui-drive`
+**skipped** on its own JWT-derivation step (the misleading message recorded in
+§5.33), so it is unproven here rather than passing.
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461

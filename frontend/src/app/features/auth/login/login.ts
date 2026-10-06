@@ -6,7 +6,19 @@ import { AuthService } from '../../../core/services/auth.service';
 import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
 
 /**
- * Login — email/password + Google OAuth entry point.
+ * Login — email and password.
+ *
+ * ⚠️ "Continue with Google" was removed in Phase 8g: the owner is not paying
+ * for it. The button is what cost money; the backend route and the passport
+ * strategy are deliberately left in place, because an account that signed up
+ * through Google still exists and a half-finished OAuth callback must not meet
+ * a 404.
+ *
+ * Removing a way IN means giving its users another one, and that is the other
+ * half of this change: a Google-only account asking to reset its password used
+ * to be told "you sign in with Google" and handed nothing. It now gets a real
+ * reset link, so it can set a first password and carry on through this form.
+ * See account-recovery.service.ts.
  * Full visual design (per RentBoard-ZA-Visual-Preview-v2.html) ports in with
  * the UI/CI-CD pass; this is a working, unstyled functional baseline.
  */
@@ -24,17 +36,6 @@ import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
         <h1 class="auth__title">Welcome back</h1>
         <p class="auth__sub">Log in to your account</p>
 
-        <button type="button" class="auth__google" (click)="continueWithGoogle()">
-          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-          </svg>
-          Continue with Google
-        </button>
-
-        <div class="auth__divider"><span>or</span></div>
 
         <form [formGroup]="form" (ngSubmit)="onSubmit()">
           <div class="auth__field">
@@ -227,11 +228,6 @@ export class Login {
         this.error.set(err?.error?.message ?? 'Invalid email or password');
       },
     });
-  }
-
-  continueWithGoogle() {
-    const returnUrl = this.route.snapshot.queryParams['returnUrl'];
-    this.auth.loginWithGoogle('TENANT', returnUrl);
   }
 
   /**
