@@ -1171,6 +1171,42 @@ where the page does not scroll at all.
 
 ---
 
+## 21. Google sign-in: the button is gone, the integration is not
+
+The owner is not paying for it, so "Continue with Google" was removed from the
+login screen in v1.112.0 (Phase 8g).
+
+**Deliberately still in place:**
+
+- `GET /api/auth/google` and `/api/auth/google/callback`;
+- `GoogleStrategy` and its passport registration;
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in the environment.
+
+An account that signed up through Google still exists, and a callback already in
+flight must not meet a 404. Nothing links to the route any more, so nothing new
+can start down it.
+
+⚠️ **Removing the code does not stop the billing.** Whatever is being paid for
+sits in Google Cloud — the OAuth client and whatever project it belongs to — and
+that is a change in their console, not in this repository. Deleting the route
+here without doing that would cost the same and break the people still on it.
+
+**Before deleting the rest**, check whether anybody is actually on it:
+
+```sql
+SELECT count(*) FROM users WHERE "authProvider" = 'google';
+SELECT count(*) FROM users WHERE "authProvider" = 'google' AND "passwordHash" IS NULL;
+```
+
+The second number is the one that matters: those accounts have no password yet.
+They are not stranded — "Email me a sign-in link" never gated on a password, and
+since v1.112.0 "forgot password" issues them a real reset token instead of the
+old "you sign in with Google" email, which after this change pointed at a door
+that no longer exists. Once that number is zero, the route, the strategy and the
+two secrets can go together.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash
