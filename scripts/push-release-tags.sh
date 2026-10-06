@@ -1402,6 +1402,34 @@ or the check fails as nothing really measured.
 Falsified: with the fix reverted it names both overflowing elements at the phone
 widths, and still catches one at 1280 where the page does not scroll at all."
 
+tag_if_missing "v1.112.0" "e43846ecbc5b9a9f8b75af6fbe2f764f1ce92821" "2026-10-06 05:56:22 +0000" "v1.112.0 — Phase 8g: 'Continue with Google' removed
+
+The owner is not paying for it.
+
+Removing a way in means checking the way out, and I overstated the risk first:
+the password-reset path refuses an account with no password, so it looked like
+deleting the button stranded every Google account. One more file showed that
+wrong — the magic link never gated on a password at all, and 'Email me a
+sign-in link instead' is on the same screen under the form.
+
+What was genuinely wrong after the removal was the 'you sign in with Google'
+email, which then pointed somebody at a door that is not there. Forgot-password
+now issues a real token for a passwordless account, so it can set a first
+password and carry on as an ordinary email account. The email method it replaced
+had no other caller and was deleted.
+
+The route, the strategy and the two secrets stay: an account that signed up
+through Google still exists, a callback in flight must not meet a 404, and
+deleting the code would not stop the billing, which lives in Google Cloud.
+
+Three faults in the drive, all the same shape: a check matching remembered copy,
+then one asserting a guessed count. Both report the product broken when it is
+fine, which is the mirror of a check that passes when it is not.
+
+Falsified: the button restored fails the first checks; the old refusal restored
+fails the reset check while the HTTP 200 still passes, which is why that
+assertion reads the token row rather than the reply."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1417,7 +1445,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.](10[0-9]|11[01])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.](10[0-9]|11[0-2])[.]'"
 else
   echo "Nothing to push."
 fi
