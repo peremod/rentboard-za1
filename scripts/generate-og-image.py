@@ -3,6 +3,11 @@
 Generates frontend/src/assets/images/og-default.png — the fallback social card.
 
     python3 scripts/generate-og-image.py
+    python3 scripts/generate-og-image.py --brand UMastande --domain umastande.co.za
+
+Brand name and domain are flags, not hard-coded strings. During a rebrand the
+card is the single most-shared visual the product has, and it should not need
+a code edit to keep up with whatever the name currently is.
 
 Why this is a script and not a one-off export from a design tool: the card
 carries the mission's short form, and that wording is canonical. When the
@@ -31,12 +36,13 @@ Design decisions, so they are not re-litigated later:
     legible at the 200px-wide thumbnail size WhatsApp actually renders.
 """
 
+import argparse
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 # ── Brand palette — mirrors frontend/src/styles/_variables.scss ──
 INK = (0x1C, 0x16, 0x0E)        # $color-ink, primary text
-TERRACOTTA = (0xAD, 0x42, 0x22)  # $color-terracotta, primary action
+TERRACOTTA = (0xC0, 0x4E, 0x28)  # $color-terracotta, primary action
 SAGE = (0x3D, 0x70, 0x40)        # $color-sage
 CARD = (0xFD, 0xFA, 0xF4)        # $color-card, surface
 BORDER = (0xE0, 0xD5, 0xC4)      # $color-border
@@ -66,7 +72,21 @@ def font(path: Path, size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(str(path), size)
 
 
+def parse_args() -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="Generate the default Open Graph social card.")
+    p.add_argument("--brand", default="UMastande", help="Wordmark text.")
+    p.add_argument(
+        "--suffix",
+        default="ZA",
+        help="Small superscript after the wordmark. Pass an empty string to omit it.",
+    )
+    p.add_argument("--domain", default="umastande.co.za", help="Domain shown bottom-right.")
+    p.add_argument("--out", default=str(OUT), help="Output path.")
+    return p.parse_args()
+
+
 def main() -> None:
+    args = parse_args()
     img = Image.new("RGB", (W, H), CARD)
     d = ImageDraw.Draw(img)
 
@@ -82,9 +102,29 @@ def main() -> None:
     y = 112
 
     # ── Wordmark ──
-    d.text((x, y), "Mastande", font=font(BOLD, 64), fill=INK)
-    wordmark_w = d.textlength("Mastande", font=font(BOLD, 64))
-    d.text((x + wordmark_w + 14, y + 26), "ZA", font=font(BOLD, 30), fill=TERRACOTTA)
+    # Auto-shrunk if a longer brand name would run into the right margin.
+    # "UMastande" is wider than "RentBoard" at the same size, and a wordmark
+    # that silently clips is worse than one a few points smaller.
+    size = 64
+    while size > 40:
+        f_mark = font(BOLD, size)
+        total = d.textlength(args.brand, font=f_mark) + 14 + d.textlength(
+            args.suffix, font=font(BOLD, int(size * 0.47))
+        )
+        if x + total < W - MARGIN:
+            break
+        size -= 2
+
+    f_mark = font(BOLD, size)
+    d.text((x, y), args.brand, font=f_mark, fill=INK)
+    if args.suffix:
+        wordmark_w = d.textlength(args.brand, font=f_mark)
+        d.text(
+            (x + wordmark_w + 14, y + int(size * 0.41)),
+            args.suffix,
+            font=font(BOLD, int(size * 0.47)),
+            fill=TERRACOTTA,
+        )
 
     y += 116
 
@@ -109,7 +149,7 @@ def main() -> None:
     )
 
     # ── Domain, bottom right ──
-    domain = "umastande.co.za"
+    domain = args.domain
     f = font(MEDIUM, 28)
     d.text(
         (W - MARGIN - d.textlength(domain, font=f), H - MARGIN - 44),
@@ -118,13 +158,14 @@ def main() -> None:
         fill=SAGE,
     )
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
     # optimize=True keeps it well under the 300KB that some clients refuse to
     # fetch on a slow connection.
-    img.save(OUT, "PNG", optimize=True)
+    img.save(out, "PNG", optimize=True)
 
-    kb = OUT.stat().st_size / 1024
-    print(f"Wrote {OUT.relative_to(ROOT)}  {img.width}x{img.height}  {kb:.0f}KB")
+    kb = out.stat().st_size / 1024
+    print(f"Wrote {out}  {img.width}x{img.height}  {kb:.0f}KB  — {args.brand} / {domain}")
     if kb > 300:
         raise SystemExit("Over 300KB — some clients will not fetch this. Reduce it.")
 
