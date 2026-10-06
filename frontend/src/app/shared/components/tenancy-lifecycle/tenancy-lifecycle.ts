@@ -46,7 +46,10 @@ import { Tenancy } from '../../../core/models/tenancy.model';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (needingAnswer().length) {
-      <section class="tl">
+      <!-- The id is what the "Confirm the move" row in the task inbox points
+           at. Phase 8c mounted this panel with no anchor, so a list that knew
+           a move needed confirming had nowhere to send anybody. -->
+      <section class="tl" id="moving-in-out">
         <h2 class="tl__title">Moving in and out</h2>
         <p class="tl__lede">
           Marking a move-in is what starts the rent record for that room. It is a

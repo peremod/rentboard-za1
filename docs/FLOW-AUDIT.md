@@ -3390,6 +3390,65 @@ With the fix reverted: `span.preview 993>303` and `p.msg-row__room 537>303` at
 scroll sideways at all — so the sweep is strictly stronger than the page-level
 check it sits beside.
 
+### 5.44 "Continue with Google" removed — ✅ v1.112.0 (Phase 8g)
+
+The owner is not paying for it. One button, and one thing to get right.
+
+#### Removing a way in means checking the way out
+
+⚠️ **I overstated this at first.** `requestPasswordReset` refuses an account with
+no `passwordHash` and sends "you sign in with Google" instead, and account
+settings refuses `authProvider === 'google'` outright — so the first reading was
+that deleting the button strands every Google account, the same family as the
+phone-only lockout in §5.33.
+
+That was wrong, and reading one more file showed it: **`requestMagicLink` never
+gated on a password at all.** Any active account with an address gets a link, and
+"✉️ Email me a sign-in link instead" is on the same screen, under the form. Two
+passwordless routes, in fact — the other is "💬 Use my phone number instead".
+Nobody is stranded.
+
+#### What WAS wrong after the removal
+
+The "you sign in with Google" email. True while the button existed; after it
+went, it pointed somebody at a door that is not there, which is worse than
+saying nothing. `requestPasswordReset` now issues a real token for an account
+with no password — owning the inbox is the proof a reset has always rested on,
+and `resetPassword` writes `passwordHash` unconditionally, so it sets a FIRST
+password as happily as it replaces one. A Google account that does this comes out
+an ordinary email account.
+
+`sendGoogleOnlyAccountEmail` had no other caller and was deleted rather than left
+as a method nothing reaches.
+
+#### Left in place on purpose
+
+The route, the strategy and the two secrets. An account that signed up through
+Google still exists and a callback in flight must not meet a 404 — and
+⚠️ **deleting the code would not stop the billing**, which lives in Google Cloud.
+`docs/OUTSTANDING.md` §21 has the SQL for deciding when the rest can go.
+
+#### ⚠️ Three faults in my own drive, all the same shape
+
+1. It matched `/email me a link/` and failed on a working screen, because the
+   button reads "Email me a sign-in **link instead**".
+2. It then asserted exactly one `.auth__magic` and failed again, because there
+   are **two**.
+3. Both are checks built on remembered copy and a guessed count, which report the
+   product broken when it is fine — the mirror of a check that passes when it is
+   not, and the same cost: a drive people learn to ignore.
+
+#### Falsified
+
+Button restored → the first two checks fail. The old refusal restored → the reset
+check fails, while **"forgot password is accepted (200)" still passes**, because
+the endpoint answers identically whether or not the address exists. That is why
+the assertion reads the `auth_tokens` row and not the HTTP reply.
+
+12 checks. Smoke 503, onboarding green, build clean. ⚠️ `phone-only-ui-drive`
+**skipped** on its own JWT-derivation step (the misleading message recorded in
+§5.33), so it is unproven here rather than passing.
+
 ## 6. What "verified" means here
 
 `./scripts/smoke-test.sh` exercises the API against a live server: **461
@@ -3411,19 +3470,19 @@ the fixtures are expensive or the assertions are about a browser:
 | `services-ui-drive.mjs` | the `tel:`/`wa.me` links, and that errors are not reported twice |
 | `mobile-drive.mjs` | the five bugs found on a real phone, at 390px |
 | `inbox-drive.mjs` | the task inbox's ORDERING between competing situations, and what the health card refuses to quote |
-| `inbox-ui-drive.mjs` | it leads the dashboard; every row resolves to a real route and is distinctly named |
+| `inbox-ui-drive.mjs` | it leads the dashboard; every row resolves to a real route and is distinctly named; and the sidebar's "Needs you" tab lands somewhere even when nothing needs doing — before v1.113.0 it pointed at an element that did not exist |
 | `storefront-drive.mjs` | published only when asked; hidden is indistinguishable from nonexistent; slug collisions; the sitemap entry |
 | `storefront-ui-drive.mjs` | that a crawler is served CONTENT, not "Loading…", plus the JSON-LD in the raw HTML |
 | `notes-calendar-drive.mjs` | that a private note is private — from another landlord, the tenant AND an admin — and that calendar dates are days, not instants |
 | `storage-drive.mjs` | **that deleting really deletes** — it IS an ImageKit stub, so it checks a DELETE arrived, and that a 500 is not recorded as success |
-| `lease-docs-ui-drive.mjs` | both parties see the lease, and nothing on screen claims it was signed here |
+| `lease-docs-ui-drive.mjs` | both parties see the lease, nothing on screen claims it was signed here, and the panel lays out at 360/390/768/1280 — the document name reads as a link rather than a terracotta button, every caption sits above its control, every control fills its field and clears 44px. ⚠️ Its landlord half had been auditing the wrong URL since v1.87.0 |
 | `dashboard-drive.mjs` | that "viewed 47 times this week" has data under it and counts the right things, that the task buttons point somewhere that exists, and the tenant task list — including what it deliberately leaves out |
 | `onboarding-drive.mjs` | that the social card's image is a real 1200×630 file reached by a URL that works, that the fallback falls back and the unverifiable dimensions are NOT claimed, and that the walkthrough appears once per ACCOUNT, is role-appropriate, waits for the cookie notice, and can be left with Escape at 360px |
-| `nav-ui-drive.mjs` | that the portal sidebar is on every guarded screen and the same size on all of them, that the mobile header keeps both visitor CTAs at 360/390/430px with a 44px target, that the footer offers a visitor nothing it cannot open, and that nothing scrolls sideways at three widths |
+| `nav-ui-drive.mjs` | that the portal sidebar is on every guarded screen and the same size on all of them, that the mobile header keeps both visitor CTAs at 360/390/430px with a 44px target, that a SIGNED-IN account of either role keeps one visible route back into its own portal at 360/390/768 with the drawer shut — measured, 44px, no horizontal scroll, and clicked — that the footer offers a visitor nothing it cannot open, and that nothing scrolls sideways at three widths |
 | `dashboard-ui-drive.mjs` | that the task buttons ARRIVE (a click, not a string), that the numbers read as sentences with their window stated, that rent reminders is reachable at all, and that a landlord who never grouped anything can reach their own money |
 | `messages-inbox-drive.mjs` | who a WhatsApp reply is actually from, that `readAt` is written by something, and that two new surfaces onto private conversations are scoped by the WHERE clause rather than by a guard |
 | `messages-inbox-ui-drive.mjs` | that both navs lead somewhere, that the screen says which channel a reply leaves by, that a closed thread offers no box to type in, and that a failed request does not read as an empty inbox |
-| `a11y-drive.mjs` | 25 pages with CONTENT on them: heading order, accessible names, contrast at rest, on hover and on focus. It seeds a room, an application and a message first — before that it audited every portal screen empty and reported it green |
+| `a11y-drive.mjs` | 27 pages with CONTENT on them: heading order, accessible names, contrast at rest, on hover and on focus. It seeds a room, an application and a message first — before that it audited every portal screen empty and reported it green. ⚠️ Since v1.113.0 it also promotes axe's `equalRatio` **incompletes** to failures: text exactly the same colour as its background is not a `violation` in axe, so the worst contrast failure there is was the one case this gate could not see |
 | `refund-drive.mjs` | the refund promise |
 | `verify-build.sh` | what the production build and the deploy artefact actually *serve* |
 
@@ -3461,6 +3520,22 @@ way in this codebase:
   because its loose selector matched "Delete yard" and then the rent-reminder
   form's "Save". It was pressing a destructive button while claiming to test
   creation. Selectors are anchored on the element being exercised now.
+- **A gate can measure honestly and still be blind.** The contrast run printed
+  "every visible text node meets its WCAG threshold" on ten screens where a
+  button was white-on-white at 1.00:1. It was not wrong about what it measured:
+  axe reports text the same colour as its background as `incomplete`
+  (`messageKey: 'equalRatio'`), never as a `violation`, and the drive read
+  violations only. The worst possible failure of a rule was the one case the
+  rule's own tooling excluded. Worth carrying forward: when a check wraps
+  somebody else's engine, read what that engine does with the EXTREME case, not
+  only the typical one.
+- **A drive can arrive at the wrong screen and keep passing.** Three did, found
+  in one sitting (OUTSTANDING §26): one pointed at a URL that became a redirect
+  four releases ago, so eleven checks audited a list of cards for a control that
+  only exists on a detail page; one was red for the same reason and had been
+  read as "known red"; one matched copy that had been renamed and reported the
+  product broken. A check pointed at the wrong page proves nothing in either
+  direction, and the two failure modes look identical from the summary line.
 - **No single `verify-build.sh` run clears every skip.** The room and sitemap
   checks need an API on port 3000; the hanging-API check has to black-hole that
   same port. Run it both ways before tagging.

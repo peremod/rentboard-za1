@@ -384,6 +384,19 @@ if [[ -n "$ROOM_ID" ]]; then
   req GET /api/applications/mine "" "$TTOKEN"
   check "tenant sees own applications" 200 "$STATUS" "$BODY"
 
+  # Phase 8h. The row carries the letting, or the tenant's dashboard cannot tell
+  # "they said yes" from "I live here" — an Application stays `accepted` for
+  # good and the move-in is a Tenancy. Without this field the dashboard filed a
+  # room somebody had moved into under "Your applications — you're waiting on
+  # the landlord". `tenancy` is null here because nothing has been accepted yet;
+  # the KEY has to be present, which is what distinguishes "no letting" from
+  # "the API stopped returning it".
+  if ! echo "$BODY" | jq -e '.[0] | has("tenancy")' >/dev/null 2>&1; then
+    red "  FAIL  /applications/mine no longer carries tenancy — the tenant dashboard cannot tell an acceptance from a move-in"; FAIL=$((FAIL+1))
+  else
+    green "  ok    each application says whether it became a letting"
+  fi
+
   req GET "/api/applications/room/$ROOM_ID" "" "$LTOKEN"
   check "landlord sees applicants" 200 "$STATUS" "$BODY"
 

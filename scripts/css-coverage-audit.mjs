@@ -97,9 +97,19 @@ const walk = (dir) =>
     return statSync(p).isDirectory() ? walk(p) : [p];
   });
 
-/** A selector mentions the class if it appears followed by any selector delimiter. */
+/**
+ * A selector mentions the class if it appears followed by any selector delimiter.
+ *
+ * ⚠️ ')' is in the list, and it is not padding. A class can be referenced only
+ * from inside a functional pseudo-class — :not(.nav-home), :is(.a, .b),
+ * :where(.c) — which is a real rule about it and the only kind this audit
+ * could not see. The navbar's .nav-home is exactly that: it exists so one
+ * responsive rule can say which ghost button stays in the header, and it was
+ * reported as having no rule at all while the rule that reads it was three
+ * lines long.
+ */
 const styled = (c) =>
-  ['{', ',', ' ', ':', '>', '+', '~', '[', '.'].some((d) => css.includes(`.${c}${d}`));
+  ['{', ',', ' ', ':', '>', '+', '~', '[', '.', ')'].some((d) => css.includes(`.${c}${d}`));
 
 const bare = new Map();
 let scanned = 0;

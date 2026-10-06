@@ -53,32 +53,43 @@ export class AccountRecoveryService {
     const user = await this.prisma.user.findUnique({ where: { email: normalised } });
 
     if (user && user.isActive) {
-      // Google-only accounts have no password to reset.
-      if (user.passwordHash) {
-        const token = this.newToken();
-        await this.prisma.authToken.create({
-          data: {
-            userId: user.id,
-            tokenHash: this.hash(token),
-            type: 'password_reset',
-            expiresAt: new Date(Date.now() + RESET_TTL_MINUTES * 60_000),
-          },
-        });
-        // Guarded on the address existing, not on the user existing.
-        //
-        // A phone-only account (Phase 7g) has nothing to send a reset link TO.
-        // That is not an error and must not change the response: this endpoint
-        // deliberately answers identically whether or not the address has an
-        // account, and a different outcome here would leak which addresses are
-        // real. Their route back in is the one-time code, which needs no email.
-        if (user.email) {
-          this.notifications
-            .sendPasswordResetEmail(user.email, { fullName: user.fullName, token, ttlMinutes: RESET_TTL_MINUTES })
-            .catch(() => {});
-        }
-      } else if (user.email) {
+      /**
+       * ⚠️ No longer gated on having a password — Phase 8g.
+       *
+       * This used to refuse an account with no `passwordHash` and send
+       * "you sign in with Google" instead. That was true while the button
+       * existed. The button is gone, so the same email now points somebody at a
+       * door that is not there, which is worse than saying nothing.
+       *
+       * Owning the inbox is the proof a reset has always rested on, and
+       * `resetPassword` writes `passwordHash` unconditionally, so this sets a
+       * FIRST password just as happily as it replaces one. A Google account
+       * that does this comes out the other side an ordinary email account.
+       *
+       * ⚠️ Not the only way back, and worth knowing before this reads as the
+       * rescue: `requestMagicLink` never gated on a password at all, so "email
+       * me a link" on the same screen already signed these accounts in. This
+       * removes a misleading message; it does not unlock anybody.
+       */
+      const token = this.newToken();
+      await this.prisma.authToken.create({
+        data: {
+          userId: user.id,
+          tokenHash: this.hash(token),
+          type: 'password_reset',
+          expiresAt: new Date(Date.now() + RESET_TTL_MINUTES * 60_000),
+        },
+      });
+      // Guarded on the address existing, not on the user existing.
+      //
+      // A phone-only account (Phase 7g) has nothing to send a reset link TO.
+      // That is not an error and must not change the response: this endpoint
+      // deliberately answers identically whether or not the address has an
+      // account, and a different outcome here would leak which addresses are
+      // real. Their route back in is the one-time code, which needs no email.
+      if (user.email) {
         this.notifications
-          .sendGoogleOnlyAccountEmail(user.email, { fullName: user.fullName })
+          .sendPasswordResetEmail(user.email, { fullName: user.fullName, token, ttlMinutes: RESET_TTL_MINUTES })
           .catch(() => {});
       }
     }

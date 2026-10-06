@@ -355,6 +355,85 @@ drawerLabels.some((l) => /log out/i.test(l)) && drawerLabels.some((l) => /dashbo
   ? ok('…and the drawer has them, which is where a signed-in account looks')
   : bad(`the drawer carries ${JSON.stringify(drawerLabels)}`);
 
+await signedInPhone.close();
+
+// ── 4b. The way BACK, which nothing here had ever asserted ───────────────
+//
+// ⚠️ This section exists because the check above passed while the defect was
+// live, and it passed because of what it says rather than what it checks:
+// "the phone header is not asked to carry Dashboard, List a room AND Log out"
+// only ever looked for Log out. `.nav-inner.is-signed-in .nav-actions
+// .btn-ghost { display: none }` hid every ghost action, Dashboard among them,
+// and for a TENANT — whose only two actions are Dashboard and Log out — that
+// left a header holding a logo and a burger.
+//
+// So a signed-in person who tapped "Browse rooms" from their own dashboard had
+// no way back to it except opening the hamburger and finding Dashboard under
+// six public links. Reported from a phone as "too much friction and bad UX",
+// and the assertion that should have caught it was structurally incapable of
+// seeing it — this codebase's own recurring defect, in a check.
+//
+// Both roles, because they render different branches of the same template and
+// the tenant branch is the one with nothing to spare. 360px as well as 390,
+// because 360 is where the landlord's Dashboard has to fit beside "+ List a
+// room" and the burger.
+//
+// And it is CLICKED, not merely measured. A visible link that does not
+// navigate is the exact fault class CLAUDE.md names.
+for (const who of [
+  { label: 'tenant', acct: tenant, home: '/tenant/dashboard' },
+  { label: 'landlord', acct: landlord, home: '/landlord/dashboard' },
+]) {
+  for (const width of [360, 390, 768]) {
+    const page = await signIn(browser, WEB, who.acct.email, PASSWORD, { width, height: 844 });
+    await page.goto(`${WEB}/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1800);
+
+    const state = await page.evaluate(() => {
+      const vis = (el) => !!el && getComputedStyle(el).display !== 'none'
+        && el.getBoundingClientRect().width > 0;
+      const drawerOpen = !!document.querySelector('.nav-links.open');
+      const home = [...document.querySelectorAll('.nav-actions .nav-home')].filter(vis);
+      const box = home[0]?.getBoundingClientRect();
+      return {
+        drawerOpen,
+        count: home.length,
+        text: (home[0]?.textContent ?? '').trim(),
+        href: home[0]?.getAttribute('href') ?? '',
+        height: box ? Math.round(box.height) : 0,
+        overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      };
+    });
+
+    if (state.drawerOpen) {
+      bad(`${who.label} at ${width}px: the drawer was already open, so this proves nothing`);
+      await page.close();
+      continue;
+    }
+    state.count === 1
+      ? ok(`${who.label} at ${width}px: the header carries the way back ("${state.text}" → ${state.href}), drawer shut`)
+      : bad(`${who.label} at ${width}px: ${state.count} visible route into the portal in the header — a signed-in account's only way back is the burger`);
+    state.height >= 44
+      ? ok(`…and it clears the 44px tap target (${state.height}px)`)
+      : bad(`${who.label} at ${width}px: the way back is ${state.height}px tall — under WCAG 2.5.8`);
+    state.overflow <= 0
+      ? ok('…without pushing the page sideways')
+      : bad(`${who.label} at ${width}px: keeping it in the header costs ${state.overflow}px of horizontal scroll`);
+
+    // Does it actually go there.
+    if (state.count === 1) {
+      await page.locator('.nav-actions .nav-home').click();
+      try {
+        await page.waitForURL((u) => u.pathname === who.home, { timeout: 12000 });
+        ok(`…and tapping it lands on ${who.home}`);
+      } catch {
+        bad(`${who.label} at ${width}px: tapping the way back left them on ${new URL(page.url()).pathname}`);
+      }
+    }
+    await page.close();
+  }
+}
+
 console.log('\n── 5. The footer offers a visitor nothing it cannot open ────');
 
 const guarded = /^\/(landlord|tenant|account|admin)\//;

@@ -1402,6 +1402,74 @@ or the check fails as nothing really measured.
 Falsified: with the fix reverted it names both overflowing elements at the phone
 widths, and still catches one at 1280 where the page does not scroll at all."
 
+tag_if_missing "v1.112.0" "e43846ecbc5b9a9f8b75af6fbe2f764f1ce92821" "2026-10-06 05:56:22 +0000" "v1.112.0 — Phase 8g: 'Continue with Google' removed
+
+The owner is not paying for it.
+
+Removing a way in means checking the way out, and I overstated the risk first:
+the password-reset path refuses an account with no password, so it looked like
+deleting the button stranded every Google account. One more file showed that
+wrong — the magic link never gated on a password at all, and 'Email me a
+sign-in link instead' is on the same screen under the form.
+
+What was genuinely wrong after the removal was the 'you sign in with Google'
+email, which then pointed somebody at a door that is not there. Forgot-password
+now issues a real token for a passwordless account, so it can set a first
+password and carry on as an ordinary email account. The email method it replaced
+had no other caller and was deleted.
+
+The route, the strategy and the two secrets stay: an account that signed up
+through Google still exists, a callback in flight must not meet a 404, and
+deleting the code would not stop the billing, which lives in Google Cloud.
+
+Three faults in the drive, all the same shape: a check matching remembered copy,
+then one asserting a guessed count. Both report the product broken when it is
+fine, which is the mirror of a check that passes when it is not.
+
+Falsified: the button restored fails the first checks; the old refusal restored
+fails the reset check while the HTTP 200 still passes, which is why that
+assertion reads the token row rather than the reply."
+
+tag_if_missing "v1.113.0" "ff5ea519405db13a0ee1ce86b5aaf8e561101ba8" "2026-10-06 18:46:42 +0000" "v1.113.0 — Phase 8h: five reports from one phone, and the gates that could not see them
+
+A button nobody could read. .hint__close set a background and no colour;
+:where(button) sets color #fff at zero specificity, so the only control on the
+first-use hint panel was white on white at 1.00:1, with 'Got it' in the DOM the
+whole time. font: inherit does not help — the shorthand never touches colour.
+
+The part that matters more: a11y-drive printed a tick on all ten screens that
+render it. axe does not report identical colours as a violation; it buckets them
+as incomplete with messageKey 'equalRatio'. The worst contrast failure there is
+was the one case the gate could not see. Promoted to a failure, and only that
+reason.
+
+The tenant dashboard could not tell an acceptance from a move-in. An Application
+stays accepted for ever and the move-in is a Tenancy, which nothing on that
+screen had ever read — so somebody who had moved in was still told to talk to
+the landlord about moving in, at the top of the list, for the whole tenancy.
+My first fix invented the fault it was fixing: a new inbox kind for a state the
+product cannot reach, because accepting opens a tenancy in the same transaction.
+A drive caught it.
+
+A nav tab that pointed at an element that did not exist, for every landlord who
+was on top of their work. The nav file's own comment describes that fault three
+lines above the item.
+
+No way back to your own portal on a phone: one rule hid every ghost action, and
+a tenant has only two. Keeping Dashboard cost 21px of horizontal scroll at 360px
+for a landlord, so the signed-in header is tightened. The check that should have
+caught it had passed for four releases because it only ever looked for Log out.
+
+And .field / .field-label / .btn-link — baselined as debt in Phase 8c and left
+until the owner photographed them. 26 baselined classes, 23 now.
+
+Three drives were auditing the wrong screen, found in one sitting: one pointed
+at a URL that became a redirect four releases ago, one was red for the same
+reason, one matched copy that had been renamed and crashed on a select.
+
+Falsified one fault at a time, each check confirmed to fail with its own bug put
+back."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1417,7 +1485,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.](10[0-9]|11[01])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.](10[0-9]|11[0-3])[.]'"
 else
   echo "Nothing to push."
 fi
