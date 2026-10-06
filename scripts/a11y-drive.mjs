@@ -331,14 +331,51 @@ async function auditPage(page, path, { close = true } = {}) {
       const contrast = await page.evaluate(async () => {
         const run = await window.axe.run(document, {
           runOnly: { type: 'rule', values: ['color-contrast'] },
-          resultTypes: ['violations'],
         });
-        return run.violations.flatMap((v) =>
+        // ⚠️ `incomplete`, not just `violations`, and the reason is the whole
+        // defect this line was added for.
+        //
+        // axe does NOT report text the same colour as its background as a
+        // violation. It buckets it as INCOMPLETE with
+        // messageKey 'equalRatio' — "Element has a 1:1 contrast ratio with the
+        // background" — on the theory that identical colours usually mean a
+        // background image or a gradient it could not resolve, so a human
+        // should look.
+        //
+        // So the single worst contrast failure there is, text that cannot be
+        // seen at all, was the one case this drive could not see. It printed
+        // "✅ contrast: every visible text node meets its WCAG threshold" on
+        // ten screens where the hint panel's only button was white-on-white at
+        // 1.00:1, and a person on a phone reported it as "a big button with no
+        // text". The hover/focus pass below is what eventually caught it, and
+        // it reported a RESTING-state fault under the label ':hover', which
+        // sent the first look at it in the wrong direction.
+        //
+        // Only 'equalRatio' is promoted. The other incomplete reasons really
+        // are "axe could not tell" — text over a background image, a gradient,
+        // a video — and failing those would make this gate red on things it
+        // has not actually measured. Identical colours are not an edge case:
+        // whatever is behind the text, the text is the same colour as it.
+        const promoted = run.incomplete.flatMap((v) => ({
+          ...v,
+          nodes: v.nodes.filter((n) =>
+            [...(n.any ?? []), ...(n.none ?? []), ...(n.all ?? [])]
+              .some((c) => c?.data?.messageKey === 'equalRatio'),
+          ),
+        })).filter((v) => v.nodes.length);
+
+        return [...run.violations, ...promoted].flatMap((v) =>
           v.nodes.map((n) => {
             // axe puts the measured ratio and the threshold in the check's
             // own data, which is the part worth printing: "2.86:1, needs
             // 4.5:1" is actionable, "insufficient contrast" is not.
-            const d = n.any?.[0]?.data ?? {};
+            // Across `any`, `none` and `all`, because a promoted incomplete
+            // does not necessarily carry its data in the same bucket a
+            // violation does — and reading only `any` would print a finding
+            // with no ratio and no colours on it, which is the half of the
+            // line that makes it actionable.
+            const d = [...(n.any ?? []), ...(n.none ?? []), ...(n.all ?? [])]
+              .map((c) => c?.data).find((x) => x && x.contrastRatio !== undefined) ?? {};
             return {
               target: Array.isArray(n.target) ? n.target.join(' ') : String(n.target),
               ratio: d.contrastRatio ?? null,

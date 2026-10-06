@@ -59,6 +59,29 @@ async function tenancy(title) {
 const tcy = await tenancy('Paperwork room');
 if (!tcy) { console.log('\n❌ fixtures failed'); process.exit(1); }
 
+// ⚠️ The room is put into a PROPERTY, and without this the whole landlord half
+// of this drive was dead.
+//
+// /landlord/yard renders tenancies inside a property block. Phase 7b made a
+// property something a landlord opts into — a room can sit in none — and this
+// drive never created one, so for its landlord the screen showed "You have 1
+// room listed. Grouping is optional" and no tenancy block at all. The first
+// assertion after this point was "no paperwork toggle on the yard", and it had
+// been failing on a structural change rather than on anything about leases.
+// Named here rather than fixed quietly: a fixture that stopped reaching the
+// screen it audits is the same fault as a check that cannot fail.
+const prop = await apiCall(API, 'POST', '/api/properties', {
+  name: 'Paperwork yard', city: 'Johannesburg', province: 'Gauteng', suburb: 'Soweto',
+}, T);
+prop.status === 201 || prop.status === 200
+  ? ok('the landlord has a property for the room to sit in')
+  : bad(`could not create the property: ${prop.status} ${JSON.stringify(prop.body).slice(0, 160)}`);
+const assigned = await apiCall(API, 'POST', `/api/properties/${prop.body?.id}/rooms`,
+  { roomIds: [tcy.roomId] }, T);
+assigned.status === 200
+  ? ok('…and the let room is in it, which is what puts the tenancy on the yard')
+  : bad(`could not assign the room: ${assigned.status} ${JSON.stringify(assigned.body).slice(0, 160)}`);
+
 // The tenancy starts out `pending`, and a lease is usually signed BEFORE
 // move-in — so the pending case is checked first, then the tenancy is confirmed
 // and the active case checked. The tenant rent page used to filter pending
@@ -85,7 +108,16 @@ const browser = await chromium.launch();
 
 // ── The landlord's view: behind a toggle in the yard ──────────────────────
 const lp = await signIn(browser, WEB, ll.email, PASSWORD);
-await lp.goto(`${WEB}/landlord/yard`, { waitUntil: 'domcontentloaded' });
+// ⚠️ The property DETAIL screen, not /landlord/yard.
+//
+// Phase 7b (v1.87.0) turned /landlord/yard into a redirect to
+// /landlord/properties — the LIST — and the yard component moved to
+// /landlord/properties/:propertyId. This drive kept going to the old path, so
+// since that release it had been auditing a list of property cards for a
+// paperwork toggle that only exists on the detail screen. Two other places in
+// this repo already carry a comment about that redirect dropping a fragment;
+// nothing had checked that a drive still arrived where it thought it did.
+await lp.goto(`${WEB}/landlord/properties/${prop.body?.id}`, { waitUntil: 'domcontentloaded' });
 await lp.waitForTimeout(2600);
 
 (await lp.locator('#lease-documents').count()) === 0
@@ -216,6 +248,111 @@ tOrder[0] === 1 && tSkip === -1
   ? ok(`the tenant page's heading order holds too (${tOrder.map((l) => 'H' + l).join(' → ')})`)
   : bad(`tenant heading order broken at ${tSkip}: ${tOrder.map((l) => 'H' + l).join(' → ')}`);
 
+// ── The layout of the panel, at four widths — Phase 8h ───────────────────
+//
+// ⚠️ Every assertion here is a thing a person photographed and sent in, and
+// every one of them was a CSS class with NO RULE ANYWHERE:
+//
+//   · `.btn-link` on the document name. Nothing styled it, so it fell through
+//     to `:where(button)` — the app's bare-button default — and the name of
+//     every stored file rendered as a full TERRACOTTA PRIMARY BUTTON. A list
+//     of documents looked like a column of calls to action, and the actual
+//     action on the row (Remove) looked subordinate to it.
+//   · `.field` and `.field-label`, six uses across three components. `.field`
+//     is a <label>, so it was display:block and nothing else; a <select> or an
+//     <input> is inline-block with no width, because the base control rule
+//     leaves layout to the container ON PURPOSE and the container was this
+//     one. So "What is it?" sat on the same line as its dropdown and "Name it"
+//     beside its box.
+//   · the file input, which was the browser's bare grey Choose file.
+//
+// Both names sat in scripts/css-coverage-baseline.json, so the audit that
+// exists to catch exactly this had seen them and been told to keep quiet. The
+// baseline is debt, not permission, and it reached a phone.
+//
+// Measured rather than read: a rule can exist and still lose to another one.
+console.log('\n── The layout of the panel, at four widths ────────────────');
+for (const width of [360, 390, 768, 1280]) {
+  const page = await signIn(browser, WEB, tenant.email, PASSWORD, { width, height: 1000 });
+  await page.goto(`${WEB}/tenant/rent`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2600);
+
+  const m = await page.evaluate(() => {
+    const panel = document.querySelector('#lease-documents');
+    if (!panel) return { missing: true };
+    const round = (n) => Math.round(n);
+
+    const name = panel.querySelector('.btn-link');
+    const ncs = name ? getComputedStyle(name) : null;
+    const nbox = name?.getBoundingClientRect();
+
+    const fields = [...panel.querySelectorAll('.field')].map((f) => {
+      const lab = f.querySelector('.field-label');
+      const ctl = f.querySelector('input, select, textarea');
+      const lb = lab?.getBoundingClientRect();
+      const cb = ctl?.getBoundingClientRect();
+      return {
+        label: (lab?.textContent ?? '').trim(),
+        // The defect, in one boolean: caption and control sharing a line.
+        sameLine: !!(lb && cb) && Math.abs(lb.top - cb.top) < 6,
+        ctlWidth: cb ? round(cb.width) : 0,
+        ctlHeight: cb ? round(cb.height) : 0,
+        fieldWidth: round(f.getBoundingClientRect().width),
+      };
+    });
+
+    const file = panel.querySelector('input[type=file]');
+    const fcs = file ? getComputedStyle(file) : null;
+    const fb = file?.getBoundingClientRect();
+
+    return {
+      nameText: (name?.textContent ?? '').trim(),
+      nameBg: ncs?.backgroundColor ?? '',
+      nameColor: ncs?.color ?? '',
+      nameWrap: ncs?.whiteSpace ?? '',
+      nameHeight: nbox ? round(nbox.height) : 0,
+      fields,
+      file: fb ? { w: round(fb.width), h: round(fb.height), display: fcs.display } : null,
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+
+  if (m.missing) { bad(`${width}px: no paperwork panel to measure`); await page.close(); continue; }
+
+  const transparent = /rgba\(0, 0, 0, 0\)|transparent/.test(m.nameBg);
+  transparent
+    ? ok(`${width}px: the document name reads as a link, not a primary button (${m.nameBg})`)
+    : bad(`${width}px: "${m.nameText}" has background ${m.nameBg} — it is rendering as a button`);
+  m.nameWrap !== 'nowrap'
+    ? ok('…and it wraps, so a long file name does not run off the row')
+    : bad(`${width}px: the document name is white-space: nowrap`);
+
+  const beside = m.fields.filter((f) => f.sameLine);
+  beside.length === 0
+    ? ok(`…every field puts its caption above its control (${m.fields.length} fields)`)
+    : bad(`${width}px: ${beside.length} field(s) with the caption beside the control: ${JSON.stringify(beside.map((f) => f.label))}`);
+
+  const narrow = m.fields.filter((f) => f.ctlWidth < f.fieldWidth - 2);
+  narrow.length === 0
+    ? ok('…and every control fills the width it was given')
+    : bad(`${width}px: ${JSON.stringify(narrow)} — a control narrower than its field`);
+
+  const short = m.fields.filter((f) => f.ctlHeight < 44);
+  short.length === 0
+    ? ok('…and every control clears the 44px tap target')
+    : bad(`${width}px: ${JSON.stringify(short.map((f) => [f.label, f.ctlHeight]))} under 44px — WCAG 2.5.8`);
+
+  m.file && m.file.display === 'block' && m.file.h >= 44
+    ? ok(`…the file input is a full-width control, ${m.file.w}×${m.file.h}px`)
+    : bad(`${width}px: the file input is ${JSON.stringify(m.file)}`);
+
+  m.overflow <= 0
+    ? ok('…and the page does not scroll sideways')
+    : bad(`${width}px: ${m.overflow}px of horizontal scroll on the rent screen`);
+
+  await page.close();
+}
+
 await browser.close();
-console.log(fail ? `\n❌ ${fail} failure(s)` : '\n✅ both parties see the lease, and nothing claims it was signed here');
+console.log(fail ? `\n❌ ${fail} failure(s)` : '\n✅ both parties see the lease, nothing claims it was signed here, and the panel lays out at 360/390/768/1280');
 process.exit(fail ? 1 : 0);

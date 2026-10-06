@@ -187,6 +187,71 @@ urgentSaysSoInWords
   ? ok('an urgent row says so in words, not only with a coloured edge')
   : bad('urgency is conveyed by colour alone');
 
+// ── The "Needs you" NAV TAB, which pointed at nothing — Phase 8h ─────────
+//
+// ⚠️ landlordNav has had an item { label: 'Needs you', fragment:
+// 'needs-attention' } since Phase 7a, and this panel renders nothing when
+// nothing needs doing. Those two decisions are each defensible and together
+// they made a dead control: for every landlord who was on top of their work,
+// the tab pointed at an element that did not exist. Measured before the fix —
+// hasAnchor false, scrollY 0 before the click and 0 after — so pressing it did
+// nothing at all and left a screen identical to the one before it. Reported as
+// "the needs you page looks exactly the same as the dashboard page, nothing
+// happens when I click the needs you tab".
+//
+// The file's own comments say a nav item must not point at a destination that
+// does not exist. This is the check that makes that true rather than stated.
+//
+// The QUIET landlord is used deliberately: the fault only exists when the
+// inbox is empty, which is the state the rest of this drive sets up and then
+// moves away from.
+console.log('\n── The Needs you tab reaches somewhere, even when empty ────');
+
+await qp.goto(`${WEB}/landlord/dashboard`, { waitUntil: 'domcontentloaded' });
+await qp.waitForTimeout(2600);
+
+// Not merely "scrolled": scrolled TO this section. The dashboard is long
+// enough that a scroll to anywhere would move the number.
+const tab = qp.locator('.portal-nav-link', { hasText: 'Needs you' });
+(await tab.count()) === 1
+  ? ok('the sidebar offers exactly one Needs you tab')
+  : bad(`${await tab.count()} Needs you tabs in the sidebar`);
+
+const beforeTab = await qp.evaluate(() => ({
+  anchor: !!document.getElementById('needs-attention'),
+  y: Math.round(window.scrollY),
+}));
+!beforeTab.anchor
+  ? ok('…and on an ordinary visit there is still no empty panel drawing the eye')
+  : bad('an empty attention panel is rendered before anybody asked for it');
+
+await tab.first().click();
+await qp.waitForTimeout(1600);
+
+const afterTab = await qp.evaluate(() => {
+  const el = document.getElementById('needs-attention');
+  return {
+    anchor: !!el,
+    y: Math.round(window.scrollY),
+    top: el ? Math.round(el.getBoundingClientRect().top) : null,
+    text: (el?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+    fragment: location.hash,
+  };
+});
+
+afterTab.anchor
+  ? ok('pressing it brings the section into existence rather than doing nothing')
+  : bad('the Needs you tab still points at an element that does not exist');
+afterTab.top !== null && Math.abs(afterTab.top) < 80
+  ? ok(`…and the page is scrolled to it (section top at ${afterTab.top}px, from scrollY ${beforeTab.y} → ${afterTab.y})`)
+  : bad(`the section exists but the page did not move to it: top ${afterTab.top}, scrollY ${beforeTab.y} → ${afterTab.y}`);
+/nothing is waiting on you/i.test(afterTab.text)
+  ? ok('…and it says so in words, rather than being an empty heading')
+  : bad(`the empty panel reads: ${afterTab.text.slice(0, 160)}`);
+!/\b0\b/.test(afterTab.text)
+  ? ok('…with no count of zero beside the heading')
+  : bad(`a zero count is shown: ${afterTab.text.slice(0, 120)}`);
+
 await browser.close();
-console.log(fail ? `\n❌ ${fail} failure(s)` : '\n✅ the inbox leads the dashboard, every row acts, and nothing skips a heading level');
+console.log(fail ? `\n❌ ${fail} failure(s)` : '\n✅ the inbox leads the dashboard, every row acts, nothing skips a heading level, and the Needs you tab always lands somewhere');
 process.exit(fail ? 1 : 0);

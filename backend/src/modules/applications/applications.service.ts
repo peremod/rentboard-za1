@@ -167,7 +167,21 @@ export class ApplicationsService {
   async getMyApplications(tenantId: string) {
     const applications = await this.prisma.application.findMany({
       where: { tenantId },
-      include: { room: true },
+      include: {
+        room: true,
+        // ⚠️ The letting, so the dashboard can stop lying about the status.
+        //
+        // An Application stays `accepted` forever; the move-in is a Tenancy.
+        // Without this the tenant's dashboard filed a room they had already
+        // moved into under "Your applications — Live, you're waiting on the
+        // landlord", which is three wrong statements in one line. Reported in
+        // those words.
+        //
+        // Two fields, deliberately. The rent figure, the notice dates and the
+        // lease terms all live on Tenancy too and none of them belongs in a
+        // list of applications; the rent screen is where a tenancy is read.
+        tenancy: { select: { status: true, startDate: true } },
+      },
       orderBy: [{ archivedAt: 'asc' }, { createdAt: 'desc' }],
     });
 

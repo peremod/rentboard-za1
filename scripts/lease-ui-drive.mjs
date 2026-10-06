@@ -22,17 +22,41 @@ async function tenancy(title){
   bad(`no tenancy for ${title}`); return null;
 }
 
+/**
+ * ⚠️ The property DETAIL screen, and the property that makes it exist.
+ *
+ * This drive went to /landlord/yard, which v1.87.0 (Phase 7b) turned into a
+ * redirect to /landlord/properties — the LIST. The #ending-soon card lives on
+ * the yard component, which moved to /landlord/properties/:propertyId. So for
+ * four releases every check below was looking at a page of property cards:
+ * "no card when nothing is ending" passed because the card can never be there,
+ * and the four checks after it failed. A drive that is red for a structural
+ * reason teaches people to ignore it being red.
+ *
+ * The property also has to exist and hold the rooms: Phase 7b made grouping
+ * optional, and a landlord with no property gets the teaching empty state.
+ * Same fault, same release, found the same day in lease-docs-ui-drive.
+ */
+const prop = (await apiCall(API,'POST','/api/properties',
+  {name:'Lease yard',city:'Johannesburg',province:'Gauteng',suburb:'Soweto'},T)).body;
+const YARD = `${WEB}/landlord/properties/${prop?.id}`;
+
 const browser = await chromium.launch();
 const page = await signIn(browser, WEB, ll.email, PASSWORD, {width:390, height:844});
 
 // Nothing happening yet: no card at all.
-await page.goto(`${WEB}/landlord/yard`,{waitUntil:'domcontentloaded'});
+await page.goto(YARD,{waitUntil:'domcontentloaded'});
 await page.waitForTimeout(2500);
 (await page.locator('#ending-soon').count())===0 ? ok('no card when nothing is ending — not an empty "Rooms coming up"') : bad('empty panel rendered');
+// ⚠️ …and the screen it is absent FROM is the right one. Without this the
+// check above passes on any page in the app that has no such card, which is
+// how it survived pointing at a redirect.
+(await page.locator('#money').count()) ? ok('…on the yard itself, which is the screen the card belongs to') : bad('this is not the yard screen — the absence above proves nothing');
 
 const fixed = await tenancy('Lease ending soon room');
 const rolling = await tenancy('Month to month room');
 if(!fixed||!rolling){console.log('\n❌ fixtures failed');process.exit(1);}
+await apiCall(API,'POST',`/api/properties/${prop?.id}/rooms`,{roomIds:[fixed.roomId, rolling.roomId]},T);
 await apiCall(API,'PATCH',`/api/tenancies/${fixed.id}/lease`,{leaseEndDate:iso(inDays(12))},T);
 
 await page.reload({waitUntil:'domcontentloaded'});

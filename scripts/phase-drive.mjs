@@ -229,8 +229,17 @@ check('the yard screen loads', /yard|propert/i.test(yardText), yardText.slice(0,
 // for a working feature, while pressing a destructive button in its own
 // fixture. An API-created yard renders on that page perfectly well, which is
 // what proved it.
+//
+// ⚠️ And the copy it matches is the copy that is THERE. Phase 7b replaced
+// "+ Group rooms into a yard" with "+ Add your first property" / "+ Add a new
+// property" on a new list screen, which /landlord/yard now redirects to. The
+// selector kept naming the old string, found nothing, and reported "the yard
+// screen offers a way to add one" as a failure — against a screen whose whole
+// job is offering exactly that. A check anchored on remembered copy fails on a
+// rename and says the product is broken; this one accepts either wording and
+// the fallback below says which was expected.
 const addYard = lPage.locator('.portal-main button, .portal-main a')
-  .filter({ hasText: /group rooms into a yard/i }).first();
+  .filter({ hasText: /group rooms into a yard|add (your first|a new) property/i }).first();
 if (await addYard.count()) {
   await addYard.click();
   await lPage.waitForTimeout(900);
@@ -241,7 +250,15 @@ if (await addYard.count()) {
     // that refusal as "the yard did not appear on the page".
     await nameField.fill(`Drive yard ${STAMP}`);
     await lPage.locator('.portal-main input[name="city"]:visible').first().fill('Springs');
-    await lPage.locator('.portal-main input[name="province"]:visible').first().fill('Gauteng');
+    // ⚠️ Province is a <select>, not a text box, and `fill` on a select throws
+    // after thirty seconds — crashing the drive before its summary rather than
+    // failing a check. Phase 7b made it a dropdown of the nine provinces, which
+    // is right: a typed province is a typo waiting to split a landlord's own
+    // listings. The drive was still typing into it.
+    const province = lPage.locator('.portal-main select[name="province"]:visible').first();
+    (await province.count())
+      ? await province.selectOption('Gauteng')
+      : await lPage.locator('.portal-main input[name="province"]:visible').first().fill('Gauteng');
     // The submit button of the form that CONTAINS the name field — not the
     // first submit on the page, and not a text match.
     //
@@ -262,7 +279,7 @@ if (await addYard.count()) {
     bad('the yard form has a name field to fill');
   }
 } else {
-  bad('the yard screen offers a way to add one');
+  bad('the yard screen offers no way to add a property — looked for "+ Group rooms into a yard" or "+ Add … property"');
 }
 
 const yardAgain = await visit(lPage, '/landlord/yard');

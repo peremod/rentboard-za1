@@ -30,6 +30,14 @@ export interface Application {
   /** Letting cycle this application belongs to. */
   cycle?: number;
   coverNote?: string | null;
+  /**
+   * The letting this application became, if it became one.
+   *
+   * Present on `GET /applications/mine` only. An application stays `accepted`
+   * for good — the move-in is a Tenancy — so this is the only field that
+   * distinguishes "they said yes" from "I live here".
+   */
+  tenancy?: { status: 'pending' | 'active' | 'ended' | 'cancelled'; startDate: string | null } | null;
   room?: Room;
   tenant?: ApplicationTenant;
   createdAt: string;

@@ -118,6 +118,36 @@ export class TenantInboxService {
    * `pending` and `viewed` are NOT here: those are the tenant waiting on the
    * landlord, which is the opposite of this list. The dashboard's "Your
    * applications" section is where a tenant watches those.
+   *
+   * ── ⚠️ The tenancy is read, and that is the point of this query
+   *
+   * An `Application` stays `accepted` for as long as it exists. It does not
+   * become "moved in" — the move-in is a `Tenancy`, which Phase 8c finally gave
+   * a screen to. So before this, a tenant who had agreed a date, moved in, and
+   * confirmed it was STILL shown "You have been accepted — talk to the landlord
+   * about moving in" at urgency -2000, which is the top of the list, for the
+   * whole duration of the tenancy. Reported in those words: "shouldn't that
+   * message be removed because I have already spoken to the landlord and moved
+   * in?"
+   *
+   * This codebase's recurring defect, once more: the lifecycle advanced and the
+   * list derived from it did not read the advance.
+   *
+   *   · pending     → accepting OPENS a tenancy, immediately, so this is the
+   *                   state a fresh acceptance is actually in. Two things are
+   *                   outstanding and the row says both: agree a date with the
+   *                   landlord, and record the day the move happened. The
+   *                   action is the one that finishes it.
+   *   · active      → they live there. Nothing needs them.
+   *   · ended /
+   *     cancelled   → over. Nothing needs them.
+   *   · no tenancy  → should not happen, because accept opens one in the same
+   *                   transaction. Handled rather than assumed: if the open
+   *                   ever failed, the acceptance is still news and the
+   *                   conversation is still the way forward. NOT given a kind
+   *                   of its own — a second kind for a state the product
+   *                   cannot reach is a branch nothing would ever exercise,
+   *                   which is the fault this file keeps being fixed for.
    */
   private async applicationItems(tenantId: string): Promise<TenantInboxItem[]> {
     const rows = await this.prisma.application.findMany({
@@ -125,30 +155,54 @@ export class TenantInboxService {
       select: {
         id: true, status: true, decidedAt: true, createdAt: true,
         room: { select: { id: true, title: true, locationDisplay: true } },
+        tenancy: { select: { id: true, status: true } },
       },
       orderBy: { decidedAt: 'desc' },
     });
 
-    return rows.map((r) => {
+    const out: TenantInboxItem[] = [];
+    for (const r of rows) {
       const since = -daysUntil(r.decidedAt ?? r.createdAt);
       if (r.status === 'accepted') {
-        return {
-          kind: 'application_accepted' as const,
+        const tenancy = r.tenancy;
+
+        // Living there, or finished. Either way this is history, and a list
+        // called "needs you" that leads with something needing nothing is a
+        // list people stop reading — the same reasoning that keeps a disputed
+        // month out of here.
+        if (tenancy && tenancy.status !== 'pending') continue;
+
+        const ago = since <= 0 ? 'Accepted today.' : `Accepted ${since} day${since === 1 ? '' : 's'} ago.`;
+
+        out.push({
+          kind: 'application_accepted',
           // Ahead of everything. Somebody has offered a person a place to live
           // and is waiting to hear back; a day of silence here can cost them it.
           urgency: -2000,
-          title: 'You have been accepted — talk to the landlord about moving in',
-          detail: since <= 0
-            ? 'Accepted today. Agree a date and what you need to bring.'
-            : `Accepted ${since} day${since === 1 ? '' : 's'} ago. Agree a date and what you need to bring.`,
-          entityId: r.id,
+          title: tenancy
+            ? 'You have been accepted — agree a date, then record the day you move in'
+            : 'You have been accepted — talk to the landlord about moving in',
+          detail: tenancy
+            ? `${ago} Agree a date and what you need to bring, then say which day the move happened — ` +
+              'that is what starts the rent record. It is a note of what happened, not a payment; ' +
+              'Mastande never holds rent or a deposit.'
+            : `${ago} Agree a date and what you need to bring.`,
+          entityId: tenancy ? tenancy.id : r.id,
           roomTitle: r.room.title,
           daysUntil: -since,
-          actionLabel: 'Open the conversation',
-          actionPath: '/account/messages',
-        };
+          // The action is the step that FINISHES this, not the one that opens
+          // it: the conversation already exists and they can reach it from the
+          // row above or from Messages, while nothing else on the dashboard
+          // pointed at the panel that ends the row.
+          actionLabel: tenancy ? 'Confirm the move' : 'Open the conversation',
+          // The lifecycle panel, by its own anchor. Phase 8c mounted it at the
+          // top of this dashboard with no id, so there was nothing for a row
+          // like this to point at.
+          actionPath: tenancy ? '/tenant/dashboard#moving-in-out' : '/account/messages',
+        });
+        continue;
       }
-      return {
+      out.push({
         kind: 'application_shortlisted' as const,
         urgency: -500,
         title: 'A landlord wants to meet you — message them to set up a viewing',
@@ -158,8 +212,9 @@ export class TenantInboxService {
         daysUntil: -since,
         actionLabel: 'Message the landlord',
         actionPath: '/account/messages',
-      };
-    });
+      });
+    }
+    return out;
   }
 
   /**

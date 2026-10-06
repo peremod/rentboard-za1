@@ -332,7 +332,22 @@
   // Only for a VISITOR. A signed-in account's actions are Dashboard, List a
   // room and Log out, and three buttons plus a logo plus a burger do not fit
   // at 360px — those stay in the drawer, where the next rule puts them.
-  .nav-inner.is-signed-in .nav-actions .btn-ghost { display: none; }
+  // ⚠️ `:not(.nav-home)` — the Dashboard link STAYS in the header.
+  //
+  // This rule used to hide every ghost action a signed-in account had. For a
+  // landlord that was Dashboard and Log out; for a TENANT it was Dashboard and
+  // Log out, which is everything they have — so a signed-in tenant on any
+  // public page saw a header containing a logo and a burger and nothing else.
+  // Tapping "Browse rooms" from their own dashboard left them with no way back
+  // to it but the hamburger, below six public links. Reported from a phone as
+  // "too much friction and bad UX".
+  //
+  // The way back to your own portal is what a signed-in header is FOR, by the
+  // same argument the rule below makes for a visitor's Log in. Log out is the
+  // one that moves into the drawer: it is not an action anybody needs within
+  // reach, and the measured widths (scripts/nav-ui-drive.mjs, 360/390/430px)
+  // only fit two actions beside the logo and the burger.
+  .nav-inner.is-signed-in .nav-actions .btn-ghost:not(.nav-home) { display: none; }
   .nav-inner:not(.is-signed-in) .nav-links-auth { display: none; }
   // Tightened so the pair fits beside the logo without wrapping. Measured at
   // 360, 390 and 430px by scripts/nav-ui-drive.mjs, which fails on any
@@ -340,6 +355,20 @@
   .nav-inner:not(.is-signed-in) .nav-actions {
     gap: .35rem;
     .btn { padding: .5rem .6rem; font-size: .75rem; }
+  }
+  // The same tightening for a LANDLORD, who is the only account with two
+  // actions left in the header: Dashboard plus "+ List a room".
+  //
+  // ⚠️ Measured, not estimated. At 360px the budget beside an 80px logo, a
+  // 44px burger and 27px of inner padding is about 193px, and the two buttons
+  // came to 227px — so keeping Dashboard in the header pushed the burger to
+  // 381px on a 360px viewport: 21px of horizontal scroll, which is the first
+  // thing in CLAUDE.md's mobile list. A tenant has one action and fit with
+  // room to spare, which is exactly how this would have shipped unnoticed.
+  // scripts/nav-ui-drive.mjs now measures both roles at 360, 390 and 768.
+  .nav-inner.is-signed-in .nav-actions {
+    gap: .3rem;
+    .btn { padding: .5rem .5rem; font-size: .74rem; }
   }
   // ⚠️ min-height, not padding. Tightening the padding to fit both CTAs beside
   // the logo took them to 28px tall — and they were ALREADY 28px before that,

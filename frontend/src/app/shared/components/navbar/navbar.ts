@@ -70,16 +70,28 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
         <!-- One dashboard per account. An admin used to get both an Admin link
              and a Dashboard button pointing at the tenant view, which is empty
              for an account with no tenant profile. -->
+        <!-- ⚠️ nav-home is why these three carry a second class.
+             At mobile width the rule
+             .nav-inner.is-signed-in .nav-actions .btn-ghost was display:none,
+             which hid EVERY ghost action a signed-in
+             account had — and for a tenant those were Dashboard and Log out,
+             i.e. all of them. So a signed-in person who tapped Browse rooms
+             had no way back into their own portal except opening the burger
+             and finding it among six public links. Reported as "too much
+             friction and bad UX", and it is: the one thing a signed-in
+             account needs from a public page is the way back.
+             The class marks the ONE ghost action that stays, so the rule can
+             name it instead of hiding the lot. -->
         @if (auth.isAdmin()) {
-          <a class="btn btn-ghost btn-sm" routerLink="/admin/dashboard" routerLinkActive="active"
+          <a class="btn btn-ghost btn-sm nav-home" routerLink="/admin/dashboard" routerLinkActive="active"
              (click)="mobileOpen.set(false)">Admin</a>
         } @else if (auth.isLandlord()) {
-          <a class="btn btn-ghost btn-sm" routerLink="/landlord/dashboard"
+          <a class="btn btn-ghost btn-sm nav-home" routerLink="/landlord/dashboard"
              (click)="mobileOpen.set(false)">{{ 'nav.dashboard' | translate }}</a>
           <a class="btn btn-primary btn-sm" routerLink="/landlord/rooms/new"
              (click)="mobileOpen.set(false)">+ List a room</a>
         } @else {
-          <a class="btn btn-ghost btn-sm" routerLink="/tenant/dashboard"
+          <a class="btn btn-ghost btn-sm nav-home" routerLink="/tenant/dashboard"
              (click)="mobileOpen.set(false)">{{ 'nav.dashboard' | translate }}</a>
         }
         <button type="button" class="btn btn-ghost btn-sm" (click)="logout()">{{ 'nav.logout' | translate }}</button>
