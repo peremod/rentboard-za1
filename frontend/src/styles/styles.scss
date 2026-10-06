@@ -280,6 +280,150 @@ a.btn { text-decoration: none; }
 fieldset { border: none; margin-bottom: $sp-5; min-width: 0; }
 legend { font-weight: 600; margin-bottom: $sp-3; }
 
+// ── `.field` — the labelled-control container, which had no rule at all ──
+//
+// ⚠️ Six uses across three components (lease-documents, storefront-settings,
+// tenant-notes) and NOT ONE LINE of CSS anywhere in the app. Both names sat in
+// scripts/css-coverage-baseline.json, so the audit that exists to find exactly
+// this saw them and was told to keep quiet — baselined as debt in Phase 8c and
+// then left, which is the part that reached a person's phone.
+//
+// What it looked like without this rule: `.field` is a <label>, so it got
+// `:where(label) { display: block }` and nothing else. The caption span is
+// inline and a <select>/<input>/<textarea> is inline-block with NO width — the
+// base control rule says so on purpose, "layout belongs to the container" —
+// and the container was this one. So "What is it?" sat on the same line as its
+// dropdown, "Name it" beside its box, and the storefront bio was a <textarea>
+// at its default 20-column width: a one-sentence-wide box for 600 characters
+// of "in your own words".
+//
+// Reported from a phone as "bad UI layout", which is exactly what it was.
+.field {
+  display: block;
+  margin-bottom: $sp-4;
+  // The <label> base rule sets 600 so the caption reads as a label; the
+  // CONTROL inside must not inherit it, or every value a person types looks
+  // like a heading.
+  font-weight: 400;
+}
+.field-label {
+  display: block;
+  font-size: .8rem;
+  font-weight: 600;
+  color: $color-ink;
+  margin-bottom: .3rem;
+}
+// Full width, and `display: block` so the control starts on its own line.
+// Direct children only: a `.field` wrapping a checkbox keeps the inline
+// treatment the label rule above gives it.
+.field > input:not([type='checkbox']):not([type='radio']),
+.field > select,
+.field > textarea {
+  display: block;
+  width: 100%;
+  // A flex or grid parent sizes an input from its `size` attribute, not from
+  // `width: 100%` — the same automatic-minimum-size trap the messages row hit.
+  min-width: 0;
+}
+
+// ── `.btn-link` — a button meant to read as a link ───────────────────────
+//
+// ⚠️ One use, and it was the loudest thing on the screen. The lease-and-
+// paperwork list names each stored document with
+// `<button class="btn-link doc-open">`, and `.btn-link` had no rule anywhere —
+// so it fell all the way through to `:where(button)` and rendered a
+// full-width TERRACOTTA PRIMARY BUTTON for every file a landlord had
+// uploaded. A list of documents looked like a column of calls to action, and
+// the actual action on the row (Remove) sat beside it looking subordinate.
+.btn-link {
+  display: inline;
+  padding: 0;
+  // Explicit, not inherited: the rule it is overriding sets `color: #fff`, and
+  // a variant that takes the background without taking the foreground is this
+  // codebase's recurring defect. The hint panel's Got it button shipped
+  // white-on-white at 1.00:1 for exactly this reason.
+  color: $color-terracotta;
+  background: none;
+  border: none;
+  border-radius: 0;
+  font-family: $font-body;
+  font-size: inherit;
+  font-weight: 600;
+  line-height: inherit;
+  // Links wrap. `:where(button)` sets nowrap, which is right for a button and
+  // wrong for a document title that can be sixty characters long.
+  white-space: normal;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    // The base rule's hover paints the background terracotta and the text
+    // white. On something shaped like a link that is a 44px-tall orange slab
+    // appearing under the pointer, so both halves are restated here.
+    color: $color-terra-deep;
+    background: none;
+    transform: none;
+    box-shadow: none;
+  }
+  &:disabled { opacity: .5; cursor: default; }
+}
+// It is still a control, so it still needs a target — but as a run of text
+// inside a sentence, not as a 44px box. The row it sits in gives it the height.
+.btn-link { min-height: 0; }
+
+// ── File inputs ──────────────────────────────────────────────────────────
+//
+// ⚠️ Seven of them across six screens — the lease, the landlord's logo, ID
+// verification, both passport uploads, an advert's creative — and every one
+// was the browser's bare grey "Choose file / No file chosen", at whatever
+// width the UA felt like, beside a caption on the same line. On the two
+// screens a person reported it was the thing that made them say "bad UI
+// layout".
+//
+// `:not([hidden])` is load-bearing: photo-upload.ts hides its real input
+// behind a drop zone and clicks it from script. An author `display: block`
+// here beats the UA's `[hidden] { display: none }`, so without the guard this
+// rule would put a stray native file picker on the listing wizard.
+input[type='file']:not([hidden]) {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  // The box model the base control rule deliberately leaves to the container,
+  // stated here because a file input has no container of its own.
+  padding: $sp-2;
+  font-family: $font-body;
+  font-size: .85rem;
+  color: $color-ink;
+  background: $color-surface-2;
+  // Dashed, so it reads as "put something here" rather than as a filled
+  // field with a value in it.
+  border: 1.5px dashed $color-border;
+  border-radius: $r8;
+  cursor: pointer;
+
+  &::file-selector-button {
+    margin-right: $sp-3;
+    min-height: 32px;
+    padding: .35rem .8rem;
+    font-family: $font-body;
+    font-size: .8rem;
+    font-weight: 600;
+    // Both halves of the pair, again. ::file-selector-button does NOT inherit
+    // from the :where(button) rule — it is a pseudo-element, not a button — so
+    // leaving either out means whatever the UA chose.
+    color: $color-white;
+    background: $color-terracotta;
+    border: none;
+    border-radius: $r4;
+    cursor: pointer;
+  }
+  &:hover:not(:disabled) { border-color: $color-terracotta; }
+  &:disabled { background: $color-surface-2; color: $color-muted; cursor: not-allowed; }
+  &:disabled::file-selector-button { opacity: .5; cursor: not-allowed; }
+}
+
 // Field-level help and error text sit tight under their control
 .field-hint  { display: block; font-size: .78rem; color: $color-muted; margin: .35rem 0 0; line-height: 1.5; }
 .field-error { display: block; font-size: .78rem; color: $color-danger; margin: .35rem 0 0; line-height: 1.5; }

@@ -45,11 +45,29 @@ import { HintsService } from '../../../core/services/hints.service';
     .hint__text { margin: 0; font-size: .82rem; line-height: 1.55; color: #4A4034; }
     /* 44px, and a real border: this is the only control on the panel and the
        one people press without reading, so it has to look pressable. */
+    /* ⚠️ The color declaration is the whole reason this block was edited.
+       The app's base rule is :where(button) with color #fff on a terracotta
+       background, at ZERO specificity — so this class won the background and
+       INHERITED the foreground: white text on a white button, measured at
+       1.00:1. The panel rendered its heading and its sentence perfectly and
+       the only control on it was an empty box, which is what a person holding
+       a phone reported. Setting a background without setting a foreground is
+       the defect; they are one decision.
+       font: inherit does not help: the shorthand resets family, size, weight,
+       style, variant and line-height, and never colour.
+       scripts/control-contrast-audit.mjs now fails on any rule that sets one
+       of the pair without the other. */
     .hint__close {
       min-height: 44px; padding: .5rem 1.1rem; flex: 0 0 auto;
-      border: 1.5px solid #C9B894; border-radius: 6px; background: #fff;
+      border: 1.5px solid #C9B894; border-radius: 6px;
+      background: #fff; color: #1C160E;
       font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer;
     }
+    /* The base rule's hover paints terracotta under white text, which is
+       readable — but it must be said here too, because a variant that states
+       its resting colours and leaves hover to a rule it already overrode is
+       how a chip ended up with terracotta text on a terracotta background. */
+    .hint__close:hover { background: #AD4222; color: #fff; border-color: #AD4222; }
     /* At 480px the button goes full width under the text rather than being
        squeezed beside it — the breakpoints here are 900/768/480. */
     @media (max-width: 480px) {

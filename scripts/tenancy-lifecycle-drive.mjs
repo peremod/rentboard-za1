@@ -68,7 +68,7 @@ async function lettingReadyToStart(stamp) {
   if (accepted.status >= 300) {
     throw new Error(`could not accept the application: ${accepted.status} ${JSON.stringify(accepted.body).slice(0, 200)}`);
   }
-  return { landlord, tenant, roomId, applicationId };
+  return { landlord, tenant, roomId, applicationId, roomTitle: `Back room ${stamp}` };
 }
 
 const browser = await chromium.launch();
@@ -271,6 +271,124 @@ for (const width of [360, 390, 768, 1280]) {
       ? `${width}px: every control on the panel clears 44px`
       : `${width}px: ${small.length} under target — ${small.join(', ')}`,
   );
+}
+
+// ── 6. What the TENANT's dashboard says, before and after ────────────────
+//
+// ⚠️ An Application stays `accepted` for good. The move-in is a Tenancy, and
+// nothing on the tenant's dashboard had ever read one. So after agreeing a
+// date, moving in and confirming it, a tenant still saw, at the very top of
+// "Needs you" and at urgency -2000:
+//
+//     "You have been accepted — talk to the landlord about moving in"
+//
+// and, below it, the room filed under "Your applications" with the standing
+// subtitle "Live — you're waiting on the landlord". Three statements, all
+// false, about the place they were sitting in. Reported in exactly those
+// terms: "shouldn't that message be removed because I have already spoken to
+// the landlord and moved in?"
+//
+// The pending case is checked as well as the active one, because "drop the row
+// when a tenancy exists" would be the easy wrong fix: while nobody has
+// confirmed the move there IS something to do, and it is not "talk to the
+// landlord" — it is "say which day you moved in".
+console.log('\n── 6. The tenant dashboard reads the tenancy, not the application ──');
+
+{
+  // A fresh letting, left PENDING: section 1's was confirmed.
+  const p6 = await lettingReadyToStart(Date.now() + 600);
+  const tp = await signIn(browser, WEB, p6.tenant.email, PASSWORD, { width: 390, height: 1000 });
+  await tp.goto(`${WEB}/tenant/dashboard`, { waitUntil: 'domcontentloaded' });
+  await tp.waitForTimeout(2600);
+
+  const pendingInbox = ((await tp.locator('#needs-you').textContent().catch(() => '')) ?? '')
+    .replace(/\s+/g, ' ');
+  // ⚠️ Accepting OPENS a tenancy in the same transaction, so "accepted with no
+  // tenancy" is a state this product never reaches. A first version of this
+  // fix gave that state its own inbox kind and its own row, and this check
+  // found it: the row it asserted could not exist, and the kind was a branch
+  // nothing would ever run. One row, carrying both outstanding things.
+  /you have been accepted/i.test(pendingInbox)
+    ? ok('a fresh acceptance still leads the list — silence here costs somebody the room')
+    : bad(`pending inbox reads: ${pendingInbox.slice(0, 180)}`);
+  /record the day you move in|which day the move happened/i.test(pendingInbox)
+    ? ok('…and the same row names the step that finishes it, rather than only "talk to the landlord"')
+    : bad(`the acceptance row does not mention recording the move: ${pendingInbox.slice(0, 220)}`);
+  (pendingInbox.match(/you have been accepted/gi) ?? []).length === 1
+    ? ok('…once, not as two rows about one letting')
+    : bad('one letting produced more than one acceptance row');
+
+  // The row must reach the panel that answers it.
+  const confirmRow = tp.locator('#needs-you a, #needs-you button').filter({ hasText: /Confirm the move/i });
+  (await confirmRow.count()) === 1
+    ? ok('…and it carries one action')
+    : bad(`${await confirmRow.count()} "Confirm the move" actions in the tenant inbox`);
+  if (await confirmRow.count()) {
+    await confirmRow.first().click();
+    await tp.waitForTimeout(1500);
+    const landed = await tp.evaluate(() => {
+      const el = document.getElementById('moving-in-out');
+      return { hash: location.hash, exists: !!el, top: el ? Math.round(el.getBoundingClientRect().top) : null };
+    });
+    landed.exists && landed.hash === '#moving-in-out'
+      ? ok(`…which lands on the move-in panel (${landed.hash}, ${landed.top}px from the top of the window)`)
+      : bad(`"Confirm the move" went to ${JSON.stringify(landed)} — the panel it names has no anchor`);
+  }
+
+  // Now confirm it from the tenant's own side and re-read the screen.
+  const confirmed = await apiCall(API, 'POST', `/api/tenancies/${
+    dbQuery(`SELECT id FROM tenancies WHERE "applicationId" = '${p6.applicationId}'`)
+  }/confirm-start`, { startDate: new Date().toISOString().slice(0, 10) }, p6.tenant.token);
+  check(confirmed.status === 200 || confirmed.status === 201,
+    `the tenant confirms their own move-in (${confirmed.status})`);
+
+  await tp.goto(`${WEB}/tenant/dashboard`, { waitUntil: 'domcontentloaded' });
+  await tp.waitForTimeout(2600);
+
+  const after = await tp.evaluate(() => {
+    const txt = (sel) => (document.querySelector(sel)?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    return {
+      needsYou: txt('#needs-you'),
+      needsYouExists: !!document.querySelector('#needs-you'),
+      applications: txt('#your-applications'),
+      live: txt('#where-you-live'),
+      liveExists: !!document.querySelector('#where-you-live'),
+    };
+  });
+
+  !/you have been accepted/i.test(after.needsYou)
+    ? ok('once they have moved in, "You have been accepted" is gone from Needs you')
+    : bad(`Needs you still says it after move-in: ${after.needsYou.slice(0, 180)}`);
+  !/record the day you move in/i.test(after.needsYou)
+    ? ok('…and so is the instruction to record the move, because it is answered')
+    : bad('the row survives its own answer');
+
+  after.liveExists
+    ? ok('the room appears under "Where you live now"')
+    : bad('nothing on the dashboard says where this tenant actually lives');
+  /moved in/i.test(after.live)
+    ? ok('…with the date they moved in')
+    : bad(`the live section reads: ${after.live.slice(0, 160)}`);
+
+  // ⚠️ The ROOM, not a phrase.
+  //
+  // This check first asked only whether the words "you're waiting on the
+  // landlord" were gone, and it passed with the defect reintroduced — because
+  // the hardcoded sentence had by then been replaced by a derived one that
+  // says something else about the same wrong list. A check on the copy cannot
+  // see a room in the wrong section. So it asks the question that matters:
+  // is the room they live in still filed under applications.
+  !after.applications.includes(p6.roomTitle)
+    ? ok(`…and "${p6.roomTitle}" is no longer filed under "Your applications"`)
+    : bad(`"Your applications" still lists the room they live in: ${after.applications.slice(0, 200)}`);
+  after.live.includes(p6.roomTitle)
+    ? ok('…it is under "Where you live now" instead')
+    : bad(`"Where you live now" does not name the room: ${after.live.slice(0, 160)}`);
+  !/you're waiting on the landlord|you are waiting on the landlord/i.test(after.applications)
+    ? ok('…and nothing there claims they are waiting on a landlord')
+    : bad(`"Your applications" still reads: ${after.applications.slice(0, 200)}`);
+
+  await tp.close();
 }
 
 await browser.close();

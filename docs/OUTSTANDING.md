@@ -920,7 +920,7 @@ deliberate rather than one sort call away. See docs/FLOW-AUDIT.md §5.31.
 
 ---
 
-## 17. 26 classes are used in a template and styled nowhere
+## 17. 23 classes are used in a template and styled nowhere
 
 `scripts/css-coverage-audit.mjs` (v1.106.0) checks that every class a template
 uses has a rule in the shipped CSS. Switched on, it found **27 across 82
@@ -939,20 +939,51 @@ details" and "Delete this property" on a landlord's phone as one unbroken
 string; `.form-error` rendered a failed save, `role="alert"` and all, as
 ordinary body text on four screens. Neither was visible to any other check here.
 
-The remaining 26, in `scripts/css-coverage-baseline.json`:
+### ✅ Three burned down in v1.113.0 (Phase 8h) — and this is what the baseline cost
+
+`.field`, `.field-label` and `.btn-link` were baselined in Phase 8c and left.
+Four months later the owner photographed three screens and called them "bad UI
+layout". All three photographs were these three lines.
+
+- **`.field` / `.field-label`** — six uses across lease-documents,
+  storefront-settings and tenant-notes. `.field` is a `<label>`, so it got
+  `:where(label) { display: block }` and nothing else; a `<select>`, `<input>`
+  or `<textarea>` is inline-block with no width, because the base control rule
+  leaves layout to the container **on purpose** — and the container was this
+  class. So "What is it?" sat on the same line as its dropdown, "Name it"
+  beside its box, and the landlord's public-page bio was a `<textarea>` at its
+  default twenty-column width: a one-sentence-wide box for 600 characters of
+  "in your own words".
+- **`.btn-link`** — one use, and it was the loudest thing on the screen. The
+  lease-and-paperwork list names each stored document with
+  `<button class="btn-link doc-open">`. With no rule it fell through to
+  `:where(button)`, the app's bare-button default, and every file a landlord
+  had uploaded rendered as a full **terracotta primary button**. A list of
+  documents looked like a column of calls to action, and the real action on the
+  row (Remove) looked subordinate to it.
+
+The lesson is about the baseline rather than about CSS: it is **debt that
+ages**, and nothing was tracking how long a line had been in it. The audit
+named all 26 on every run and was read as a pass because the number did not go
+up.
+
+The same phase also taught the audit about `:not(.x)`, `:is(.x)` and
+`:where(.x)` — a class referenced only from inside a functional pseudo-class
+was reported as having no rule at all. The navbar's `.nav-home` is exactly
+that: a marker so one responsive rule can say which ghost button stays in the
+header on a phone.
+
+The remaining 23, in `scripts/css-coverage-baseline.json`:
 
 | `.ac-sub` |
 | `.auth__alt` |
 | `.auth__form` |
 | `.auth__hint` |
-| `.btn-link` |
 | `.card` |
 | `.cover-note` |
 | `.detail__facts` |
 | `.detail__safety` |
 | `.detail__section` |
-| `.field` |
-| `.field-label` |
 | `.growth-table` |
 | `.landlord-trust` |
 | `.landlord-trust__state--none` |
@@ -970,7 +1001,7 @@ The remaining 26, in `scripts/css-coverage-baseline.json`:
 
 Worth knowing before picking one up: a class that always appears beside another
 that does the styling (`class="muted something"`) is a hook, not a defect —
-those live in `ALLOWED` in the audit, each with a reason. These 26 are the ones
+those live in `ALLOWED` in the audit, each with a reason. These 23 are the ones
 with nothing carrying them.
 
 **Check it:** `npm run audit:css`, after a production build.
@@ -1204,6 +1235,200 @@ since v1.112.0 "forgot password" issues them a real reset token instead of the
 old "you sign in with Google" email, which after this change pointed at a door
 that no longer exists. Once that number is zero, the route, the strategy and the
 two secrets can go together.
+
+---
+
+## 22. ✅ A button nobody could read, and the gate that could not see it
+
+v1.113.0 (Phase 8h). Reported from a phone as *"the first use hints just has a
+big button with no text or instructions"*. The hint panel rendered its heading
+and its sentence perfectly; its only control was an empty white box.
+
+Measured: `color: rgb(255,255,255)` on `background: rgb(255,255,255)` — **1.00:1**.
+The word "Got it" was in the DOM the whole time.
+
+The cause is this codebase's oldest CSS fault, written down twice already:
+
+```scss
+:where(button) { color: #fff; background: $color-terracotta; }   // zero specificity
+.hint__close   { background: #fff; /* …and no color */ }          // wins the background only
+```
+
+`font: inherit` does not save it — the shorthand resets family, size, weight,
+style, variant and line-height, and never colour. `_spec.scss` carries the same
+note on `.yard-rent__actions button` ("`color` is explicit, not inherited"), and
+`.btn-link` in §17 above is the third instance in one release.
+**Setting a background without setting a foreground is the defect; they are one
+decision.**
+
+### What matters more: the contrast gate could not see it
+
+`a11y-drive.mjs` visits ten screens that render this hint and prints
+*"✅ contrast: every visible text node meets its WCAG threshold"* on each. It
+was not lying about what it measured — axe does **not** report text the same
+colour as its background as a violation. It buckets it as `incomplete` with
+`messageKey: 'equalRatio'`, on the theory that identical colours usually mean a
+background image or gradient it could not resolve, so a human should look.
+The drive read `run.violations` only.
+
+So the single worst contrast failure there is — text that cannot be seen at all
+— was the one case the gate was structurally incapable of seeing.
+
+The drive now promotes `equalRatio` incompletes to failures. Only that one
+reason: the others really are "axe could not tell" (text over an image, a
+gradient, a video), and failing those would make the gate red on things it has
+not measured.
+
+Falsified: with the colour removed it reports
+`.hint__close — 1:1, needs 4.5:1  #ffffff on #ffffff` on ten screens. Before
+the change, the same run printed a tick on all ten.
+
+⚠️ The drive's hover/focus pass **did** catch it, and reported a resting-state
+fault under the labels `:hover` and `:focus` — which sent the first look at it
+in the wrong direction.
+
+---
+
+## 23. ✅ The tenant dashboard could not tell an acceptance from a move-in
+
+v1.113.0 (Phase 8h). Reported as: *"in the dashboard page if say I have clicked
+moved in, the needs you section — shouldn't the 'you have been accepted talk to
+the landlord' message be removed because I have already spoken to the landlord
+and moved in?"*
+
+An `Application` stays `accepted` for good. The move-in is a `Tenancy`, which
+Phase 8c finally gave a screen to — and **nothing on the tenant's dashboard had
+ever read one**. So after agreeing a date, moving in and confirming it, a tenant
+saw:
+
+- at the top of "Needs you", at urgency `-2000`: *"You have been accepted — talk
+  to the landlord about moving in"*, for the whole duration of the tenancy;
+- below it, the room filed under "Your applications" with the standing subtitle
+  *"Live — you're waiting on the landlord"*.
+
+Three statements, all false, about the place they were sitting in.
+
+**Fixed:** `tenant-inbox.service.ts` reads the tenancy; `GET /applications/mine`
+returns `tenancy: { status, startDate }`; the dashboard gained a **"Where you
+live now"** section and a derived sentence under "Your applications" in place of
+the hardcoded one.
+
+### The wrong first fix, and what caught it
+
+The first version gave the unconfirmed state its own kind, `tenancy_unconfirmed`,
+with its own row. `dashboard-ui-drive` failed on it — because **accepting opens
+a `pending` tenancy in the same transaction**, so "accepted with no tenancy" is
+a state this product never reaches. The acceptance row would never have
+rendered, and the new kind was a branch nothing could run: the exact fault class
+this document exists for, introduced while fixing an instance of it.
+
+One row now carries both outstanding things ("agree a date, then record the day
+you move in"), and its action points at the lifecycle panel — which Phase 8c
+had mounted with **no `id`**, so nothing could link to it. It has one now
+(`#moving-in-out`).
+
+---
+
+## 24. ✅ A nav tab that pointed at an element that did not exist
+
+v1.113.0 (Phase 8h). Reported as *"the needs you page looks exactly the same as
+the dashboard page, nothing happens when I click the needs you tab"*.
+
+`landlordNav` has carried `{ label: 'Needs you', fragment: 'needs-attention' }`
+since Phase 7a. `landlord-inbox` renders nothing when nothing needs doing —
+deliberately, and the reasoning is good: an empty queue that still draws the eye
+is how people learn to ignore a queue.
+
+Each decision is defensible. Together they made a dead control: for every
+landlord who was on top of their work the tab pointed at an element that did not
+exist. Measured before the fix — `hasAnchor: false`, `scrollY` 0 before the
+click and 0 after.
+
+The nav file's own comment says a fragment exists because *"without it they
+navigate to the dashboard root, which from the dashboard is indistinguishable
+from a click that did nothing"*. The fault it names was three lines below it.
+
+**Fixed:** the section renders when the fragment asks for it, saying in words
+that nothing is waiting — and still renders nothing on an ordinary dashboard
+visit. It scrolls itself into view rather than relying on the router's
+`anchorScrolling`, which looks for the element once, at NavigationEnd, when this
+section does not exist yet because the inbox request has not come back.
+
+`#active-listings` and `#drafts` are unconditional sections and were never
+affected.
+
+---
+
+## 25. ✅ A signed-in account on a phone had no way back to its own portal
+
+v1.113.0 (Phase 8h). Reported as *"when I click the browse rooms button I can't
+go back to the dashboard without opening the burger menu — that's too much
+friction and bad UX"*.
+
+`.nav-inner.is-signed-in .nav-actions .btn-ghost { display: none }` at ≤480px
+hid **every** ghost action a signed-in account had. For a landlord that was
+Dashboard and Log out; for a **tenant**, whose only two actions are Dashboard
+and Log out, it was all of them — so a signed-in tenant on any public page saw a
+header holding a logo and a burger.
+
+Dashboard now stays (`:not(.nav-home)`); Log out moves into the drawer, which is
+the right half to lose.
+
+⚠️ **Keeping it cost 21px of horizontal scroll at 360px** for a landlord, who
+also carries "+ List a room": the budget beside an 80px logo, a 44px burger and
+27px of inner padding is about 193px, and the two buttons came to 227px. The
+signed-in header is now tightened the same way the visitor's already was. A
+tenant has one action and fitted with room to spare — which is exactly how this
+would have shipped unnoticed.
+
+The check that should have caught the original fault passed for four releases,
+because of what it says rather than what it does: *"signed in, the phone header
+is not asked to carry Dashboard, List a room AND Log out"* only ever looked for
+Log out. `nav-ui-drive` now measures **both roles at 360, 390 and 768**, asserts
+one visible route into the portal with the drawer shut, 44px, no horizontal
+scroll — and **clicks it**.
+
+---
+
+## 26. A drive had been auditing the wrong screen since v1.87.0
+
+v1.113.0 (Phase 8h), found while extending `lease-docs-ui-drive.mjs`.
+
+Phase 7b turned `/landlord/yard` into a redirect to `/landlord/properties` (the
+list) and moved the yard component to `/landlord/properties/:propertyId` (the
+detail). This drive kept going to the old path, so its **entire landlord half**
+— eleven checks about the paperwork panel — had been auditing a list of property
+cards for a toggle that only exists on the detail screen.
+
+It also never created a property, and a room can sit in none, so even the right
+URL would have shown it the teaching empty state.
+
+Both fixed. Two other places in this repo already carry a comment about that
+redirect dropping a fragment; nothing had ever checked that a drive still
+arrived where it thought it did.
+
+### Two more found by looking, in the same sitting
+
+- **`lease-ui-drive.mjs`** — same cause, and it was **red right now**. Its first
+  check, *"no card when nothing is ending"*, passed because `#ending-soon` can
+  never be on a list of property cards; the four after it failed. A drive that
+  is red for a structural reason teaches people to ignore it being red. It now
+  goes to the detail screen, groups its rooms, and — the part worth keeping —
+  asserts that the screen the card is **absent from** is the yard, so the
+  absence proves something.
+- **`phase-drive.mjs`** — two faults, neither to do with the redirect. Its
+  selector still named the Phase 7b copy ("+ Group rooms into a yard"), so it
+  reported *"the yard screen offers a way to add one"* as a FAILURE against a
+  screen whose entire job is offering that. And Province became a `<select>`;
+  `fill()` on a select throws after thirty seconds, **crashing the drive before
+  its summary** rather than failing a check. Both fixed; 52/52 pass.
+
+`properties-ui-drive.mjs` goes to `/landlord/yard` deliberately, to assert the
+redirect, and is correct as it stands.
+
+**The pattern, three times in one sitting:** a check anchored on remembered copy
+fails on a rename and blames the product; a check anchored on a moved URL passes
+on the wrong page and proves nothing. Both read as the product being wrong.
 
 ---
 

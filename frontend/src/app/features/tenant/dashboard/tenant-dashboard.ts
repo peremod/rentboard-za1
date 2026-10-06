@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { forkJoin, of, catchError } from 'rxjs';
 import { RouterLink } from '@angular/router';
+import { DatePipe } from '@angular/common';
 import { AuthService } from '../../../core/services/auth.service';
 import { ApplicationsService } from '../../../core/services/applications.service';
 import { Application } from '../../../core/models/application.model';
@@ -24,7 +25,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations, ScreenHint, TenancyLifecycle],
+  imports: [RouterLink, DatePipe, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations, ScreenHint, TenancyLifecycle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="tenant-dashboard" heading="Where you stand, on everything you applied for">
@@ -66,9 +67,54 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
            do about it. -->
       <app-dispute-panel role="tenant"/>
 
+      <!-- ⚠️ Its own section, above the applications, because it is not one.
+           A room you live in was filed under "Your applications / Live —
+           you're waiting on the landlord" for as long as tenancies have
+           existed: an Application stays accepted and the move-in is a
+           Tenancy, so nothing in that list had ever read the move. Reported
+           as "it's all confusing". -->
+      @if (currentHomes().length > 0) {
+        <section class="dash-section" id="where-you-live">
+          <h2 class="dash-section-title">Where you live now</h2>
+          <p class="muted">
+            Confirmed — nothing here is waiting on you. Rent, notice and the
+            paperwork for this room are on your rent screen.
+          </p>
+          @for (app of currentHomes(); track app.id) {
+            <div class="app-card">
+              <div class="app-thumb portal-thumb" aria-hidden="true">🔑</div>
+              <div class="app-info">
+                <div class="app-room">{{ app.room?.title }}</div>
+                @if (app.room) {
+                  <div class="app-location">{{ app.room.locationDisplay }}</div>
+                  <div class="app-rent">{{ app.room.rentCents | zarCents:'monthly' }}</div>
+                }
+                @if (app.tenancy?.startDate) {
+                  <div class="app-location">Moved in {{ app.tenancy!.startDate | date: 'd MMM yyyy' }}.</div>
+                }
+              </div>
+              <div class="portal-row-actions">
+                <a class="btn btn-sm btn-primary" routerLink="/tenant/rent">Rent and paperwork</a>
+                <button type="button" class="btn btn-sm btn-outline" (click)="toggle(app.id)"
+                        [attr.aria-expanded]="openId() === app.id">
+                  {{ openId() === app.id ? 'Hide messages' : '💬 Messages' }}
+                </button>
+              </div>
+              @if (openId() === app.id) {
+                <div class="app-card__thread">
+                  <app-message-thread [applicationId]="app.id"/>
+                </div>
+              }
+            </div>
+          }
+        </section>
+      }
+
       <section class="dash-section" id="your-applications">
         <h2 class="dash-section-title">Your applications</h2>
-        <p class="muted">Live — you're waiting on the landlord.</p>
+        @if (activeApplicationsNote()) {
+          <p class="muted">{{ activeApplicationsNote() }}</p>
+        }
 
         @if (loading()) {
           <p class="muted">Loading…</p>
@@ -549,11 +595,59 @@ export class TenantDashboard implements OnInit {
     return labels[room.status] ?? 'No longer available';
   }
 
-  /** Live: not archived, and not ended by the tenant's own withdrawal. */
+  /**
+   * Live: not archived, not ended by the tenant's own withdrawal — and not a
+   * room they have already moved into.
+   *
+   * ⚠️ The last clause is the fix for a thing that was wrong on screen for as
+   * long as there have been tenancies. An `Application` stays `accepted`
+   * permanently; moving in creates a `Tenancy`. So a tenant who had agreed a
+   * date, moved in and confirmed it found that room still sitting under
+   * "Your applications", under the words "Live — you're waiting on the
+   * landlord". They were not waiting on anybody. They lived there.
+   *
+   * `pending` deliberately stays in this list: the letting is open and nobody
+   * has confirmed the move, so it is genuinely still in progress.
+   */
   activeApplications() {
     return this.applications().filter(
-      (a) => !a.isArchived && a.status !== 'withdrawn' && a.status !== 'rejected',
+      (a) => !a.isArchived && a.status !== 'withdrawn' && a.status !== 'rejected'
+        && a.tenancy?.status !== 'active',
     );
+  }
+
+  /** Rooms this tenant has moved into and not moved out of. */
+  currentHomes() {
+    return this.applications().filter((a) => a.tenancy?.status === 'active');
+  }
+
+  /**
+   * The sentence under "Your applications", which used to be the hardcoded
+   * "Live — you're waiting on the landlord".
+   *
+   * It said that over a list that could contain a shortlisting and an
+   * acceptance — both of which are the landlord waiting on the TENANT — and
+   * over a room they had already moved into. One static sentence cannot
+   * describe a list whose rows mean different things, so it describes what is
+   * actually in it.
+   */
+  activeApplicationsNote(): string {
+    const apps = this.activeApplications();
+    if (apps.length === 0) return '';
+    const yours = apps.filter((a) => a.status === 'accepted' || a.status === 'shortlisted').length;
+    const theirs = apps.length - yours;
+    if (yours && theirs) {
+      return `${yours} ${yours === 1 ? 'needs' : 'need'} something from you; ` +
+        `the other ${theirs === 1 ? 'one is' : `${theirs} are`} with the landlord.`;
+    }
+    if (yours) {
+      return yours === 1
+        ? 'The landlord has moved on this one — it is waiting on you.'
+        : 'These are waiting on you, not on the landlord.';
+    }
+    return apps.length === 1
+      ? 'Sent — you are waiting on the landlord.'
+      : 'Sent — you are waiting on the landlords.';
   }
 
   /**

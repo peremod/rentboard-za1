@@ -330,14 +330,51 @@ const tPage = await signIn(browser, WEB, tenantA.email, PASSWORD);
 await tPage.goto(`${WEB}/tenant/dashboard`, { waitUntil: 'domcontentloaded' });
 await tPage.waitForSelector('#needs-you, .dash-week', { timeout: 20000 });
 
-(await tPage.locator('#needs-you').count()) === 1
-  ? ok('the tenant dashboard now leads with "Needs you" — the brief asks for this in BOTH portals')
-  : bad('the tenant dashboard has no task list');
+/**
+ * ⚠️ Tenant A has an ACTIVE tenancy — this drive's own `tenancyFor` sets the
+ * status directly — so there must be no acceptance row for them, and this
+ * check used to assert the opposite.
+ *
+ * It read: "with the acceptance at the top, which is the one where silence
+ * costs them the room". That is true of somebody who has just been accepted
+ * and false of somebody who has moved in, and an Application stays `accepted`
+ * for good, so the inbox showed it for the whole tenancy at urgency -2000. The
+ * person it was built for read it as "you have been accepted, talk to the
+ * landlord" on the dashboard of the room they were sitting in, and said so.
+ *
+ * The acceptance wording is proved on a tenant who really is waiting, below.
+ */
+const tTasks = (await tPage.locator('#needs-you').innerText().catch(() => '')).replace(/\s+/g, ' ');
+!/You have been accepted/i.test(tTasks)
+  ? ok('a tenant who has MOVED IN is not still told they have been accepted')
+  : bad(`tenant A lives there and the task list still says: "${tTasks.slice(0, 180)}"`);
+(await tPage.locator('#where-you-live').count()) === 1
+  ? ok('…their room is under "Where you live now" instead')
+  : bad('nothing on the dashboard says where tenant A actually lives');
+(await tPage.locator('#your-applications').innerText()).includes(`Front room ${S}`)
+  ? bad('…and it is STILL also filed under "Your applications"')
+  : ok('…and it is no longer filed under "Your applications"');
 
-const tTasks = (await tPage.locator('#needs-you').innerText()).replace(/\s+/g, ' ');
-/You have been accepted/i.test(tTasks)
-  ? ok('…with the acceptance at the top, which is the one where silence costs them the room')
-  : bad(`the tenant's task list does not lead with the acceptance: "${tTasks.slice(0, 160)}"`);
+/**
+ * Somebody genuinely waiting: accepted, with no tenancy confirmed. This is
+ * what the check above used to be pointed at.
+ */
+const waiting = await registerUser(API, 'TENANT');
+const roomWait = await mkRoom(`Waiting room ${S}`, L, { propertyId: propA.id });
+const waitApp = await apiCall(API, 'POST', '/api/applications',
+  { roomId: roomWait, coverNote: 'I can move in on the first of next month.' }, waiting.token);
+await apiCall(API, 'POST', `/api/applications/${waitApp.body.id}/accept`, {}, L);
+const wPage = await signIn(browser, WEB, waiting.email, PASSWORD);
+await wPage.goto(`${WEB}/tenant/dashboard`, { waitUntil: 'domcontentloaded' });
+await wPage.waitForSelector('#needs-you', { timeout: 20000 });
+const wTasks = (await wPage.locator('#needs-you').innerText()).replace(/\s+/g, ' ');
+/You have been accepted/i.test(wTasks)
+  ? ok('a tenant who has just been accepted IS told so, at the top — silence here costs them the room')
+  : bad(`the waiting tenant's task list does not lead with the acceptance: "${wTasks.slice(0, 160)}"`);
+/record the day you move in/i.test(wTasks)
+  ? ok('…and the same row names the step that finishes it')
+  : bad(`the acceptance row does not say how to finish it: "${wTasks.slice(0, 200)}"`);
+// Kept open: its summary sentence is read below, where tenant A's cannot be.
 
 /**
  * The rent wording is checked on tenant B, whose month is the UNPAID one.
@@ -355,10 +392,25 @@ const tbTasks = (await tbPage.locator('#needs-you').innerText()).replace(/\s+/g,
   ? ok('…and the rent line says the landlord has not recorded it, never that the tenant has not paid')
   : bad(`the rent wording is wrong: "${tbTasks.slice(0, 220)}"`);
 
-const tSummary = (await tPage.locator('.dash-week').first().innerText()).replace(/\s+/g, ' ');
-/\d+ applications? open/.test(tSummary)
+/**
+ * ⚠️ The count sentence is read on the WAITING tenant, not on tenant A.
+ *
+ * Tenant A has moved in, so their application is no longer open and the
+ * sentence correctly says none are — which is not a sentence with a number in
+ * it. Asserting /\d+ applications? open/ on them was asserting that a tenant
+ * who lives somewhere still has an open application, which is the whole fault
+ * this section was changed for. Both wordings are checked, each on the account
+ * it is true of.
+ */
+const wSummary = (await wPage.locator('.dash-week').first().innerText()).replace(/\s+/g, ' ');
+/\d+ applications? open/.test(wSummary)
   ? ok('the three bare numbers are a sentence now')
-  : bad(`the tenant summary reads: "${tSummary.slice(0, 160)}"`);
+  : bad(`the waiting tenant's summary reads: "${wSummary.slice(0, 160)}"`);
+
+const tSummary = (await tPage.locator('.dash-week').first().innerText()).replace(/\s+/g, ' ');
+/none of your applications are still open/i.test(tSummary)
+  ? ok('…and a tenant who has moved in is told none are still open, rather than given a count of one')
+  : bad(`tenant A's summary reads: "${tSummary.slice(0, 160)}"`);
 
 (await tPage.locator('.stat-row .lbl', { hasText: 'Awaiting reply' }).count()) === 0
   ? ok('…and the overlapping "Applications / Shortlisted / Awaiting reply" boxes are gone')
