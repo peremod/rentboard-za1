@@ -13,9 +13,33 @@ const PASSWORD = 'DrivePass123';
 
 export { PASSWORD };
 
-/** A JSON call to the API, returning status and parsed body rather than throwing. */
+/**
+ * A JSON call to the API, returning status and parsed body rather than throwing.
+ *
+ * ── ⚠️ One retry, and ONLY on a dead socket
+ *
+ * Node's fetch keeps connections alive and reuses them. Nest's throttler closes
+ * the connection when it answers 429, so the next call picks up a socket the
+ * server has already finished with and fails with
+ * `SocketError: other side closed` — a thrown TypeError, not a status, so it
+ * takes the whole drive down rather than failing one check.
+ *
+ * That is not hypothetical: `phone-signup-drive.mjs` has been dying at its
+ * rate-limiter section — the one that deliberately provokes a 429 — nine checks
+ * in, for every run on this machine, at HEAD as well as on a branch. curl over
+ * the same 26 requests answers 200×15 then 429×11 and the API stays healthy, so
+ * it was the client all along. A drive that dies mid-run reports neither a pass
+ * nor a failure; it reports nothing, which is the worst of the three.
+ *
+ * The retry is deliberately narrow. It fires only when fetch THREW with a
+ * connection-level cause, never on an HTTP status: retrying a 429 or a 500
+ * would paper over the thing a drive exists to find. One attempt, because a
+ * stale socket fails once and a genuinely unreachable API fails every time.
+ */
+const DEAD_SOCKET = /other side closed|socket hang up|ECONNRESET|UND_ERR_SOCKET/i;
+
 export async function apiCall(base, method, path, body, token) {
-  const res = await fetch(base + path, {
+  const send = () => fetch(base + path, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -23,6 +47,16 @@ export async function apiCall(base, method, path, body, token) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
+
+  let res;
+  try {
+    res = await send();
+  } catch (err) {
+    const why = `${err?.message ?? ''} ${err?.cause?.message ?? ''} ${err?.cause?.code ?? ''}`;
+    if (!DEAD_SOCKET.test(why)) throw err;
+    res = await send();
+  }
+
   const text = await res.text();
   let json;
   try {

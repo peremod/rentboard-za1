@@ -1432,6 +1432,112 @@ on the wrong page and proves nothing. Both read as the product being wrong.
 
 ---
 
+## 27. WhatsApp: the sign-in code can now be sent, and four other paths still cannot
+
+v1.114.0 (Phase 8i). Row 40 of `PRE-LAUNCH-CHECKLIST.md` has recorded since
+Phase 0 that every outbound WhatsApp message is free-form `type: 'text'`, and
+that Meta permits that **only inside the 24-hour customer service window** —
+within 24 hours of the person messaging the business. A business-initiated
+message outside that window is rejected with **error 131047** unless it uses a
+pre-approved template.
+
+Recording it is not the same as being able to see it. Nothing in this
+repository had ever observed a single outbound WhatsApp body: the only way to
+look was to configure live Meta credentials and send a real message to a real
+phone, so every send path here was written from documentation and never checked
+against anything.
+
+### What changed
+
+- `buildOtpSend()` is exported and pure, so the body can be asserted without
+  Meta, a network, or a running API.
+- `sendOtp` sends an **AUTHENTICATION template** when `WHATSAPP_TEMPLATE_OTP` is
+  set, and free-form text when it is not.
+- `WHATSAPP_GRAPH_BASE_URL` exists for one reason: `whatsapp-template-drive.mjs`
+  points the client at a stub and reads what we actually put on the wire. An
+  operator never sets it.
+- **Credentials with no template now warn at boot**, naming 131047. That is the
+  state that looks configured and delivers nothing, and before this the code had
+  no notion of a template at all, so it could not say so.
+
+### The text branch is not a lesser fallback
+
+Against real credentials it does not deliver **at all**. It stays because it is
+right in development, where nothing is sent and the code is logged, and because
+an operator mid-setup should see Meta's own error rather than a silent no-op.
+
+### What is still broken, and why it is survivable
+
+Four paths remain free-form text and still fail outside the window. Each
+degrades honestly rather than breaking, which is why they are listed rather than
+fixed in the same phase — each needs its own **UTILITY** template and its own
+Meta approval:
+
+| Path | What it is | What happens outside the window |
+|---|---|---|
+| `notifyLandlord` | a tenant applied, or wrote | returns null; the email still goes |
+| `sendToNumber` (rent) | a rent reminder | returns false; the landlord's own record is unaffected |
+| `sendToNumber` (references) | asking a previous landlord | returns false; falls back to an admin phoning |
+| `sendToNumber` (notices) | a notice to a phone-only account | the `Notice` row is written first and `whatsappError` records the reason |
+
+The notice router already wrote that reason in words before this phase —
+"Most likely outside the 24-hour window with no approved template" — which is
+the one place the product had already admitted this out loud.
+
+The **listing bot's replies are genuinely fine**: the landlord messaged us
+first, so they are inside the window by construction. That is the only
+free-form send here that was ever correct.
+
+### What a green drive does NOT mean
+
+`scripts/whatsapp-template-drive.mjs` proves the **shape**, not the approval.
+A template name Meta has not approved produces a correctly-shaped request that
+Meta rejects with **132001**, and nothing in this repository can tell the
+difference. Section 4 of the drive prints that on screen rather than letting a
+green run read as "WhatsApp works". **No message has ever been delivered from
+this repository to a real handset.**
+
+⚠️ `name + language` is the identity of a template. Sending `en_US` to one
+approved as `en` fails with 132001, which reads like a typo in the name and is
+not one. Hence `WHATSAPP_TEMPLATE_LANG`, separate and documented.
+
+⚠️ `ttlMinutes` is deliberately **absent** from the template payload. The expiry
+is baked into the template's footer at approval time
+(`code_expiration_minutes`), so Meta already holds it; sending it too would be a
+second source of truth that can disagree with the first. The TTL the API quotes
+in its reply ("expires in 10 minutes") and the one on the approved template are
+**not linked by anything**, and a mismatch would be invisible — a real gap,
+named here rather than papered over.
+
+---
+
+## 28. ✅ A drive died mid-run on its own rate-limiter check
+
+v1.114.0 (Phase 8i), found while regression-testing §27 and **pre-existing** —
+it fails identically at HEAD, which is how it was told apart from the WhatsApp
+work rather than assumed to be.
+
+`phone-signup-drive.mjs` has a section that deliberately provokes a 429, to
+prove the throttler is not decoration. Nest closes the connection when it
+answers 429; Node's `fetch` keeps connections alive and reuses them, so the next
+call picked up a socket the server had already finished with and failed with
+`SocketError: other side closed`.
+
+That is a **thrown TypeError, not a status**, so it took the whole drive down
+nine checks in. `curl` over the same 26 requests answers 200×15 then 429×11 with
+the API healthy throughout, which is what proved it was the client and not the
+product.
+
+A drive that dies mid-run reports neither a pass nor a failure. It reports
+nothing, which is worse than either.
+
+`apiCall` in `scripts/lib/drive-session.mjs` now retries **once**, and only when
+fetch threw with a connection-level cause — never on an HTTP status. Retrying a
+429 or a 500 would paper over exactly the thing a drive exists to find. The
+drive now completes: 17 checks, green.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

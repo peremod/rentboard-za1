@@ -245,6 +245,21 @@ WHATSAPP_PHONE_NUMBER_ID=
 WHATSAPP_ACCESS_TOKEN=
 WHATSAPP_VERIFY_TOKEN=
 WHATSAPP_APP_SECRET=
+# ⚠️ Credentials above with this left blank is the state that LOOKS configured
+# and delivers nothing. Meta permits free-form text only inside the 24-hour
+# customer service window, and a sign-in code goes to somebody who has not
+# messaged us — always outside it, always rejected with 131047. Set this to the
+# name of an APPROVED Authentication template (WhatsApp Manager -> Message
+# templates), not a submitted one. The API logs a warning at boot while it is
+# unset and credentials are present.
+WHATSAPP_TEMPLATE_OTP=
+# The language the template was approved under, not the reader's. Meta treats
+# name+language as one identity, so en_US against a template approved as en
+# fails with 132001 — which reads like a typo in the name and is not one.
+WHATSAPP_TEMPLATE_LANG=en
+# Leave blank. It exists so a drive can point a send at a stub and read what we
+# actually put on the wire; it defaults to https://graph.facebook.com.
+WHATSAPP_GRAPH_BASE_URL=
 ```
 
 Nine variables above were missing from this list until v1.61.0, `SITE_URL`

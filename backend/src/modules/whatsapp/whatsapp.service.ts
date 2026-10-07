@@ -6,6 +6,97 @@ import { UpdateWhatsappConfigDto } from './dto/update-whatsapp-config.dto';
 import { sanitizeText } from '../../common/utils/sanitize.util';
 
 /**
+ * The body of a Cloud API send, as it goes on the wire.
+ *
+ * Exported and pure so the SHAPE can be asserted without Meta, a network or a
+ * running API — see scripts/whatsapp-template-drive.mjs. The alternative is a
+ * check that only runs against live credentials, which in practice means a
+ * check that never runs.
+ */
+export interface OtpSendOptions {
+  phone: string;
+  code: string;
+  ttlMinutes: number;
+  /** Approved AUTHENTICATION template name, or undefined if there is none yet. */
+  templateName?: string;
+  /** The template's language code, exactly as it was approved — e.g. en, en_US. */
+  templateLang?: string;
+}
+
+/**
+ * Build the outbound body for a sign-in code.
+ *
+ * ── Why there are two shapes at all
+ *
+ * Meta permits free-form `type: 'text'` ONLY inside the 24-hour customer
+ * service window — within 24 hours of the person messaging the business. A
+ * sign-in code goes to somebody who has not messaged us, by definition, so in
+ * production it is always business-initiated and always outside the window.
+ * Meta rejects it with error 131047 unless it uses a pre-approved template.
+ *
+ * So the text branch is NOT a fallback that works a bit less well. Against real
+ * credentials it does not deliver at all. It stays because it is the right
+ * thing in development, where no credentials are set and the code is logged
+ * rather than sent, and because an operator mid-setup should get Meta's own
+ * error rather than a silent no-op from us.
+ *
+ * ── The authentication template's shape is fixed by Meta, not by us
+ *
+ * An AUTHENTICATION template has preset body text with one variable (the code),
+ * an optional expiry footer, and a required one-time-password button. The code
+ * is passed TWICE — once to the body, which is what the person reads, and once
+ * to the button, which is what the copy-code button puts on their clipboard.
+ * Leaving the button parameter out is the common mistake; the message is then
+ * rejected rather than sent without a button.
+ *
+ * ⚠️ `ttlMinutes` does NOT appear in the payload. The expiry is baked into the
+ * template's footer at approval time (`code_expiration_minutes`), so it is a
+ * number Meta already holds. It stays in the signature because the text branch
+ * does use it, and because a caller passing a TTL that the template contradicts
+ * is a real mistake worth being able to see — see OUTSTANDING §27.
+ */
+export function buildOtpSend(opts: OtpSendOptions): Record<string, unknown> {
+  const to = opts.phone.replace('+', '');
+
+  if (opts.templateName) {
+    return {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'template',
+      template: {
+        name: opts.templateName,
+        language: { code: opts.templateLang ?? 'en' },
+        components: [
+          { type: 'body', parameters: [{ type: 'text', text: opts.code }] },
+          {
+            type: 'button',
+            // 'url' even for a copy-code button: the sub_type names the button
+            // SLOT in the send request, while copy-code vs one-tap is fixed on
+            // the template itself (otp_type) when it is created.
+            sub_type: 'url',
+            // A string, not the number 0. Meta's examples use "0" and a number
+            // is rejected by some API versions.
+            index: '0',
+            parameters: [{ type: 'text', text: opts.code }],
+          },
+        ],
+      },
+    };
+  }
+
+  return {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'text',
+    text: {
+      body:
+        `${opts.code} is your Mastande sign-in code. It expires in ${opts.ttlMinutes} minutes.\n\n` +
+        `If you did not ask to sign in, ignore this message and do not share the code.`,
+    },
+  };
+}
+
+/**
  * WhatsApp Business API bridge (Meta Cloud API).
  * Landlords opt in with a phone number; Mastande notifies them there when a
  * tenant applies or messages, and their replies flow back into the
@@ -22,6 +113,18 @@ export class WhatsappService {
   private readonly accessToken?: string;
   private readonly verifyToken?: string;
   private readonly appSecret?: string;
+  private readonly otpTemplate?: string;
+  private readonly templateLang: string;
+  /**
+   * Where the Cloud API lives.
+   *
+   * Configurable for one reason: it is the only way to prove, in this
+   * repository, that what we put on the wire is what Meta expects. Every send
+   * path here was written against documentation and NONE of it had ever been
+   * observed — scripts/whatsapp-template-drive.mjs points this at a stub and
+   * reads the body. It defaults to Meta and an operator never sets it.
+   */
+  private readonly graphBase: string;
 
   /**
    * Set by WhatsappModule after construction.
@@ -43,6 +146,30 @@ export class WhatsappService {
     this.accessToken = this.config.get<string>('whatsapp.accessToken');
     this.verifyToken = this.config.get<string>('whatsapp.verifyToken');
     this.appSecret = this.config.get<string>('whatsapp.appSecret');
+    this.otpTemplate = this.config.get<string>('whatsapp.otpTemplate');
+    this.templateLang = this.config.get<string>('whatsapp.templateLang') ?? 'en';
+    this.graphBase = (
+      this.config.get<string>('whatsapp.graphBaseUrl') ?? 'https://graph.facebook.com'
+    ).replace(/\/$/, '');
+
+    // Said once, at boot, where an operator reads it — not per message.
+    //
+    // Credentials set with no template is the state that looks configured and
+    // delivers nothing: every sign-in code is business-initiated, so Meta
+    // rejects all of them with 131047. The old code could not say this because
+    // it had no notion of a template at all.
+    if (this.phoneNumberId && this.accessToken && !this.otpTemplate) {
+      this.logger.warn(
+        'WhatsApp credentials are set but WHATSAPP_TEMPLATE_OTP is not. Sign-in codes will be sent as ' +
+          'free-form text, which Meta accepts only inside the 24-hour customer service window — so in ' +
+          'practice they will be REJECTED (131047). Submit an AUTHENTICATION template and set its name.',
+      );
+    }
+  }
+
+  /** The Cloud API messages endpoint for the configured number. */
+  private messagesUrl(): string {
+    return `${this.graphBase}/${this.apiVersion}/${this.phoneNumberId}/messages`;
   }
 
   /**
@@ -132,18 +259,15 @@ export class WhatsappService {
       return;
     }
 
-    const url = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`;
-    const body = {
-      messaging_product: 'whatsapp',
-      to: phone.replace('+', ''),
-      type: 'text',
-      text: {
-        body: `${code} is your Mastande sign-in code. It expires in ${ttlMinutes} minutes.\n\n` +
-              `If you did not ask to sign in, ignore this message and do not share the code.`,
-      },
-    };
+    const body = buildOtpSend({
+      phone,
+      code,
+      ttlMinutes,
+      templateName: this.otpTemplate,
+      templateLang: this.templateLang,
+    });
 
-    const res = await fetch(url, {
+    const res = await fetch(this.messagesUrl(), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
@@ -154,7 +278,15 @@ export class WhatsappService {
 
     if (!res.ok) {
       const detail = await res.text();
-      this.logger.error(`WhatsApp OTP failed (${res.status}): ${detail.slice(0, 300)}`);
+      // ⚠️ Meta's own error text, not a summary of it. 131047 ("re-engagement
+      // message") and 132001 ("template name does not exist") are different
+      // problems with different fixes, and an operator who sees neither has to
+      // guess which. The code is also never logged — it is a credential.
+      this.logger.error(
+        `WhatsApp OTP failed (${res.status}) sending a ` +
+          `${this.otpTemplate ? `template "${this.otpTemplate}" (${this.templateLang})` : 'free-form text message'}: ` +
+          detail.slice(0, 300),
+      );
       throw new Error('Could not send the code. Please try email instead.');
     }
   }
@@ -178,8 +310,7 @@ export class WhatsappService {
       return false;
     }
 
-    const url = `https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`;
-    const res = await fetch(url, {
+    const res = await fetch(this.messagesUrl(), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
@@ -211,7 +342,7 @@ export class WhatsappService {
     }
 
     try {
-      const res = await fetch(`https://graph.facebook.com/${this.apiVersion}/${this.phoneNumberId}/messages`, {
+      const res = await fetch(this.messagesUrl(), {
         method: 'POST',
         headers: { Authorization: `Bearer ${this.accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({

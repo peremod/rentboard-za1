@@ -72,5 +72,34 @@ export default () => ({
      * never again. The verify token proves nothing about any subsequent POST.
      */
     appSecret: process.env.WHATSAPP_APP_SECRET?.trim(),
+    /**
+     * The approved AUTHENTICATION template that carries a sign-in code.
+     *
+     * Unset until somebody has submitted one in the Meta console and Meta has
+     * approved it. While it is unset, sendOtp falls back to free-form text —
+     * which is correct in development, where nothing is sent at all, and does
+     * NOT deliver in production: a sign-in code is business-initiated by
+     * definition, so it is always outside Meta's 24-hour customer service
+     * window and always rejected with 131047.
+     */
+    otpTemplate: process.env.WHATSAPP_TEMPLATE_OTP?.trim() || undefined,
+    /**
+     * The language a template was APPROVED under, not the reader's language.
+     *
+     * Meta treats name+language as the identity of a template: sending
+     * `en_US` to a template approved as `en` fails with 132001 ("template name
+     * does not exist"), which reads like a typo in the name and is not one.
+     */
+    templateLang: process.env.WHATSAPP_TEMPLATE_LANG?.trim() || 'en',
+    /**
+     * Where the Cloud API lives. An operator never sets this.
+     *
+     * It exists so scripts/whatsapp-template-drive.mjs can point the send at a
+     * stub and read what we actually put on the wire. Every WhatsApp send in
+     * this codebase was written from documentation and none of it had ever
+     * been observed, which is how three paths shipped using a message type
+     * Meta rejects.
+     */
+    graphBaseUrl: process.env.WHATSAPP_GRAPH_BASE_URL?.trim() || undefined,
   },
 });
