@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
+import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 
 /**
  * The last step of getting back in when the phone is gone — Phase 7q.
@@ -30,11 +31,23 @@ import { environment } from '../../../../environments/environment';
       <div class="auth__card">
         <h1 class="auth__title">Lost the phone you sign in with?</h1>
 
-        <p class="auth__sub">
-          If you still have your number, you do not need this page — sign in with
-          a WhatsApp code as usual, or change your number from your settings.
-          This is for a phone that is gone.
-        </p>
+        <!-- Phase 8j: the sentence depends on whether codes are being sent at
+             all. Telling somebody to "sign in with a WhatsApp code as usual"
+             while that is switched off sends them to a door that is shut, from
+             the one page they reach when they are already locked out. -->
+        @if (whatsappEnabled) {
+          <p class="auth__sub">
+            If you still have your number, you do not need this page — sign in with
+            a WhatsApp code as usual, or change your number from your settings.
+            This is for a phone that is gone.
+          </p>
+        } @else {
+          <p class="auth__sub">
+            Signing in with a phone number is not available at the moment, so a
+            code is not the way back in either way. Talk to us and we will move
+            your account onto an email address.
+          </p>
+        }
 
         <div class="insight-banner">
           📞
@@ -99,6 +112,9 @@ import { environment } from '../../../../environments/environment';
   `],
 })
 export class LostNumber {
+  /** Phase 8j — see feature-flags.ts. */
+  protected readonly whatsappEnabled = WHATSAPP_ENABLED;
+
   private http = inject(HttpClient);
   private router = inject(Router);
 

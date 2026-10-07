@@ -1470,6 +1470,46 @@ reason, one matched copy that had been renamed and crashed on a select.
 Falsified one fault at a time, each check confirmed to fail with its own bug put
 back."
 
+tag_if_missing "v1.114.0" "79089f07995925b40e4b3ebb2383f08d8234b0ca" "2026-10-07 07:30:38 +0000" "v1.114.0 — Phase 8i: the sign-in code as a template, and looking at what we send
+
+Meta permits free-form text only inside the 24-hour customer service window. A
+sign-in code goes to somebody who has not messaged us, by definition, so it was
+always outside it and always rejected with 131047. sendOtp now sends an
+AUTHENTICATION template when one is configured.
+
+The larger finding: nothing here had ever seen an outbound WhatsApp body. Every
+send path was written from documentation, because the only way to look was live
+credentials and a real phone. WHATSAPP_GRAPH_BASE_URL exists so a drive can
+point the client at a stub and read the request.
+
+Also fixed a drive that had been dying nine checks in since the throttler
+started closing connections on a 429, confirmed pre-existing by running it at
+HEAD first."
+
+tag_if_missing "v1.115.0" "de411f027864e9ceb039ee47a62c19b4cf49ba87" "2026-10-07 08:35:36 +0000" "v1.115.0 — Phase 8j: WhatsApp switched off behind one flag
+
+Meta bills per message — about USD 0.0095 plus VAT per sign-in code to a South
+African number, from the first one, no free allowance — and this product is
+free to list and free to apply. WHATSAPP_ENABLED now defaults to false.
+
+Switched off, not deleted. WhatsApp-first is still the goal; it goes back on
+when the business can carry it, and CLAUDE.md says so.
+
+Two decisions were the owner's: phone-only accounts keep their screens and are
+told plainly to use email, rather than the flows being removed; and wa.me links
+stay, because they open the person's own WhatsApp and Meta bills nobody.
+
+Two things would have gone wrong quietly. The rent reminder stamps
+reminderSentAt whether or not the send worked, and that stamp excludes a period
+from the next pass — every unpaid month would have been marked reminded while
+nothing was sent, and never reminded again, including after WhatsApp came back.
+And the notices screen would have rendered \"WhatsApp could not deliver this
+one\" against every notice ever written, with a reason that was false.
+
+Proved against a stub Cloud API: any request reaching it is one Meta would
+bill. Falsified by removing the gates — a real billable template message lands
+on the stub."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
@@ -1485,7 +1525,7 @@ if [ "$created" -gt 0 ]; then
   git push origin "${to_push[@]}"
   echo
   echo "Done. Verify with:"
-  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.](10[0-9]|11[0-3])[.]'"
+  echo "  git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-9]|9[0-9])[.]|v1[.](10[0-9]|11[0-5])[.]'"
 else
   echo "Nothing to push."
 fi

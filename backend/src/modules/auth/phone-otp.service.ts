@@ -1,8 +1,8 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
-import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { WhatsappService, PHONE_CODES_OFF } from '../whatsapp/whatsapp.service';
 import { normaliseSaMobile } from '../../common/utils/phone.util';
 import { SIGN_IN_USER } from '../../common/prisma/account-visibility';
 
@@ -103,6 +103,13 @@ export class PhoneOtpService {
    * for the same reason password reset does.
    */
   async requestCode(rawPhone: string) {
+    // ⚠️ BEFORE a code is issued, not after. Issuing one that cannot be
+    // delivered still burns the per-number code budget, still writes a row,
+    // and still leaves somebody watching a handset for a message that is never
+    // coming. A control that looks like it works is this codebase's oldest
+    // defect. 503, because nothing about the request is wrong — the capability
+    // is off.
+    if (!this.whatsapp.isEnabled()) throw new ServiceUnavailableException(PHONE_CODES_OFF);
     const phone = this.normalise(rawPhone);
     if (!phone) {
       throw new BadRequestException('Enter a valid South African mobile number, e.g. 082 123 4567');
@@ -187,6 +194,13 @@ export class PhoneOtpService {
    * find anyone — which is exactly how it shipped.
    */
   async requestVerification(userId: string) {
+    // ⚠️ BEFORE a code is issued, not after. Issuing one that cannot be
+    // delivered still burns the per-number code budget, still writes a row,
+    // and still leaves somebody watching a handset for a message that is never
+    // coming. A control that looks like it works is this codebase's oldest
+    // defect. 503, because nothing about the request is wrong — the capability
+    // is off.
+    if (!this.whatsapp.isEnabled()) throw new ServiceUnavailableException(PHONE_CODES_OFF);
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     if (!user.phone) {
       throw new BadRequestException('Add a mobile number to your profile first.');
@@ -377,6 +391,13 @@ export class PhoneOtpService {
    * number being proven.
    */
   async requestPhoneChange(userId: string, rawNewPhone: string) {
+    // ⚠️ BEFORE a code is issued, not after. Issuing one that cannot be
+    // delivered still burns the per-number code budget, still writes a row,
+    // and still leaves somebody watching a handset for a message that is never
+    // coming. A control that looks like it works is this codebase's oldest
+    // defect. 503, because nothing about the request is wrong — the capability
+    // is off.
+    if (!this.whatsapp.isEnabled()) throw new ServiceUnavailableException(PHONE_CODES_OFF);
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     const phone = this.normalise(rawNewPhone);
     if (!phone) {

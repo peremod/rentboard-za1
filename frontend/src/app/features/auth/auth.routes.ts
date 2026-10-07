@@ -1,4 +1,16 @@
-import { Routes } from '@angular/router';
+import { inject } from '@angular/core';
+import { Router, Routes } from '@angular/router';
+import { WHATSAPP_ENABLED } from '../../core/config/feature-flags';
+
+/**
+ * Lets a route through only while the WhatsApp channel is on — Phase 8j.
+ *
+ * Returns a UrlTree rather than `false`: a bare false leaves the person on
+ * whatever page they were on with nothing explaining why the link did
+ * nothing, which is the dead-control defect wearing a router's clothes.
+ */
+const whatsappOnlyGuard = () =>
+  WHATSAPP_ENABLED ? true : inject(Router).createUrlTree(['/auth/register']);
 
 /** Auth feature — lazy-loaded, no guard (unauthenticated users need access). */
 export const AUTH_ROUTES: Routes = [
@@ -18,6 +30,15 @@ export const AUTH_ROUTES: Routes = [
     path: 'register-phone',
     loadComponent: () => import('./register-phone/register-phone').then((m) => m.RegisterPhone),
     title: 'Sign up with your phone number — Mastande',
+    /**
+     * Phase 8j. The link to this page is hidden while WHATSAPP_ENABLED is
+     * false, but a hidden link is not a closed door — this URL has been shared
+     * and it is in the sitemap's history, so somebody will arrive here by
+     * typing it or from a bookmark. Without the guard they would fill in the
+     * whole form and meet a 503 at the end, which is the worst place to find
+     * out. Redirected to the ordinary sign-up instead, which works.
+     */
+    canActivate: [whatsappOnlyGuard],
   },
   {
     path: 'magic',

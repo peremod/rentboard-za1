@@ -60,6 +60,26 @@ export default () => ({
   },
 
   whatsapp: {
+    /**
+     * The master switch for everything Meta charges for — Phase 8j.
+     *
+     * ⚠️ Default FALSE, and the default is the decision. Meta bills per
+     * message: an authentication message to a South African number is about
+     * USD $0.0095 plus VAT, from the first one, with no free allowance. On a
+     * product that is free to list and free to apply, that is a per-head cost
+     * with no revenue behind it, so the channel is off until somebody decides
+     * to pay for it.
+     *
+     * When false, every outbound Cloud API call is skipped and the phone
+     * sign-in endpoints refuse with a 503 that says so. Nothing is deleted:
+     * the listing bot, the webhook, the templates and the landlord opt-in all
+     * still exist, and setting this to true with credentials in place brings
+     * the whole channel back.
+     *
+     * It does NOT gate wa.me links — sharing a room or calling a plumber opens
+     * the person's own WhatsApp and Meta never bills for that.
+     */
+    enabled: process.env.WHATSAPP_ENABLED === 'true',
     apiVersion: process.env.WHATSAPP_API_VERSION ?? 'v19.0',
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
     accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
@@ -72,5 +92,34 @@ export default () => ({
      * never again. The verify token proves nothing about any subsequent POST.
      */
     appSecret: process.env.WHATSAPP_APP_SECRET?.trim(),
+    /**
+     * The approved AUTHENTICATION template that carries a sign-in code.
+     *
+     * Unset until somebody has submitted one in the Meta console and Meta has
+     * approved it. While it is unset, sendOtp falls back to free-form text —
+     * which is correct in development, where nothing is sent at all, and does
+     * NOT deliver in production: a sign-in code is business-initiated by
+     * definition, so it is always outside Meta's 24-hour customer service
+     * window and always rejected with 131047.
+     */
+    otpTemplate: process.env.WHATSAPP_TEMPLATE_OTP?.trim() || undefined,
+    /**
+     * The language a template was APPROVED under, not the reader's language.
+     *
+     * Meta treats name+language as the identity of a template: sending
+     * `en_US` to a template approved as `en` fails with 132001 ("template name
+     * does not exist"), which reads like a typo in the name and is not one.
+     */
+    templateLang: process.env.WHATSAPP_TEMPLATE_LANG?.trim() || 'en',
+    /**
+     * Where the Cloud API lives. An operator never sets this.
+     *
+     * It exists so scripts/whatsapp-template-drive.mjs can point the send at a
+     * stub and read what we actually put on the wire. Every WhatsApp send in
+     * this codebase was written from documentation and none of it had ever
+     * been observed, which is how three paths shipped using a message type
+     * Meta rejects.
+     */
+    graphBaseUrl: process.env.WHATSAPP_GRAPH_BASE_URL?.trim() || undefined,
   },
 });
