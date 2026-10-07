@@ -1632,6 +1632,41 @@ this file exists for.
 inside the off state: a 503 for an unknown number and a 200 for a known one
 would leak exactly what the neutral message exists to hide.
 
+### ⚠️ Deferred, not abandoned — and the open consequence
+
+The owner's words, recorded because an off switch left alone for six months
+starts to look like a decision nobody remembers making:
+
+> *"WhatsApp-first is still a goal, but since we can't afford it at the moment
+> we will use it once it's feasible for us to do so."*
+
+So this is **paused work**. Do not delete the WhatsApp code to tidy up, and do
+not quietly design around its absence as though the channel were never coming.
+`CLAUDE.md` carries the short version so every future session reads it.
+
+**The gap that is open right now:** a person with **no email address has no way
+in at all.** `User.email` is nullable precisely for the WhatsApp-first landlord
+the product is built for, and `sendOtp` is the only delivery there has ever
+been for a phone code — no SMS provider, and even assisted sign-up goes over
+WhatsApp. Today such a person needs somebody to put an email on their account
+by hand.
+
+That is accepted for now and it is not free. Three ways out, when it matters
+more than it costs:
+
+1. **Turn WhatsApp back on** — the intended answer, and the cheapest per
+   message of the three.
+2. **An admin-read code for assisted sign-up.** `requestCodeAssisted`
+   deliberately does not return the code in its response, which is the right
+   call against a compromised admin account but is also what makes the
+   in-person path impossible with the channel off. A deliberate, audited
+   admin-only variant would close the gap for nothing per head — and would need
+   thinking about carefully, because it is a way to create an account for
+   somebody else.
+3. **SMS.** Works, and costs roughly R0.20–0.40 a message in South Africa —
+   the same or worse than WhatsApp authentication, plus a new integration. No
+   saving, so no reason, unless deliverability turns out to differ.
+
 ### Turning it back on
 
 `docs/WHATSAPP-SETUP.md` §0. Both flags, API first, and an approved

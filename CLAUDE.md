@@ -56,6 +56,40 @@ Any new secret goes in `backend/.env.example` with a comment explaining what it
 is and where to get it. Never hardcoded, never defaulted to a working value in
 code. `scripts/env-parity.mjs` is the gate.
 
+### WhatsApp is deferred, not abandoned
+
+**WhatsApp-first is still the goal.** It is switched off because of cost, not
+because it was the wrong idea, and it goes back on when the business can carry
+it. Treat it as paused work, not dead code.
+
+`WHATSAPP_ENABLED` defaults to false (and a missing line means false). Meta
+bills **per message** — roughly USD $0.0095 + VAT per sign-in code to a South
+African number, from the first one, with no free allowance — and this product
+is free to list and free to apply, so every message is a per-head cost with no
+revenue behind it.
+
+So:
+
+- **Do not delete the WhatsApp code.** The listing bot, the parser, the
+  webhook, the signature verification and the landlord opt-in all stay. One
+  variable brings the channel back; rebuilding it later is waste.
+- **Do not add a new paid send without the flag.** Anything that calls the
+  Cloud API goes through `WhatsappService` and respects `isEnabled()`.
+- **`wa.me` links are NOT affected and never were.** Sharing a room, or tapping
+  "WhatsApp" on a contractor, opens the person's own WhatsApp and Meta bills
+  nobody. Those are free distribution in this market. Leave them alone.
+- **Nothing on screen may promise a WhatsApp message while it is off.** The
+  landing page advertised "WhatsApp Notifications" to every visitor and had to
+  be fixed; phone sign-in refuses with a 503 naming email rather than accepting
+  and sending nothing.
+
+⚠️ **The open consequence:** a person with no email address currently has no
+way in at all. `User.email` is nullable precisely for the WhatsApp-first
+landlord, and `sendOtp` is the only delivery there has ever been for a phone
+code — there is no SMS provider, and even assisted sign-up sends over WhatsApp.
+That gap is known and accepted for now. See `docs/OUTSTANDING.md` §29 and
+`docs/WHATSAPP-SETUP.md`.
+
 ### Three environments
 
 Development, staging and production. A new feature must work identically across
