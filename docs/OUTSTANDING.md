@@ -1432,6 +1432,248 @@ on the wrong page and proves nothing. Both read as the product being wrong.
 
 ---
 
+## 27. WhatsApp: the sign-in code can now be sent, and four other paths still cannot
+
+v1.114.0 (Phase 8i). Row 40 of `PRE-LAUNCH-CHECKLIST.md` has recorded since
+Phase 0 that every outbound WhatsApp message is free-form `type: 'text'`, and
+that Meta permits that **only inside the 24-hour customer service window** —
+within 24 hours of the person messaging the business. A business-initiated
+message outside that window is rejected with **error 131047** unless it uses a
+pre-approved template.
+
+Recording it is not the same as being able to see it. Nothing in this
+repository had ever observed a single outbound WhatsApp body: the only way to
+look was to configure live Meta credentials and send a real message to a real
+phone, so every send path here was written from documentation and never checked
+against anything.
+
+### What changed
+
+- `buildOtpSend()` is exported and pure, so the body can be asserted without
+  Meta, a network, or a running API.
+- `sendOtp` sends an **AUTHENTICATION template** when `WHATSAPP_TEMPLATE_OTP` is
+  set, and free-form text when it is not.
+- `WHATSAPP_GRAPH_BASE_URL` exists for one reason: `whatsapp-template-drive.mjs`
+  points the client at a stub and reads what we actually put on the wire. An
+  operator never sets it.
+- **Credentials with no template now warn at boot**, naming 131047. That is the
+  state that looks configured and delivers nothing, and before this the code had
+  no notion of a template at all, so it could not say so.
+
+### The text branch is not a lesser fallback
+
+Against real credentials it does not deliver **at all**. It stays because it is
+right in development, where nothing is sent and the code is logged, and because
+an operator mid-setup should see Meta's own error rather than a silent no-op.
+
+### What is still broken, and why it is survivable
+
+Four paths remain free-form text and still fail outside the window. Each
+degrades honestly rather than breaking, which is why they are listed rather than
+fixed in the same phase — each needs its own **UTILITY** template and its own
+Meta approval:
+
+| Path | What it is | What happens outside the window |
+|---|---|---|
+| `notifyLandlord` | a tenant applied, or wrote | returns null; the email still goes |
+| `sendToNumber` (rent) | a rent reminder | returns false; the landlord's own record is unaffected |
+| `sendToNumber` (references) | asking a previous landlord | returns false; falls back to an admin phoning |
+| `sendToNumber` (notices) | a notice to a phone-only account | the `Notice` row is written first and `whatsappError` records the reason |
+
+The notice router already wrote that reason in words before this phase —
+"Most likely outside the 24-hour window with no approved template" — which is
+the one place the product had already admitted this out loud.
+
+The **listing bot's replies are genuinely fine**: the landlord messaged us
+first, so they are inside the window by construction. That is the only
+free-form send here that was ever correct.
+
+### What a green drive does NOT mean
+
+`scripts/whatsapp-template-drive.mjs` proves the **shape**, not the approval.
+A template name Meta has not approved produces a correctly-shaped request that
+Meta rejects with **132001**, and nothing in this repository can tell the
+difference. Section 4 of the drive prints that on screen rather than letting a
+green run read as "WhatsApp works". **No message has ever been delivered from
+this repository to a real handset.**
+
+⚠️ `name + language` is the identity of a template. Sending `en_US` to one
+approved as `en` fails with 132001, which reads like a typo in the name and is
+not one. Hence `WHATSAPP_TEMPLATE_LANG`, separate and documented.
+
+⚠️ `ttlMinutes` is deliberately **absent** from the template payload. The expiry
+is baked into the template's footer at approval time
+(`code_expiration_minutes`), so Meta already holds it; sending it too would be a
+second source of truth that can disagree with the first. The TTL the API quotes
+in its reply ("expires in 10 minutes") and the one on the approved template are
+**not linked by anything**, and a mismatch would be invisible — a real gap,
+named here rather than papered over.
+
+---
+
+## 28. ✅ A drive died mid-run on its own rate-limiter check
+
+v1.114.0 (Phase 8i), found while regression-testing §27 and **pre-existing** —
+it fails identically at HEAD, which is how it was told apart from the WhatsApp
+work rather than assumed to be.
+
+`phone-signup-drive.mjs` has a section that deliberately provokes a 429, to
+prove the throttler is not decoration. Nest closes the connection when it
+answers 429; Node's `fetch` keeps connections alive and reuses them, so the next
+call picked up a socket the server had already finished with and failed with
+`SocketError: other side closed`.
+
+That is a **thrown TypeError, not a status**, so it took the whole drive down
+nine checks in. `curl` over the same 26 requests answers 200×15 then 429×11 with
+the API healthy throughout, which is what proved it was the client and not the
+product.
+
+A drive that dies mid-run reports neither a pass nor a failure. It reports
+nothing, which is worse than either.
+
+`apiCall` in `scripts/lib/drive-session.mjs` now retries **once**, and only when
+fetch threw with a connection-level cause — never on an HTTP status. Retrying a
+429 or a 500 would paper over exactly the thing a drive exists to find. The
+drive now completes: 17 checks, green.
+
+---
+
+## 29. ✅ WhatsApp switched off — one flag, nothing deleted
+
+v1.115.0 (Phase 8j). The owner's decision, once the cost was on the table:
+*"for now we don't need a sign in code and everything that uses WhatsApp needs
+to be removed and reserved for later stages when we can pay for these costs."*
+
+Meta bills **per message**. An authentication message to a South African number
+is about **USD $0.0095 + VAT**, from the first one, with **no free allowance** —
+the 1,000-a-month free tier is service messages only. On a product that is free
+to list and free to apply, that is a per-head cost with no revenue behind it.
+
+### Removed, or switched off?
+
+Switched off. `WHATSAPP_ENABLED` defaults to false — including when the line is
+missing entirely — and nothing was deleted. Deleting 1,000 lines of working
+code (the listing bot, the parser, the webhook, the signature verification, the
+landlord opt-in) and rebuilding it in six months is waste, and the owner's own
+words were "reserved for later stages".
+
+Two decisions were put to the owner rather than assumed, because both change
+who can use the product:
+
+1. **Phone-only accounts.** `sendOtp` is the *only* delivery for a phone code —
+   there is no SMS provider, and even **assisted sign-up**, where an admin sits
+   with a landlord, sends the code over WhatsApp and deliberately does not
+   return it in the response. So switching the channel off closes sign-up,
+   sign-in, number change and lost-number recovery for anybody with no email
+   address, and `User.email` is nullable precisely because, in the schema's own
+   words, *"many township landlords are WhatsApp-first and do not use email at
+   all."* Chosen: **keep the flows, disable delivery**, and say so on screen.
+2. **The free links.** `wa.me` opens the person's own WhatsApp and Meta bills
+   nobody. Sharing a room and tapping "WhatsApp" on a plumber are free
+   distribution in this market. Chosen: **keep them**, and a drive now guards
+   them against a later over-eager sweep.
+
+### What the switch does
+
+| | While `WHATSAPP_ENABLED` is false |
+|---|---|
+| `sendOtp` | **throws** — a silently unsent sign-in code leaves somebody watching a handset |
+| `sendToNumber` | returns false; every caller already had another route |
+| `notifyLandlord` | returns null; the email still goes |
+| Webhook handshake | refused, so it cannot be registered against a deployment that will not answer |
+| Inbound deliveries | ignored — acting on one means *replying*, which is billable |
+| Phone sign-in / sign-up / verify / change | **503**, naming email as the way in |
+| Lost-number recovery | **503** before the row is marked approved |
+| Rent reminder pass | does not run at all |
+| `wa.me` links | untouched |
+
+### Two things that would have gone wrong quietly
+
+- **The rent reminder would have lied in the database.** `reminderSentAt` is
+  stamped on every candidate whether or not the send succeeded, and that stamp
+  is what excludes a period from the next pass. With the channel off, every
+  unpaid month would have been marked as reminded while nothing was sent — and
+  would then **never be reminded again, including after WhatsApp came back**. A
+  silent permanent hole, created by a feature flag. The pass now returns before
+  the loop.
+- **The notices screen would have accused itself.** `sendToNumber` returning
+  false makes the notice router write *"WhatsApp declined the message. Most
+  likely outside the 24-hour window with no approved template"*, which the
+  notices screen renders as "WhatsApp could not deliver this one" — against
+  every notice ever written, with a reason that is false, because nothing was
+  declined and nothing was sent. The router now returns before the attempt, so
+  the column stays null, which is the distinction it exists to preserve.
+
+### The refusal is before the code, not after
+
+Every guarded entry point refuses **before** a code is issued. Issuing one that
+cannot be delivered still burns the per-number code budget, still writes a row,
+and still leaves a person watching a handset — a control that looks like it
+works, which is this codebase's oldest defect.
+
+### Proof
+
+`scripts/whatsapp-off-drive.mjs` runs the API against a **stub Cloud API**: any
+request reaching that stub is a request that would have reached Meta and been
+billed. ⚠️ It runs with credentials and a template name **set** — proving
+nothing is sent when nothing is configured proves nothing, since it was never
+going to send. Falsified: with the gates removed, a real billable template
+message lands on the stub and the drive prints the payload.
+
+It also asserts the frontend flag agrees with the API, because the dangerous
+drift is frontend-on/API-off: a button that looks like it works.
+
+`otp-drive` and `phone-signup-drive` now **stop loudly** when they meet the
+503, naming which drive covers which state, and exit 0 — a deliberate decision
+should not make a suite run red, and a skip presented as a pass is the defect
+this file exists for.
+
+`smoke-test.sh` asserts **both** states, and keeps the no-enumeration guarantee
+inside the off state: a 503 for an unknown number and a 200 for a known one
+would leak exactly what the neutral message exists to hide.
+
+### ⚠️ Deferred, not abandoned — and the open consequence
+
+The owner's words, recorded because an off switch left alone for six months
+starts to look like a decision nobody remembers making:
+
+> *"WhatsApp-first is still a goal, but since we can't afford it at the moment
+> we will use it once it's feasible for us to do so."*
+
+So this is **paused work**. Do not delete the WhatsApp code to tidy up, and do
+not quietly design around its absence as though the channel were never coming.
+`CLAUDE.md` carries the short version so every future session reads it.
+
+**The gap that is open right now:** a person with **no email address has no way
+in at all.** `User.email` is nullable precisely for the WhatsApp-first landlord
+the product is built for, and `sendOtp` is the only delivery there has ever
+been for a phone code — no SMS provider, and even assisted sign-up goes over
+WhatsApp. Today such a person needs somebody to put an email on their account
+by hand.
+
+That is accepted for now and it is not free. Three ways out, when it matters
+more than it costs:
+
+1. **Turn WhatsApp back on** — the intended answer, and the cheapest per
+   message of the three.
+2. **An admin-read code for assisted sign-up.** `requestCodeAssisted`
+   deliberately does not return the code in its response, which is the right
+   call against a compromised admin account but is also what makes the
+   in-person path impossible with the channel off. A deliberate, audited
+   admin-only variant would close the gap for nothing per head — and would need
+   thinking about carefully, because it is a way to create an account for
+   somebody else.
+3. **SMS.** Works, and costs roughly R0.20–0.40 a message in South Africa —
+   the same or worse than WhatsApp authentication, plus a new integration. No
+   saving, so no reason, unless deliverability turns out to differ.
+
+### Turning it back on
+
+`docs/WHATSAPP-SETUP.md` §0. Both flags, API first, and an approved
+AUTHENTICATION template before any of it delivers (§27).
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

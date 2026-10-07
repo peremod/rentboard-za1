@@ -5,6 +5,7 @@ import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
 import { ReferralsService } from '../../../core/services/referrals.service';
+import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 
 @Component({
   selector: 'app-register',
@@ -82,9 +83,11 @@ import { ReferralsService } from '../../../core/services/referrals.service';
              invented one for them, and then never received a single notice. The
              link is this prominent because the people who need it are the least
              likely to go looking. -->
-        <a class="auth__magic" routerLink="/auth/register-phone">
-          💬 No email address? Sign up with your phone number
-        </a>
+        @if (whatsappEnabled) {
+          <a class="auth__magic" routerLink="/auth/register-phone">
+            💬 No email address? Sign up with your phone number
+          </a>
+        }
 
         <p class="auth__fine">
           By registering you agree to our
@@ -101,6 +104,9 @@ import { ReferralsService } from '../../../core/services/referrals.service';
   `,
 })
 export class Register implements OnInit {
+  /** Phase 8j — see feature-flags.ts. */
+  protected readonly whatsappEnabled = WHATSAPP_ENABLED;
+
   private fb = inject(FormBuilder);
   private auth = inject(AuthService);
   private route = inject(ActivatedRoute);

@@ -49,6 +49,27 @@ const NEW_E164 = `+2782124${S}`;
 const TAKEN_LOCAL = `082125${S}`;
 const TAKEN_E164 = `+2782125${S}`;
 
+/**
+ * ⚠️ Phase 8j. Phone sign-up issues a code over WhatsApp, and WhatsApp is
+ * switched off by default now — Meta bills per message on a product that is
+ * free to use. So this drive is about a dormant feature.
+ *
+ * It stops loudly rather than skipping quietly: a skip presented as a pass is
+ * this repository's own recurring defect. Exits 0, because a deliberate
+ * decision should not make a suite run red.
+ *
+ * To run it for real: start the API with WHATSAPP_ENABLED=true.
+ */
+const offProbe = await apiCall(API, 'POST', '/api/auth/phone/signup/request-code', { phone: '0821230001' });
+if (offProbe.status === 503) {
+  console.log('\n⏭  SKIPPED — phone sign-up is switched off on this API (WHATSAPP_ENABLED).');
+  console.log('   Nothing below ran. This is a decision, not a failure:');
+  console.log('   · the OFF behaviour is covered by scripts/whatsapp-off-drive.mjs');
+  console.log('   · the ON behaviour is covered by scripts/whatsapp-template-drive.mjs');
+  console.log('   To exercise this one, restart the API with WHATSAPP_ENABLED=true.');
+  process.exit(0);
+}
+
 const SECRET = process.env.JWT_SECRET ?? '';
 const hashCode = (code, phone) =>
   crypto.createHmac('sha256', SECRET).update(`signup:${phone}:${code}`).digest('hex');

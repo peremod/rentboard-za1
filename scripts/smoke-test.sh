@@ -2726,14 +2726,32 @@ if [[ -n "$UNDO_ROOM" ]]; then
   fi
 fi
 
-# Phone sign-in must not reveal whether a number has an account.
+# Phone sign-in — Phase 8j made this TWO states, and both are asserted.
+#
+# ⚠️ The suite must mean something whichever way the switch is set, or it stops
+# being run on the deployment it matters most on. WHATSAPP_ENABLED=false is the
+# default now (Meta bills per message), so the usual answer is a 503 — and the
+# no-enumeration guarantee still has to hold inside it: a 503 for an unknown
+# number and a 200 for a known one would leak exactly what the neutral message
+# exists to hide.
 req POST /api/auth/phone/request-code '{"phone":"0821234567"}'
-check "phone code request accepted" 200 "$STATUS" "$BODY"
-PHONE_MSG=$(echo "$BODY" | jq -r '.message')
+PHONE_STATUS="$STATUS"
+PHONE_MSG=$(echo "$BODY" | jq -r '.message // empty')
+
+if [[ "$PHONE_STATUS" == "503" ]]; then
+  green "  PASS  phone sign-in is switched off and says so  (503)"; PASS=$((PASS+1))
+  if echo "$PHONE_MSG" | grep -qi 'email'; then
+    green "  PASS  …and the refusal names the way in that works"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the 503 does not mention email: $PHONE_MSG"; FAIL=$((FAIL+1))
+  fi
+else
+  check "phone code request accepted" 200 "$PHONE_STATUS" "$BODY"
+fi
 
 req POST /api/auth/phone/request-code '{"phone":"0839999999"}'
-if [[ "$(echo "$BODY" | jq -r '.message')" == "$PHONE_MSG" ]]; then
-  green "  PASS  identical response for known and unknown numbers"; PASS=$((PASS+1))
+if [[ "$STATUS" == "$PHONE_STATUS" && "$(echo "$BODY" | jq -r '.message // empty')" == "$PHONE_MSG" ]]; then
+  green "  PASS  identical response for known and unknown numbers  ($STATUS)"; PASS=$((PASS+1))
 else
   red "  FAIL  phone response reveals whether an account exists"; FAIL=$((FAIL+1))
 fi
@@ -2752,8 +2770,14 @@ check "rejects a short code" 400 "$STATUS" "$BODY"
 # database, which is what scripts/phone-signup-drive.mjs is for.
 SIGNUP_PHONE="08212$(( RANDOM % 90000 + 10000 ))"
 req POST /api/auth/phone/signup/request-code "{\"phone\":\"$SIGNUP_PHONE\"}"
-check "sign-up code request accepted" 200 "$STATUS" "$BODY"
-SIGNUP_MSG=$(echo "$BODY" | jq -r '.message')
+# Same two states as sign-in above — see the comment there.
+SIGNUP_STATUS="$STATUS"
+SIGNUP_MSG=$(echo "$BODY" | jq -r '.message // empty')
+if [[ "$SIGNUP_STATUS" == "503" ]]; then
+  green "  PASS  phone sign-up is switched off and says so  (503)"; PASS=$((PASS+1))
+else
+  check "sign-up code request accepted" 200 "$SIGNUP_STATUS" "$BODY"
+fi
 
 # The same number sign-in uses above, which by now HAS an account.
 #
@@ -3094,7 +3118,9 @@ req PATCH /api/users/me '{"phone":"12345"}' "$LTOKEN"
 check "rejects a malformed number on save" 400 "$STATUS" "$BODY"
 
 req POST /api/auth/phone/verify-number "" "$LTOKEN"
-if [[ "$STATUS" == "200" || "$STATUS" == "400" ]]; then
+# 503 joins the accepted set for the same reason as the two blocks above:
+# verifying a number means sending a code to it, which is the switched-off path.
+if [[ "$STATUS" == "200" || "$STATUS" == "400" || "$STATUS" == "503" ]]; then
   green "  PASS  verification request handled  ($STATUS)"; PASS=$((PASS+1))
 else
   red "  FAIL  verification request returned $STATUS"; FAIL=$((FAIL+1))

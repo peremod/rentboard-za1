@@ -161,6 +161,21 @@ export class RentService {
    */
   @Cron('0 9 * * *', { timeZone: 'Africa/Johannesburg' })
   async sendOverdueReminders() {
+    // ⚠️ Phase 8j. Stop before the loop, and the reason is in the data rather
+    // than in the message.
+    //
+    // `reminderSentAt` is stamped on every candidate whether or not the send
+    // succeeded. With the channel off that would mark EVERY unpaid month as
+    // reminded while nothing was sent — and the stamp is what excludes a
+    // period from the next pass, so those months would never be reminded
+    // again, including after WhatsApp is switched back on. A silent, permanent
+    // hole, created by a feature flag.
+    //
+    // Returning here leaves `reminderSentAt` null, so the work simply resumes.
+    if (!this.whatsapp.isEnabled()) {
+      this.logger.log('Rent reminders skipped — WHATSAPP_ENABLED is not set, so nothing was marked as reminded');
+      return { sent: 0, skipped: 0, considered: 0 };
+    }
     const now = new Date();
     const thisMonth = this.monthStart(now);
 

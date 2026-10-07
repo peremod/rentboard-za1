@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { RoomsService } from '../../core/services/rooms.service';
 import { AlertsService } from '../../core/services/alerts.service';
+import { WHATSAPP_ENABLED } from '../../core/config/feature-flags';
 import { AuthService } from '../../core/services/auth.service';
 import { Room, SA_PROVINCES } from '../../core/models/room.model';
 import { RoomCard } from '../../shared/components/room-card/room-card';
@@ -74,7 +75,15 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
       <div class="trust-item"><span class="trust-icon">🔒</span>POPIA Compliant</div>
       <div class="trust-item"><span class="trust-icon">🏛️</span>Rental Housing Act Aligned</div>
       <div class="trust-item"><span class="trust-icon">🚫</span>No Agent Fees</div>
-      <div class="trust-item"><span class="trust-icon">📱</span>WhatsApp Notifications</div>
+      <!-- ⚠️ Phase 8j. This strip is a promise made to a visitor on the
+           landing page, so it cannot advertise a channel that is switched off.
+           Room alerts are the true version of the same claim: a saved search
+           mails you the moment something matches, and costs nobody anything. -->
+      @if (whatsappEnabled) {
+        <div class="trust-item"><span class="trust-icon">📱</span>WhatsApp Notifications</div>
+      } @else {
+        <div class="trust-item"><span class="trust-icon">🔔</span>Free Room Alerts</div>
+      }
     </div>
 
     <div class="search-wrap">
@@ -410,6 +419,9 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
   // specific), which is why the board ignored every breakpoint.
 })
 export class Home implements OnInit, OnDestroy {
+  /** Phase 8j — see feature-flags.ts. The strip must not promise a dead channel. */
+  protected readonly whatsappEnabled = WHATSAPP_ENABLED;
+
   private roomsService = inject(RoomsService);
   private alerts = inject(AlertsService);
   auth = inject(AuthService);

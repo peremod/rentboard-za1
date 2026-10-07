@@ -111,6 +111,19 @@ export class NoticeRouter {
     // number is messaging whoever actually holds it.
     if (!to.phone || !to.phoneVerified) return;
 
+    // ⚠️ Phase 8j. Return BEFORE the attempt, so `whatsappError` stays null.
+    //
+    // Without this the send returns false, the catch-all below writes "WhatsApp
+    // declined the message. Most likely outside the 24-hour window with no
+    // approved template" — and the notices screen renders "WhatsApp could not
+    // deliver this one" against every notice ever written. That reason would be
+    // false (nothing was declined; nothing was sent) and the screen would be
+    // telling a person their notice half-failed when it did not.
+    //
+    // Null means "we never tried", which is exactly right and is the
+    // distinction the column was added to preserve.
+    if (!this.whatsapp.isEnabled()) return;
+
     const text = [notice.title, notice.body].filter(Boolean).join('\n\n');
     try {
       const sent = await this.whatsapp.sendToNumber(to.phone, text);
