@@ -5,10 +5,11 @@ code rather than from documentation, plus the tools that made them.
 
 | Start here | |
 |---|---|
-| **`DESIGN-BRIEF.md`** | Positioning, who this is for, and the known UX problems — quoted from the repository's own records. **Read the box at the top first:** two documents named in the handoff request do not exist in this repository. |
+| **`DESIGN-BRIEF.md`** | Positioning, who this is for, and the known UX problems. Quotes the brand guide and reproduces **Phase 7 of the implementation prompt verbatim** (all 178 lines, verified line-for-line), then says where each item actually stands. **§2 is the one to read first:** three places the brand document and the shipped product disagree. |
 | `ROUTE-INVENTORY.md` | 73 routes, every portal, with components and guards. |
 | `TOKENS-CURRENT.md` | Every design value in use, counted. 33 tokens used 671 times; 158 literal colours bypassing them 330 times; 106 of those used exactly once. |
 | `COMPONENT-INVENTORY.md` | 83 standalone components by portal, described in their own doc comments. |
+| `source-documents/` | The two source documents, unmodified: the brand positioning guide and the full implementation prompt (Phases 0–7). |
 
 ## Regenerating
 
