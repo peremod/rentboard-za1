@@ -159,13 +159,55 @@ is not made here: see `docs/OUTSTANDING.md` §27.
 
 ---
 
-## 6. Cost
+## 6. Cost — WhatsApp sign-in is NOT free
 
-Meta charges per conversation, by category and country. Authentication
-conversations in South Africa are billed per delivered message.
+⚠️ **Every sign-in code costs money, from the first one.** There is no free
+allowance that covers it.
 
-This is a cost to **Umastande**, not to a landlord or a tenant — it does not
-touch the "free to list, free to apply" rule. But it is a real per-sign-in cost
-and it scales with sign-ins, so watch it in the WhatsApp Manager billing page
-before turning phone sign-in on for everybody. Email magic links cost nothing
-and already work.
+Meta charges **per message**, not per conversation — that changed in July 2025
+— by category and by the **recipient's** country. The four categories are
+Marketing, Utility, Authentication and Service.
+
+### What Mastande actually sends
+
+| What | Category | Charged? |
+|---|---|---|
+| Sign-in code (`sendOtp`) | **Authentication** | **Yes, every one.** No free tier applies |
+| Listing-bot replies to a landlord | Service | First **1,000 per number per month** free, then charged |
+| Landlord notifications, rent reminders, reference requests, notices | Utility (once templated) | Charged. Today they are free-form text and mostly fail — §5 |
+
+The 1,000 free **service** messages a month are per business phone number, do
+not carry over, and **do not cover Authentication, Utility or Marketing** —
+those are billed from message one.
+
+### Rough figures for South Africa
+
+Authentication to a South African number is about **USD $0.0095 per message**
+as of the 1 October 2026 rate change (it was $0.0076 before), **plus 15% VAT**.
+
+At roughly R18/USD that is about **R0.17 + VAT ≈ R0.20 per sign-in code**, so
+about **R200 per 1,000 codes**. A person who mistypes and asks for a second
+code costs twice.
+
+⚠️ **Verify before you budget.** Meta reviews rates quarterly — 1 January,
+1 April, 1 July, 1 October — and the figures above are read off third-party
+summaries, because Meta's own docs are not reachable from the environment this
+was written in. The authoritative number is on Meta's WhatsApp pricing page and
+in WhatsApp Manager → Billing for your own account, in your own currency.
+
+### What that means for the product
+
+This is a cost to **Umastande**, not to a landlord or a tenant, so it does not
+touch the "free to list, free to apply" rule. But it is a **real per-head cost
+on a free product**, and it scales with sign-ins rather than with revenue.
+
+Two things follow:
+
+- **Email magic links cost nothing and already work.** WhatsApp sign-in is for
+  the person who has no email address — which is a real and important part of
+  this market, and exactly who the product is built for — not the default for
+  everybody who happens to have a phone.
+- **Watch the service-message allowance** if the WhatsApp listing bot takes
+  off. A landlord listing a room is a back-and-forth of several messages, so
+  1,000 free a month is roughly a hundred or two listings, and after that each
+  reply is billed at the same rate as a utility message.
