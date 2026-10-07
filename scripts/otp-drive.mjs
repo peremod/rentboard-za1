@@ -52,6 +52,28 @@ q(`UPDATE users SET phone = '${PHONE_E164}', "phoneVerified" = true WHERE id = '
 ok('a landlord with a verified number');
 
 // ── No enumeration, in either direction ───────────────────────────────────
+/**
+ * ⚠️ Phase 8j. This drive exercises the phone sign-in code, which is sent over
+ * WhatsApp — and WhatsApp is switched off by default now, because Meta bills
+ * per message on a product that is free to use.
+ *
+ * So the whole drive is about a dormant feature. It is NOT silently skipped:
+ * a skip presented as a pass is this repository's own recurring defect. It
+ * stops here, says which switch is off and which drive covers the off-state,
+ * and exits 0 so a suite run is not red over a deliberate decision.
+ *
+ * To run it for real: start the API with WHATSAPP_ENABLED=true.
+ */
+const probe = await apiCall(API, 'POST', '/api/auth/phone/request-code', { phone: '0821230000' });
+if (probe.status === 503) {
+  console.log('\n⏭  SKIPPED — phone sign-in is switched off on this API (WHATSAPP_ENABLED).');
+  console.log('   Nothing below ran. This is a decision, not a failure:');
+  console.log('   · the OFF behaviour is covered by scripts/whatsapp-off-drive.mjs');
+  console.log('   · the ON behaviour is covered by scripts/whatsapp-template-drive.mjs');
+  console.log('   To exercise this one, restart the API with WHATSAPP_ENABLED=true.');
+  process.exit(0);
+}
+
 const known = await apiCall(API, 'POST', '/api/auth/phone/request-code', { phone: PHONE_LOCAL });
 const unknown = await apiCall(API, 'POST', '/api/auth/phone/request-code', { phone: `082999${SUFFIX}` });
 known.status === unknown.status && JSON.stringify(known.body) === JSON.stringify(unknown.body)

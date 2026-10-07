@@ -240,6 +240,14 @@ PAYFAST_SANDBOX=true
 # delivery rather than trusting unsigned ones, so the feature is off rather
 # than open — and it fails silently from the outside, which is why it is
 # listed here rather than discovered later.
+# ⚠️ The master switch, and OFF is the default. Anything but "true" means no
+# Cloud API call is ever made, the webhook is refused, and phone sign-in
+# answers 503 telling people to use email. Meta bills per message — about
+# USD $0.0095 + VAT per sign-in code to a South African number, from the first
+# one — so the channel stays off until that is a cost worth carrying. Nothing
+# is deleted; flip this to true with the credentials below to bring it back.
+# wa.me share links are unaffected and always have been.
+WHATSAPP_ENABLED=false
 WHATSAPP_API_VERSION=v19.0
 WHATSAPP_PHONE_NUMBER_ID=
 WHATSAPP_ACCESS_TOKEN=

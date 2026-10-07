@@ -6,6 +6,20 @@ import { UpdateWhatsappConfigDto } from './dto/update-whatsapp-config.dto';
 import { sanitizeText } from '../../common/utils/sanitize.util';
 
 /**
+ * The one sentence every phone-code entry point says while the channel is off.
+ *
+ * ⚠️ One constant, not six copies. Six copies drift, and the first thing a
+ * person reads when a door is shut is the only explanation they get — it has
+ * to name the alternative, not just the refusal.
+ *
+ * It deliberately does NOT say "WhatsApp is too expensive". Why the channel is
+ * off is Umastande's business; what a person needs is the way in that works.
+ */
+export const PHONE_CODES_OFF =
+  'Signing in with a phone number is not available yet. Use your email address — ' +
+  'and if you do not have one on your account, ask us to add it.';
+
+/**
  * The body of a Cloud API send, as it goes on the wire.
  *
  * Exported and pure so the SHAPE can be asserted without Meta, a network or a
@@ -113,6 +127,14 @@ export class WhatsappService {
   private readonly accessToken?: string;
   private readonly verifyToken?: string;
   private readonly appSecret?: string;
+  /**
+   * The master switch — Phase 8j. False means no Cloud API call is ever made.
+   *
+   * ⚠️ Read it through `enabled` rather than inlining the config lookup. One
+   * place to check is one place to get wrong, and this gate is the difference
+   * between a bill and no bill.
+   */
+  private readonly enabled: boolean;
   private readonly otpTemplate?: string;
   private readonly templateLang: string;
   /**
@@ -141,6 +163,7 @@ export class WhatsappService {
   }
 
   constructor(private config: ConfigService, private prisma: PrismaService) {
+    this.enabled = this.config.get<boolean>('whatsapp.enabled') === true;
     this.apiVersion = this.config.get<string>('whatsapp.apiVersion') ?? 'v19.0';
     this.phoneNumberId = this.config.get<string>('whatsapp.phoneNumberId');
     this.accessToken = this.config.get<string>('whatsapp.accessToken');
@@ -158,13 +181,34 @@ export class WhatsappService {
     // delivers nothing: every sign-in code is business-initiated, so Meta
     // rejects all of them with 131047. The old code could not say this because
     // it had no notion of a template at all.
-    if (this.phoneNumberId && this.accessToken && !this.otpTemplate) {
+    // Said once, at boot, where an operator reads it. Which of the two lines
+    // appears is the whole state of the channel.
+    if (!this.enabled) {
+      this.logger.log(
+        'WhatsApp is OFF (WHATSAPP_ENABLED is not "true"). No message is sent and nothing is billed. ' +
+          'Phone sign-in refuses with a 503 that says so; email and the magic link are unaffected. ' +
+          'wa.me share links are not affected either — Meta does not bill for those.',
+      );
+    } else if (this.phoneNumberId && this.accessToken && !this.otpTemplate) {
       this.logger.warn(
         'WhatsApp credentials are set but WHATSAPP_TEMPLATE_OTP is not. Sign-in codes will be sent as ' +
           'free-form text, which Meta accepts only inside the 24-hour customer service window — so in ' +
           'practice they will be REJECTED (131047). Submit an AUTHENTICATION template and set its name.',
       );
     }
+  }
+
+  /**
+   * Is the paid channel on at all?
+   *
+   * Public because the auth endpoints have to refuse BEFORE issuing a code
+   * rather than issuing one nobody can receive: a code that exists, counts
+   * against the attempt budget and is never delivered is worse than a plain
+   * refusal, and it is exactly the kind of control this codebase keeps
+   * shipping — one that looks like it works.
+   */
+  isEnabled(): boolean {
+    return this.enabled;
   }
 
   /** The Cloud API messages endpoint for the configured number. */
@@ -252,6 +296,14 @@ export class WhatsappService {
    * waiting for a message that is never coming.
    */
   async sendOtp(phone: string, code: string, ttlMinutes: number): Promise<void> {
+    // ⚠️ Throws rather than returning quietly, and that is the point of the
+    // whole switch. A sign-in code that is silently not sent leaves somebody
+    // staring at a box waiting for a message that is never coming. The callers
+    // check isEnabled() first and refuse before a code is ever issued; this is
+    // the backstop for a caller that forgets.
+    if (!this.enabled) {
+      throw new Error('WhatsApp is switched off (WHATSAPP_ENABLED), so no sign-in code was sent.');
+    }
     if (!this.phoneNumberId || !this.accessToken) {
       // In development this is the whole delivery mechanism, so log it rather
       // than leaving no way to test the flow at all.
@@ -305,6 +357,11 @@ export class WhatsappService {
    * go, so it can say "we could not reach them" rather than "sent".
    */
   async sendToNumber(phone: string, message: string): Promise<boolean> {
+    // false, not a throw: every caller treats false as "it did not go" and has
+    // another route — an in-app notice, an email, or an admin phoning. Those
+    // paths were already written to degrade, which is why switching the
+    // channel off costs them nothing but the WhatsApp copy.
+    if (!this.enabled) return false;
     if (!this.phoneNumberId || !this.accessToken) {
       this.logger.warn(`[WhatsApp not configured] message for ${phone}: ${message.slice(0, 120)}`);
       return false;
@@ -333,6 +390,10 @@ export class WhatsappService {
   }
 
   async notifyLandlord(landlordProfileId: string, message: string): Promise<string | null> {
+    // null is this method's own "did not send" value, and the email
+    // notification beside it is unaffected. Checked before the database read,
+    // because a query to decide not to send is a query for nothing.
+    if (!this.enabled) return null;
     const config = await this.getConfig(landlordProfileId);
     if (!config?.waEnabled) return null;
 
@@ -371,6 +432,10 @@ export class WhatsappService {
 
   /** GET /whatsapp/webhook — Meta's one-time verification handshake. */
   verifyWebhook(mode: string, token: string, challenge: string): string {
+    // Refused while the channel is off, so a webhook cannot be registered
+    // against a deployment that will not answer it. Meta retries a failed
+    // handshake rather than silently subscribing.
+    if (!this.enabled) throw new BadRequestException('WhatsApp is not enabled on this deployment');
     if (mode === 'subscribe' && token === this.verifyToken) return challenge;
     throw new BadRequestException('Webhook verification failed');
   }
@@ -386,6 +451,14 @@ export class WhatsappService {
    * skipped rather than mis-filed into the wrong conversation.
    */
   async handleIncomingWebhook(body: any): Promise<void> {
+    // Nothing inbound is processed either. An inbound message is free to
+    // receive, but acting on one means REPLYING — the listing bot answers
+    // every message it accepts — and a reply is a service message Meta bills
+    // for once the monthly free tier is gone.
+    if (!this.enabled) {
+      this.logger.log('Inbound WhatsApp delivery ignored — WHATSAPP_ENABLED is not set');
+      return;
+    }
     const entry = body?.entry?.[0]?.changes?.[0]?.value;
     const message = entry?.messages?.[0];
     if (!message) return; // status-update callback, not a new message — nothing to do

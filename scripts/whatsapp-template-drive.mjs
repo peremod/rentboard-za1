@@ -156,6 +156,9 @@ const api = spawn('node', [built], {
   env: {
     ...process.env,
     PORT: String(PORT_API),
+    // Phase 8j: this is the drive for the ENABLED path. whatsapp-off-drive is
+    // the one that proves the switch holds when it is false.
+    WHATSAPP_ENABLED: 'true',
     WHATSAPP_GRAPH_BASE_URL: `http://localhost:${PORT_STUB}`,
     WHATSAPP_PHONE_NUMBER_ID: '111111111111111',
     WHATSAPP_ACCESS_TOKEN: 'stub-access-token',
@@ -265,6 +268,7 @@ const api2 = spawn('node', [built], {
   env: {
     ...process.env,
     PORT: String(PORT_API),
+    WHATSAPP_ENABLED: 'true',
     WHATSAPP_PHONE_NUMBER_ID: '111111111111111',
     WHATSAPP_ACCESS_TOKEN: 'stub-access-token',
     WHATSAPP_TEMPLATE_OTP: '',

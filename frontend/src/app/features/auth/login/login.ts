@@ -4,6 +4,7 @@ import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angu
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
+import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 
 /**
  * Login — email and password.
@@ -75,8 +76,19 @@ import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
           </p>
 
           <!-- WhatsApp is close to universal here, and a number is something
-               people keep long after they have forgotten a password. -->
-          @if (!phoneMode()) {
+               people keep long after they have forgotten a password — which is
+               why the whole flow stays, behind one flag, rather than being
+               deleted. Phase 8j: Meta bills per message and this product is
+               free, so the channel is off until that is a cost worth carrying.
+               The form is not merely hidden: somebody who has only ever signed
+               in with a number needs to be told where to go instead. -->
+          @if (!whatsappEnabled) {
+            <p class="auth__hint" style="margin-top:.5rem">
+              Signing in with a phone number is not available yet — use your
+              email address above. If your account has no email address on it,
+              <a routerLink="/legal/privacy">get in touch</a> and we will add one.
+            </p>
+          } @else if (!phoneMode()) {
             <button type="button" class="auth__magic" style="margin-top:.5rem"
                     (click)="phoneMode.set(true)">
               💬 Use my phone number instead
@@ -134,6 +146,9 @@ import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
   `,
 })
 export class Login {
+  /** Phase 8j — see feature-flags.ts. Hides what promises a WhatsApp message. */
+  protected readonly whatsappEnabled = WHATSAPP_ENABLED;
+
   private fb = inject(FormBuilder);
   private auth = inject(AuthService);
   private router = inject(Router);

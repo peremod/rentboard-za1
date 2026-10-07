@@ -1538,6 +1538,107 @@ drive now completes: 17 checks, green.
 
 ---
 
+## 29. ✅ WhatsApp switched off — one flag, nothing deleted
+
+v1.115.0 (Phase 8j). The owner's decision, once the cost was on the table:
+*"for now we don't need a sign in code and everything that uses WhatsApp needs
+to be removed and reserved for later stages when we can pay for these costs."*
+
+Meta bills **per message**. An authentication message to a South African number
+is about **USD $0.0095 + VAT**, from the first one, with **no free allowance** —
+the 1,000-a-month free tier is service messages only. On a product that is free
+to list and free to apply, that is a per-head cost with no revenue behind it.
+
+### Removed, or switched off?
+
+Switched off. `WHATSAPP_ENABLED` defaults to false — including when the line is
+missing entirely — and nothing was deleted. Deleting 1,000 lines of working
+code (the listing bot, the parser, the webhook, the signature verification, the
+landlord opt-in) and rebuilding it in six months is waste, and the owner's own
+words were "reserved for later stages".
+
+Two decisions were put to the owner rather than assumed, because both change
+who can use the product:
+
+1. **Phone-only accounts.** `sendOtp` is the *only* delivery for a phone code —
+   there is no SMS provider, and even **assisted sign-up**, where an admin sits
+   with a landlord, sends the code over WhatsApp and deliberately does not
+   return it in the response. So switching the channel off closes sign-up,
+   sign-in, number change and lost-number recovery for anybody with no email
+   address, and `User.email` is nullable precisely because, in the schema's own
+   words, *"many township landlords are WhatsApp-first and do not use email at
+   all."* Chosen: **keep the flows, disable delivery**, and say so on screen.
+2. **The free links.** `wa.me` opens the person's own WhatsApp and Meta bills
+   nobody. Sharing a room and tapping "WhatsApp" on a plumber are free
+   distribution in this market. Chosen: **keep them**, and a drive now guards
+   them against a later over-eager sweep.
+
+### What the switch does
+
+| | While `WHATSAPP_ENABLED` is false |
+|---|---|
+| `sendOtp` | **throws** — a silently unsent sign-in code leaves somebody watching a handset |
+| `sendToNumber` | returns false; every caller already had another route |
+| `notifyLandlord` | returns null; the email still goes |
+| Webhook handshake | refused, so it cannot be registered against a deployment that will not answer |
+| Inbound deliveries | ignored — acting on one means *replying*, which is billable |
+| Phone sign-in / sign-up / verify / change | **503**, naming email as the way in |
+| Lost-number recovery | **503** before the row is marked approved |
+| Rent reminder pass | does not run at all |
+| `wa.me` links | untouched |
+
+### Two things that would have gone wrong quietly
+
+- **The rent reminder would have lied in the database.** `reminderSentAt` is
+  stamped on every candidate whether or not the send succeeded, and that stamp
+  is what excludes a period from the next pass. With the channel off, every
+  unpaid month would have been marked as reminded while nothing was sent — and
+  would then **never be reminded again, including after WhatsApp came back**. A
+  silent permanent hole, created by a feature flag. The pass now returns before
+  the loop.
+- **The notices screen would have accused itself.** `sendToNumber` returning
+  false makes the notice router write *"WhatsApp declined the message. Most
+  likely outside the 24-hour window with no approved template"*, which the
+  notices screen renders as "WhatsApp could not deliver this one" — against
+  every notice ever written, with a reason that is false, because nothing was
+  declined and nothing was sent. The router now returns before the attempt, so
+  the column stays null, which is the distinction it exists to preserve.
+
+### The refusal is before the code, not after
+
+Every guarded entry point refuses **before** a code is issued. Issuing one that
+cannot be delivered still burns the per-number code budget, still writes a row,
+and still leaves a person watching a handset — a control that looks like it
+works, which is this codebase's oldest defect.
+
+### Proof
+
+`scripts/whatsapp-off-drive.mjs` runs the API against a **stub Cloud API**: any
+request reaching that stub is a request that would have reached Meta and been
+billed. ⚠️ It runs with credentials and a template name **set** — proving
+nothing is sent when nothing is configured proves nothing, since it was never
+going to send. Falsified: with the gates removed, a real billable template
+message lands on the stub and the drive prints the payload.
+
+It also asserts the frontend flag agrees with the API, because the dangerous
+drift is frontend-on/API-off: a button that looks like it works.
+
+`otp-drive` and `phone-signup-drive` now **stop loudly** when they meet the
+503, naming which drive covers which state, and exit 0 — a deliberate decision
+should not make a suite run red, and a skip presented as a pass is the defect
+this file exists for.
+
+`smoke-test.sh` asserts **both** states, and keeps the no-enumeration guarantee
+inside the off state: a 503 for an unknown number and a 200 for a known one
+would leak exactly what the neutral message exists to hide.
+
+### Turning it back on
+
+`docs/WHATSAPP-SETUP.md` §0. Both flags, API first, and an approved
+AUTHENTICATION template before any of it delivers (§27).
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

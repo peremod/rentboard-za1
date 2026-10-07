@@ -1,14 +1,56 @@
 # WhatsApp Business API — setup
 
+> ## ⚠️ WhatsApp is OFF, deliberately
+>
+> `WHATSAPP_ENABLED=false` is the default and the decision. Meta bills **per
+> message** — about **USD $0.0095 + VAT** per sign-in code to a South African
+> number, from the first one, with no free allowance — and this product is free
+> to list and free to apply. That is a per-head cost with no revenue behind it.
+>
+> **Nothing has been deleted.** The listing bot, the webhook, the templates, the
+> landlord opt-in and the whole phone sign-in flow are all still here. Setting
+> that one variable to `true`, with the credentials below in place, brings the
+> channel back.
+>
+> **What is off while it is false:** no Cloud API call is ever made; the webhook
+> handshake is refused; phone sign-in, sign-up, number verification, number
+> change and lost-number recovery all answer **503** telling people to use an
+> email address; the rent-reminder pass does not run (so it does not mark months
+> as reminded that nobody was reminded about).
+>
+> **What is NOT off:** `wa.me` links. Sharing a room, or tapping "WhatsApp" on a
+> plumber in the directory, opens the person's **own** WhatsApp — Meta bills
+> nobody for that, and in this market it is free distribution. Those stay.
+>
+> **Check which state you are in:** the API says so at boot, and
+> `node scripts/whatsapp-off-drive.mjs` proves nothing reaches Meta.
+>
+> The rest of this page is how to turn it on when that cost is worth carrying.
+
 What this covers: getting Meta credentials, pointing the webhook at the API,
 and getting a template approved so sign-in codes actually arrive.
 
-**Read this first.** Credentials alone do **not** make WhatsApp work. Meta
-permits free-form text only inside the **24-hour customer service window** —
-within 24 hours of the person messaging you. A sign-in code goes to somebody who
-has not messaged you, by definition, so without an approved template every one
-is rejected with **error 131047**. The API logs a warning at boot if you set
-credentials and leave the template name blank.
+**Read this too.** Credentials alone do **not** make WhatsApp work, even with
+the switch on. Meta permits free-form text only inside the **24-hour customer
+service window** — within 24 hours of the person messaging you. A sign-in code
+goes to somebody who has not messaged you, by definition, so without an approved
+template every one is rejected with **error 131047**. The API logs a warning at
+boot if you set credentials and leave the template name blank.
+
+## 0. Turning it on
+
+```
+WHATSAPP_ENABLED=true          # on the API
+```
+and in `frontend/src/app/core/config/feature-flags.ts`:
+```ts
+export const WHATSAPP_ENABLED = true;
+```
+
+⚠️ **Both, and the API one first.** The frontend flag only decides whether the
+buttons are shown; the API decides whether anything is sent. Frontend-on with
+API-off is a button that looks like it works — the API answers 503 so it is an
+honest error rather than silence, but it is still the wrong way round.
 
 ---
 

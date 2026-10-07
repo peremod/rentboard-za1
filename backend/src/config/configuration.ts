@@ -60,6 +60,26 @@ export default () => ({
   },
 
   whatsapp: {
+    /**
+     * The master switch for everything Meta charges for — Phase 8j.
+     *
+     * ⚠️ Default FALSE, and the default is the decision. Meta bills per
+     * message: an authentication message to a South African number is about
+     * USD $0.0095 plus VAT, from the first one, with no free allowance. On a
+     * product that is free to list and free to apply, that is a per-head cost
+     * with no revenue behind it, so the channel is off until somebody decides
+     * to pay for it.
+     *
+     * When false, every outbound Cloud API call is skipped and the phone
+     * sign-in endpoints refuse with a 503 that says so. Nothing is deleted:
+     * the listing bot, the webhook, the templates and the landlord opt-in all
+     * still exist, and setting this to true with credentials in place brings
+     * the whole channel back.
+     *
+     * It does NOT gate wa.me links — sharing a room or calling a plumber opens
+     * the person's own WhatsApp and Meta never bills for that.
+     */
+    enabled: process.env.WHATSAPP_ENABLED === 'true',
     apiVersion: process.env.WHATSAPP_API_VERSION ?? 'v19.0',
     phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
     accessToken: process.env.WHATSAPP_ACCESS_TOKEN,

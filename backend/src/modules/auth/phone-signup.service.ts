@@ -1,10 +1,10 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { Prisma, User } from '@prisma/client';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
-import { WhatsappService } from '../whatsapp/whatsapp.service';
+import { WhatsappService, PHONE_CODES_OFF } from '../whatsapp/whatsapp.service';
 import { NoticeRouter } from '../notifications/notice-router.service';
 import { ReferralsService } from '../referrals/referrals.service';
 import { normaliseSaMobile } from '../../common/utils/phone.util';
@@ -131,6 +131,13 @@ export class PhoneSignupService {
    * numbers learns neither.
    */
   async requestCode(rawPhone: string) {
+    // ⚠️ BEFORE a code is issued, not after. Issuing one that cannot be
+    // delivered still burns the per-number code budget, still writes a row,
+    // and still leaves somebody watching a handset for a message that is never
+    // coming. A control that looks like it works is this codebase's oldest
+    // defect. 503, because nothing about the request is wrong — the capability
+    // is off.
+    if (!this.whatsapp.isEnabled()) throw new ServiceUnavailableException(PHONE_CODES_OFF);
     const phone = this.requirePhone(rawPhone);
     const neutral = {
       message:
@@ -477,6 +484,13 @@ export class PhoneSignupService {
    * sent. The public endpoint is unchanged, and the drive asserts it.
    */
   async requestCodeAssisted(rawPhone: string, adminId: string) {
+    // ⚠️ BEFORE a code is issued, not after. Issuing one that cannot be
+    // delivered still burns the per-number code budget, still writes a row,
+    // and still leaves somebody watching a handset for a message that is never
+    // coming. A control that looks like it works is this codebase's oldest
+    // defect. 503, because nothing about the request is wrong — the capability
+    // is off.
+    if (!this.whatsapp.isEnabled()) throw new ServiceUnavailableException(PHONE_CODES_OFF);
     const phone = this.requirePhone(rawPhone);
 
     const existing = await this.prisma.user.findFirst({

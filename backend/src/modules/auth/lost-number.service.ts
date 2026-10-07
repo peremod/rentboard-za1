@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -287,6 +287,17 @@ export class LostNumberService {
    * being no guard at all.
    */
   async approve(adminId: string, id: string) {
+    // ⚠️ Refused BEFORE the recovery is marked approved. Approving and then
+    // failing to deliver leaves the row in `approved` with a code nobody can
+    // receive, which an admin reads as "done" and a person experiences as
+    // still locked out — the worst of the three outcomes. While the channel is
+    // off, a lost number is recovered by an admin changing it directly.
+    if (!this.whatsapp.isEnabled()) {
+      throw new ServiceUnavailableException(
+        'Recovery codes go out on WhatsApp, which is switched off. Change the number on the ' +
+          'account directly instead, after you are satisfied the checks passed.',
+      );
+    }
     const row = await this.prisma.accountRecovery.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('No such recovery request.');
     if (row.status !== 'open') {
