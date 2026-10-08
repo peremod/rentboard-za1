@@ -51,20 +51,93 @@ export class RentService {
   private async assertLandlord(tenancyId: string, landlordId: string) {
     const tenancy = await this.prisma.tenancy.findUnique({
       where: { id: tenancyId },
-      select: { id: true, landlordId: true, tenantId: true, status: true, rentCents: true },
+      // startDate and endDate come back because the window they describe is
+      // what bounds a rent period — see assertRentWindow. Selecting only the
+      // status is what allowed a landlord to record rent for a month the
+      // tenant did not live there.
+      select: {
+        id: true, landlordId: true, tenantId: true, status: true, rentCents: true,
+        startDate: true, endDate: true,
+      },
     });
     if (!tenancy) throw new NotFoundException('No such tenancy');
     if (tenancy.landlordId !== landlordId) throw new ForbiddenException('That is not your tenancy');
     return tenancy;
   }
 
-  /** The landlord's toggle. Creates the month on first use. */
-  async mark(tenancyId: string, dto: MarkRentDto, landlordId: string) {
-    const tenancy = await this.assertLandlord(tenancyId, landlordId);
+  /**
+   * Whether a month may be written against this tenancy at all.
+   *
+   * ── Why this is a window and not a status check
+   *
+   * `mark()` refused `cancelled` and nothing else. So on a tenancy that had
+   * ENDED a landlord could still mark months, and on any tenancy they could
+   * mark a month before the tenant moved in, a month after they moved out, or
+   * next March — `upsert` would happily create the row, with `amountCents`
+   * snapshotted from a tenancy that was not running.
+   *
+   * The invariant is not "the tenancy is active". It is **a rent period
+   * belongs to the months the tenancy actually covered**, which is true of a
+   * finished letting as much as a live one. That distinction matters, because
+   * refusing every write on an `ended` tenancy would break the most ordinary
+   * thing there is: a tenant moves out on the 30th owing that month, and the
+   * landlord records it on the 5th. Freezing the ledger at the moment of
+   * move-out would make the record wrong in the one case it is most needed.
+   *
+   * So: the months of the letting stay writable; everything outside them does
+   * not.
+   */
+  private assertRentWindow(
+    tenancy: { status: string; startDate: Date | null; endDate: Date | null },
+    periodStart: Date,
+  ) {
     if (tenancy.status === 'cancelled') {
       throw new BadRequestException('That tenancy was cancelled — there is no rent to record.');
     }
+    // `pending` means nobody has confirmed the move-in, so there is no month
+    // to be in arrears on. The tenant's rent screen has always said exactly
+    // this — "Your move-in is not confirmed yet, so there is no rent record" —
+    // while the API accepted the write anyway.
+    if (tenancy.status === 'pending' || !tenancy.startDate) {
+      throw new BadRequestException(
+        'This tenancy has not started yet. Confirm the move-in first, then the rent record opens.',
+      );
+    }
+
+    const firstMonth = this.monthStart(tenancy.startDate);
+    if (periodStart < firstMonth) {
+      throw new BadRequestException(
+        'That month is before the tenant moved in, so it is not part of this tenancy.',
+      );
+    }
+
+    // Not the future. Rent is due at the start of a month, so the CURRENT
+    // month is fair game; the one after it has not begun.
+    const thisMonth = this.monthStart(new Date());
+    if (periodStart > thisMonth) {
+      throw new BadRequestException('That month has not started yet.');
+    }
+
+    if (tenancy.endDate) {
+      const lastMonth = this.monthStart(tenancy.endDate);
+      if (periodStart > lastMonth) {
+        throw new BadRequestException(
+          'That month is after the tenancy ended, so it is not part of this tenancy.',
+        );
+      }
+    }
+  }
+
+  /**
+   * The landlord's toggle. Creates the month on first use.
+   *
+   * A finished letting is still correctable — see assertRentWindow for why
+   * that is deliberate rather than an oversight.
+   */
+  async mark(tenancyId: string, dto: MarkRentDto, landlordId: string) {
+    const tenancy = await this.assertLandlord(tenancyId, landlordId);
     const periodStart = this.monthStart(dto.periodStart);
+    this.assertRentWindow(tenancy, periodStart);
 
     return this.prisma.rentPeriod.upsert({
       where: { tenancyId_periodStart: { tenancyId, periodStart } },
@@ -99,14 +172,30 @@ export class RentService {
    *
    * Disputing also stops further reminders for that month — continuing to
    * chase someone who has said they paid is how a reminder becomes harassment.
+   *
+   * ⚠️ An ENDED tenancy is deliberately still disputable, and this is the one
+   * place where "the letting is over, so lock it" would be actively harmful.
+   * The most consequential rent mark a tenant will ever receive is the final
+   * month, entered after they moved out — and `TenancyFlag.unpaid_rent` can be
+   * raised off the back of it. Taking away the tenant's answer at exactly that
+   * moment would leave the landlord's unverified word as the only record.
+   *
+   * So the window that bounds `mark()` does not bound this: whatever months
+   * exist may be answered, whenever.
    */
   async dispute(periodId: string, dto: DisputeRentDto, tenantId: string) {
     const period = await this.prisma.rentPeriod.findUnique({
       where: { id: periodId },
-      include: { tenancy: { select: { tenantId: true } } },
+      include: { tenancy: { select: { tenantId: true, status: true } } },
     });
     if (!period) throw new NotFoundException('No such rent record');
     if (period.tenancy.tenantId !== tenantId) throw new ForbiddenException('That is not your tenancy');
+    // A cancelled letting never ran, so there is nothing to disagree about.
+    // It should hold no periods either — assertRentWindow refuses to create
+    // them — and this is the belt to that brace.
+    if (period.tenancy.status === 'cancelled') {
+      throw new BadRequestException('That tenancy was cancelled — there is no rent record to answer.');
+    }
     if (period.status === 'paid') {
       throw new BadRequestException('That month is already marked paid — there is nothing to dispute.');
     }
@@ -122,21 +211,51 @@ export class RentService {
     });
   }
 
-  /** Rent history for one tenancy. Either party may read their own. */
+  /**
+   * Rent history for one tenancy. Either party may read their own.
+   *
+   * ── Why this returns an envelope and not a bare array
+   *
+   * It used to answer `RentPeriod[]`, which meant a caller holding a rent
+   * ledger could not tell whether the letting behind it was running, waiting
+   * on a move-in, or finished two years ago. The tenant's rent screen read
+   * that array and rendered an ended tenancy exactly like a current one —
+   * present-tense heading, "/mo" rent figure, live actions — because the only
+   * other way to know was a second request it did not make.
+   *
+   * A screen cannot describe a record it has not been told the state of. So
+   * the state travels with the record.
+   */
   async history(tenancyId: string, userId: string) {
     const tenancy = await this.prisma.tenancy.findUnique({
       where: { id: tenancyId },
-      select: { landlordId: true, tenantId: true, rentCents: true },
+      select: {
+        id: true, landlordId: true, tenantId: true, rentCents: true,
+        status: true, startDate: true, endDate: true, reviewsCloseAt: true,
+      },
     });
     if (!tenancy) throw new NotFoundException('No such tenancy');
     if (tenancy.landlordId !== userId && tenancy.tenantId !== userId) {
       throw new ForbiddenException('That is not your tenancy');
     }
-    return this.prisma.rentPeriod.findMany({
+
+    const periods = await this.prisma.rentPeriod.findMany({
       where: { tenancyId },
       orderBy: { periodStart: 'desc' },
       take: 24,
     });
+
+    return {
+      tenancy: {
+        id: tenancy.id,
+        status: tenancy.status,
+        startDate: tenancy.startDate,
+        endDate: tenancy.endDate,
+        rentCents: tenancy.rentCents,
+        reviewsCloseAt: tenancy.reviewsCloseAt,
+      },
+      periods,
+    };
   }
 
   async updateSettings(dto: RentSettingsDto, landlordId: string) {

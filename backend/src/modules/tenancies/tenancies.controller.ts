@@ -57,7 +57,12 @@ export class TenanciesController {
   }
 
   @Post(':id/notice')
-  @ApiOperation({ summary: 'Record that notice was given, by either side' })
+  @ApiOperation({
+    summary:
+      'Landlord records that notice was given. `givenBy` says which side gave ' +
+      'it; the LANDLORD is the only caller — a tenant cannot give notice ' +
+      'through the API yet. See docs/OUTSTANDING.md §30.',
+  })
   giveNotice(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: GiveNoticeDto,
@@ -68,7 +73,7 @@ export class TenanciesController {
 
   @Post(':id/notice/withdraw')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Notice was given in error, or withdrawn' })
+  @ApiOperation({ summary: 'Notice was given in error, or withdrawn. Landlord only, as above.' })
   withdrawNotice(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
     return this.lease.withdrawNotice(id, user.id);
   }

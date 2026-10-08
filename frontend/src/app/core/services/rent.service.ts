@@ -27,6 +27,31 @@ export interface RentPeriod {
   reminderSentAt?: string | null;
 }
 
+/**
+ * The tenancy a ledger belongs to, as the rent endpoint returns it.
+ *
+ * ⚠️ This arrives WITH the periods, and that is the point. The endpoint used
+ * to answer a bare `RentPeriod[]`, so a screen holding a rent ledger had no
+ * way to know whether the letting behind it was running, waiting on a
+ * move-in, or finished two years ago — and the tenant's rent screen duly
+ * rendered an ended tenancy as a current one. A record whose state you have
+ * to guess gets described wrongly.
+ */
+export interface RentLedgerTenancy {
+  id: string;
+  status: 'pending' | 'active' | 'ended' | 'cancelled';
+  startDate: string | null;
+  endDate: string | null;
+  rentCents: number;
+  reviewsCloseAt: string | null;
+}
+
+/** What `GET /properties/rent/:tenancyId` answers. */
+export interface RentLedger {
+  tenancy: RentLedgerTenancy;
+  periods: RentPeriod[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class RentService {
   private http = inject(HttpClient);
@@ -34,7 +59,7 @@ export class RentService {
 
   /** Either party may read their own tenancy's history. */
   history(tenancyId: string) {
-    return this.http.get<RentPeriod[]>(`${this.api}/properties/rent/${tenancyId}`);
+    return this.http.get<RentLedger>(`${this.api}/properties/rent/${tenancyId}`);
   }
 
   /**

@@ -477,11 +477,15 @@ record is assembled from:
 
 ### Three rules the archive must hold
 
-1. **Read-only is enforced server-side, not by hiding buttons.** Removing the
-   dispute button from an archived screen is not the fix; `RentService.mark()`
-   and `dispute()` must refuse. The request's own section 12 names this
-   distinction, and this repo has shipped seven controls that only looked like
-   controls.
+1. **Enforced server-side, not by hiding buttons** — and "read-only" is the
+   wrong word, which Phase A established. Removing a button from an archived
+   screen is never the fix; the API must refuse. But the archive is *not*
+   inert: a tenant disputing the final month is a write that belongs there,
+   and it is the single most consequential thing either party does after a
+   move-out. So the rule is **bounded, not frozen**: `mark()` is bounded to
+   the months the tenancy covered, `dispute()` is not bounded at all, and
+   nothing else writes. What the archive must stop being is *present tense* —
+   that is a presentation problem (Phase D), not a permissions one.
 2. **It is a record, not a resurrection.** No "message your old landlord", no
    relist shortcut, no rent toggle. The permissions follow the facts: both
    parties were there, so both may read; neither may now change what happened.
@@ -683,14 +687,54 @@ nothing user-visible ships before the backend refuses the action behind it.
 ### Phase A — Make the backend refuse what the UI will stop offering
 *No visible change. Everything after this depends on it.*
 
-- `RentService.mark()` — refuse `ended`, keep refusing `cancelled` (C2)
-- `RentService.dispute()` — refuse when the tenancy is not `active` (C2)
-- `RentService.history()` — return the tenancy's status and `endDate` with the periods, so no consumer has to make a second call to know what it is looking at (C2)
-- `LeaseService.giveNotice()` — admit the tenant, or correct the OpenAPI summary. One or the other; the two must stop disagreeing (C7)
+**Done — v1.116.0.** With two corrections to what this section originally
+said, both found by implementing it:
 
-**Proof:** extend `scripts/tenancy-lifecycle-drive.mjs` to end a tenancy and
-then attempt each write. Then revert one guard and confirm the check fails.
-That last step is the phase's actual deliverable.
+- `RentService.mark()` — **not** "refuse `ended`". The invariant is a *window*:
+  a rent period belongs to the months the tenancy actually covered. Refusing
+  every write on an `ended` tenancy would break the most ordinary thing there
+  is — a tenant moves out on the 30th owing that month, the landlord records it
+  on the 5th. `assertRentWindow` bounds the months and leaves a finished
+  letting correctable. It also now refuses `pending`, which the tenant's rent
+  screen has always claimed and the API never enforced (C2)
+- `RentService.dispute()` — **the original instruction here was wrong.**
+  "Refuse when the tenancy is not `active`" would remove the tenant's answer at
+  exactly the moment it matters most: the final month, marked unpaid after they
+  moved out, with `TenancyFlag.unpaid_rent` able to rest on it. Only `cancelled`
+  is refused. A dispute is never locked (C2)
+- `RentService.history()` — returns `{ tenancy, periods }` (C2)
+- `LeaseService.giveNotice()` — the OpenAPI summary is corrected to say
+  landlord-only, rather than the guard relaxed. Admitting the tenant needs
+  `Tenancy.noticeRecordedById`, because `noticeGivenById` records who notice is
+  *attributed to*, not who entered it — so there is no safe rule for who may
+  withdraw it, and a landlord clearing a tenant's notice resets a countdown that
+  frees a room. A half-right tenant path is worse than an honest refusal. Phase
+  B/G (C7, `docs/OUTSTANDING.md` §30)
+
+Also found while driving it: **a tenancy is opened fire-and-forget.**
+`ApplicationsService.accept` calls `createFromApplication(...).catch(...)`
+unawaited so it cannot fail the acceptance, and nothing retries — if it throws,
+the application is `accepted` with no tenancy and nothing would notice. It also
+made this drive flaky in a way that read as a broken accept flow. The drive now
+polls; the fire-and-forget stands and is recorded in §30.
+
+**Proof — done.** `scripts/tenancy-lifecycle-drive.mjs` section 7, 18 checks.
+Each guard was then reintroduced and confirmed to fail:
+
+| | |
+|---|---|
+| window guards reverted to the shipped `cancelled`-only behaviour | **7 failed, 50 passed** |
+| `history()` reverted to a bare array | **3 failed, 54 passed** |
+| both restored | **57 passed** |
+
+The "still correctable once ended" check stays green under the first revert, by
+construction — it tests the opposite direction. Anybody can write a guard that
+refuses everything, so each pair of checks has one half that proves the guard
+is a window and not a freeze.
+
+`scripts/smoke-test.sh` §46 carries the same three assertions. Production build
+clean; the 456.40 kB bundle warning is byte-identical at HEAD (verified by
+stashing), so it is pre-existing and this change adds nothing to it.
 
 ### Phase B — `archivedAt`, one writer
 - `Tenancy.archivedAt DateTime?` (D2). Nullable, no backfill guess

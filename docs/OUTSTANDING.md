@@ -1674,6 +1674,108 @@ AUTHENTICATION template before any of it delivers (§27).
 
 ---
 
+## 30. The rent ledger did not know whether the letting was still running
+
+**Phase A of the tenancy-lifecycle work. Fixed, with two exceptions recorded
+below that are deliberately still open.**
+
+### What was wrong
+
+`Tenancy.end()` writes four columns on one row — `status`, `endDate`,
+`endedById`, `reviewsCloseAt` — and that is the entire effect of a tenancy
+ending. Nothing downstream read them. Three consequences on the rent path:
+
+- **`RentService.mark()` refused `cancelled` and nothing else.** So a landlord
+  could record rent against a tenancy that finished two years ago, against a
+  month before the tenant moved in, or against next March. `upsert` created the
+  row, with `amountCents` snapshotted off a tenancy that was not running.
+- **`dispute()` checked the period's own status and never the tenancy's.**
+- **`history()` answered a bare `RentPeriod[]`.** A caller holding a rent ledger
+  had no way to tell a finished letting from a running one, so the tenant's rent
+  screen rendered an ended tenancy exactly like a current one: present-tense
+  heading, a `/mo` rent figure, live actions. Reported by the owner.
+
+### The invariant, which is not "the tenancy is active"
+
+A rent period belongs to **the months the tenancy actually covered**. That is
+as true of a finished letting as a live one, and the distinction matters:
+refusing every write on an `ended` tenancy would break the most ordinary thing
+in this product — a tenant moves out on the 30th owing that month, and the
+landlord records it on the 5th. Freezing the ledger at move-out makes the record
+wrong in the one case it is most needed.
+
+So `assertRentWindow` bounds the months and does not freeze the record:
+
+| | |
+|---|---|
+| `cancelled` | refused — the letting never ran |
+| `pending`, or no `startDate` | refused, naming the move-in. The tenant's rent screen has always said this; the API accepted the write anyway |
+| before the start month | refused |
+| after the current month | refused — the month has not begun |
+| after the end month, once ended | refused |
+| **inside the window, even once ended** | **accepted** |
+
+`dispute()` is deliberately **not** bounded by that window. The most
+consequential mark a tenant ever receives is the final month, entered after
+they moved out, and `TenancyFlag.unpaid_rent` can be raised off it. Taking
+their answer away at exactly that moment would leave the landlord's unverified
+word as the only record.
+
+### Still open — a tenant cannot give notice
+
+`tenancies.controller.ts` documented `POST /tenancies/:id/notice` as *"Record
+that notice was given, by either side"*, and `LeaseService.giveNotice` calls
+`assertLandlordOwns`, so a tenant gets a 403. A documented capability the code
+refuses — the same shape as the `@Throttle` decorators with no guard and the
+`documentDeletedAt` that deleted nothing.
+
+**The summary is corrected rather than the guard relaxed, and that is a
+decision, not a shortcut.** Admitting the tenant needs one column this model
+does not have. `noticeGivenById` records who notice is *attributed to*, not who
+entered it, so there is no way to distinguish a landlord's record of a tenant's
+verbal notice from a tenant's own act — and therefore no safe rule for who may
+withdraw it. Letting a landlord clear a tenant's notice resets a countdown that
+frees a room; letting a tenant clear a landlord's does the same in reverse.
+
+**What it needs:** `Tenancy.noticeRecordedById`, then the tenant route, with
+withdrawal restricted to whoever entered it. Phase B/G of
+`docs/TENANCY-LIFECYCLE-AUDIT.md`.
+
+### Still open — a tenancy is opened fire-and-forget
+
+`ApplicationsService.accept` calls
+`this.tenancies.createFromApplication(applicationId).catch(...)` — deliberately
+not awaited, so a failure there cannot fail the acceptance. Defensible, and
+nothing retries: if that call throws, the application is `accepted` and no
+tenancy exists, which no screen and no job would ever notice.
+
+It also made the drive flaky. `tenancy-lifecycle-drive.mjs` read the row with a
+bare query straight after accept and intermittently reported *"accepting opens
+a tenancy, and it starts 'pending' (got '')"* — which reads exactly like a
+broken accept flow and is not one. The drive now polls (`tenancyFor`). **The
+flake is fixed; the fire-and-forget is not.**
+
+### Proof
+
+`scripts/tenancy-lifecycle-drive.mjs` section 7 — 18 checks. Then, as this
+repo requires, each guard was reintroduced and the check confirmed to fail:
+
+- window guards reverted to the shipped `cancelled`-only behaviour → **7 failed, 50 passed**
+- `history()` reverted to a bare array → **3 failed, 54 passed**
+- both restored → **57 passed**
+
+The "still correctable once ended" check stays green under the first revert, by
+construction: it tests the opposite direction, and anybody can write a guard
+that refuses everything.
+
+`scripts/smoke-test.sh` §46 carries the same three assertions against the API.
+
+**Not proven:** nothing here reads the rent *screen*. The API refuses what it
+should and accepts what it must; the tenant's rent page still presents an ended
+tenancy as a current one. That is Phase D.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

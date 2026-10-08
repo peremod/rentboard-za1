@@ -3567,6 +3567,38 @@ if [[ -n "$TEN_ID" ]]; then
 
   req GET "/api/properties/rent/$TEN_ID" "" "$TTOKEN"
   check "a tenant can read their own rent record" 200 "$STATUS" "$BODY"
+
+  # The ledger carries the tenancy's own state (v1.116.0). It used to answer a
+  # bare array, so a caller holding a rent record could not tell a finished
+  # letting from a running one — and the tenant's rent screen duly rendered
+  # both the same way. A screen cannot describe a record it has not been told
+  # the state of.
+  LEDGER_STATE=$(echo "$BODY" | jq -r '.tenancy.status // empty')
+  if [[ -n "$LEDGER_STATE" ]]; then
+    green "  PASS  the ledger says which state the tenancy is in ($LEDGER_STATE)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the rent ledger carries no tenancy state — { tenancy, periods }?"; FAIL=$((FAIL+1))
+  fi
+
+  # ── The rent window (v1.116.0) ─────────────────────────────────────────
+  #
+  # A rent period belongs to the months the tenancy actually covered. That is
+  # the invariant, and it is NOT "the tenancy is active": $TEN_ID has already
+  # ended by this point, and a landlord must still be able to record the month
+  # a tenant moved out owing. `mark()` previously refused `cancelled` and
+  # nothing else, so it accepted a month before the move-in, a month after the
+  # move-out, and next March.
+  THIS_MONTH=$(date -u +%Y-%m-01)
+  NEXT_MONTH=$(date -u -d '1 month' +%Y-%m-01 2>/dev/null || date -u -v+1m +%Y-%m-01)
+
+  req PATCH "/api/properties/rent/$TEN_ID/mark" "{\"periodStart\":\"$THIS_MONTH\",\"status\":\"unpaid\"}" "$LTOKEN"
+  check "a month inside a FINISHED letting is still correctable" 200 "$STATUS" "$BODY"
+
+  req PATCH "/api/properties/rent/$TEN_ID/mark" "{\"periodStart\":\"$NEXT_MONTH\",\"status\":\"unpaid\"}" "$LTOKEN"
+  check "a month that has not started is refused" 400 "$STATUS" "$BODY"
+
+  req PATCH "/api/properties/rent/$TEN_ID/mark" '{"periodStart":"2020-01-01","status":"unpaid"}' "$LTOKEN"
+  check "a month before the tenant moved in is refused" 400 "$STATUS" "$BODY"
 else
   skipped "tenant rent record — no tenancy was created earlier"
 fi

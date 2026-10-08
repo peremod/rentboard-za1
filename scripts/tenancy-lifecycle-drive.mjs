@@ -71,6 +71,33 @@ async function lettingReadyToStart(stamp) {
   return { landlord, tenant, roomId, applicationId, roomTitle: `Back room ${stamp}` };
 }
 
+/**
+ * The tenancy a given application opened — polled, never read once.
+ *
+ * ⚠️ `ApplicationsService.accept` opens the tenancy FIRE-AND-FORGET:
+ * `this.tenancies.createFromApplication(...).catch(...)`, deliberately not
+ * awaited so a failure there cannot fail the acceptance. The row therefore
+ * does not reliably exist when accept returns.
+ *
+ * Section 1 read it with a bare query and intermittently saw `''` — reported
+ * as "accepting opens a tenancy, and it starts 'pending' (got '')", which
+ * reads exactly like a broken accept flow and is not one. Later sections got
+ * away with it only because a page load and a two-second wait sat in between.
+ * An id read too early also produces URLs like `/api/properties/rent//mark`
+ * and a row of 404s that look nothing like the thing under test.
+ *
+ * A flaky check is worse than a missing one: it teaches whoever runs this to
+ * disbelieve a red line.
+ */
+async function tenancyFor(applicationId) {
+  for (let i = 0; i < 40; i++) {
+    const id = dbQuery(`SELECT id FROM tenancies WHERE "applicationId" = '${applicationId}'`);
+    if (id) return id;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`no tenancy was ever opened for application ${applicationId}`);
+}
+
 const browser = await chromium.launch();
 
 // ── 1. The landlord side ───────────────────────────────────────────────────
@@ -78,6 +105,7 @@ console.log('\n── 1. The landlord confirms the move-in ───────
 
 const a = await lettingReadyToStart(Date.now());
 
+await tenancyFor(a.applicationId);
 let status = dbQuery(`SELECT status FROM tenancies WHERE "applicationId" = '${a.applicationId}'`);
 check(status === 'pending', `accepting opens a tenancy, and it starts 'pending' (got '${status}')`);
 
@@ -336,9 +364,9 @@ console.log('\n── 6. The tenant dashboard reads the tenancy, not the applica
   }
 
   // Now confirm it from the tenant's own side and re-read the screen.
-  const confirmed = await apiCall(API, 'POST', `/api/tenancies/${
-    dbQuery(`SELECT id FROM tenancies WHERE "applicationId" = '${p6.applicationId}'`)
-  }/confirm-start`, { startDate: new Date().toISOString().slice(0, 10) }, p6.tenant.token);
+  const confirmed = await apiCall(API, 'POST',
+    `/api/tenancies/${await tenancyFor(p6.applicationId)}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, p6.tenant.token);
   check(confirmed.status === 200 || confirmed.status === 201,
     `the tenant confirms their own move-in (${confirmed.status})`);
 
@@ -390,6 +418,177 @@ console.log('\n── 6. The tenant dashboard reads the tenancy, not the applica
 
   await tp.close();
 }
+
+
+// ── 7. The rent ledger and the end of a letting — Phase A ────────────────
+//
+// ⚠️ Why this section exists at all.
+//
+// Everything above this line proves a transition HAPPENS. Section 3 ends a
+// tenancy and asserts the column reads 'ended'. That was the whole of this
+// drive's coverage of moving out, and by the standard this repo sets for
+// itself — "change it, drive it, then reintroduce the bug and confirm the
+// check fails" — it could not fail on any of the following, all of which were
+// true of the shipped product:
+//
+//   · `mark()` refused `cancelled` and NOTHING else, so a landlord could
+//     record rent against a tenancy that finished two years ago, against a
+//     month before the tenant moved in, or against next March. `upsert`
+//     created the row, with `amountCents` snapshotted off a tenancy that was
+//     not running;
+//   · `dispute()` checked the period's own status and never the tenancy's;
+//   · `history()` answered a bare array, so the tenant's rent screen could not
+//     tell a finished letting from a running one and rendered both the same.
+//
+// ── The shape of the fix, because it is not "freeze it when it ends"
+//
+// The invariant is NOT "the tenancy is active". It is that a rent period
+// belongs to the months the tenancy actually covered — which is as true of a
+// finished letting as a live one. Refusing every write on an `ended` tenancy
+// would break the most ordinary thing in this product: a tenant moves out on
+// the 30th owing that month, and the landlord records it on the 5th.
+//
+// So the checks below come in pairs, and the SECOND half of each pair is the
+// one that matters. Anybody can make a guard that refuses everything.
+console.log('\n── 7. What the rent ledger accepts once the letting is over ──');
+
+{
+  /** The first of a month, `offset` months from this one, as the DTO wants it. */
+  const month = (offset) => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + offset, 1))
+      .toISOString().slice(0, 10);
+  };
+  const markAs = (tenancyId, token, periodStart, status = 'unpaid') =>
+    apiCall(API, 'PATCH', `/api/properties/rent/${tenancyId}/mark`, { periodStart, status }, token);
+
+  const r = await lettingReadyToStart(Date.now() + 4000);
+  const tenancyId = await tenancyFor(r.applicationId);
+
+  // ── 7a. A tenancy nobody has confirmed holds no rent record ─────────────
+  //
+  // The tenant's rent screen has said exactly this since it shipped — "Your
+  // move-in is not confirmed yet, so there is no rent record" — while the API
+  // accepted the write. The screen was right and alone.
+  const onPending = await markAs(tenancyId, r.landlord.token, month(0));
+  check(
+    onPending.status === 400,
+    `a pending tenancy refuses a rent mark (${onPending.status}, want 400)`,
+  );
+  /confirm the move-in|has not started/i.test(JSON.stringify(onPending.body))
+    ? ok('…and names the step that opens it, rather than refusing blankly')
+    : bad(`the refusal does not mention the move-in: ${JSON.stringify(onPending.body).slice(0, 180)}`);
+
+  // Start it, then backdate so each edge of the window can be tested on its
+  // own. The API refuses a start date more than a day ahead, so the move-in is
+  // confirmed for today and moved afterwards — the date is what is under test
+  // here, not the endpoint that sets it.
+  await apiCall(API, 'POST', `/api/tenancies/${tenancyId}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, r.landlord.token);
+  dbQuery(`UPDATE tenancies SET "startDate" = now() - interval '5 months' WHERE id = '${tenancyId}'`);
+
+  // ── 7b. While it runs: inside the window yes, outside it no ─────────────
+  const inside = await markAs(tenancyId, r.landlord.token, month(-3));
+  check(inside.status === 200, `a month the tenant lived there is accepted (${inside.status})`);
+
+  const beforeMoveIn = await markAs(tenancyId, r.landlord.token, month(-6));
+  check(
+    beforeMoveIn.status === 400,
+    `a month BEFORE the move-in is refused (${beforeMoveIn.status}, want 400)`,
+  );
+  /before the tenant moved in/i.test(JSON.stringify(beforeMoveIn.body))
+    ? ok('…and says so')
+    : bad(`wrong reason: ${JSON.stringify(beforeMoveIn.body).slice(0, 160)}`);
+
+  const future = await markAs(tenancyId, r.landlord.token, month(+1));
+  check(future.status === 400, `a month that has not started is refused (${future.status}, want 400)`);
+  // Rent is due at the start of a month, so the CURRENT month must stay
+  // writable — a guard that refused it would stop a landlord recording the
+  // rent they are owed right now.
+  const thisMonth = await markAs(tenancyId, r.landlord.token, month(0));
+  check(thisMonth.status === 200, `…but the current month is still writable (${thisMonth.status})`);
+
+  // ── 7c. End it, two months back ─────────────────────────────────────────
+  const ended = await apiCall(API, 'POST', `/api/tenancies/${tenancyId}/end`,
+    { endDate: month(-2) }, r.landlord.token);
+  check(ended.status === 200 || ended.status === 201, `the letting ends (${ended.status})`);
+
+  const afterMoveOut = await markAs(tenancyId, r.landlord.token, month(-1));
+  check(
+    afterMoveOut.status === 400,
+    `a month AFTER the move-out is refused (${afterMoveOut.status}, want 400)`,
+  );
+  /after the tenancy ended/i.test(JSON.stringify(afterMoveOut.body))
+    ? ok('…and says so, rather than blaming the date')
+    : bad(`wrong reason: ${JSON.stringify(afterMoveOut.body).slice(0, 160)}`);
+
+  // ⚠️ THE CHECK THIS SECTION EXISTS FOR.
+  //
+  // The letting is over and a month the tenant genuinely lived there is still
+  // correctable. If this goes red, the guard above has become a freeze, and
+  // the landlord who needs to record an unpaid final month cannot.
+  const stillCorrectable = await markAs(tenancyId, r.landlord.token, month(-3), 'paid');
+  check(
+    stillCorrectable.status === 200,
+    `…while a month inside the finished letting is STILL correctable (${stillCorrectable.status}) ` +
+      `— the guard is a window, not a freeze`,
+  );
+
+  // ── 7d. The ledger says what it is ──────────────────────────────────────
+  const ledger = await apiCall(API, 'GET', `/api/properties/rent/${tenancyId}`, null, r.tenant.token);
+  check(ledger.status === 200, `either party can read the ledger (${ledger.status})`);
+  check(
+    !!ledger.body?.tenancy && Array.isArray(ledger.body?.periods),
+    'it answers { tenancy, periods }, not a bare array',
+  );
+  check(
+    ledger.body?.tenancy?.status === 'ended',
+    `…and the state travels with it (status='${ledger.body?.tenancy?.status}', want 'ended')`,
+  );
+  check(
+    !!ledger.body?.tenancy?.endDate,
+    '…with the date it ended, so a screen can say when rather than guess',
+  );
+
+  // ── 7e. The tenant's answer OUTLIVES the letting, deliberately ──────────
+  //
+  // This is the one place where "it is over, so lock it" would do real harm.
+  // The most consequential mark a tenant ever receives is the final month,
+  // entered after they moved out, and `TenancyFlag.unpaid_rent` can be raised
+  // off it. Taking their answer away at that moment leaves the landlord's
+  // unverified word as the only record.
+  const lastUnpaid = await markAs(tenancyId, r.landlord.token, month(-2), 'unpaid');
+  check(lastUnpaid.status === 200, `the landlord marks the final month unpaid (${lastUnpaid.status})`);
+  const periodId = dbQuery(
+    `SELECT id FROM rent_periods WHERE "tenancyId" = '${tenancyId}' ` +
+      `AND "periodStart" = date_trunc('month', now() - interval '2 months')`,
+  );
+  const answered = await apiCall(API, 'PATCH', `/api/properties/rent/period/${periodId}/dispute`,
+    { note: 'Paid on the 3rd by EFT.' }, r.tenant.token);
+  check(
+    answered.status === 200,
+    `…and the tenant can still answer it after moving out (${answered.status}) — never locked`,
+  );
+
+  // ── 7f. A letting that fell through holds nothing at all ────────────────
+  const f = await lettingReadyToStart(Date.now() + 5000);
+  const fTenancy = await tenancyFor(f.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${fTenancy}/cancel`, {}, f.landlord.token);
+  const onCancelled = await markAs(fTenancy, f.landlord.token, month(0));
+  check(
+    onCancelled.status === 400,
+    `a cancelled letting refuses a rent mark (${onCancelled.status}, want 400)`,
+  );
+}
+
+console.log('\n── What section 7 does NOT prove ────────────────────────────');
+console.log('  ⚠️  Nothing here reads the rent SCREEN. It proves the API refuses');
+console.log('      what it should and accepts what it must; it does not prove the');
+console.log('      tenant\'s rent page has stopped presenting an ended tenancy as a');
+console.log('      current one. That is Phase D, and it needs its own checks.');
+console.log('  ⚠️  A tenant still cannot give notice. The OpenAPI summary that said');
+console.log('      they could is corrected, not the guard — docs/OUTSTANDING.md §30.');
+
 
 await browser.close();
 

@@ -204,7 +204,10 @@ export class TenantRent implements OnInit {
 
   private loadPeriods(tenancyId: string) {
     this.rent.history(tenancyId).subscribe({
-      next: (list) => this.periods.update((m) => ({ ...m, [tenancyId]: list })),
+      // The ledger now arrives with the tenancy's own state attached. Only
+      // the periods are stored here; Phase D is what reads the state and
+      // stops this screen describing a finished letting as a running one.
+      next: (ledger) => this.periods.update((m) => ({ ...m, [tenancyId]: ledger.periods })),
       error: () => this.periods.update((m) => ({ ...m, [tenancyId]: [] })),
     });
   }

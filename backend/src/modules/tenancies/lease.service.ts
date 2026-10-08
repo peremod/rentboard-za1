@@ -81,10 +81,26 @@ export class LeaseService {
   /**
    * Record that notice was given, and by whom.
    *
-   * Either side may give it, so `givenBy` is stored rather than assumed. A
-   * landlord logging "the tenant told me they are leaving" and a landlord
-   * giving notice themselves are different facts, and a dispute later turns on
-   * which one happened.
+   * `givenBy` is stored rather than assumed. A landlord logging "the tenant
+   * told me they are leaving" and a landlord giving notice themselves are
+   * different facts, and a dispute later turns on which one happened.
+   *
+   * ⚠️ **The LANDLORD is the only caller.** `assertLandlordOwns` below means a
+   * tenant calling this gets a 403 — so a tenant cannot give notice on their
+   * own home, and learns notice was given only through the `notice_given`
+   * inbox row. The route's own OpenAPI summary read "by either side" for as
+   * long as this method has existed, which is the shape of defect this
+   * codebase keeps producing: a documented capability the code refuses.
+   *
+   * The summary is corrected rather than the guard relaxed, deliberately.
+   * Admitting the tenant needs one column this model does not have:
+   * `noticeGivenById` records who notice is ATTRIBUTED to, not who entered it,
+   * so there is no way to tell a landlord's record of a tenant's verbal notice
+   * from a tenant's own act — and therefore no safe rule for who may withdraw
+   * it. Letting a landlord clear a tenant's notice resets a countdown that
+   * frees a room; letting a tenant clear a landlord's does the same in
+   * reverse. A half-right tenant path is worse than an honest refusal, so the
+   * column comes first. docs/OUTSTANDING.md §30.
    *
    * Idempotent-ish: giving notice twice keeps the FIRST date, because the
    * countdown runs from when notice was actually given and a second tap must
