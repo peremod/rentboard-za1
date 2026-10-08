@@ -737,13 +737,33 @@ clean; the 456.40 kB bundle warning is byte-identical at HEAD (verified by
 stashing), so it is pre-existing and this change adds nothing to it.
 
 ### Phase B — `archivedAt`, one writer
-- `Tenancy.archivedAt DateTime?` (D2). Nullable, no backfill guess
-- Set by the existing `reviews.release.ts` cron when `reviewsCloseAt` passes
-- `Report.tenancyId String?` (D1). Nullable, historical rows stay null
-- Migration via `scripts/migrate-remote.sh` only — never `prisma migrate deploy` (CLAUDE.md, and `docs/OUTSTANDING.md` §5a)
+**Done — v1.117.0**, migration `20261008095150_tenancy_archive_and_report_scope`.
 
-**Proof:** `scripts/migration-preflight.mjs`, which already refuses the
-`DIRECT_URL` trap that put production down on 5 October.
+- `Tenancy.archivedAt DateTime?` (D2), set by `ReviewsRelease.archiveClosed`
+  once `reviewsCloseAt` passes — **on its own query**, because the review
+  release selects only tenancies with something held back and most tenancies
+  never get a review
+- `TenanciesService.cancel` archives immediately: a cancelled letting never
+  gets a `reviewsCloseAt`, so it would otherwise sit unarchived forever
+- `Report.tenancyId String?` (D1), `SetNull`, settable only by a party to that
+  tenancy, never backfilled
+- **`Tenancy.noticeRecordedById`**, which was not in this plan — Phase A
+  established it as the blocker on the tenant notice path (C7). With it the
+  withdrawal rule is decidable, so **a tenant can now give notice**, and that
+  item is closed rather than carried
+- `POST /reviews/release-closed`, admin-only: the pass had no operator route,
+  so nothing could drive it, check it after a deploy or re-run it
+
+**Proof — done.** Drive section 8, 17 checks (74 in the file). All five
+behaviours reintroduced at once gave **8 red, 66 passed**; restored, 74 passed.
+`migration-preflight` clean, and it **correctly refused first** because only
+`DATABASE_URL` was exported and not `DIRECT_URL` — the exact trap from 5
+October. The migration was hand-edited to strip five unrelated index
+drop/recreates that `prisma migrate dev` added; they are pre-existing drift
+(`docs/OUTSTANDING.md` §31), and dropping an index on `users` has no business
+riding along with a feature migration.
+
+⚠️ **Nothing reads `archivedAt` yet** — one writer, no readers, until Phase F.
 
 ### Phase C — Close the loop on `end()`
 - Emit `tenancy_ended` to both parties, and `room_needs_relisting` to the landlord (C4)

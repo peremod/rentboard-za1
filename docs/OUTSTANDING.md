@@ -1852,6 +1852,174 @@ tenancy as a current one. That is Phase D.
 
 ---
 
+## 31. Pre-existing schema drift, kept out of a feature migration
+
+**Open. Needs a migration of its own.**
+
+`prisma migrate dev` generates five DROP INDEX / CREATE INDEX pairs on top of
+whatever you asked for:
+
+```
+account_recoveries_status_createdAt_idx
+phone_signups_assistedByAdminId_createdAt_idx
+service_providers_lastCheckedAt_idx
+users_deactivatedAt_idx
+users_deletedAt_idx
+```
+
+They are **drift between the schema and the database**, not part of any current
+work — confirmed by running `prisma migrate diff` with the pending schema
+changes stashed, which emits the same five pairs on its own. Two of them differ
+only by sort order: the database holds `"createdAt" DESC`, the schema declares
+plain `createdAt`.
+
+They were stripped out of `20261008095150_tenancy_archive_and_report_scope` by
+hand. **Dropping and recreating an index on `users` is a real operation on the
+busiest table in this database** — a lock, and a window with no index — and it
+has no business riding along with a feature migration where nobody reviewing
+that feature would think to question it.
+
+**What this costs:** the next `prisma migrate dev` offers those five pairs
+again, because the drift is still there. Expected. Do not fold them into
+whatever you are working on either.
+
+**What it needs:** one migration that does only this, with the two `DESC`
+indexes either declared as `@@index([status, createdAt(sort: Desc)])` in the
+schema or rebuilt ascending — a decision about whether those queries actually
+read newest-first — and a runbook line, because two of the five are on `users`.
+
+**Not urgent.** The drift costs nothing while it sits there; the indexes work.
+It matters only in that it makes every future migration diff noisy, which is
+how something real gets waved through.
+
+---
+
+## 32. The tenancy archive — Phase B
+
+**Three columns, each with a writer. Fixed.**
+
+### What was missing
+
+`ended` was doing two jobs: "ended last week, reviews open, both parties still
+acting on it" and "ended in 2024, read-only". They want different screens and
+different permissions, and there was one value for both.
+
+Separately, `Report` carried `roomId` and `reportedUserId` and nothing else, so
+"what went wrong during this letting" could not be answered — a complaint by
+one tenant about a room was indistinguishable from one by the next tenant two
+lettings later, and `ReportReason` is full of tenancy-period claims
+(`already_let`, `misleading_details`, `upfront_payment_demanded`).
+
+### What landed
+
+| Column | Written by |
+|---|---|
+| `Tenancy.archivedAt` | `ReviewsRelease.archiveClosed` once `reviewsCloseAt` passes; `TenanciesService.cancel` immediately |
+| `Tenancy.noticeRecordedById` | `LeaseService.giveNotice`, from the caller |
+| `Report.tenancyId` | `ReportsService.create`, only for a party to that tenancy |
+
+**`archivedAt` is a column, not a derived `reviewsCloseAt < now()`.** Derived
+state with many readers is how this codebase ended up with three navigation
+definitions that disagreed, and the archive will have several readers. One
+writer, one value.
+
+**It is not a fifth `TenancyStatus`.** Archival is orthogonal to how a letting
+finished; folding it in would make `cancelled` lose the reason it was cancelled
+the moment it aged.
+
+**Archiving runs on its own query, not as a field on the review release.**
+`releaseClosedWindows` selects `reviews: { some: { publishedAt: null } }`, and
+most tenancies never get a review — so hanging `archivedAt` off that query
+would have archived only the minority that happened to have one held back. A
+column set for some rows and not others is worse than no column.
+
+**`cancelled` archives at once.** It never gets a `reviewsCloseAt` (the drive
+asserts that), and the nightly pass waits for one, so it would have sat
+unarchived forever: finished, but never reading as finished.
+
+**Archived does NOT mean frozen.** A tenant may still answer a rent month on an
+archived letting — see §30 for why that is the one write which has to outlive
+the letting.
+
+### A tenant can now give notice — §30's open item, closed
+
+`noticeRecordedById` is what the tenant path waited on. `noticeGivenById` is who
+notice is *attributed to*; this is who *entered* it. A landlord logging "my
+tenant told me they are leaving" and a tenant giving notice produce the same
+attribution and are not the same act — and without the distinction there was no
+safe withdrawal rule, because a landlord who could clear a tenant's notice
+could keep them on the books.
+
+The rule is now: **whoever recorded it may withdraw it.** Rows written before
+the column have none, and those were all entered by a landlord — the only
+caller the route ever had — so a null reads as the landlord.
+
+A landlord may record either side. **A tenant may only record their own**: a
+tenant setting `givenBy: 'landlord'` would be fabricating that they had been
+served notice to leave, which is a materially different fact.
+
+### An operator route for the nightly pass
+
+`POST /reviews/release-closed`, admin-only, mirroring
+`POST /properties/rent/run-reminders`. The pass publishes reviews and sets
+`archivedAt`, and **a cron nobody can trigger cannot be driven, checked after a
+deploy, or re-run when it fails** — the only evidence it works is that nobody
+has complained, which is how this codebase ended up with a rent-reminder
+control on a screen with no route. Admin-only because it publishes ratings, and
+that is not a button for a landlord with an opinion about a tenant's review.
+
+It returns `{ archived, released }` even when both are 0, rather than a bare
+`return`: an operator running it after a deploy needs to see "0 and 0" and know
+it ran.
+
+### Two things the drive caught that the code had wrong
+
+**`POST /tenancies/:id/notice` answered 201 while its own withdraw answered
+200.** Every other lifecycle route here — `confirm-start`, `cancel`, `end`,
+`notice/withdraw` — carries `@HttpCode(OK)`. Giving notice is a state change on
+an existing tenancy, not a creation. Fixed on the route; and the drive's check
+was tightened from `200 || 201` to exactly 200, because **the tolerance is what
+let it drift in the first place.**
+
+**`ReportReason` and `TenancyFlagReason` overlap but are not the same enum.**
+`room_not_as_described` is a flag reason, not a report reason. Small trap, cost
+one red check.
+
+### Proof
+
+`scripts/tenancy-lifecycle-drive.mjs` section 8 — 17 checks, 74 in the file.
+All five behaviours were then reintroduced at once and confirmed to fail:
+
+| Reverted | Result |
+|---|---|
+| `cancel()` no longer archives | ❌ `archivedAt` reads `f` |
+| the nightly pass no longer archives | ❌ and `{"archived":0}` |
+| withdrawal open to either party | ❌ landlord cleared the tenant's notice (200, want 403) |
+| a tenant may claim the landlord served notice | ❌ 201, want 400 |
+| reports accept any `tenancyId` | ❌ a stranger attached one (201, want 403) |
+
+**8 red, 66 passed. Restored: 74 passed.**
+
+`scripts/smoke-test.sh` carries the four notice assertions. `migration-preflight`
+clean — and it correctly refused the run first, because only `DATABASE_URL` was
+exported and not `DIRECT_URL`: the exact trap that kept production down for an
+extra hour on 5 October (§5a). The gate works.
+
+### Not proven
+
+**No screen reads `archivedAt`.** The column is written and nothing renders it —
+the archive view is Phase F. Until then this is a column with one writer and no
+readers, which is half of the defect this repository keeps producing, and it is
+recorded here rather than implied away.
+
+**`Report.tenancyId` is not backfilled and never will be.** Inferring which
+letting a historical report belonged to from a room id and a date would
+manufacture facts about a complaint, and a complaint attached to the wrong
+tenancy is worse than one attached to none. Historical rows stay null and the
+archive has to say so on screen.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

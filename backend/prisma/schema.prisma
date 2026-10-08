@@ -624,6 +624,31 @@ model Report {
   reportedUserId String?
   reportedUser   User?   @relation("ReportsAgainst", fields: [reportedUserId], references: [id], onDelete: SetNull)
 
+  /// The letting this is about, when it is about one.
+  ///
+  /// ⚠️ Without this, "what went wrong during this tenancy" cannot be
+  /// answered. A report filed by tenant A about room X was indistinguishable
+  /// from one filed by tenant B about the same room two lettings later — and
+  /// `ReportReason` is full of tenancy-period claims: `already_let`,
+  /// `room_not_as_described`, `upfront_payment_demanded`.
+  ///
+  /// Nullable, and that is not laziness. Most reports come from people with no
+  /// tenancy at all — `reporterId` is already nullable for signed-out
+  /// visitors — and off-platform conduct reported against a landlord belongs
+  /// to no letting. A null means "not about a particular tenancy", which is
+  /// the common case.
+  ///
+  /// NOT backfilled. Inferring which letting a historical report belonged to
+  /// from a room id and a date would manufacture facts about a complaint, and
+  /// a complaint attached to the wrong tenancy is worse than one attached to
+  /// none. Historical rows stay null and the archive says so on screen.
+  ///
+  /// SetNull rather than Cascade: deleting a tenancy must not delete the
+  /// report. A room's safety history is the thing a future tenant needs most,
+  /// and it outlives any one letting.
+  tenancyId      String?
+  tenancy        Tenancy? @relation(fields: [tenancyId], references: [id], onDelete: SetNull)
+
   reason       ReportReason
   details      String
   /// Contact address for signed-out reporters, so we can follow up.
@@ -641,6 +666,7 @@ model Report {
   @@index([status, createdAt])
   @@index([roomId])
   @@index([reportedUserId])
+  @@index([tenancyId])
   @@map("reports")
 }
 
@@ -740,6 +766,47 @@ model Tenancy {
   /// reveal a definite deadline.
   reviewsCloseAt DateTime?
 
+  /// Finished AND closed to further action — the history, not the aftermath.
+  ///
+  /// ⚠️ `ended` was doing two jobs, and they want different screens and
+  /// different permissions: "ended last week, reviews open, both parties still
+  /// acting on it" and "ended in 2024, read-only". This separates them.
+  ///
+  /// It is a column rather than a derived `reviewsCloseAt < now()` on purpose.
+  /// Derived state with many readers is how this codebase ended up with three
+  /// navigation definitions that disagreed (see `landlordNav`), and the archive
+  /// will have several readers: the tenant's rent screen, the landlord's past
+  /// tenants, the archive view itself. One writer, one value, no re-derivation.
+  ///
+  /// NOT a fifth `TenancyStatus`. Archival is orthogonal to how a letting
+  /// finished — folding it in would make `cancelled` lose the reason it was
+  /// cancelled the moment it aged.
+  ///
+  /// Set by `ReviewsRelease` once `reviewsCloseAt` passes, and immediately on
+  /// `cancel()` — a letting that fell through has no aftermath to wait for.
+  /// Null on every row that existed before this column: no backfill, because
+  /// guessing which historical tenancies were "closed" would manufacture
+  /// facts. A null simply means not yet archived, which is the safe reading.
+  archivedAt DateTime?
+
+  /// Who ENTERED the notice, as distinct from who it is attributed to.
+  ///
+  /// ⚠️ `noticeGivenById` is the attribution, and on its own it is not enough
+  /// to say who may withdraw. A landlord logging "my tenant told me they are
+  /// leaving" and a tenant giving notice themselves produce the SAME
+  /// `noticeGivenById`, and they are not the same act.
+  ///
+  /// Without this distinction there is no safe withdrawal rule, which is why a
+  /// tenant could not give notice at all: letting a landlord clear a tenant's
+  /// notice resets a countdown that frees a room, and letting a tenant clear a
+  /// landlord's does the same in reverse. With it, the rule is simply that
+  /// whoever recorded it may withdraw it.
+  ///
+  /// Null on rows written before this column. Those were all created by a
+  /// landlord — the only caller the route ever had — so a null is read as the
+  /// landlord, and `LeaseService.withdrawNotice` says so.
+  noticeRecordedById String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -747,10 +814,18 @@ model Tenancy {
   flags       TenancyFlag[]
   rentPeriods RentPeriod[]
   documents   LeaseDocument[]
+  reports     Report[]
 
   @@index([landlordId, status])
   @@index([tenantId, status])
   @@index([roomId])
+  /// The archive listings: every past letting for one person, newest first.
+  /// Both sides, because a sub-lessor is a landlord of one room and a tenant
+  /// of another and their history is one list (Phase 6).
+  @@index([tenantId, archivedAt])
+  @@index([landlordId, archivedAt])
+  /// The nightly archive pass: ended, window closed, not yet archived.
+  @@index([status, archivedAt])
   @@map("tenancies")
 }
 

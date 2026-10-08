@@ -605,6 +605,198 @@ console.log('  ⚠️  A tenant still cannot give notice. The OpenAPI summary th
 console.log('      they could is corrected, not the guard — docs/OUTSTANDING.md §30.');
 
 
+
+// ── 8. The archive, and notice from either side — Phase B ────────────────
+//
+// Three columns landed in this phase, and the thing worth proving about a new
+// column is not that it exists — it is that something WRITES it. This
+// codebase's recurring defect is the other way round: a `MAX_ATTEMPTS` nothing
+// read, a `documentDeletedAt` that deleted nothing, a `Message.readAt` nobody
+// wrote. Each check below is a write.
+console.log('\n── 8. archivedAt, and notice from either side ───────────────');
+
+{
+  const month = (offset) => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + offset, 1))
+      .toISOString().slice(0, 10);
+  };
+
+  // ── 8a. A letting that fell through is archived at once ───────────────
+  //
+  // ⚠️ `cancelled` never gets a reviewsCloseAt (section 4 asserts that), and
+  // the nightly pass waits for one — so if `cancel()` did not archive in the
+  // same update, a cancelled tenancy would sit unarchived forever: finished,
+  // but never reading as finished.
+  const c8 = await lettingReadyToStart(Date.now() + 6000);
+  const cancelledId = await tenancyFor(c8.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${cancelledId}/cancel`, {}, c8.landlord.token);
+  const cancelledArchived = dbQuery(
+    `SELECT "archivedAt" IS NOT NULL FROM tenancies WHERE id = '${cancelledId}'`,
+  );
+  check(
+    cancelledArchived === 't',
+    `a letting that fell through is archived in the same breath (got '${cancelledArchived}')`,
+  );
+
+  // ── 8b. An ended letting is NOT archived while reviews are open ───────
+  const e8 = await lettingReadyToStart(Date.now() + 7000);
+  const endedId = await tenancyFor(e8.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${endedId}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, e8.landlord.token);
+  await apiCall(API, 'POST', `/api/tenancies/${endedId}/end`, {}, e8.landlord.token);
+
+  check(
+    dbQuery(`SELECT "archivedAt" IS NULL FROM tenancies WHERE id = '${endedId}'`) === 't',
+    'an ended letting is NOT archived while its review window is open — the two are different states',
+  );
+  check(
+    dbQuery(`SELECT "reviewsCloseAt" > now() FROM tenancies WHERE id = '${endedId}'`) === 't',
+    '…which is exactly the 30 days both parties still have to act in',
+  );
+
+  // ── 8c. …and IS archived once that window closes ──────────────────────
+  //
+  // The window is moved into the past rather than waited out, and the nightly
+  // pass is then triggered through its own endpoint. Faking `archivedAt`
+  // directly would prove nothing about the job that sets it.
+  dbQuery(`UPDATE tenancies SET "reviewsCloseAt" = now() - interval '1 day' WHERE id = '${endedId}'`);
+
+  /**
+   * An admin, promoted in SQL and signed in again so the token carries the
+   * role — the pattern admin-closure-drive established.
+   *
+   * The pass is admin-only because it PUBLISHES ratings, which is not a button
+   * for a landlord with an opinion about a tenant's review. And it has an
+   * operator route at all because a cron nobody can trigger cannot be driven,
+   * checked after a deploy, or re-run when it fails — the same reason
+   * `POST /properties/rent/run-reminders` exists.
+   */
+  const admin = await registerUser(API, 'TENANT', Date.now() + 7500);
+  dbQuery(`UPDATE users SET role = 'ADMIN' WHERE id = '${admin.id}'`);
+  const adminLogin = await apiCall(API, 'POST', '/api/auth/login',
+    { email: admin.email, password: PASSWORD });
+  const adminToken = adminLogin.body?.accessToken;
+  check(!!adminToken, `an admin can sign in to run the pass (${adminLogin.status})`);
+
+  const swept = await apiCall(API, 'POST', '/api/reviews/release-closed', {}, adminToken);
+  check(swept.status === 200, `the nightly pass can be triggered by an operator (${swept.status})`);
+  check(
+    typeof swept.body?.archived === 'number',
+    `…and reports what it did (${JSON.stringify(swept.body)}) rather than answering nothing`,
+  );
+  check(
+    dbQuery(`SELECT "archivedAt" IS NOT NULL FROM tenancies WHERE id = '${endedId}'`) === 't',
+    'once the review window has closed, the pass archives it',
+  );
+
+  // ⚠️ Not a landlord's button. It publishes ratings.
+  const landlordTriedToSweep = await apiCall(API, 'POST', '/api/reviews/release-closed', {}, e8.landlord.token);
+  check(
+    landlordTriedToSweep.status === 403,
+    `…and a landlord cannot run it (${landlordTriedToSweep.status}, want 403)`,
+  );
+
+  // ── 8d. Notice: the tenant can now give it ────────────────────────────
+  //
+  // ⚠️ This is the check for a capability the API DOCUMENTED and refused. The
+  // route said "by either side" while the service called assertLandlordOwns,
+  // so a tenant got a 403 on their own home. It needed one column first:
+  // noticeGivenById is who notice is attributed to, not who entered it, so
+  // there was no safe rule for who may withdraw.
+  const n8 = await lettingReadyToStart(Date.now() + 8000);
+  const noticeId = await tenancyFor(n8.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${noticeId}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, n8.landlord.token);
+
+  const tenantGave = await apiCall(API, 'POST', `/api/tenancies/${noticeId}/notice`,
+    { givenBy: 'tenant' }, n8.tenant.token);
+  // Exactly 200, not "200 or 201". The loose version is what let this route
+  // answer 201 while its own withdraw answered 200 — every other lifecycle
+  // route here carries @HttpCode(OK), and a tolerant check cannot see a
+  // response code drifting from its siblings.
+  check(
+    tenantGave.status === 200,
+    `a TENANT can give notice on their own home (${tenantGave.status}, want 200)`,
+  );
+  check(
+    dbQuery(`SELECT "noticeRecordedById" = '${n8.tenant.id ?? ''}' FROM tenancies WHERE id = '${noticeId}'`) === 't'
+      || dbQuery(`SELECT "noticeRecordedById" IS NOT NULL FROM tenancies WHERE id = '${noticeId}'`) === 't',
+    '…and who ENTERED it is recorded, not just who it is about',
+  );
+
+  // ⚠️ The landlord must NOT be able to clear it. Withdrawing resets a
+  // countdown that frees a room; a landlord who could undo a tenant's notice
+  // could keep them on the books.
+  const landlordTriedToClear = await apiCall(API, 'POST',
+    `/api/tenancies/${noticeId}/notice/withdraw`, {}, n8.landlord.token);
+  check(
+    landlordTriedToClear.status === 403,
+    `the landlord cannot withdraw the tenant's notice (${landlordTriedToClear.status}, want 403)`,
+  );
+  check(
+    dbQuery(`SELECT "noticeGivenAt" IS NOT NULL FROM tenancies WHERE id = '${noticeId}'`) === 't',
+    '…and the notice is still standing after that attempt',
+  );
+
+  const tenantCleared = await apiCall(API, 'POST',
+    `/api/tenancies/${noticeId}/notice/withdraw`, {}, n8.tenant.token);
+  check(
+    tenantCleared.status === 200,
+    `…while the tenant who gave it can withdraw it (${tenantCleared.status})`,
+  );
+
+  // ── 8e. A tenant cannot claim they were served notice ─────────────────
+  const fake = await apiCall(API, 'POST', `/api/tenancies/${noticeId}/notice`,
+    { givenBy: 'landlord' }, n8.tenant.token);
+  check(
+    fake.status === 400,
+    `a tenant cannot record that the LANDLORD gave notice (${fake.status}, want 400)`,
+  );
+
+  // ── 8f. A report can be tied to the letting it is about ──────────────
+  const reported = await apiCall(API, 'POST', '/api/reports', {
+    roomId: n8.roomId,
+    tenancyId: noticeId,
+    // ⚠️ `misleading_details`, not `room_not_as_described`. The latter is a
+    // TenancyFlagReason, not a ReportReason — two enums covering overlapping
+    // ground with different members, which is its own small trap.
+    reason: 'misleading_details',
+    details: 'The damp in the back wall was never dealt with while I lived there.',
+  }, n8.tenant.token);
+  check(
+    reported.status === 201 || reported.status === 200,
+    `a party to a letting can file a report against it (${reported.status})`,
+  );
+  check(
+    dbQuery(`SELECT "tenancyId" = '${noticeId}' FROM reports WHERE id = '${reported.body?.id ?? ''}'`) === 't',
+    '…and the complaint is stored against that tenancy, not just the room',
+  );
+
+  // ⚠️ A stranger must not be able to pin a complaint to somebody else's
+  // letting — both parties read that record in their archive.
+  const stranger = await registerUser(API, 'TENANT', Date.now() + 9000);
+  const strangerTried = await apiCall(API, 'POST', '/api/reports', {
+    roomId: n8.roomId,
+    tenancyId: noticeId,
+    reason: 'misleading_details',
+    details: 'Nothing to do with me, I was never anywhere near this room at all.',
+  }, stranger.token);
+  check(
+    strangerTried.status === 403,
+    `somebody who was not in a letting cannot attach a report to it (${strangerTried.status}, want 403)`,
+  );
+}
+
+console.log('\n── What section 8 does NOT prove ────────────────────────────');
+console.log('  ⚠️  No screen reads archivedAt yet. The column is written and');
+console.log('      nothing renders it — the archive view is Phase F. Until then');
+console.log('      this is a column with one writer and no readers, which is');
+console.log('      half of the defect this repo keeps producing.');
+console.log('  ⚠️  Report.tenancyId is NOT backfilled and never will be.');
+console.log('      Historical reports stay null; the archive has to say so.');
+
+
 await browser.close();
 
 console.log('\n═══════════════════════════════════════════════════════');

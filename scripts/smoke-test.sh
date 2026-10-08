@@ -1607,6 +1607,25 @@ if [[ -n "$TEN_ROOM" ]]; then
       req POST "/api/tenancies/$TEN_ID/cancel" '{}' "$TTOKEN"
       check "cannot cancel once active" 400 "$STATUS" "$BODY"
 
+      # Either party may give notice (v1.117.0). The route documented "by
+      # either side" from the day it shipped while the service called
+      # assertLandlordOwns, so a tenant got a 403 on their own home. It needed
+      # Tenancy.noticeRecordedById first: noticeGivenById says who notice is
+      # attributed to, not who entered it, so there was no safe rule for who
+      # may withdraw — and a landlord who could clear a tenant's notice could
+      # keep them on the books.
+      req POST "/api/tenancies/$TEN_ID/notice" '{"givenBy":"landlord"}' "$TTOKEN"
+      check "a tenant cannot record that the LANDLORD gave notice" 400 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/notice" '{"givenBy":"tenant"}' "$TTOKEN"
+      check "a tenant CAN give notice on their own home" 200 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/notice/withdraw" '{}' "$LTOKEN"
+      check "the landlord cannot withdraw the tenant's notice" 403 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/notice/withdraw" '{}' "$TTOKEN"
+      check "…but whoever recorded it can" 200 "$STATUS" "$BODY"
+
       req POST "/api/tenancies/$TEN_ID/end" '{"reason":"Moved closer to work"}' "$LTOKEN"
       check "landlord ends the tenancy" 200 "$STATUS" "$BODY"
 

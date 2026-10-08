@@ -57,11 +57,20 @@ export class TenanciesController {
   }
 
   @Post(':id/notice')
+  // 200, like every other lifecycle route here — confirm-start, cancel, end
+  // and this route's own withdraw all carry it. Giving notice is a state
+  // change on an existing tenancy, not a creation, and it answered 201 while
+  // its own mirror answered 200.
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary:
-      'Landlord records that notice was given. `givenBy` says which side gave ' +
-      'it; the LANDLORD is the only caller — a tenant cannot give notice ' +
-      'through the API yet. See docs/OUTSTANDING.md §30.',
+    summary: 'Record that notice was given, by either side',
+    description:
+      'Either party may call this. `givenBy` says which side gave it, and is ' +
+      'stored separately from who entered it (`noticeRecordedById`) — a ' +
+      'landlord logging "my tenant told me" and a tenant giving notice are ' +
+      'not the same act. A landlord may record either side; a tenant may only ' +
+      'record their own notice. Whoever recorded it is the only one who may ' +
+      'withdraw it.',
   })
   giveNotice(
     @Param('id', ParseUUIDPipe) id: string,
@@ -73,7 +82,12 @@ export class TenanciesController {
 
   @Post(':id/notice/withdraw')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Notice was given in error, or withdrawn. Landlord only, as above.' })
+  @ApiOperation({
+    summary: 'Notice was given in error, or withdrawn',
+    description:
+      'Only whoever RECORDED the notice may withdraw it. Withdrawing resets a ' +
+      'countdown that frees a room, so neither party gets to undo the other\'s act.',
+  })
   withdrawNotice(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
     return this.lease.withdrawNotice(id, user.id);
   }

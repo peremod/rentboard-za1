@@ -95,7 +95,21 @@ export class TenanciesService {
 
     return this.prisma.tenancy.update({
       where: { id },
-      data: { status: 'cancelled', endedById: userId, endReason: reason, endDate: new Date() },
+      data: {
+        status: 'cancelled',
+        endedById: userId,
+        endReason: reason,
+        endDate: new Date(),
+        // ⚠️ Archived in the same update, unlike `end()`.
+        //
+        // A letting that fell through has no aftermath: no reviews open (and
+        // `tenancy-lifecycle-drive` asserts `reviewsCloseAt` stays null), no
+        // rent, nothing either party can still do about it. The nightly
+        // archive pass waits for a review window to close, so a cancelled
+        // tenancy would sit unarchived forever — a row that is finished but
+        // never reads as finished.
+        archivedAt: new Date(),
+      },
     });
   }
 
