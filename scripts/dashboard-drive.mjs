@@ -136,8 +136,19 @@ const tenancyFor = async (roomId, tenant) => {
   if (app.status !== 201) throw new Error(`apply: ${app.status} ${JSON.stringify(app.body).slice(0, 160)}`);
   const acc = await apiCall(API, 'POST', `/api/applications/${app.body.id}/accept`, {}, L);
   if (acc.status >= 300) throw new Error(`accept: ${acc.status} ${JSON.stringify(acc.body).slice(0, 160)}`);
-  const id = q(`SELECT id FROM tenancies WHERE "applicationId" = '${app.body.id}'`);
-  q(`UPDATE tenancies SET status='active' WHERE id = '${id}'`);
+  // Poll: accept() opens the tenancy fire-and-forget
+  // (`createFromApplication(...).catch(...)`, not awaited), so reading it once
+  // can return ''. See tenancy-lifecycle-drive's tenancyFor.
+  let id = '';
+  for (let i = 0; i < 40 && !id; i++) {
+    id = q(`SELECT id FROM tenancies WHERE "applicationId" = '${app.body.id}'`);
+    if (!id) await new Promise((r) => setTimeout(r, 250));
+  }
+  if (!id) throw new Error(`no tenancy opened for application ${app.body.id}`);
+  // startDate too — see account-lifecycle-drive: an 'active' tenancy with no
+  // startDate cannot be produced through the API, and the rent window refuses
+  // marks against one.
+  q(`UPDATE tenancies SET status='active', "startDate"=now() WHERE id = '${id}'`);
   return { applicationId: app.body.id, tenancyId: id };
 };
 
@@ -197,18 +208,57 @@ empty.status === 200 && (empty.body?.items ?? []).length === 0
   ? ok('a tenant with nothing to do gets an empty list, not an error and not filler')
   : bad(`a fresh tenant's inbox returned ${empty.status} with ${JSON.stringify(empty.body?.items?.length)} item(s)`);
 
+/**
+ * ⚠️ TWO tenants, because one cannot be in both states.
+ *
+ * This block asked tenantA's inbox for `application_accepted` AND
+ * `rent_unrecorded`, and those are mutually exclusive by construction:
+ * `tenant-inbox.service.ts` drops the acceptance row for any tenancy that is
+ * not `pending` ("a list called 'needs you' that leads with something needing
+ * nothing is a list people stop reading"), while a rent item needs a tenancy
+ * that has started. tenantA's tenancy is forced `active` above so the rent
+ * items exist, so the acceptance row was never going to be there.
+ *
+ * Both assertions were right about the product and wrong about the fixture —
+ * it asked one tenant to be mid-move-in and already living there. So the
+ * acceptance rule gets a letting of its own, left PENDING, which is the state
+ * the rule is actually about.
+ */
+const roomPending = await mkRoom(`Pending room ${S}`, L);
+const tenantC = await registerUser(API, 'TENANT');
+{
+  const app = await apiCall(API, 'POST', '/api/applications',
+    { roomId: roomPending, coverNote: 'I can move in on the first.' }, tenantC.token);
+  if (app.status !== 201) throw new Error(`apply: ${app.status} ${JSON.stringify(app.body).slice(0, 160)}`);
+  const acc = await apiCall(API, 'POST', `/api/applications/${app.body.id}/accept`, {}, L);
+  if (acc.status >= 300) throw new Error(`accept: ${acc.status} ${JSON.stringify(acc.body).slice(0, 160)}`);
+  // Deliberately NOT confirmed: `pending` is the whole point.
+  for (let i = 0; i < 40; i++) {
+    if (q(`SELECT id FROM tenancies WHERE "applicationId" = '${app.body.id}'`)) break;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
+
+const pInbox = await apiCall(API, 'GET', '/api/tenant-inbox', null, tenantC.token);
+const pKinds = (pInbox.body?.items ?? []).map((i) => i.kind);
+pKinds.includes('application_accepted')
+  ? ok('an accepted application nobody has confirmed is the tenant’s to answer, and it is in the list')
+  : bad(`no acceptance in the inbox of a tenant mid-move-in: ${JSON.stringify(pKinds)}`);
+
+pKinds[0] === 'application_accepted'
+  ? ok('…ranked first, because a day of silence there can cost somebody the room')
+  : bad(`the first item is ${pKinds[0]}, not the acceptance`);
+
 const tInbox = await apiCall(API, 'GET', '/api/tenant-inbox', null, tenantA.token);
 const kinds = (tInbox.body?.items ?? []).map((i) => i.kind);
-kinds.includes('application_accepted')
-  ? ok('an accepted application is the tenant’s to answer, and it is in the list')
-  : bad(`no acceptance in the tenant's inbox: ${JSON.stringify(kinds)}`);
-
-kinds[0] === 'application_accepted'
-  ? ok('…ranked first, because a day of silence there can cost somebody the room')
-  : bad(`the first item is ${kinds[0]}, not the acceptance`);
+// And once they have moved in it is GONE — the row survives its own answer
+// otherwise, which is the defect OUTSTANDING §23 was written for.
+!kinds.includes('application_accepted')
+  ? ok('…and once the move is confirmed the acceptance row is gone, not still asking')
+  : bad(`a tenant who has moved in is still being told they were accepted: ${JSON.stringify(kinds)}`);
 
 kinds.includes('rent_unrecorded')
-  ? ok('…and so is a month their landlord has not recorded')
+  ? ok('…while a month their landlord has not recorded is in its place')
   : bad(`no rent item in the tenant's inbox: ${JSON.stringify(kinds)}`);
 
 const rentItem = (tInbox.body?.items ?? []).find((i) => i.kind === 'rent_unrecorded');

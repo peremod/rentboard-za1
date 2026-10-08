@@ -559,10 +559,25 @@ console.log('\n── 7. What the rent ledger accepts once the letting is over �
   // unverified word as the only record.
   const lastUnpaid = await markAs(tenancyId, r.landlord.token, month(-2), 'unpaid');
   check(lastUnpaid.status === 200, `the landlord marks the final month unpaid (${lastUnpaid.status})`);
+  /**
+   * ⚠️ The month comes from JS, not from `date_trunc(now())`.
+   *
+   * `periodStart` is a `timestamp` normalised to UTC midnight; `now()` is
+   * `timestamptz`, so `date_trunc('month', now() - interval '2 months')`
+   * truncates in the SESSION's timezone. On a non-UTC session that lands on a
+   * different instant and the equality misses, `periodId` comes back empty,
+   * and the dispute below is sent to `/rent/period//dispute` — a 404 that
+   * reads as a product bug. It passed here only because this container runs
+   * UTC. `month(-2)` is already the right value, computed the same way the
+   * API normalises it.
+   */
   const periodId = dbQuery(
     `SELECT id FROM rent_periods WHERE "tenancyId" = '${tenancyId}' ` +
-      `AND "periodStart" = date_trunc('month', now() - interval '2 months')`,
+      `AND "periodStart" = '${month(-2)}T00:00:00.000Z'`,
   );
+  if (!periodId) {
+    bad(`no rent period found for ${month(-2)} — the dispute check below cannot run`);
+  }
   const answered = await apiCall(API, 'PATCH', `/api/properties/rent/period/${periodId}/dispute`,
     { note: 'Paid on the 3rd by EFT.' }, r.tenant.token);
   check(

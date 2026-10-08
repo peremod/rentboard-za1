@@ -73,7 +73,37 @@ export class LeaseService {
       data['leaseEndDate'] = dto.leaseEndDate ? new Date(dto.leaseEndDate) : null;
     }
     if (dto.noticePeriodDays !== undefined) data['noticePeriodDays'] = dto.noticePeriodDays;
-    if (dto.startDate !== undefined) data['startDate'] = dto.startDate ? new Date(dto.startDate) : null;
+
+    if (dto.startDate !== undefined) {
+      /**
+       * ⚠️ An ACTIVE tenancy cannot lose its start date.
+       *
+       * This wrote whatever it was given, `null` included, and that became an
+       * unrecoverable lockout the moment the rent window started reading
+       * `startDate`: `mark()` answers "Confirm the move-in first, then the
+       * rent record opens", and `confirmStart()` refuses because the tenancy
+       * is already `active`. Neither route can put the date back, so the
+       * landlord's rent record for that room is shut with no way in.
+       *
+       * It is also simply untrue. `active` means somebody confirmed a move-in,
+       * and `confirmStart` sets status and startDate in one update — a live
+       * tenancy that started on no particular day is a state the product
+       * cannot otherwise reach. Correcting the date is fine; erasing it is not.
+       */
+      if (!dto.startDate && tenancy.status === 'active') {
+        throw new BadRequestException(
+          'A tenancy that has started must keep its move-in date. Correct the date rather than clearing it.',
+        );
+      }
+      const start = dto.startDate ? new Date(dto.startDate) : null;
+      // The same bound `confirmStart` enforces, for the same reason: a move-in
+      // dated in the future on a tenancy somebody is already living in would
+      // put every month of rent before it outside the window.
+      if (start && tenancy.status === 'active' && start.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
+        throw new BadRequestException('A move-in date cannot be in the future.');
+      }
+      data['startDate'] = start;
+    }
 
     return this.prisma.tenancy.update({ where: { id: tenancyId }, data });
   }

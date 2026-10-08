@@ -129,8 +129,12 @@ kinds2.indexOf('lease_ending') < kinds2.indexOf('rent_unmarked')
   : bad(`order puts rent admin first: ${JSON.stringify(kinds2)}`);
 
 // A tenant disputing the record should go straight to the top.
+// ⚠️ `.periods`. The endpoint answers `{ tenancy, periods }`, and indexing
+// the envelope yields undefined — which made the `if (period)` block below
+// skip the tenant-dispute checks entirely, with no bad() and a green run. A
+// check that cannot fail is not a check.
 const periods = await apiCall(API, 'GET', `/api/properties/rent/${tenancyId}`, undefined, T);
-const thisMonth = (periods.body || [])[0];
+const thisMonth = (periods.body?.periods ?? [])[0];
 if (!thisMonth) {
   // No period row yet — mark one so there is something to dispute.
   const mk = await apiCall(API, 'PATCH', `/api/properties/rent/${tenancyId}/mark`,
@@ -138,7 +142,10 @@ if (!thisMonth) {
   if (mk.status >= 300) bad(`could not mark rent: ${mk.status} ${JSON.stringify(mk.body).slice(0, 160)}`);
 }
 const periods2 = await apiCall(API, 'GET', `/api/properties/rent/${tenancyId}`, undefined, T);
-const period = (periods2.body || [])[0];
+const period = (periods2.body?.periods ?? [])[0];
+// Say so rather than skipping. The silent `if (period)` is what let this
+// section pass while testing nothing.
+if (!period) bad(`no rent period to dispute: ${JSON.stringify(periods2.body).slice(0, 200)}`);
 if (period) {
   const dis = await apiCall(API, 'PATCH', `/api/properties/rent/period/${period.id}/dispute`,
     { note: 'paid on the 3rd by EFT' }, accepted.tenant.token);

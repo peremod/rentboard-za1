@@ -923,7 +923,15 @@ export class Yard implements OnInit {
 
   protected loadRent(tenancyId: string) {
     this.properties.rentHistory(tenancyId).subscribe({
-      next: (periods) => this.rent.update((m) => ({ ...m, [tenancyId]: periods })),
+      // ⚠️ `.periods`, not the whole response. The endpoint answers
+      // `{ tenancy, periods }` so a caller can tell a finished letting from a
+      // running one; storing the envelope here put an object where
+      // `currentLabel(periods)` calls `.find`, which is a TypeError on the
+      // landlord's own property screen. It passed `tsc` and `ng build`
+      // because the generic on `http.get` is an unchecked cast — caught by a
+      // review, not by a compiler. `RentLedger` is now declared once so the
+      // next change to this shape is a compile error.
+      next: (ledger) => this.rent.update((m) => ({ ...m, [tenancyId]: ledger.periods })),
       error: () => this.error.set('Could not load the rent record.'),
     });
   }

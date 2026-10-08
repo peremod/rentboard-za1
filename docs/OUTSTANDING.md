@@ -1755,6 +1755,82 @@ a tenancy, and it starts 'pending' (got '')"* — which reads exactly like a
 broken accept flow and is not one. The drive now polls (`tenancyFor`). **The
 flake is fixed; the fire-and-forget is not.**
 
+### What the first pass got wrong — found by review, not by any check here
+
+Phase A shipped green: the drive passed 57 checks, the smoke suite passed, both
+typechecks were clean and `ng build --configuration=production` succeeded. A
+code review then found seven defects. Six are worth recording because each one
+is a shape this codebase keeps producing.
+
+**1. A runtime crash on the landlord's property screen.** The rent endpoint has
+**two** consumers — `RentService.history` for the tenant's screen and
+`PropertiesService.rentHistory` for the yard — and only the first was migrated
+to the envelope. The generic on `http.get` is an **unchecked cast**, so
+declaring `RentPeriod[]` over a response that is now an object passes `tsc` and
+`ng build` without complaint. `loadRent` put the envelope into the `rent`
+signal and `currentLabel(periods)` called `.find` on it: a TypeError on a screen
+every landlord uses.
+
+Fixed by declaring `RentLedger` **once**, in `core/models/property.model.ts`
+beside the `RentPeriod` it carries, imported by both services. Adding the shared
+type made the yard an immediate compile error, which is the point.
+
+**⚠️ And the check that was supposed to cover this could not.** A new section in
+`yard-layout-drive.mjs` opens the rent panel and reads the rendered label. Three
+of its five checks stay **green** with the bug reintroduced:
+
+| | |
+|---|---|
+| a `pageerror` listener | green — Angular catches a template expression's error and logs it, so it never reaches `window.onerror` |
+| the Paid / Not yet toggle renders | green — the `@if (rent()[id]; as periods)` guard passes, because **an object is truthy** |
+| the rendered label reads "paid" | **red** — the only visible trace |
+
+Measured: reintroducing it gives 2 failed, 39 passed, and both failures are the
+content checks. A drive that watched for errors and counted controls would have
+called this screen healthy.
+
+**2. An unrecoverable lockout.** `LeaseService.updateTerms` wrote
+`startDate: null` on request, including for an `active` tenancy. Harmless until
+the rent window started reading `startDate` — then `mark()` answers "Confirm the
+move-in first" while `confirmStart()` refuses because the tenancy is already
+active. Neither route can put the date back. It is also untrue: `confirmStart`
+sets status and startDate in one update, so a live tenancy that started on no
+particular day is a state the product cannot otherwise reach. `updateTerms` now
+refuses to clear it, and refuses a future date on an active tenancy, as
+`confirmStart` does.
+
+**3. Three drives were fabricating an impossible tenancy.**
+`account-lifecycle-drive`, `dashboard-drive` and `dashboard-ui-drive` each force
+`UPDATE tenancies SET status='active'` in raw SQL and left `startDate` null —
+a row the API cannot produce. The guard exposed the fabrication; the drives were
+what was wrong, and they now set both columns.
+
+**4. A check that could no longer fail.** `inbox-drive.mjs` read
+`(periods.body || [])[0]` — indexing the envelope object, so `period` was always
+undefined and the entire `if (period)` block (the tenant disputes a month,
+`rent_disputed` sorts to the top) was **silently skipped with no `bad()`**. It
+now reads `.periods` and says so when there is nothing to dispute.
+
+**5. A pre-existing impossible expectation.** `dashboard-drive` asked one
+tenant's inbox for `application_accepted` **and** `rent_unrecorded`. Those are
+mutually exclusive by construction: `tenant-inbox.service.ts` drops the
+acceptance row for any tenancy that is not `pending`, while a rent item needs a
+tenancy that has started. Both assertions were right about the product and
+wrong about the fixture. Verified pre-existing — 2 failures before Phase A, 4
+at Phase A, 2 again once the drives were fixed. The acceptance rule now has a
+letting of its own, left pending, and tenantA additionally proves the row is
+**gone** once the move is confirmed.
+
+**6. A timezone trap in the new drive, of the kind its own comment warns
+about.** Section 7 found a period with
+`date_trunc('month', now() - interval '2 months')`: `now()` is `timestamptz`,
+so `date_trunc` truncates in the **session's** timezone, while `periodStart` is
+a `timestamp` at UTC midnight. Confirmed against Postgres — UTC gives
+`2026-08-01 00:00:00+00`, `Pacific/Auckland` gives `2026-08-01 00:00:00+12`, and
+the equality misses. It passed only because this container runs UTC. The month
+now comes from the JS value already computed, with a `bad()` if nothing is
+found, and the drive is green under both `TZ=UTC` and `TZ=Pacific/Auckland`.
+
 ### Proof
 
 `scripts/tenancy-lifecycle-drive.mjs` section 7 — 18 checks. Then, as this

@@ -115,6 +115,43 @@ export interface RentPeriod {
   reminderSentAt?: string | null;
 }
 
+/**
+ * The tenancy a rent ledger belongs to.
+ *
+ * ⚠️ This arrives WITH the periods, and that is the whole point. The endpoint
+ * used to answer a bare `RentPeriod[]`, so a screen holding a ledger had no
+ * way to know whether the letting behind it was running, waiting on a
+ * move-in, or finished two years ago — and the tenant's rent screen duly
+ * rendered an ended tenancy as a current one. A record whose state you have to
+ * guess gets described wrongly.
+ */
+export interface RentLedgerTenancy {
+  id: string;
+  status: 'pending' | 'active' | 'ended' | 'cancelled';
+  /** Null on a `pending` tenancy: nobody has confirmed the move-in. */
+  startDate: string | null;
+  endDate: string | null;
+  rentCents: number;
+  reviewsCloseAt: string | null;
+}
+
+/**
+ * What `GET /properties/rent/:tenancyId` answers.
+ *
+ * ⚠️ **Declared once, deliberately.** Two services call that endpoint —
+ * `PropertiesService.rentHistory` for the landlord's yard and
+ * `RentService.history` for the tenant's rent screen — and the generic on
+ * `http.get` is an unchecked cast, so a stale `RentPeriod[]` on either side
+ * passes `tsc` and `ng build` and fails at runtime when something calls
+ * `.find` on an object. That is exactly what happened to the yard when the
+ * envelope landed. One type, imported by both, is what makes the next change
+ * to this shape a compile error instead of a blank panel.
+ */
+export interface RentLedger {
+  tenancy: RentLedgerTenancy;
+  periods: RentPeriod[];
+}
+
 export type ExpenseCategory = 'municipal' | 'water' | 'electricity' | 'maintenance' | 'other';
 
 /** Something the landlord paid for. Hangs off the yard; `room` only when the cost is one room's. */
