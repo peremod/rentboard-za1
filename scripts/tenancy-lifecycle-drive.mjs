@@ -797,6 +797,160 @@ console.log('  ⚠️  Report.tenancyId is NOT backfilled and never will be.');
 console.log('      Historical reports stay null; the archive has to say so.');
 
 
+
+// ── 9. What ending a letting actually does — Phase C ─────────────────────
+//
+// ⚠️ Before this phase, `end()` wrote four columns on one row and that was the
+// entire effect of a tenancy ending. Nothing downstream read them:
+//
+//   · the room stayed `let` indefinitely — off the public board, out of the
+//     sitemap, with nothing telling the landlord to relist;
+//   · a letting that FELL THROUGH did the same, for a room nobody ever moved
+//     into;
+//   · 32 Notice.kind values existed and not one was for a letting starting or
+//     ending. The biggest event in the lifecycle logged a console line and
+//     produced nothing a person could read.
+//
+// Each check below reads a row that something now has to write.
+console.log('\n── 9. Ending a letting reaches the room and the people ──────');
+
+{
+  const noticesFor = (userId, kind) =>
+    dbQuery(
+      `SELECT count(*) FROM notices WHERE "userId" = '${userId}'` +
+        (kind ? ` AND kind = '${kind}'` : ''),
+    );
+  const noticeBody = (userId, kind) =>
+    dbQuery(
+      `SELECT title || ' :: ' || coalesce(body,'') FROM notices ` +
+        `WHERE "userId" = '${userId}' AND kind = '${kind}' ORDER BY "createdAt" DESC LIMIT 1`,
+    );
+  const roomStatus = (roomId) => dbQuery(`SELECT status FROM rooms WHERE id = '${roomId}'`);
+
+  // ── 9a. A letting that fell through frees the room at once ────────────
+  //
+  // Not a relist: there is nothing to archive, because autoRejectOthers
+  // rejected the other applicants when this one was accepted and they stay
+  // rejected — which is what actually happened. This is the shape of undoLet.
+  const f9 = await lettingReadyToStart(Date.now() + 10000);
+  check(
+    roomStatus(f9.roomId) === 'let',
+    `accepting marks the room let (got '${roomStatus(f9.roomId)}')`,
+  );
+  const f9Tenancy = await tenancyFor(f9.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${f9Tenancy}/cancel`, {}, f9.landlord.token);
+  check(
+    roomStatus(f9.roomId) === 'active',
+    `…and a letting that fell through puts it straight back on the board (got '${roomStatus(f9.roomId)}')`,
+  );
+
+  // ── 9b. Ending an active letting tells BOTH parties ───────────────────
+  const e9 = await lettingReadyToStart(Date.now() + 11000);
+  const e9Tenancy = await tenancyFor(e9.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${e9Tenancy}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, e9.landlord.token);
+
+  const beforeTenant = Number(noticesFor(e9.tenant.id, 'tenancy_ended') || 0);
+  await apiCall(API, 'POST', `/api/tenancies/${e9Tenancy}/end`, {}, e9.landlord.token);
+  // The announcement is awaited inside end(), but give the row a moment.
+  await new Promise((r) => setTimeout(r, 1200));
+
+  check(
+    Number(noticesFor(e9.tenant.id, 'tenancy_ended') || 0) === beforeTenant + 1,
+    'the TENANT is told their letting is recorded as ended',
+  );
+  check(
+    Number(noticesFor(e9.landlord.id, 'tenancy_ended') || 0) >= 1,
+    '…and so is the landlord',
+  );
+
+  // ⚠️ The words, not just the row. A review window is 30 days and a notice
+  // that does not mention it is a notice that costs somebody their review.
+  const tBody = noticeBody(e9.tenant.id, 'tenancy_ended');
+  check(/30 days/i.test(tBody), `…and the tenant's names the review window ("${tBody.slice(0, 70)}…")`);
+  // It must not tell them they did something they did not do. The landlord
+  // ended this one.
+  //
+  // ⚠️ The `tBody` guard is not decoration. Without it this check passes when
+  // there is NO notice at all — the empty string does not match the phrase —
+  // so disabling the announcement entirely made it go green. Measured: with
+  // the announcement reverted it was one of three checks still passing, for
+  // exactly the wrong reason. A negative assertion has to prove the thing it
+  // is reading exists.
+  check(
+    !!tBody && !/you marked this as ended/i.test(tBody),
+    'the tenant is not told THEY ended it when the landlord did',
+  );
+  const lBody = noticeBody(e9.landlord.id, 'tenancy_ended');
+  check(
+    /you marked this as ended/i.test(lBody),
+    `…while the landlord, who did, is told so ("${lBody.slice(0, 60)}…")`,
+  );
+
+  // ── 9c. The room is NOT auto-relisted, and the landlord is prompted ───
+  //
+  // ⚠️ Both halves matter. Auto-relisting republishes old photos at an old
+  // price the day somebody moves out, and relist() archives every open
+  // application — destructive, and not asked for. But a room going quietly
+  // invisible is not an option either, which is exactly what used to happen.
+  check(
+    roomStatus(e9.roomId) === 'let',
+    `ending a letting does NOT silently republish the room (got '${roomStatus(e9.roomId)}')`,
+  );
+  check(
+    Number(noticesFor(e9.landlord.id, 'room_needs_relisting') || 0) === 1,
+    '…the landlord is prompted instead, once',
+  );
+  const prompt = noticeBody(e9.landlord.id, 'room_needs_relisting');
+  check(
+    /nobody can find it|not listed/i.test(prompt),
+    `…and the prompt says what the consequence is ("${prompt.slice(0, 70)}…")`,
+  );
+  const promptLink = dbQuery(
+    `SELECT link FROM notices WHERE "userId" = '${e9.landlord.id}' ` +
+      `AND kind = 'room_needs_relisting' ORDER BY "createdAt" DESC LIMIT 1`,
+  );
+  check(
+    !!promptLink && promptLink.startsWith('/landlord/'),
+    `…and lands somewhere in the portal ("${promptLink}")`,
+  );
+
+  // ── 9d. The prompt is not sent for a room the landlord has moved on ───
+  //
+  // A landlord who has already relisted, paused or removed the room has said
+  // something more recent than the stale `let`.
+  const p9 = await lettingReadyToStart(Date.now() + 12000);
+  const p9Tenancy = await tenancyFor(p9.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${p9Tenancy}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, p9.landlord.token);
+  dbQuery(`UPDATE rooms SET status='paused' WHERE id = '${p9.roomId}'`);
+  await apiCall(API, 'POST', `/api/tenancies/${p9Tenancy}/end`, {}, p9.landlord.token);
+  await new Promise((r) => setTimeout(r, 1200));
+  check(
+    Number(noticesFor(p9.landlord.id, 'room_needs_relisting') || 0) === 0,
+    'a room the landlord has already paused draws no relisting prompt',
+  );
+  check(
+    roomStatus(p9.roomId) === 'paused',
+    '…and their own choice is left alone',
+  );
+  // The ending itself is still announced — that is about the people, not the room.
+  check(
+    Number(noticesFor(p9.tenant.id, 'tenancy_ended') || 0) === 1,
+    '…while the tenant is still told the letting ended',
+  );
+}
+
+console.log('\n── What section 9 does NOT prove ────────────────────────────');
+console.log('  ⚠️  No EMAIL goes out. deliver() writes an in-app notice and');
+console.log('      nothing else, so anybody who does not sign in within the');
+console.log('      30-day review window misses it. Named in OUTSTANDING §33,');
+console.log('      not implied away.');
+console.log('  ⚠️  Nothing here reads the landlord DASHBOARD. The notice row');
+console.log('      exists; whether the relisting prompt appears as a task is');
+console.log('      Phase E.');
+
+
 await browser.close();
 
 console.log('\n═══════════════════════════════════════════════════════');

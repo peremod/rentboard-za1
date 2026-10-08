@@ -362,13 +362,41 @@ and the repo's own history argues against derived state with many readers. Do
 tenancy ended, and folding it in would make `cancelled → archived` lose the
 reason it was cancelled.
 
-### D3 — `Room.reserved` is unwritable
+### D3 — `Room.reserved` — ⚠️ **this section was wrong, corrected in Phase C**
 
-Read in two places, written nowhere. Either wire it to `Tenancy.pending`
-(accepted, not yet moved in — which is precisely what "reserved" means and
-would make the board honest during that gap) or delete it from the enum.
-Leaving an unreachable state is how a status dot ends up with a colour nobody
-ever sees.
+**What it said:** "Read in two places, written nowhere… an unreachable state."
+
+**What is actually true:** `reserved` *is* written —
+`RoomsService.markReserved` (`rooms.service.ts:533`) sets it, behind
+`POST /rooms/:id/reserve`, with `unreserve` to undo. I grepped for the string
+`'reserved'`, read the matches as reads, and missed the write two lines into
+one of them. The conclusion was wrong and the recommendation that followed it
+("wire it or delete it") was answering a question that was not open.
+
+**The real defect is one layer up, and it is the audit's own through-line:** a
+complete feature with no way in. Built and working:
+
+| | |
+|---|---|
+| `POST /rooms/:id/reserve`, `/unreserve` | work |
+| `applications.service.ts:43` | a tailored refusal — "reserved for another tenant while they finalise. It may become available again" |
+| `room-card.ts:59` | renders a **Reserved** badge |
+| `landlord-inbox.service.ts:419`, `properties.service.ts:249` | count it as occupied |
+| `admin.service.ts:449,467`, `account-lifecycle.service.ts:76` | count it as live |
+| `rooms.service.ts:572,659,763` | pause, let and the working-on list all handle it |
+| **a button anywhere in the portal** | **none** |
+
+So the status dot does have a colour nobody ever sees — but because no screen
+can set the status, not because nothing can.
+
+The frontend service had carried **two** methods for that one endpoint,
+`markReserved` and `reserve`, identical but for the name. That is what happens
+to code nobody calls: neither copy was ever wrong, because neither was ever
+used. `markReserved` is deleted; the gap is recorded as `OUTSTANDING` §34.
+
+**Still not done:** the one screen it needs. Deliberately not built in Phase C —
+a landlord control belongs with the rest of the landlord side in Phase E, and
+inventing it here would be the scope creep this plan exists to avoid.
 
 ### D4 — `Notice` has no tenancy link
 
@@ -766,13 +794,44 @@ riding along with a feature migration.
 ⚠️ **Nothing reads `archivedAt` yet** — one writer, no readers, until Phase F.
 
 ### Phase C — Close the loop on `end()`
-- Emit `tenancy_ended` to both parties, and `room_needs_relisting` to the landlord (C4)
-- Decide the room's fate explicitly. **Recommendation: prompt, do not auto-relist.** Auto-relisting republishes a room with its old photos, old price and old description the day a tenant moves out, and `rooms.service.ts:539` already documents why relist is destructive — it archives every open application. A notice plus a one-tap relist respects that (C3)
-- Either make `closureReason`'s "has been relisted" branch true, or change the sentence (C3)
-- Wire `Room.reserved` to `Tenancy.pending`, or delete it from the enum (D3)
+**Done — v1.118.0.**
 
-**Proof:** a drive that ends a tenancy and asserts both notices exist, the room
-is still `let`, and the relist prompt is reachable.
+- `tenancy_ended` to both parties, worded for who did it — a notice that tells
+  somebody about their own action reads as a system not paying attention — and
+  naming the 30-day review window, because a notice that omits it costs
+  somebody their review (C4)
+- `room_needs_relisting` to the landlord, **only while the room is still
+  `let`**: one who has already paused, removed or relisted it has said
+  something more recent (C3)
+- **Prompt, not auto-relist**, as recommended and for the reason given: relist
+  republishes old photos at an old price and archives every open application
+- **A letting that fell through now frees the room immediately** — not in the
+  original plan, found while reading `cancel()`. Accepting sets the room `let`
+  and nothing set it back, so a room nobody ever moved into stayed off the
+  board and out of the sitemap for good. Straight to `active`, not a relist:
+  there is nothing to archive, because `autoRejectOthers` already rejected the
+  others at accept time and they stay rejected, which is what happened (C3)
+- `closureReason`'s "This tenancy ended and the room has been relisted" is
+  gone. It asserted one of three possible histories as fact; it now says what
+  is true in all of them (C3)
+- D3 — see the corrected section above. The audit was wrong; `reserved` is
+  written, and the defect is that no screen can reach it
+
+**Proof — done.** Drive section 9, 14 checks (88 in the file). All three
+behaviours reintroduced and confirmed to fail, revert 3 in isolation because
+revert 2 masked it:
+
+| Reverted | Result |
+|---|---|
+| `cancel()` no longer frees the room | ❌ reads `let` |
+| `end()` announces nothing | ❌ 9 red |
+| the relist prompt ignores the room's status | ❌ (isolated) prompt fires on a paused room |
+
+⚠️ **And one check was passing for the wrong reason.** "The tenant is not told
+THEY ended it" is a negative assertion, and with the announcement disabled
+there was no notice at all — the empty string matches no phrase, so it went
+green. It now requires the notice to exist first. A negative check has to prove
+the thing it reads is there.
 
 ### Phase D — Tenant-side correctness
 - `activeApplications()` — exclude any application whose tenancy has reached `ended` or `cancelled`, not just `active` (C1)

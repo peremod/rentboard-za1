@@ -2020,6 +2020,141 @@ archive has to say so on screen.
 
 ---
 
+## 33. Ending a letting now tells both parties — Phase C
+
+**Fixed, with one gap named below rather than implied away.**
+
+### What was wrong
+
+`end()` wrote four columns on one row and that was the entire effect of a
+tenancy ending.
+
+- **The room stayed `let` indefinitely.** Off the public board
+  (`rooms.service` filters `status: 'active'`), out of the sitemap, with
+  nothing telling the landlord to relist.
+- **A letting that FELL THROUGH did the same.** Accepting sets the room `let`;
+  nothing set it back. So a room **nobody ever moved into** went invisible for
+  good, and the landlord had to find "relist" themselves.
+- **32 `Notice.kind` values existed and not one was for a letting starting or
+  ending.** The biggest event in the lifecycle logged a console line and
+  produced nothing a person could read. A tenant learned their review window
+  had opened only by happening to open the dashboard inside 30 days.
+
+### What it does now
+
+`tenancy_ended` to **both** parties, worded for who actually did it — a notice
+that tells somebody about their own action reads as a system not paying
+attention — and naming the 30-day review window, because a notice that omits
+it costs somebody their review.
+
+`room_needs_relisting` to the landlord, **and only while the room is still
+`let`**. One who has already paused, removed or relisted it has said something
+more recent, and overwriting that would be the code deciding it knows better.
+
+**A prompt, not an automatic relist, and that is a product decision.**
+`relist()` republishes the room with its old photos, its old price and its old
+description on the day a tenant moves out, and it archives every open
+application and increments `relistCount`. Destructive, and not asked for.
+Whether to let the room again, and at what rent, is the landlord's. But a room
+going quietly invisible is not an option either — so: one notice, with the
+room's own screen on the end of it.
+
+**A cancelled letting frees the room at once**, straight to `active` rather
+than through `relist()`. There is nothing to archive: `autoRejectOthers`
+rejected the other applicants when this one was accepted and they stay
+rejected, which is what actually happened. This is the shape of `undoLet` —
+the room simply was not let.
+
+`closureReason` no longer reads *"This tenancy ended and the room has been
+relisted."* `archivedAt` is set by a relist and nothing else, so that branch is
+reached whenever a landlord relists a room they had let to this person — after
+a tenancy ended, after one that fell through, or after a letting never
+recorded. It asserted the first of three as fact. It now says what is true in
+all of them.
+
+### ⚠️ The gap: no email
+
+`NoticeRouter.deliver` sends an email when it can and then returns **without**
+writing a notice row. Passing no email function therefore guarantees the in-app
+notice exists for everybody — including the phone-only landlord, for whom it is
+the only channel there is.
+
+That is the right trade, and it has a cost: **somebody who does not sign in
+within 30 days misses the review window entirely.** A review window is the one
+notification here with a deadline, which is exactly the case an email is for.
+
+**What it needs:** a `sendTenancyEndedEmail` template beside the sixteen that
+already exist, passed to `deliver` as its email function — at which point the
+in-app notice stops being written for anyone with an address, so the two
+channels need thinking about together rather than one bolted on.
+
+### Proof
+
+Drive section 9 — 14 checks, 88 in the file. All three behaviours reintroduced
+and confirmed to fail:
+
+| Reverted | Result |
+|---|---|
+| `cancel()` no longer frees the room | ❌ room reads `let` |
+| `end()` announces nothing | ❌ **9 red** |
+| the relist prompt ignores the room's own status | ❌ fires on a paused room |
+
+Revert 3 had to be run **in isolation**: with the announcement disabled nothing
+fires at all, so "a paused room draws no prompt" passed for the wrong reason.
+
+⚠️ **And one check was green when it should have been red.** *"The tenant is not
+told THEY ended it"* is a negative assertion, and with no notice at all the
+empty string matches no phrase — so disabling the announcement made it pass. It
+now requires the notice to exist first. **A negative check has to prove the
+thing it is reading is there.**
+
+### Not proven
+
+Nothing here reads the landlord **dashboard**. The notice row exists; whether
+the relisting prompt surfaces as a task in the inbox is Phase E.
+
+---
+
+## 34. The Reserved status: a complete feature with no button
+
+**Open. One screen away.**
+
+`Room.reserved` means "a tenant is lined up but nothing is signed" — the room
+stays visible with a badge, takes no new applications, and existing applicants
+are left open deliberately as the landlord's fallback.
+
+All of it is built:
+
+| | |
+|---|---|
+| `POST /rooms/:id/reserve`, `/unreserve` | work |
+| `RoomsService.markReserved` | writes the status |
+| `applications.service.ts:43` | refuses new applications with a tailored sentence — "reserved for another tenant while they finalise. It may become available again" |
+| `room-card.ts:59` | renders the **Reserved** badge |
+| `landlord-inbox`, `properties.service` | count it as occupied |
+| `admin.service`, `account-lifecycle.service` | count it as live |
+| `rooms.service` pause / let / working-on | all handle it |
+| **a control in the portal** | **none** |
+
+So the badge, the refusal sentence and the gold status dot are all unreachable,
+and a landlord with somebody lined up has only "mark as let" — which closes and
+emails every other applicant, the destructive action for a non-destructive
+reason that `pause()` was added to avoid.
+
+`frontend/.../rooms.service.ts` also carried **two** methods for that one
+endpoint, `markReserved` and `reserve`, identical but for the name. That is
+what happens to code nobody calls: neither copy was ever wrong, because neither
+was ever used. `markReserved` is deleted.
+
+**⚠️ `docs/TENANCY-LIFECYCLE-AUDIT.md` §D3 got this wrong** and said nothing
+wrote the status at all. The write is at `rooms.service.ts:533`, two lines into
+a match I read as a read. Corrected in place rather than quietly.
+
+**What it needs:** a Reserve / Unreserve control on the room row, next to the
+existing let and pause actions. Phase E.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

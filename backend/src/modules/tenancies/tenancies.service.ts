@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { NoticeRouter } from '../notifications/notice-router.service';
 
 /** How long after a tenancy ends both parties may still review. */
 const REVIEW_WINDOW_DAYS = 30;
@@ -22,7 +23,10 @@ const REVIEW_WINDOW_DAYS = 30;
 export class TenanciesService {
   private readonly logger = new Logger(TenanciesService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notice: NoticeRouter,
+  ) {}
 
   /** Called from the accept flow. Idempotent: accepting twice creates one tenancy. */
   async createFromApplication(applicationId: string) {
@@ -93,7 +97,7 @@ export class TenanciesService {
       throw new BadRequestException('Only a tenancy that has not started can be cancelled. End it instead.');
     }
 
-    return this.prisma.tenancy.update({
+    const cancelled = await this.prisma.tenancy.update({
       where: { id },
       data: {
         status: 'cancelled',
@@ -111,6 +115,30 @@ export class TenanciesService {
         archivedAt: new Date(),
       },
     });
+
+    /**
+     * Put the room back on the board.
+     *
+     * ⚠️ Accepting an application sets the room to `let`. Nothing ever set it
+     * back, so a letting that FELL THROUGH left the room `let` indefinitely:
+     * off the public board (`rooms.service` filters `status: 'active'`), out of
+     * the sitemap, and invisible to every tenant — for a room nobody ever
+     * moved into. The landlord had to find "relist" themselves, with nothing
+     * telling them to.
+     *
+     * Straight back to `active`, not a relist, and the difference matters.
+     * `relist()` archives every open application and increments
+     * `relistCount`; here there is nothing to archive — `autoRejectOthers`
+     * rejected the other applicants when this one was accepted, and they stay
+     * rejected, which is what actually happened. This is the shape of
+     * `undoLet`: the room simply was not let.
+     *
+     * Only from `let`. A landlord who has already paused, removed or relisted
+     * the room in the meantime has said something more recent than this.
+     */
+    await this.restoreRoomIfStillLet(tenancy.roomId, 'the letting fell through');
+
+    return cancelled;
   }
 
   /**
@@ -143,7 +171,132 @@ export class TenanciesService {
     });
 
     this.logger.log(`Tenancy ${id} ended by ${userId}; reviews open for ${REVIEW_WINDOW_DAYS} days`);
+
+    // Never allowed to fail the ending. A tenancy ends because it ended; a
+    // notification that cannot be delivered must not undo the record of it.
+    await this.announceEnding(id, userId).catch((e: unknown) =>
+      this.logger.error(`Could not announce the end of tenancy ${id}`, e instanceof Error ? e.stack : String(e)),
+    );
+
     return updated;
+  }
+
+  /**
+   * Tell both parties the letting is over, and the landlord that the room is
+   * free.
+   *
+   * ── Why this exists
+   *
+   * Ending a tenancy wrote four columns on one row and told nobody. There are
+   * 32 `Notice.kind` values in this codebase and, until this, not one for a
+   * tenancy starting or ending — the single biggest event in the lifecycle
+   * logged a line to the server console and produced nothing a person could
+   * read. A tenant learned their review window had opened only by happening to
+   * open the dashboard inside 30 days.
+   *
+   * ── Why no email
+   *
+   * `deliver` sends an email when it can and then returns WITHOUT writing a
+   * notice row. Passing no email function therefore guarantees the in-app
+   * notice exists for everybody, including the phone-only landlord for whom it
+   * is the only channel there is. That is the right trade here, and it has a
+   * cost worth naming rather than hiding: somebody who does not log in inside
+   * 30 days misses the review window. See docs/OUTSTANDING.md §33.
+   */
+  private async announceEnding(tenancyId: string, endedById: string) {
+    const t = await this.prisma.tenancy.findUnique({
+      where: { id: tenancyId },
+      select: {
+        id: true, roomId: true, landlordId: true, tenantId: true, endDate: true,
+        room: { select: { id: true, title: true, status: true, propertyId: true } },
+        landlord: { select: { id: true, fullName: true, email: true, phone: true, phoneVerified: true } },
+        tenant: { select: { id: true, fullName: true, email: true, phone: true, phoneVerified: true } },
+      },
+    });
+    if (!t) return;
+
+    const roomTitle = t.room?.title ?? 'the room';
+    // Who did it, in the other person's terms. "You recorded this" and "your
+    // landlord recorded this" are different things to read, and a notice that
+    // tells somebody about their own action reads as a system that is not
+    // paying attention.
+    const byTenant = endedById === t.tenantId;
+
+    await this.notice.deliver(t.tenant, {
+      kind: 'tenancy_ended',
+      title: `Your time at "${roomTitle}" is recorded as ended`,
+      body:
+        (byTenant
+          ? 'You marked this as ended. '
+          : `${t.landlord.fullName} marked this as ended. `) +
+        `You have ${REVIEW_WINDOW_DAYS} days to review the room and the landlord. ` +
+        'Neither review is shown until you have both written one, or the window closes. ' +
+        'Your rent record for this room stays where it is.',
+      link: '/tenant/dashboard',
+    });
+
+    await this.notice.deliver(t.landlord, {
+      kind: 'tenancy_ended',
+      title: `${t.tenant.fullName} has moved out of "${roomTitle}"`,
+      body:
+        (byTenant
+          ? `${t.tenant.fullName} marked this as ended. `
+          : 'You marked this as ended. ') +
+        `You have ${REVIEW_WINDOW_DAYS} days to review them, and they have ${REVIEW_WINDOW_DAYS} days ` +
+        'to review you and the room. Neither is shown until both are in, or the window closes.',
+      link: '/landlord/dashboard',
+    });
+
+    /**
+     * ⚠️ A PROMPT, not an automatic relist. This is a product decision.
+     *
+     * Relisting republishes the room with its old photos, its old price and
+     * its old description on the day a tenant moves out — and `relist()`
+     * archives every open application and increments `relistCount`, which is
+     * destructive in a way the landlord has not asked for. Deciding to let a
+     * room again, and at what rent, is theirs.
+     *
+     * But the room going quietly invisible is not an option either, which is
+     * what happened: `let` with nothing to move it back, so it stayed off the
+     * board and out of the sitemap for good. So: one notice, with the room's
+     * own screen on the end of it.
+     *
+     * Only while the room is still `let`. A landlord who has already relisted,
+     * paused or removed it has said something more recent.
+     */
+    if (t.room?.status === 'let') {
+      await this.notice.deliver(t.landlord, {
+        kind: 'room_needs_relisting',
+        title: `"${roomTitle}" is empty — put it back on the board when you are ready`,
+        body:
+          'It is not listed at the moment, so nobody can find it or apply. Relisting takes one tap ' +
+          'and you can change the rent and the available-from date on the way past. ' +
+          'Nothing is published until you do.',
+        link: t.room.propertyId
+          ? `/landlord/properties/${t.room.propertyId}`
+          : '/landlord/dashboard',
+      });
+    }
+  }
+
+  /**
+   * Back to `active`, but only from `let`.
+   *
+   * Used where a letting ends before it began — see `cancel`. Deliberately not
+   * `relist()`: that archives open applications and increments the cycle, and
+   * there is nothing here to archive.
+   *
+   * The guard is the point. A landlord who has paused, removed or already
+   * relisted the room has expressed something more recent than the stale
+   * `let`, and overwriting it would be this method deciding it knows better.
+   */
+  private async restoreRoomIfStillLet(roomId: string, why: string) {
+    const { count } = await this.prisma.room.updateMany({
+      where: { id: roomId, status: 'let' },
+      data: { status: 'active', letAt: null },
+    });
+    if (count) this.logger.log(`Room ${roomId} is back on the board — ${why}`);
+    return count > 0;
   }
 
   /**
