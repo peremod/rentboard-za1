@@ -3,7 +3,7 @@
 Generates frontend/src/assets/images/og-default.png — the fallback social card.
 
     python3 scripts/generate-og-image.py
-    python3 scripts/generate-og-image.py --brand UMastande --domain umastande.co.za
+    python3 scripts/generate-og-image.py --brand Mastande --domain umastande.co.za
 
 Brand name and domain are flags, not hard-coded strings. During a rebrand the
 card is the single most-shared visual the product has, and it should not need
@@ -74,7 +74,22 @@ def font(path: Path, size: int) -> ImageFont.FreeTypeFont:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Generate the default Open Graph social card.")
-    p.add_argument("--brand", default="UMastande", help="Wordmark text.")
+    # ⚠️ "Mastande", not "UMastande", and the default is the decision.
+    #
+    # The card is the one place the brand is a picture rather than a string, so
+    # it is also the one place that can silently disagree with the other 155
+    # user-facing occurrences. It did: the card said "UMastande" while every
+    # <title>, og:site_name and footer said "Mastande", so a link shared to
+    # WhatsApp showed a picture and a headline that named two different
+    # products. Confirmed with the owner on 8 Oct 2026: the product is
+    # Mastande; "Umastande (Pty) Ltd" is the CIPC entity and stays on the legal
+    # pages; umastande.co.za is the domain and stays as it is. A domain that
+    # differs from a product name is ordinary.
+    #
+    # Left as a flag so a future rename needs no code edit — but the default
+    # has to match what is shipping, or the next bare run reintroduces the
+    # mismatch.
+    p.add_argument("--brand", default="Mastande", help="Wordmark text.")
     p.add_argument(
         "--suffix",
         default="ZA",
