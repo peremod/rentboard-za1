@@ -2288,6 +2288,79 @@ are Phase F.
 
 ---
 
+## 36. A role button whose text was invisible on hover — the `:where()` trap again
+
+**Fixed. Pre-existing, found by a red gate rather than reported.**
+
+### What was wrong
+
+`scripts/a11y-drive.mjs` was failing two checks on `/auth/register-phone`, and
+had been before any of the lifecycle phases — confirmed by stashing them and
+re-running:
+
+```
+contrast 4.34:1, needs 4.5:1 at .auth__role-sub
+:hover contrast 1.17:1 (needs 4.5) on .auth__role
+```
+
+**1.17:1 is white on cream — text that cannot be seen at all.** The same class
+of defect as the 1.00:1 white-on-white button in §22, in the same session that
+found that one.
+
+### Why, exactly
+
+Asked the browser which rules won, with the `:hover` state forced through CDP:
+
+| Rule | Specificity | Sets |
+|---|---|---|
+| `.auth__role` | (0,1,0) | `color: #1C160E`, `background: #FFF` |
+| `:where(button):hover:not(:disabled)` | **(0,2,0)** | `color: #fff`, `background: --terra-deep` |
+| `.auth__role:hover:not(.is-active)` | (0,3,0) | `background: #F2EDE3` — **and nothing about colour** |
+
+`:where()` contributes **zero** specificity, so the global button-hover rule is
+only (0,2,0) — its `:hover` and `:not(:disabled)`. The auth rule at (0,3,0)
+therefore wins the **background** and overrides it to cream… and by saying
+nothing about `color`, leaves the global rule's **white** sitting on top of it.
+The resting `.auth__role` colour is (0,1,0) and loses.
+
+**So: overriding a `:where(button):hover` background without also overriding its
+colour is how a control ends up with invisible text in one state.** The resting
+state measures 15.6:1 and says nothing about it.
+
+The second failure is arithmetic: `rgba(255,255,255,.8)` over `--terra`
+composites to `#EFD9D3`, which is 4.34:1 against the `#AD4222` behind it — just
+under the 4.5 that size of text needs. `.9` gives 5.07:1 and keeps the
+sub-label quieter than the title, which is what the alpha is for; solid white
+would pass and flatten the hierarchy instead.
+
+### Proof
+
+Both reintroduced, gate red with the same two lines; restored, gate green —
+**10 public + 17 portal pages, 11 distinct control styles hovered, 38 focused,
+all over threshold.**
+
+⚠️ **The gate needed demo rooms to say that.** Without them it reports "the
+board had no rooms, so the room card was never checked" and an H2-before-H1 on
+a room built by a drive fixture, and neither is a real finding. Seed first:
+
+```bash
+cd backend
+ADMIN_EMAIL=… ADMIN_PASSWORD=… SEED_DEMO_ROOMS=true npx ts-node prisma/seed.ts
+```
+
+A gate that reports two fixture artefacts alongside two real defects is a gate
+people learn to skim.
+
+### What this says about the rest of the app
+
+Only two other rules override a hover background without a colour
+(`.spark__bar`, a chart bar with no text, and `.prop-card__link`, which is not
+a `button` so `:where(button)` never applies to it). The gate hovers every
+distinct control style on 27 pages and passes, which is better evidence than a
+grep.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

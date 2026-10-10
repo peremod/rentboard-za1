@@ -530,6 +530,23 @@ input[type='file']:not([hidden]) {
 
     &:hover:not(.is-active) {
       background: $color-cream-2;
+      // ⚠️ `color` is NOT redundant here, and leaving it out made this button's
+      // own text invisible on hover — 1.17:1, white on cream.
+      //
+      // `:where(button):hover:not(:disabled)` in _spec.scss sets
+      // `color: #fff; background: --terra-deep`. `:where()` contributes ZERO
+      // specificity, so that rule is (0,2,0) — :hover plus :not(:disabled) —
+      // while this one is (0,3,0). This rule therefore wins the BACKGROUND and
+      // overrides it to cream… and, by saying nothing about `color`, leaves the
+      // global rule's white in place over it. The resting `.auth__role` colour
+      // is only (0,1,0) and loses.
+      //
+      // So: overriding a `:where(button):hover` background without overriding
+      // its colour is how a control ends up with invisible text in one state.
+      // Found by scripts/a11y-drive.mjs, which hovers every distinct control
+      // and reads the computed style — the resting state measures 15.6:1 and
+      // says nothing about this.
+      color: $color-ink;
       transform: none;
       box-shadow: none;
     }
@@ -539,7 +556,12 @@ input[type='file']:not([hidden]) {
       background: $color-terracotta;
       border-color: $color-terracotta;
 
-      .auth__role-sub { color: rgba(255, 255, 255, .8); }
+      // .8 over --terra composites to #EFD9D3, which is 4.34:1 against the
+      // #AD4222 behind it — just under the 4.5 this size of text needs. .9
+      // gives 5.07:1 and keeps the sub-label quieter than the title, which is
+      // what the alpha is for. Going to solid white would pass and flatten the
+      // hierarchy instead.
+      .auth__role-sub { color: rgba(255, 255, 255, .9); }
     }
   }
 
