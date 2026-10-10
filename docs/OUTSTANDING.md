@@ -2602,6 +2602,111 @@ in the same `where` clause as the published filter, which **is** exercised.
 
 ---
 
+## 39. A room could be relisted with somebody living in it — Phase G
+
+**Fixed. And my own audit described the wrong defect.**
+
+### ⚠️ What C8 got wrong
+
+`docs/TENANCY-LIFECYCLE-AUDIT.md` §C8 said an elapsed notice period produced
+nothing: *"No job watches it… still active, still generating rent reminders."*
+
+**Both inboxes already carried an escalating item.** `LeaseService.upcoming`
+computes the countdown on read, both inbox services sort by a negative day
+count so an overdue row goes first, and both already said "This date has
+already passed". The audit looked for a job and concluded there was no
+handling, when the handling was computed per read on purpose — which the file
+it was reading says in its own header.
+
+And "still generating rent reminders" is not a defect either. If nobody has
+recorded a move-out the person may still be there and rent may still be owed.
+The escalation asks; it does not decide.
+
+### The real hole, which was worse
+
+The landlord's row said *"X is leaving — get the room back on the board"* and
+pointed at relisting. `RoomsService.relist` checked the **room's** status and
+nothing about who was in it — and `let` passes that check.
+
+**Measured before the fix:** relist returned 200, the room went `active`, the
+tenancy stayed `active`, and the room was **on the public board**. Three things
+follow:
+
+- **Tenants apply for a room somebody else lives in.** That is
+  `ReportReason.already_let` — the product generating the exact complaint its
+  own report enum exists for.
+- **`relist()` archives every open application and increments `relistCount`**
+  on the way past, so it is not undone by setting the status back.
+- **Phase E's empty-room task cannot see it**, because that asks for rooms
+  still marked `let` and this one is now `active`.
+
+So the product *suggested* the step that put it into an inconsistent state.
+
+### The fix
+
+`relist()` refuses while a `pending` or `active` tenancy exists, and names the
+step rather than refusing blankly:
+
+> Drive Tenant is still recorded as living in this room. Record the move-out
+> first — then it can go back on the board.
+
+`pending` counts too: an accepted applicant who has not moved in is somebody
+expecting that room, and relisting it out from under them is the same defect
+wearing a different hat.
+
+**`relistAll` needed no change.** It calls `relist()` per room and catches each
+reason into `skipped`, so the bulk path inherited the guard and the landlord is
+told which room and why. A good seam.
+
+### And the action changes once the clock runs out
+
+While the countdown runs, relisting is the right thing to be getting ready for.
+Once it has run out, the step that unblocks everything is recording the
+move-out — the room cannot go back on the board until it exists. So:
+
+| | While running | Once elapsed |
+|---|---|---|
+| Landlord | "Get it back on the board" → the property screen | **"Record the move-out"** → `/landlord/dashboard#moving-in-out` |
+| Tenant (landlord gave notice) | "Start looking" → the board | **"Say you have moved out"** → `/tenant/rent#moving-in-out` |
+
+A row whose action 400s is its own defect, so the guard and the new action
+landed together.
+
+The tenant's change matters for a reason worth stating: sending somebody to
+browse at that point leaves a letting open behind them, and the next thing they
+hear about it is a rent reminder for a room they left.
+
+### ⚠️ What it deliberately does NOT do
+
+**An elapsed notice does not end the tenancy.** Where somebody lives is a
+record of fact, and inferring a move-out from a date is how this product would
+start asserting things it does not know — the same reasoning that keeps the
+countdown computed on read and never written. The drive asserts the tenancy is
+still `active` and `endDate` still null after the period runs out.
+
+### Proof
+
+Drive section 13 — 24 checks, 230 in the file. All three behaviours
+reintroduced: **13 red, 217 passed**; restored, 230.
+
+The cascade under revert is itself the argument. With the guard gone the room
+is relisted at the **pending** stage, so by the time the drive reaches the
+active case the room is no longer `let` and everything downstream collapses —
+which is the inconsistent state the guard exists to prevent.
+
+`smoke-test.sh` carries the guard; `room-grouping-drive` (16),
+`properties-drive`, `lease-drive`, `yard-layout-drive` (41), `inbox-drive`, the
+smoke suite and every gate are green. The bundle is unchanged — this phase is
+backend only.
+
+### Not proven
+
+Nothing here reads either **inbox on screen**. The rows and their actions are
+checked through the API; that they render is `inbox-drive` and
+`dashboard-ui-drive`.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

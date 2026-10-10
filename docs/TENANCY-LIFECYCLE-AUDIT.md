@@ -937,7 +937,37 @@ inserts a row first.
 `a11y-drive` audits the screen for both roles — 19 portal pages, not 17.
 
 ### Phase G — Notice elapsing
-- Decide what an expired notice period does. **It must not auto-end a tenancy** — that is a record of fact about where someone lives, and inferring it from a date is how the product starts asserting things it does not know. Escalate it on both inboxes instead (C8)
+**Done — v1.122.0, and ⚠️ C8 described the wrong defect.**
+
+C8 said an elapsed notice produced nothing and that no job watched it. **Both
+inboxes already escalated it** — the countdown is computed on read, both
+services sort by a negative day count, and both already said "This date has
+already passed". The audit looked for a job and concluded there was no
+handling, when the handling is computed per read on purpose and
+`LeaseService`'s own header says so. Rent reminders continuing is not a defect
+either: if nobody recorded a move-out, the person may still be there.
+
+**The real hole was the action the landlord was pointed at.** Their row said
+"get the room back on the board", and `relist()` checked the room's status and
+nothing about who was in it — so an occupied room went back on the **public
+board**, which is `ReportReason.already_let`, while archiving every open
+application and bumping `relistCount`. Phase E's empty-room task could not see
+it either, because the room was no longer `let`. Measured at 200 before the
+fix.
+
+- `relist()` refuses while a `pending` or `active` tenancy exists, naming whose
+  move-out is missing. `relistAll` inherited it — it calls `relist()` per room
+  and carries each reason back
+- Once the countdown runs out, both inboxes change their action to recording
+  the move-out, at `#moving-in-out` on each side. A row whose action 400s is
+  its own defect, so the guard and the action landed together
+- **It still does not end the tenancy**, as this section insisted: the drive
+  asserts `status` is `active` and `endDate` null after the period elapses
+
+**Proof — done.** Drive section 13, 24 checks (230 in the file). Three
+behaviours reverted: **13 red, 217 passed**; restored, 230. The cascade under
+revert is the argument — with the guard gone the room is relisted at the
+*pending* stage, so everything downstream collapses.
 
 ### Phase H — The CSS gate
 - Fail the build on a literal hex within ΔE 3 of an existing token (H1). `css-coverage-audit.mjs` is the precedent; `tokens.mjs` is the clustering

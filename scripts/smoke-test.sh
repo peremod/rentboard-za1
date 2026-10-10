@@ -1614,6 +1614,14 @@ if [[ -n "$TEN_ROOM" ]]; then
       # attributed to, not who entered it, so there was no safe rule for who
       # may withdraw — and a landlord who could clear a tenant's notice could
       # keep them on the books.
+      # ⚠️ A room somebody is recorded as living in cannot be relisted (v1.122.0).
+      # The status check on the room passes for `let`, so this was accepted —
+      # putting an occupied room back on the PUBLIC BOARD, archiving every open
+      # application and bumping relistCount on the way. That is
+      # ReportReason.already_let, the complaint the report enum exists for.
+      req POST "/api/rooms/$TEN_ROOM/relist" '{}' "$LTOKEN"
+      check "a room with somebody living in it cannot be relisted" 400 "$STATUS" "$BODY"
+
       req POST "/api/tenancies/$TEN_ID/notice" '{"givenBy":"landlord"}' "$TTOKEN"
       check "a tenant cannot record that the LANDLORD gave notice" 400 "$STATUS" "$BODY"
 

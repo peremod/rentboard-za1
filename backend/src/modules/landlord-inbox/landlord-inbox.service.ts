@@ -318,8 +318,37 @@ export class LandlordInboxService {
       entityId: r.tenancyId,
       roomTitle: r.room.title,
       daysUntil: r.daysUntilEmpty,
-      actionLabel: r.reason === 'notice_given' ? 'Get it back on the board' : 'Decide on the lease',
-      actionPath: leasePath(r.room.propertyId),
+      /**
+       * ⚠️ Once the date has PASSED the action changes, and this is the whole
+       * of Phase G.
+       *
+       * It used to read "Get it back on the board" and point at the property
+       * screen for every notice, overdue or not — and relisting a room with
+       * somebody still recorded in it was accepted, put the room on the public
+       * board while occupied, archived every open application and bumped
+       * `relistCount`. `RoomsService.relist` now refuses, which is right, but
+       * a row whose action 400s is its own defect.
+       *
+       * So: while the countdown is running, relisting is the right thing to be
+       * getting ready for. Once it has run out, the step that unblocks
+       * everything is recording the move-out — the room cannot go back on the
+       * board until it exists, and this platform does not infer one from a
+       * date.
+       *
+       * The anchor is the lifecycle panel, which is where `end()` is reachable
+       * from. Phase 8c mounted that panel with no id and a task row pointing at
+       * it had nowhere to land; `#moving-in-out` exists for exactly this.
+       */
+      actionLabel:
+        r.reason !== 'notice_given'
+          ? 'Decide on the lease'
+          : r.overdue
+            ? 'Record the move-out'
+            : 'Get it back on the board',
+      actionPath:
+        r.reason === 'notice_given' && r.overdue
+          ? '/landlord/dashboard#moving-in-out'
+          : leasePath(r.room.propertyId),
     }));
   }
 

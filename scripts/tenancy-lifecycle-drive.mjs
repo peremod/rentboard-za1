@@ -1752,6 +1752,192 @@ console.log('      filtered in the query and not exercised here. The published')
 console.log('      filter is, and they are the same clause.');
 
 
+
+// ── 13. A notice period that has run out — Phase G ──────────────────────
+//
+// ⚠️ My own audit (C8) said "no job watches it" and that an elapsed notice
+// produced nothing. That was WRONG: both inboxes already carried an item that
+// sorted by a negative day count and said "This date has already passed".
+//
+// The real hole was worse and in the other direction. The landlord's row said
+// "X is leaving — get the room back on the board" and pointed at relisting —
+// and `relist()` checked the ROOM's status and nothing about who was in it. So
+// the product suggested a step that:
+//
+//   · put a room somebody was living in back on the PUBLIC BOARD, which is
+//     `ReportReason.already_let`, the exact complaint its own report enum
+//     exists for;
+//   · archived every open application and bumped `relistCount` on the way, so
+//     it could not be undone by setting the status back;
+//   · became invisible to the Phase E empty-room task, which looks for rooms
+//     still marked `let`.
+//
+// Measured before the fix: relist returned 200, room went `active`, tenancy
+// stayed `active`, and the room was on the public board.
+console.log('\n── 13. An elapsed notice, and relisting an occupied room ────');
+
+{
+  const g13 = await lettingReadyToStart(Date.now() + 18000);
+  const t13 = await tenancyFor(g13.applicationId);
+
+  // ── 13a. A room cannot be relisted out from under a PENDING applicant ──
+  //
+  // Accepted and not yet moved in. Relisting it is the same defect wearing a
+  // different hat: somebody is expecting this room.
+  const onPending = await apiCall(API, 'POST', `/api/rooms/${g13.roomId}/relist`, {}, g13.landlord.token);
+  check(
+    onPending.status === 400,
+    `a room with an accepted applicant refuses to be relisted (${onPending.status}, want 400)`,
+  );
+  /has been accepted|has not moved in/i.test(JSON.stringify(onPending.body))
+    ? ok('…naming the step that was skipped, rather than refusing blankly')
+    : bad(`wrong reason: ${JSON.stringify(onPending.body).slice(0, 160)}`);
+
+  // ── 13b. Nor while somebody is LIVING there ────────────────────────────
+  await apiCall(API, 'POST', `/api/tenancies/${t13}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, g13.landlord.token);
+  check(
+    dbQuery(`SELECT status FROM rooms WHERE id = '${g13.roomId}'`) === 'let',
+    'the room is let while somebody lives in it',
+  );
+
+  const onActive = await apiCall(API, 'POST', `/api/rooms/${g13.roomId}/relist`, {}, g13.landlord.token);
+  check(
+    onActive.status === 400,
+    `…and relisting it is refused (${onActive.status}, want 400)`,
+  );
+  /still recorded as living/i.test(JSON.stringify(onActive.body))
+    ? ok('…saying whose move-out is missing')
+    : bad(`wrong reason: ${JSON.stringify(onActive.body).slice(0, 160)}`);
+  /record the move-out/i.test(JSON.stringify(onActive.body))
+    ? ok('…and naming the step, because this platform never infers a move-out from a date')
+    : bad(`the refusal does not name the step: ${JSON.stringify(onActive.body).slice(0, 160)}`);
+
+  // ⚠️ And nothing moved. A refusal that half-applied would be worse than the
+  // bug: relist archives applications and bumps relistCount before the room
+  // status is written.
+  check(
+    dbQuery(`SELECT status FROM rooms WHERE id = '${g13.roomId}'`) === 'let',
+    '…and the room did not move, so no application was archived on the way',
+  );
+  check(
+    dbQuery(`SELECT "relistCount" FROM rooms WHERE id = '${g13.roomId}'`) === '0',
+    '…nor the relist counter bumped',
+  );
+
+  // ── 13c. The bulk relist reports it rather than failing silently ───────
+  //
+  // `relistAll` calls relist() per room and catches each reason into `skipped`.
+  // Fixing one place fixes both, and the landlord is told which room and why.
+  const prop13 = await apiCall(API, 'POST', '/api/properties',
+    { name: `G yard ${Date.now()}`, suburb: 'Arcadia', city: 'Pretoria', province: 'Gauteng' },
+    g13.landlord.token);
+  dbQuery(`UPDATE rooms SET "propertyId" = '${prop13.body?.id}' WHERE id = '${g13.roomId}'`);
+  const bulk = await apiCall(API, 'POST', `/api/properties/${prop13.body?.id}/relist-all`, {}, g13.landlord.token);
+  check(bulk.status === 200 || bulk.status === 201, `relist-all answers (${bulk.status})`);
+  const skipped = (bulk.body?.skipped ?? []).find((x) => x.id === g13.roomId);
+  check(
+    !!skipped,
+    'the occupied room is reported as skipped rather than quietly relisted',
+  );
+  check(
+    /still recorded as living/i.test(skipped?.reason ?? ''),
+    `…with the reason carried back ("${(skipped?.reason ?? '').slice(0, 70)}…")`,
+  );
+  check(
+    (bulk.body?.relisted ?? []).every((x) => x.id !== g13.roomId),
+    '…and it is not in the relisted list',
+  );
+
+  // ── 13d. Once notice has run out, the action CHANGES ──────────────────
+  //
+  // While the countdown runs, relisting is the right thing to get ready for.
+  // Once it has run out, the step that unblocks everything is recording the
+  // move-out — the room cannot go back on the board until it exists.
+  await apiCall(API, 'POST', `/api/tenancies/${t13}/notice`, { givenBy: 'tenant' }, g13.tenant.token);
+
+  const running = (await apiCall(API, 'GET', '/api/landlord/inbox', null, g13.landlord.token))
+    .body?.items?.find((i) => i.kind === 'notice_given');
+  check(!!running, 'notice given puts a row on the landlord inbox');
+  check(
+    /back on the board/i.test(running?.actionLabel ?? ''),
+    `…and while the countdown runs the action is to get ready to relist ("${running?.actionLabel}")`,
+  );
+
+  // Run the clock out. The countdown is computed on read, never written, so
+  // moving the date IS the whole of "time passed".
+  dbQuery(`UPDATE tenancies SET "noticeGivenAt" = now() - interval '90 days' WHERE id = '${t13}'`);
+
+  const elapsed = (await apiCall(API, 'GET', '/api/landlord/inbox', null, g13.landlord.token))
+    .body?.items?.find((i) => i.kind === 'notice_given');
+  check(
+    /record the move-out/i.test(elapsed?.actionLabel ?? ''),
+    `…and once it has run out the action is to record the move-out ("${elapsed?.actionLabel}")`,
+  );
+  check(
+    (elapsed?.actionPath ?? '').includes('#moving-in-out'),
+    `…pointing at the panel where end() lives ("${elapsed?.actionPath}")`,
+  );
+  check(
+    /already passed/i.test(elapsed?.detail ?? ''),
+    '…and still says the date has passed',
+  );
+
+  // The tenant's side, same change for the same reason: sending them to browse
+  // would leave a letting open behind them, and the next thing they hear is a
+  // rent reminder for a room they left.
+  const tElapsed = (await apiCall(API, 'GET', '/api/tenant-inbox', null, g13.tenant.token))
+    .body?.items?.find((i) => i.kind === 'notice_given');
+  check(!!tElapsed, 'the tenant has the matching row');
+  check(
+    /moved out/i.test(tElapsed?.actionLabel ?? ''),
+    `…and can say so themselves ("${tElapsed?.actionLabel}")`,
+  );
+  check(
+    (tElapsed?.actionPath ?? '').includes('#moving-in-out'),
+    `…at the panel that takes it ("${tElapsed?.actionPath}")`,
+  );
+
+  // ── 13e. ⚠️ The tenancy is STILL ACTIVE, and that is the point ────────
+  //
+  // Where somebody lives is a record of fact. Inferring a move-out from a date
+  // is how this product would start asserting things it does not know — the
+  // same reasoning that keeps the notice countdown computed on read and never
+  // written. So the clock running out escalates; it does not decide.
+  check(
+    dbQuery(`SELECT status FROM tenancies WHERE id = '${t13}'`) === 'active',
+    'an elapsed notice does NOT end the tenancy by itself — nothing infers a move-out from a date',
+  );
+  check(
+    dbQuery(`SELECT "endDate" IS NULL FROM tenancies WHERE id = '${t13}'`) === 't',
+    '…and writes no move-out date it has not been told',
+  );
+
+  // And once a party does record it, the room frees up as Phase C already does.
+  await apiCall(API, 'POST', `/api/tenancies/${t13}/end`, {}, g13.tenant.token);
+  await new Promise((r) => setTimeout(r, 900));
+  const nowRelist = await apiCall(API, 'POST', `/api/rooms/${g13.roomId}/relist`, {}, g13.landlord.token);
+  check(
+    nowRelist.status === 200 || nowRelist.status === 201,
+    `…and with the move-out recorded the room relists (${nowRelist.status})`,
+  );
+  check(
+    dbQuery(`SELECT status FROM rooms WHERE id = '${g13.roomId}'`) === 'active',
+    '…and is back on the board',
+  );
+}
+
+console.log('\n── What section 13 does NOT prove ───────────────────────────');
+console.log('  ⚠️  Rent reminders keep running on a tenancy under elapsed');
+console.log('      notice, and that is deliberate rather than unhandled: if');
+console.log('      nobody has recorded a move-out the person may still be');
+console.log('      there, and rent may still be owed. The escalation asks; it');
+console.log('      does not decide.');
+console.log('  ⚠️  Nothing here reads either INBOX on screen. The rows and');
+console.log('      their actions are checked through the API; that they render');
+console.log('      is inbox-drive and dashboard-ui-drive.');
+
+
 await browser.close();
 
 console.log('\n═══════════════════════════════════════════════════════');
