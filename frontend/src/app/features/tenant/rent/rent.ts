@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TenanciesService } from '../../../core/services/tenancies.service';
 import { RentService, RentPeriod } from '../../../core/services/rent.service';
@@ -33,11 +33,40 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
  * replacing it, exactly as the API stores it — and it stops further reminders
  * for that month, because continuing to chase someone who has said they paid
  * is how a reminder becomes harassment.
+ *
+ * ── Current and past are different things on this screen — Phase D
+ *
+ * ⚠️ This screen used to loop over `active`, `ended` and `pending` tenancies
+ * together with no branch on which. So a letting that finished two years ago
+ * rendered **identically to the room somebody lives in**: the same heading,
+ * the same present-tense "R3 000/mo", the same banner telling them to say so
+ * if a month was wrong, the same paperwork panel offered as current. Reported
+ * by the owner, and the cause was architectural rather than cosmetic — one
+ * component was the only representation of rent, so it had to be both things.
+ *
+ * It is now two sections, and the past one is written in the past tense:
+ * "lived there", a date range, "rent was", and the record described as a
+ * record.
+ *
+ * **What does NOT change for a finished letting:**
+ *
+ *   · the ledger stays, in full. Previous months, amounts, dates and disputes
+ *     are what a person needs most once they have left, and hiding them
+ *     behind an archive nobody has built yet would be losing them;
+ *   · the answer button stays. `RentService.dispute` deliberately refuses only
+ *     a cancelled letting, because the most consequential mark a tenant ever
+ *     receives is the final month — entered after they moved out, and
+ *     `TenancyFlag.unpaid_rent` can rest on it. Taking their answer away at
+ *     that moment would leave the landlord's unverified word as the only
+ *     record.
+ *
+ * So the change is what the screen SAYS, not what it permits. "It is over, so
+ * lock it" would be the easy wrong fix.
  */
 @Component({
   selector: 'app-tenant-rent',
   standalone: true,
-  imports: [DatePipe, FormsModule, ZarCentsPipe, LeaseDocuments, ScreenHint, TenancyLifecycle],
+  imports: [DatePipe, NgTemplateOutlet, FormsModule, ZarCentsPipe, LeaseDocuments, ScreenHint, TenancyLifecycle],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="tenant-rent" heading="This is your landlord's record, and your answer to it">
@@ -58,7 +87,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
 
       @if (loading()) {
         <p class="muted">Loading…</p>
-      } @else if (!tenancies().length) {
+      } @else if (!current().length && !past().length) {
         <div class="empty-state">
           <!-- h2: this replaces the page's whole content, so it follows the
                shell's h1 directly. As an h3 it skipped a level. -->
@@ -69,7 +98,8 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
           </p>
         </div>
       } @else {
-        @for (t of tenancies(); track t.id) {
+
+        @for (t of current(); track t.id) {
           <section class="dash-section">
             <h2 class="dash-section-title">
               {{ t.room?.title || 'Your room' }}
@@ -79,73 +109,14 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
               <p class="muted">{{ t.room?.locationDisplay }}</p>
             }
 
-            @if (periodsFor(t.id); as periods) {
-              @if (!periods.length) {
-                <p class="muted">Your landlord has not recorded any months yet.</p>
-              }
-              @for (p of periods; track p.id) {
-                <div class="app-card">
-                  <div class="app-info">
-                    <div class="app-room">
-                      {{ p.periodStart | date: 'MMMM yyyy' }} — {{ p.amountCents | zarCents }}
-                    </div>
-                    <div class="app-location">
-                      <span class="app-status" [class]="'app-status status-' + p.status">
-                        {{ statusLabel(p.status) }}
-                      </span>
-                      @if (p.markedAt) { marked by your landlord {{ p.markedAt | date: 'd MMM' }} }
-                    </div>
-
-                    @if (p.tenantDisputedAt) {
-                      <div class="rent-answer">
-                        ✋ You said this is wrong on {{ p.tenantDisputedAt | date: 'd MMM yyyy' }}.
-                        @if (p.tenantNote) { <em>“{{ p.tenantNote }}”</em> }
-                        <br/>Your landlord can see this, and no more reminders
-                        will be sent for this month.
-                      </div>
-                    } @else if (disputing() === p.id) {
-                      <div class="rent-answer">
-                        <label [attr.for]="'note-' + p.id">
-                          Anything you want to add? (optional)
-                        </label>
-                        <input [id]="'note-' + p.id" type="text" maxlength="300"
-                               [(ngModel)]="note"
-                               placeholder="e.g. paid on the 3rd by EFT"/>
-                        <div class="portal-row-actions">
-                          <button type="button" class="btn btn-sm btn-primary"
-                                  [disabled]="saving()" (click)="confirmDispute(p)">
-                            {{ saving() ? 'Saving…' : 'Send this' }}
-                          </button>
-                          <button type="button" class="btn btn-sm btn-outline"
-                                  [disabled]="saving()" (click)="cancelDispute()">
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    }
-
-                    @if (error() === p.id) {
-                      <div class="field-error" role="alert">{{ errorMessage() }}</div>
-                    }
-                  </div>
-
-                  @if (canDispute(p) && disputing() !== p.id) {
-                    <div class="portal-row-actions">
-                      <button type="button" class="btn btn-sm btn-outline"
-                              (click)="startDispute(p)">
-                        I've paid this
-                      </button>
-                    </div>
-                  }
-                </div>
-              }
-            } @else if (t.status === 'pending') {
+            @if (t.status === 'pending') {
               <p class="muted">
                 Your move-in is not confirmed yet, so there is no rent record.
                 Anything you and your landlord have signed is below.
               </p>
             } @else {
-              <p class="muted">Loading rent record…</p>
+              <ng-container [ngTemplateOutlet]="ledger"
+                            [ngTemplateOutletContext]="{ t: t, isPast: false }"/>
             }
 
             <!-- The tenant's own copy of the lease. Shown without a toggle,
@@ -156,8 +127,175 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
             <app-lease-documents [tenancyId]="t.id" [headingLevel]="3"/>
           </section>
         }
+
+        <!-- ⚠️ Its own section, in the past tense — Phase D.
+             These used to render in the same loop as the room somebody lives
+             in: same heading, same "R3 000/mo", same banner asking them to
+             correct this month. A finished letting is a record, and the screen
+             now says so. The ledger and the answer button both stay — see the
+             component docblock for why taking them away would be the wrong
+             fix. -->
+        @if (past().length) {
+          <section class="dash-section rent-past" id="past-lettings">
+            <h2 class="dash-section-title">Rooms you have left</h2>
+            <p class="muted">
+              Kept as a record. Nothing here is waiting on you — but if a month
+              is marked wrong you can still say so, and your landlord will see it.
+            </p>
+
+            @for (t of past(); track t.id) {
+              <article class="rent-past__letting">
+                <h3 class="rent-past__title">{{ t.room?.title || 'A room' }}</h3>
+                <p class="rent-past__when">
+                  <span class="rent-past__badge">Past letting</span>
+                  @if (t.startDate && t.endDate) {
+                    Lived there {{ t.startDate | date: 'd MMM yyyy' }} to {{ t.endDate | date: 'd MMM yyyy' }}.
+                  } @else if (t.endDate) {
+                    Ended {{ t.endDate | date: 'd MMM yyyy' }}.
+                  }
+                  Rent was {{ t.rentCents | zarCents }} a month.
+                </p>
+                @if (t.room?.locationDisplay) {
+                  <p class="muted rent-past__where">{{ t.room?.locationDisplay }}</p>
+                }
+
+                <ng-container [ngTemplateOutlet]="ledger"
+                              [ngTemplateOutletContext]="{ t: t, isPast: true }"/>
+
+                <app-lease-documents [tenancyId]="t.id" [headingLevel]="4"/>
+              </article>
+            }
+          </section>
+        }
       }
+
+      <!--
+        One ledger, rendered twice.
+
+        ⚠️ Not two copies of this markup. The rows mean the same thing whether
+        the letting is running or finished — that is the whole point of keeping
+        the record — and this repository has already paid for the other choice
+        with a navigation defined six times that disagreed with itself. The
+        isPast flag changes the tense of one sentence and nothing else.
+
+        (And no backticks in this comment. A backtick inside an inline template
+        literal terminates the template — the seventh compile failure in this
+        codebase from exactly that, and it is in CLAUDE.md for a reason.)
+      -->
+      <ng-template #ledger let-t="t" let-isPast="isPast">
+        @if (periodsFor(t.id); as periods) {
+          @if (!periods.length) {
+            <p class="muted">
+              {{ isPast
+                 ? 'Your landlord did not record any months for this letting.'
+                 : 'Your landlord has not recorded any months yet.' }}
+            </p>
+          }
+          @for (p of periods; track p.id) {
+            <div class="app-card">
+              <div class="app-info">
+                <div class="app-room">
+                  {{ p.periodStart | date: 'MMMM yyyy' }} — {{ p.amountCents | zarCents }}
+                </div>
+                <div class="app-location">
+                  <span class="app-status" [class]="'app-status status-' + p.status">
+                    {{ statusLabel(p.status) }}
+                  </span>
+                  @if (p.markedAt) { marked by your landlord {{ p.markedAt | date: 'd MMM' }} }
+                </div>
+
+                @if (p.tenantDisputedAt) {
+                  <div class="rent-answer">
+                    ✋ You said this is wrong on {{ p.tenantDisputedAt | date: 'd MMM yyyy' }}.
+                    @if (p.tenantNote) { <em>“{{ p.tenantNote }}”</em> }
+                    <br/>Your landlord can see this, and no more reminders
+                    will be sent for this month.
+                  </div>
+                } @else if (disputing() === p.id) {
+                  <div class="rent-answer">
+                    <label [attr.for]="'note-' + p.id">
+                      Anything you want to add? (optional)
+                    </label>
+                    <input [id]="'note-' + p.id" type="text" maxlength="300"
+                           [(ngModel)]="note"
+                           placeholder="e.g. paid on the 3rd by EFT"/>
+                    <div class="portal-row-actions">
+                      <button type="button" class="btn btn-sm btn-primary"
+                              [disabled]="saving()" (click)="confirmDispute(p)">
+                        {{ saving() ? 'Saving…' : 'Send this' }}
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline"
+                              [disabled]="saving()" (click)="cancelDispute()">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                }
+
+                @if (error() === p.id) {
+                  <div class="field-error" role="alert">{{ errorMessage() }}</div>
+                }
+              </div>
+
+              @if (canDispute(p) && disputing() !== p.id) {
+                <div class="portal-row-actions">
+                  <button type="button" class="btn btn-sm btn-outline"
+                          (click)="startDispute(p)">
+                    I've paid this
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        } @else {
+          <p class="muted">Loading rent record…</p>
+        }
+      </ng-template>
   `,
+  /* No emoji in these comments: an emoji inside a CSS comment in an inline
+     styles block fails esbuild's CSS parser, and ng serve then keeps serving
+     the previous bundle while the production build fails. */
+  styles: [`
+    /* Past lettings read as a record, not as a screen waiting on somebody.
+       Tokens by name rather than retyped hex: --border is #E0D5C4 and this
+       file is exactly where a near-miss like #DDD5C8 gets introduced. */
+    .rent-past { border-top: 1.5px solid var(--border); padding-top: 1.25rem; }
+    .rent-past__letting {
+      border-left: 3px solid var(--border);
+      padding: 0 0 .25rem 1rem;
+      margin: 1.25rem 0 0;
+    }
+    .rent-past__title { font-size: .95rem; margin: 0 0 .35rem; }
+    .rent-past__when {
+      margin: 0 0 .25rem;
+      font-size: .82rem; line-height: 1.6; color: var(--slate);
+      display: flex; flex-wrap: wrap; align-items: center; gap: .4rem;
+    }
+    .rent-past__where { margin: 0 0 .6rem; }
+    /* The one visual assertion on this section: it is over. Terracotta on
+       cream2 rather than a grey chip, so it reads as a label and not as a
+       disabled control. */
+    .rent-past__badge {
+      flex: 0 0 auto;
+      font-size: .68rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .06em;
+      color: var(--terra-deep);
+      background: var(--cream2);
+      border: 1px solid var(--border);
+      border-radius: var(--r-full);
+      padding: .15rem .5rem;
+    }
+    /* Breakpoints here are 900 / 768 / 480. At the narrowest the left rule and
+       its indent cost width a 360px screen does not have to spare, so the
+       indent goes and the rule becomes a top border instead. */
+    @media (max-width: 480px) {
+      .rent-past__letting {
+        border-left: none;
+        border-top: 1.5px solid var(--border);
+        padding: .85rem 0 .25rem;
+      }
+    }
+  `],
 })
 export class TenantRent implements OnInit {
   private tenancies_ = inject(TenanciesService);
@@ -165,6 +303,33 @@ export class TenantRent implements OnInit {
 
   tenancies = signal<Tenancy[]>([]);
   loading = signal(true);
+
+  /**
+   * The letting somebody is in, or about to be in.
+   *
+   * `pending` belongs here and not in the past list: a lease is usually signed
+   * BEFORE move-in and the paperwork panel lives on this screen, so a tenant
+   * whose application has been accepted is one of the people most likely to be
+   * looking. They were told "No tenancies yet", which was false.
+   */
+  readonly current = computed(() =>
+    this.tenancies().filter((t) => t.status === 'active' || t.status === 'pending'),
+  );
+
+  /**
+   * Finished lettings, newest first.
+   *
+   * ⚠️ These used to render in the same loop as `current`, which is what made
+   * a letting that ended two years ago look like the room somebody lives in.
+   *
+   * `cancelled` is in neither list, and that is right: nobody ever moved in,
+   * there is no rent and there is nothing to keep a record of.
+   */
+  readonly past = computed(() =>
+    this.tenancies()
+      .filter((t) => t.status === 'ended')
+      .sort((a, b) => (b.endDate ?? '').localeCompare(a.endDate ?? '')),
+  );
   /** tenancyId → its months, loaded on demand so one slow tenancy cannot block the page. */
   private periods = signal<Record<string, RentPeriod[]>>({});
   disputing = signal<string | null>(null);
@@ -176,18 +341,9 @@ export class TenantRent implements OnInit {
   ngOnInit() {
     this.tenancies_.load().subscribe({
       next: (list) => {
-        // A cancelled tenancy never started, so it has nothing to show.
-        //
-        // `pending` is included, which it was not before. A tenant whose
-        // application had been accepted but whose move-in was not yet confirmed
-        // was told "No tenancies yet" — false, and the moment they are most
-        // likely to be looking, because a lease is usually signed BEFORE move-in
-        // and the paperwork panel lives on this page. The rent record itself
-        // still only renders for a tenancy that has started, since there is no
-        // rent to record before that.
-        const live = list.filter(
-          (t) => t.status === 'active' || t.status === 'ended' || t.status === 'pending',
-        );
+        // A cancelled tenancy never started, so it has nothing to show at all.
+        // `current` and `past` split the rest; see those computeds.
+        const live = list.filter((t) => t.status !== 'cancelled');
         this.tenancies.set(live);
         this.loading.set(false);
         // Not for a pending tenancy: rent history returns an empty list, which

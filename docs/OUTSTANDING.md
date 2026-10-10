@@ -2155,6 +2155,139 @@ existing let and pause actions. Phase E.
 
 ---
 
+## 35. The rent screen described a finished letting as a running one — Phase D
+
+**Fixed. This is the defect the owner reported, and the first phase visible on
+a screen.**
+
+### What was wrong, in two opposite directions
+
+**The rent screen** looped over `active`, `ended` and `pending` tenancies with
+no branch on which. A letting that finished two years ago rendered
+**identically to the room somebody lives in**: the same heading, the same
+present-tense "R3 000/mo", the same banner asking them to say so if a month was
+wrong, the same paperwork offered as current.
+
+The cause was architectural rather than cosmetic. One component was the only
+representation of rent, so it had to be both things at once.
+
+**The tenant dashboard** excluded only `active` from "Your applications":
+
+```ts
+&& a.tenancy?.status !== 'active',
+```
+
+So when a tenancy ENDED it fell straight back into that list — `tenancy.status`
+became `'ended'` (which satisfies `!== 'active'`), the Application stays
+`accepted` for good, and nothing archives it, because `archivedAt` is set by a
+relist and ending a tenancy does not relist the room. The derived note counts an
+acceptance as waiting on the tenant, so a person who had moved out six months
+earlier read:
+
+> The landlord has moved on this one — it is waiting on you.
+
+Meanwhile `currentHomes` requires `'active'`, so the room vanished from "Where
+you live now" in the same render. **Moving out moved the room backwards through
+their own dashboard.**
+
+### What it does now
+
+Two sections on the rent screen, and the past one is written in the past tense:
+a **Past letting** label, "Lived there 4 Jun to 1 Sep", and "Rent was R1 800 a
+month" instead of a live monthly figure.
+
+**What deliberately does NOT change for a finished letting:**
+
+- **The ledger stays, in full.** Previous months, amounts, dates and disputes
+  are what a person needs most once they have left. The owner asked for exactly
+  this in as many words: previous payments must not disappear.
+- **The answer button stays.** `RentService.dispute` refuses only a cancelled
+  letting, because the most consequential mark a tenant ever receives is the
+  final month — entered after they moved out, with `TenancyFlag.unpaid_rent`
+  able to rest on it.
+
+So the change is what the screen **says**, not what it permits. "It is over, so
+lock it" would have been the easy wrong fix.
+
+One ledger template rendered twice rather than two copies of the markup: the
+rows mean the same thing either way, and this repository has already paid for
+the other choice with a navigation defined six times that disagreed with itself.
+
+### A pointer, because excluding it from both lists made it vanish
+
+An ended tenancy's application is `accepted` and unarchived, so once it was out
+of "Your applications" it matched **no** section and disappeared from the
+dashboard entirely. The record belongs on the rent screen — a dashboard is for
+what needs doing — but a room somebody used to live in vanishing without trace
+is the same complaint as the hidden way back. So: one line, with the link on it.
+
+### ⚠️ Two mistakes worth recording
+
+**I reintroduced the defect I was fixing.** The first version replaced
+`!== 'active'` with `!isFinished(status)`, matching `ended` and `cancelled` —
+and in doing so **dropped the active exclusion**, so the room the tenant lives
+in came back into "Your applications" under "it is waiting on you". The drive
+caught it.
+
+The fix is a **whitelist, not a blacklist**: `tenancyHasMovedOn` returns true
+for any status except `pending`. Naming the one state that stays cannot fail
+that way — a status nobody thought of excludes itself.
+
+**A negative check passed on absence, for the third time in this file.** With
+the past section removed entirely, `pastText` is `''` and matches no pattern,
+so "the finished one does not show /mo" went **green** with the defect fully
+reintroduced. Every negative assertion in section 10 now proves its subject
+exists first.
+
+### Two traps this hit
+
+**Backticks in a template comment, twice** — the seventh and eighth occurrences
+in this codebase. `TS1005: ',' expected` points hundreds of characters past the
+cause, because everything after the stray backtick parses as code, and the
+backtick is almost always in a comment quoting an identifier.
+
+It is in CLAUDE.md and that has not been enough, so there is now
+**`scripts/template-literal-lint.mjs`** — a grep, essentially, which finds in
+milliseconds what a production build finds in half a minute. Verified: exits 1
+with a stray backtick naming the file and line, exits 0 clean, 83 inline
+templates checked.
+
+**`tsc --noEmit` does not check templates.** Passing `headingLevel="4"` to a
+component whose input is typed `2 | 3` is a template type error that **only
+`ng build` reports**. A clean typecheck says nothing about a component's
+inputs. (`LeaseDocuments.headingLevel` now accepts 4, which the past-lettings
+hierarchy needs: an h2 section, an h3 per letting, so the paperwork inside one
+is an h4.)
+
+### Proof
+
+Drive section 10 — 24 checks, 112 in the file. Every check reads **rendered
+text**, not a filter; a check on the filter would have passed before this phase
+as easily as after it. Both defects reintroduced:
+
+| Reverted | Result |
+|---|---|
+| the rent screen loops everything together | ❌ |
+| the dashboard excludes only `active` | ❌ — and the check printed the owner's own words back: *"Your applications… it is waiting on you. Old room"* |
+
+**13 red, 99 passed. Restored: 112 passed.**
+
+Responsive verified at **360 / 390 / 768 / 1280**, per CLAUDE.md: no horizontal
+scroll, and every control in the past section clears 44px at all four.
+
+### Not proven
+
+**The landlord still has no past-tenant view at all** — the opposite failure to
+the one fixed here. `properties.service` filters to `pending` and `active`, so
+their side loses the tenant, the dates and the ledger the moment a letting
+ends. Phase E.
+
+**No archive screen exists.** The rent record is on the rent screen because
+that is where it has always been; reviews, documents and problems per tenancy
+are Phase F.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

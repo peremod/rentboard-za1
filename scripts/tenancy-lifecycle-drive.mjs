@@ -951,6 +951,229 @@ console.log('      exists; whether the relisting prompt appears as a task is');
 console.log('      Phase E.');
 
 
+
+// ── 10. The tenant's screens, once a letting is over — Phase D ───────────
+//
+// ⚠️ This is the defect the owner actually reported, and the first phase where
+// the fix is visible on a screen. Two separate lies, in opposite directions:
+//
+//   · the RENT screen looped over active, ended and pending tenancies with no
+//     branch on which, so a letting that finished two years ago rendered
+//     identically to the room somebody lives in — same heading, same
+//     present-tense "R3 000/mo", same banner asking them to correct this
+//     month, same paperwork offered as current;
+//   · the DASHBOARD excluded only `active` from "Your applications", so an
+//     ENDED tenancy fell back into that list and the derived note counted an
+//     acceptance as waiting on the tenant: "The landlord has moved on this
+//     one — it is waiting on you", about a room they left six months ago.
+//     Meanwhile it vanished from "Where you live now". Moving out moved the
+//     room BACKWARDS through their own dashboard.
+//
+// Every check below reads rendered text, not a filter. A check on the filter
+// would have passed before Phase D as easily as after it.
+console.log('\n── 10. Current and past, on the tenant screens ──────────────');
+
+{
+  const month = (offset) => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + offset, 1))
+      .toISOString().slice(0, 10);
+  };
+
+  // A tenant with TWO lettings: one they live in, one they have left. Both at
+  // once, because the bug was that the screen could not tell them apart —
+  // checking either alone would miss it.
+  const liveLet = await lettingReadyToStart(Date.now() + 13000);
+  const liveTenancy = await tenancyFor(liveLet.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${liveTenancy}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, liveLet.landlord.token);
+  await apiCall(API, 'PATCH', `/api/properties/rent/${liveTenancy}/mark`,
+    { periodStart: month(0), status: 'unpaid' }, liveLet.landlord.token);
+
+  // The same tenant, a second room, finished. Re-using the tenant is the
+  // point: one person, two lettings, and the screen has to separate them.
+  const pastRoom = await apiCall(API, 'POST', '/api/rooms', {
+    roomType: 'shared_house', title: `Old room ${Date.now()}`,
+    description: 'A clean back room on a quiet street, with its own entrance and a shared tap.',
+    rentCents: 180000, province: 'Gauteng', city: 'Pretoria',
+    locationDisplay: 'Sunnyside, Pretoria',
+    availableFrom: new Date().toISOString().slice(0, 10),
+  }, liveLet.landlord.token);
+  const pastRoomId = pastRoom.body?.id;
+  dbQuery(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${pastRoomId}'`);
+  const pastApp = await apiCall(API, 'POST', '/api/applications',
+    { roomId: pastRoomId, coverNote: 'I can move in on the first of the month.' }, liveLet.tenant.token);
+  await apiCall(API, 'POST', `/api/applications/${pastApp.body.id}/accept`, {}, liveLet.landlord.token);
+  const pastTenancy = await tenancyFor(pastApp.body.id);
+  await apiCall(API, 'POST', `/api/tenancies/${pastTenancy}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, liveLet.landlord.token);
+  // Backdate so the ledger has months inside the letting, then end it.
+  dbQuery(`UPDATE tenancies SET "startDate" = now() - interval '4 months' WHERE id = '${pastTenancy}'`);
+  // ⚠️ `unpaid`, not `paid`. A month already marked paid has nothing to
+  // dispute — `canDispute` says so — and this check exists for the realistic
+  // case: the final month marked unpaid AFTER the tenant has gone, which is
+  // the mark `TenancyFlag.unpaid_rent` can rest on.
+  await apiCall(API, 'PATCH', `/api/properties/rent/${pastTenancy}/mark`,
+    { periodStart: month(-3), status: 'unpaid' }, liveLet.landlord.token);
+  await apiCall(API, 'POST', `/api/tenancies/${pastTenancy}/end`,
+    { endDate: month(-1) }, liveLet.landlord.token);
+
+  const page = await signIn(browser, WEB, liveLet.tenant.email, PASSWORD, { width: 390, height: 1200 });
+  await page.goto(`${WEB}/tenant/rent`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+  if (await page.locator('.cookie-notice__ok').count()) {
+    await page.locator('.cookie-notice__ok').click();
+    await page.waitForTimeout(400);
+  }
+
+  const txt = (sel) => page.locator(sel).first().textContent().then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+
+  // ── 10a. The two are separate sections ────────────────────────────────
+  check(
+    (await page.locator('#past-lettings').count()) === 1,
+    'the rent screen has a section for rooms the tenant has left',
+  );
+  const pastText = await txt('#past-lettings');
+  check(
+    pastText.includes('Old room'),
+    `…and the finished letting is in it ("${pastText.slice(0, 60)}…")`,
+  );
+
+  // ── 10b. The finished letting is in the PAST TENSE ────────────────────
+  //
+  // ⚠️ The specific words, because this is what was reported. A date range and
+  // "rent was" instead of a live "/mo" figure.
+  check(/Past letting/i.test(pastText), '…marked as a past letting, in as many words');
+  check(/Lived there/i.test(pastText), '…and says when they lived there, not that they live there');
+  check(/Rent was/i.test(pastText), '…with "rent was", not a present-tense monthly figure');
+  // The live room still carries the present-tense figure. Both halves matter:
+  // a blanket removal of "/mo" would pass a check on the past section alone.
+  const whole = await txt('app-tenant-rent, main');
+  check(
+    /\/mo/.test(whole),
+    'the room they LIVE in still shows its monthly rent',
+  );
+  // ⚠️ `pastText &&` is the guard, and it is the third time this exact shape
+  // has bitten in this file. A negative assertion over text that does not
+  // exist passes: with the past section removed entirely, `pastText` is '' and
+  // matches no pattern, so this went GREEN with the defect fully
+  // reintroduced. Every negative check here now proves its subject exists
+  // first.
+  check(
+    !!pastText && !/\/mo/.test(pastText),
+    '…and the finished one does not',
+  );
+
+  // ── 10c. The ledger survives, which is the point ──────────────────────
+  //
+  // Losing the record would be the easy wrong fix, and the owner asked for the
+  // opposite in as many words: previous payments must not disappear.
+  check(
+    /paid|unpaid|part paid|not being chased/i.test(pastText),
+    'the rent ledger for the finished letting is still there',
+  );
+  const pastAnswerButtons = await page.locator("#past-lettings button:has-text(\"I've paid this\")").count();
+  check(
+    pastAnswerButtons >= 1,
+    `…and the answer button with it (${pastAnswerButtons}) — a final month marked unpaid after ` +
+      'somebody moves out is the mark that matters most',
+  );
+
+  // ── 10d. The dashboard no longer says it is waiting on them ───────────
+  await page.goto(`${WEB}/tenant/dashboard`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+
+  const apps = await txt('#your-applications');
+  check(
+    !apps.includes('Old room'),
+    `a finished letting is not filed under "Your applications" ("${apps.slice(0, 80)}…")`,
+  );
+  check(
+    !/waiting on you|moved on this one/i.test(apps),
+    '…and nothing there says a room they have left is waiting on them',
+  );
+  check(
+    (await page.locator('#where-you-live').count()) === 1,
+    'the room they live in is still under "Where you live now"',
+  );
+  const liveText = await txt('#where-you-live');
+  check(
+    !!liveText && !liveText.includes('Old room'),
+    '…and the one they left is not',
+  );
+
+  // ── 10e. …but it has not vanished either ──────────────────────────────
+  //
+  // Excluding it from both lists left it in NEITHER, which is how a room
+  // somebody used to live in disappears without trace. One line, with the way
+  // there on it.
+  check(
+    (await page.locator('#past-lettings-pointer').count()) === 1,
+    'the dashboard still says they have a past letting',
+  );
+  const pointer = await txt('#past-lettings-pointer');
+  check(
+    /past letting/i.test(pointer) && /kept/i.test(pointer),
+    `…and that the record is kept ("${pointer.slice(0, 70)}…")`,
+  );
+  const pointerHref = await page.locator('#past-lettings-pointer a').first().getAttribute('href').catch(() => null);
+  check(
+    !!pointerHref && pointerHref.includes('/tenant/rent'),
+    `…with a link to it ("${pointerHref}")`,
+  );
+
+  // ── 10f. At the widths this market actually uses ──────────────────────
+  //
+  // Mandatory per CLAUDE.md for anything touching cards or sections, and the
+  // reason it is mandatory is that every assertion in mobile-drive.mjs is a
+  // bug that reached production and was found by a person on their phone.
+  await page.goto(`${WEB}/tenant/rent`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2500);
+  for (const width of [360, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 1200 });
+    await page.waitForTimeout(500);
+
+    const overflow = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollWidth,
+      client: document.documentElement.clientWidth,
+    }));
+    check(
+      overflow.scroll <= overflow.client + 1,
+      `${width}px: the rent screen does not scroll sideways (${overflow.scroll} in ${overflow.client})`,
+    );
+
+    // Every control in the past section, not a row of them.
+    const small = await page.evaluate(() => {
+      const out = [];
+      for (const el of document.querySelectorAll('#past-lettings button, #past-lettings a, #past-lettings input')) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) continue;
+        if (r.height < 44) out.push(`${(el.textContent || 'control').trim().slice(0, 20)} ${Math.round(r.height)}px`);
+      }
+      return out;
+    });
+    check(
+      small.length === 0,
+      small.length === 0
+        ? `${width}px: every control in the past section clears 44px`
+        : `${width}px: ${small.length} under target — ${small.join(', ')}`,
+    );
+  }
+
+  await page.close();
+}
+
+console.log('\n── What section 10 does NOT prove ───────────────────────────');
+console.log('  ⚠️  The LANDLORD still has no past-tenant view at all. Their');
+console.log('      side loses the tenant, the dates and the ledger the moment');
+console.log('      a letting ends — properties.service filters to pending and');
+console.log('      active. That is Phase E, and it is the opposite failure to');
+console.log('      the one fixed here.');
+console.log('  ⚠️  No archive SCREEN exists. The rent record is on the rent');
+console.log('      screen because that is where it has always been; reviews,');
+console.log('      documents and problems per tenancy are Phase F.');
+
+
 await browser.close();
 
 console.log('\n═══════════════════════════════════════════════════════');

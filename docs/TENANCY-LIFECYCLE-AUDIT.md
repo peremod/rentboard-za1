@@ -834,12 +834,33 @@ green. It now requires the notice to exist first. A negative check has to prove
 the thing it reads is there.
 
 ### Phase D — Tenant-side correctness
-- `activeApplications()` — exclude any application whose tenancy has reached `ended` or `cancelled`, not just `active` (C1)
-- `activeApplicationsNote()` — stop counting a finished tenancy as "waiting on you" (C1)
-- Rent screen — render only `active` and `pending`. An ended tenancy gets a single line and a link to its archive record, not a copy of the active layout (C2)
+**Done — v1.119.0.** With one correction to what this section said:
 
-**Proof:** `scripts/dashboard-ui-drive.mjs` — the drive that already caught me
-inventing a state this product cannot reach.
+- `activeApplications()` — **a whitelist, not the blacklist proposed here.**
+  "Exclude `ended` or `cancelled`" is what I wrote and it is what I first
+  built, and it **dropped the existing `active` exclusion**, putting the room
+  the tenant lives in back under "it is waiting on you" — the very defect being
+  fixed. `tenancyHasMovedOn` keeps only `pending`, so a status nobody thought
+  of excludes itself (C1)
+- `activeApplicationsNote()` — nothing in that list can be a finished letting
+  now, so an `accepted` row genuinely is waiting on the person (C1)
+- Rent screen — **two sections, not "a single line and a link to its archive"**
+  as planned. The archive does not exist until Phase F, and the owner asked
+  that previous payments not disappear, so the full ledger stays on this screen
+  in a past-tense section. The dispute button stays too, per Phase A (C2)
+- A pointer on the dashboard, which was not in the plan: excluding finished
+  lettings from "Your applications" left them matching **no** section, so they
+  vanished from the screen altogether
+
+**Proof — done.** Drive section 10, 24 checks (112 in the file), every one
+reading **rendered text** rather than a filter. Both defects reintroduced gave
+**13 red, 99 passed**; restored, 112. Responsive verified at 360 / 390 / 768 /
+1280 — no horizontal scroll, every control in the past section over 44px.
+
+⚠️ A negative check passed on absence for the third time in this file: with the
+past section gone, `pastText` is `''` and matches no pattern, so it went green
+with the defect fully in place. Every negative assertion in section 10 now
+proves its subject exists first.
 
 ### Phase E — Landlord-side parity
 - A past-tenancies list on the property detail screen, collapsed by default (C5)
@@ -861,6 +882,12 @@ reintroduce each leak and confirm the check fails.
 ### Phase H — The CSS gate
 - Fail the build on a literal hex within ΔE 3 of an existing token (H1). `css-coverage-audit.mjs` is the precedent; `tokens.mjs` is the clustering
 - Then migrate `#DDD5C8` ×19 and `#FFF` ×52 — 71 of 330 in two passes
+
+**Already landed early, from Phase D:** `scripts/template-literal-lint.mjs`.
+Not a CSS gate, but the same argument — a backtick inside an inline
+`template:` literal terminates the template, it has happened eight times, and
+a note in CLAUDE.md has not stopped it. A grep finds in milliseconds what a
+production build finds in half a minute.
 
 ### Phase I — `<app-logo>`
 - One component, `surface` input, **MA** in its own span with its own token

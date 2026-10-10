@@ -49,8 +49,10 @@ function humanSize(bytes?: number | null): string {
     <section class="dash-section" id="lease-documents">
       @if (headingLevel() === 2) {
         <h2 class="dash-section-title">Lease and paperwork</h2>
-      } @else {
+      } @else if (headingLevel() === 3) {
         <h3 class="dash-section-title">Lease and paperwork</h3>
+      } @else {
+        <h4 class="dash-section-title">Lease and paperwork</h4>
       }
 
       <p class="muted">
@@ -168,7 +170,22 @@ export class LeaseDocuments implements OnInit {
    * slot both hardcoded a level and broke heading order on the page that used
    * them.
    */
-  readonly headingLevel = input<2 | 3>(2);
+  /**
+   * Which heading this panel's title should be, so it never skips a level.
+   *
+   * 4 exists for the tenant's past-lettings section: that is an h2 ("Rooms you
+   * have left") containing an h3 per letting, so the paperwork inside one is
+   * an h4. Rendering it as an h3 there would make it a sibling of the letting
+   * it belongs to, and an h2 would skip back up two levels — both of which a
+   * screen reader reads as a different document structure than the one on
+   * screen.
+   *
+   * ⚠️ The union is what caught the mistake. Passing 4 while this read
+   * `2 | 3` is a template type error — and `tsc --noEmit` does NOT check
+   * templates, so it came from `ng build` and nowhere else. Worth knowing:
+   * a clean typecheck says nothing about a component's inputs.
+   */
+  readonly headingLevel = input<2 | 3 | 4>(2);
 
   readonly docs = signal<LeaseDocument[]>([]);
   readonly loading = signal(true);
