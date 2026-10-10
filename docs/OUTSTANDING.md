@@ -2484,6 +2484,124 @@ carries dates, rent and paperwork only.
 
 ---
 
+## 38. The archive — Phase F
+
+**Done. `/account/tenancies`, one list for both roles.**
+
+### What was missing
+
+Everything this screen shows was already in the database and **none of it was
+on a screen**. `RentPeriod`, `Review`, `TenancyFlag` and `LeaseDocument` all
+key on `tenancyId`, so three lettings for one tenant could never bleed into
+each other — and the only two places that read a tenancy were the tenant's rent
+screen and the landlord's property screen, both asking for live ones.
+
+So `/legal/paia` told the public this platform holds *"tenancy history and rent
+records"* with nothing behind it. Phases D and E fixed the two live screens.
+This is the record.
+
+### Why `/account` and not `/tenant` or `/landlord`
+
+The same reason `/account/messages` is there, and one stronger: **a person can
+be the landlord of one room and the tenant of another, and their history is one
+list.** A sub-lessor is both by definition (Phase 6), which in this market is
+not a corner case. Splitting the list by role would split one person's past by
+a distinction they do not have.
+
+### ⚠️ The permission rules are not uniform, and must not be made uniform
+
+This is a screen that assembles six private tables into one payload for two
+different people. Flattening the rules into "both parties were there, so show
+everything" would make it the product's largest POPIA and defamation exposure
+in a single step. Each rule, and why:
+
+| Rule | Why |
+|---|---|
+| Reviews: `publishedAt != null, isHidden: false` | **The double-blind rule.** A review is withheld until both sides have written one or the window closes. If the archive showed a held one, either party could read the other's before writing theirs, which turns a rating into a negotiation and stops honest criticism. `isHidden` is moderation — a review an admin took down must not come back through a different screen |
+| `TenancyFlag`: **only ones you raised** | The schema's own words: showing an unreviewed accusation to its subject is *"this platform's largest defamation exposure in South Africa."* Matches `TenancyFlagsService.listMine` rather than inventing a looser rule for a screen where both parties happen to be authorised |
+| `Report`: **only ones you filed** | Same reasoning. The admin's resolution is included, because whoever reported it is owed the outcome |
+| `LandlordNote`: **not at all** | *"The moment a note could be read by anyone but its author it stops being a memory aid and becomes an unregulated reference that follows a person around."* Excluded for **both** parties, including the landlord who wrote it — this is a shared screen, and a private note has no business being assembled into one |
+| `LeaseDocument.path`: never returned | An ImageKit path; the only way to read a document is a signed URL from `openUrlFor`, which re-checks the party. A path in the payload is a private file one guess away from public |
+| Messages: not here | They live at `/account/messages`, keyed on the application. A second copy means two places to get read-state wrong |
+
+**⚠️ My own audit got one of these wrong.** Section F's table said disputes were
+visible to "both — raiser sees own; resolution visible to both". The second
+half contradicts the defamation reasoning the schema already records. The code
+follows the existing stricter rule: **only your own**.
+
+### Two things said out loud rather than left as absences
+
+The API returns an `excluded` block naming what the record does not contain and
+why. And when there are no reviews the screen distinguishes **"none were
+published"** from **"not shown yet, because neither of you has written one"** —
+an empty list cannot tell those apart, and a reader who knows a review exists
+and cannot find it assumes it was lost.
+
+### `cancelled` lettings are listed, labelled "Never started"
+
+A letting that fell through is part of what happened and explains a gap in
+somebody's history. Phase D excluded it from the rent screen because there is
+no rent; here the job is completeness, so it is shown and labelled rather than
+hidden.
+
+### Performance: counts in the list, record on open
+
+The list carries `monthsRecorded` and `documentCount` and nothing else. A
+landlord with nine past lettings would otherwise pull nine full records — every
+rent month, every review, every document — to render nine collapsed rows.
+
+### Proof
+
+Drive section 12 — 44 checks, 206 in the file. **Every permission rule was
+reverted and confirmed to leak:**
+
+| Reverted | Result |
+|---|---|
+| the party check | ❌ a stranger opened the record (200, want 403) |
+| the published/hidden review gate | ❌ the tenant read a held review about them, and its words were in the payload |
+| the `raisedById` flag filter | ❌ the person a report was about read it |
+| the document `select` | ❌ `secret-lease.pdf` in the payload |
+
+**7 red, 199 passed. Restored: 206.**
+
+⚠️ **And a FIFTH vacuous pass.** The document-path check read `documents` on a
+fixture that had none — an empty array, so the regex matched nothing and it
+went **green with the path deliberately leaked back in.** It now inserts a
+`lease_documents` row first. A negative assertion needs its subject to exist,
+and this file has now paid for that lesson five times.
+
+Also caught by the drive: an inline link at **14px** against the 44px target
+this codebase holds everything to (WCAG 2.5.8 exempts a link inside a sentence,
+but the destination is the useful part of that block and deserves to be
+tappable), and an `href` where a `routerLink` belongs — an `href` reloads the
+whole application in an SPA, which on this market's connections is seconds and
+a white screen.
+
+`scripts/a11y-drive.mjs` now audits the screen for **both** roles — 19 portal
+pages, not 17. A new screen outside the gate's list is a new screen the gate
+cannot see.
+
+### A useful data point for §37
+
+The initial bundle grew **+154 bytes** (457.92 → 458.07 kB), and `styles.css`
+is **byte-identical** at 59,592. The archive's ~2 kB of CSS cost the initial
+bundle nothing, because it is an **inline component style** and therefore lands
+in that route's lazy chunk.
+
+Phase E's `+1,501 bytes` went into the global sheet by the yard's convention.
+This is direct evidence that moving those rules into the yard's own chunk would
+recover all of it — which is the trade §37 left open.
+
+### Not proven
+
+Nothing here downloads a document. The payload carries no path, which **is**
+checked; that a signed URL re-checks the party is `lease-docs-ui-drive`'s job.
+
+A tenancy with an admin-hidden review is not exercised. `isHidden: false` sits
+in the same `where` clause as the published filter, which **is** exercised.
+
+---
+
 ## How to check the whole thing still works
 
 ```bash

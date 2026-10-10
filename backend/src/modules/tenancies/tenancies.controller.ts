@@ -10,6 +10,7 @@ import { ConfirmStartDto, EndTenancyDto, CancelTenancyDto } from './dto/tenancy.
 import { RaiseFlagDto } from './dto/raise-flag.dto';
 import { ReviewFlagDto } from './dto/review-flag.dto';
 import { LeaseService } from './lease.service';
+import { TenancyArchiveService } from './tenancy-archive.service';
 import { GiveNoticeDto, UpdateLeaseTermsDto } from './dto/lease.dto';
 import { LeaseDocumentsService } from './lease-documents.service';
 import { AddLeaseDocumentDto, UpdateLeaseDocumentDto } from './dto/lease-document.dto';
@@ -28,6 +29,7 @@ export class TenanciesController {
     private flags: TenancyFlagsService,
     private lease: LeaseService,
     private documents: LeaseDocumentsService,
+    private archive: TenancyArchiveService,
   ) {}
 
   // ── Lease terms, renewal and notice ──────────────────────────────────────
@@ -90,6 +92,41 @@ export class TenanciesController {
   })
   withdrawNotice(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
     return this.lease.withdrawNotice(id, user.id);
+  }
+
+  /**
+   * The archive — Phase F.
+   *
+   * ⚠️ Declared BEFORE every `:id` route in this controller, and that ordering
+   * is load-bearing. Nest matches in declaration order, so with these below
+   * `GET :id/documents` the word "archive" would be handed to `ParseUUIDPipe`
+   * as an id and answer 400 — a route that exists, is correct, and 400s on its
+   * own name.
+   */
+  @Get('archive')
+  @ApiOperation({
+    summary: 'Finished lettings you were part of, either side, newest first',
+    description:
+      'Ended AND cancelled. A letting that fell through is part of what happened ' +
+      'and explains a gap in somebody history, so it is listed and labelled rather ' +
+      'than hidden.',
+  })
+  archiveList(@CurrentUser() user: { id: string }) {
+    return this.archive.list(user.id);
+  }
+
+  @Get('archive/:id')
+  @ApiOperation({
+    summary: 'One finished letting, assembled: rent, reviews, your reports, paperwork, how it began',
+    description:
+      'Either party may read it. The permission rules are deliberately NOT uniform: ' +
+      'reviews only once published (the double-blind rule), tenancy flags and reports ' +
+      'only the ones YOU raised (an unreviewed accusation is not shown to its subject), ' +
+      'and landlord notes not at all — they are private to their author. See ' +
+      'TenancyArchiveService for the reasoning on each.',
+  })
+  archiveRecord(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.archive.record(id, user.id);
   }
 
   @Get('mine')

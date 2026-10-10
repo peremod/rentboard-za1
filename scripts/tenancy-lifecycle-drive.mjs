@@ -1435,6 +1435,323 @@ console.log('  ⚠️  Nothing reads reviews, problems or viewings per tenancy. 
 console.log('      past-tenant row carries dates, rent and paperwork only.');
 
 
+
+// ── 12. The archive — Phase F ────────────────────────────────────────────
+//
+// Everything this screen shows was already in the database and none of it was
+// on a screen. RentPeriod, Review, TenancyFlag and LeaseDocument all key on
+// `tenancyId`, so three lettings for one tenant could never bleed into each
+// other — and the only two places that read a tenancy asked for live ones. So
+// /legal/paia told the public this platform holds "tenancy history and rent
+// records" with nothing behind it.
+//
+// ⚠️ The checks that matter most here are the NEGATIVE ones. This is a screen
+// that assembles six private tables into one payload for two different people,
+// and the way it goes wrong is by showing somebody something that is not
+// theirs. Each permission rule is checked by trying to break it.
+console.log('\n── 12. The archive, and what it refuses to show ─────────────');
+
+{
+  const r12 = await lettingReadyToStart(Date.now() + 16000);
+  const t12 = await tenancyFor(r12.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${t12}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, r12.landlord.token);
+  dbQuery(`UPDATE tenancies SET "startDate" = now() - interval '3 months' WHERE id = '${t12}'`);
+
+  const month = (o) => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + o, 1)).toISOString().slice(0, 10);
+  };
+  await apiCall(API, 'PATCH', `/api/properties/rent/${t12}/mark`,
+    { periodStart: month(-2), status: 'paid' }, r12.landlord.token);
+  await apiCall(API, 'PATCH', `/api/properties/rent/${t12}/mark`,
+    { periodStart: month(-1), status: 'unpaid' }, r12.landlord.token);
+  await apiCall(API, 'POST', `/api/tenancies/${t12}/end`, { endDate: month(0) }, r12.landlord.token);
+  await new Promise((rs) => setTimeout(rs, 900));
+
+  // ── 12a. Both sides see the letting, and only theirs ──────────────────
+  for (const [who, user] of [['the landlord', r12.landlord], ['the tenant', r12.tenant]]) {
+    const list = await apiCall(API, 'GET', '/api/tenancies/archive', null, user.token);
+    check(list.status === 200, `${who} can read the archive (${list.status})`);
+    const mine = (list.body ?? []).filter((x) => x.id === t12);
+    check(mine.length === 1, `…and the finished letting is in it`);
+    check(
+      mine[0]?.role === (who === 'the landlord' ? 'landlord' : 'tenant'),
+      `…with their own side named ("${mine[0]?.role}")`,
+    );
+    check(
+      !!mine[0]?.otherParty?.fullName,
+      `…and the other party named, so the row reads as a letting and not an id`,
+    );
+    check(
+      mine[0]?.monthsRecorded === 2,
+      `…and the months counted without loading them (${mine[0]?.monthsRecorded})`,
+    );
+  }
+
+  // ⚠️ A stranger sees nothing of it.
+  const stranger12 = await registerUser(API, 'TENANT', Date.now() + 16500);
+  const strangerList = await apiCall(API, 'GET', '/api/tenancies/archive', null, stranger12.token);
+  check(
+    (strangerList.body ?? []).every((x) => x.id !== t12),
+    'somebody who was not in the letting does not see it listed',
+  );
+  const strangerRecord = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, stranger12.token);
+  check(
+    strangerRecord.status === 403,
+    `…and cannot open it by its id (${strangerRecord.status}, want 403)`,
+  );
+
+  // ── 12b. The record carries the whole ledger, chronologically ─────────
+  const rec = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.tenant.token);
+  check(rec.status === 200, `the tenant can open the record (${rec.status})`);
+  check(rec.body?.rent?.periods?.length === 2, `…with both months (${rec.body?.rent?.periods?.length})`);
+  check(
+    rec.body?.rent?.periods?.[0]?.periodStart < rec.body?.rent?.periods?.[1]?.periodStart,
+    '…oldest first, because this is a record being read and not a queue being worked',
+  );
+  check(
+    rec.body?.rent?.monthsPaid === 1 && rec.body?.rent?.monthsUnpaid === 1,
+    `…summed once by the API so no two places can disagree (${rec.body?.rent?.monthsPaid} paid, ${rec.body?.rent?.monthsUnpaid} unpaid)`,
+  );
+  check(
+    rec.body?.tenancy?.endedBy === 'them',
+    `…and who ended it is resolved against the reader ("${rec.body?.tenancy?.endedBy}" to the tenant)`,
+  );
+  const recL = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.landlord.token);
+  check(
+    recL.body?.tenancy?.endedBy === 'you',
+    `…"you" to the landlord who did it ("${recL.body?.tenancy?.endedBy}")`,
+  );
+
+  // ── 12c. ⚠️ THE DOUBLE-BLIND RULE ────────────────────────────────────
+  //
+  // A review is withheld until both sides have written one or the window
+  // closes. This screen is exactly where that gets broken by accident: if the
+  // archive showed an unpublished review, either party could read the other's
+  // before writing their own, which turns a rating into a negotiation and
+  // stops honest criticism.
+  const wrote = await apiCall(API, 'POST', '/api/reviews',
+    { tenancyId: t12, type: 'tenant', rating: 2, comment: 'Left the room in a poor state and paid late twice.' },
+    r12.landlord.token);
+  check(wrote.status === 201 || wrote.status === 200, `the landlord writes a review (${wrote.status})`);
+  check(
+    dbQuery(`SELECT "publishedAt" IS NULL FROM reviews WHERE "tenancyId" = '${t12}'`) === 't',
+    '…and it is held, because the tenant has not written theirs',
+  );
+
+  const tenantSees = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.tenant.token);
+  check(
+    (tenantSees.body?.reviews ?? []).length === 0,
+    `the TENANT cannot read a held review about them through the archive (${(tenantSees.body?.reviews ?? []).length} shown)`,
+  );
+  const payload = JSON.stringify(tenantSees.body);
+  check(
+    !/poor state/i.test(payload),
+    'and not one word of it is anywhere in the payload',
+  );
+  // The author cannot see their own held one either, and that is right: the
+  // archive renders what is published, and a review that is still held is not
+  // part of the record yet.
+  check(
+    (recL2 => (recL2 ?? []).length === 0)((await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.landlord.token)).body?.reviews),
+    'nor does the archive show the author their own held review — it shows what is published',
+  );
+
+  // Release it the way the product does, then it appears for both.
+  dbQuery(`UPDATE tenancies SET "reviewsCloseAt" = now() - interval '1 day' WHERE id = '${t12}'`);
+  const admin12 = await registerUser(API, 'TENANT', Date.now() + 17000);
+  dbQuery(`UPDATE users SET role = 'ADMIN' WHERE id = '${admin12.id}'`);
+  const adminTok = (await apiCall(API, 'POST', '/api/auth/login',
+    { email: admin12.email, password: PASSWORD })).body?.accessToken;
+  await apiCall(API, 'POST', '/api/reviews/release-closed', {}, adminTok);
+
+  const afterRelease = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.tenant.token);
+  check(
+    (afterRelease.body?.reviews ?? []).length === 1,
+    `…and once the window closes it IS in the record (${(afterRelease.body?.reviews ?? []).length})`,
+  );
+  check(
+    /poor state/i.test(JSON.stringify(afterRelease.body)),
+    '…with its words, now that it is published',
+  );
+
+  // ── 12d. ⚠️ A REPORT IS NOT SHOWN TO ITS SUBJECT ─────────────────────
+  //
+  // The schema calls an unreviewed accusation shown to the person it is about
+  // this platform's largest defamation exposure in South Africa. TenancyFlag
+  // and Report are both private to whoever raised them.
+  const flagged = await apiCall(API, 'POST', `/api/tenancies/${t12}/flag`,
+    { reason: 'deposit_withheld', detail: 'My deposit was never returned after I moved out in good order.' },
+    r12.tenant.token);
+  check(flagged.status === 201 || flagged.status === 200, `the tenant reports a problem (${flagged.status})`);
+
+  const tenantOwn = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.tenant.token);
+  check(
+    (tenantOwn.body?.flags ?? []).length === 1,
+    `the person who raised it sees it in their own record (${(tenantOwn.body?.flags ?? []).length})`,
+  );
+  const landlordView = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.landlord.token);
+  check(
+    (landlordView.body?.flags ?? []).length === 0,
+    `…and the person it is ABOUT sees none of it (${(landlordView.body?.flags ?? []).length} shown)`,
+  );
+  check(
+    !/deposit was never returned/i.test(JSON.stringify(landlordView.body)),
+    'and not one word of it reaches them through any other field',
+  );
+
+  // ── 12e. ⚠️ LANDLORD NOTES ARE IN NOBODY'S RECORD ────────────────────
+  //
+  // "The moment a note could be read by anyone but its author it stops being a
+  // memory aid and becomes an unregulated reference that follows a person
+  // around." Not in this payload for EITHER party — including the landlord who
+  // wrote it, because this is a shared screen.
+  const noted = await apiCall(API, 'POST', `/api/landlord/notes/tenant/${r12.tenant.id}`,
+    { body: 'Paid late most months and argued about it every time.' },
+    r12.landlord.token);
+  if (noted.status === 201 || noted.status === 200) {
+    for (const [who, user] of [['the tenant', r12.tenant], ['the landlord who wrote it', r12.landlord]]) {
+      const view = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, user.token);
+      check(
+        !/argued about it/i.test(JSON.stringify(view.body)),
+        `a private note is not in the shared record — not for ${who}`,
+      );
+    }
+  } else {
+    bad(`could not create a landlord note to test against (${noted.status}) — the exclusion is unproven`);
+  }
+
+  // ── 12f. A document's storage path never leaves the API ──────────────
+  //
+  // `path` is an ImageKit file path and the only way to read a document is a
+  // signed URL from openUrlFor, which re-checks the party. A path in the
+  // payload would be a private file one guess away from public.
+  //
+  // ⚠️ The row is inserted directly, and it has to be. The first version of
+  // this check read `documents` on a fixture that had none — an empty array,
+  // so the regex matched nothing and the check went GREEN with the path
+  // deliberately leaked back into the select. That is the FIFTH time a
+  // negative assertion in this file has passed on absence. A negative check
+  // needs its subject to exist.
+  //
+  // Inserted rather than uploaded because the upload path goes to ImageKit and
+  // this check is about a read filter, not about storage.
+  dbQuery(
+    `INSERT INTO lease_documents (id, "tenancyId", "uploadedById", kind, path, label, "createdAt", "updatedAt") ` +
+      `VALUES (gen_random_uuid(), '${t12}', '${r12.landlord.id}', 'lease', ` +
+      `'tenancies/${t12}/secret-lease.pdf', 'Signed lease', now(), now())`,
+  );
+  const withDoc = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.landlord.token);
+  check(
+    (withDoc.body?.documents ?? []).length === 1,
+    `the record carries the paperwork (${(withDoc.body?.documents ?? []).length})`,
+  );
+  check(
+    !/secret-lease\.pdf/.test(JSON.stringify(withDoc.body)),
+    'no document storage path is in the payload — reads go through a signed URL',
+  );
+  check(
+    withDoc.body?.documents?.[0]?.mine === true,
+    '…and the API says whose it is, so no screen compares ids itself',
+  );
+
+  // ── 12g. On screen, for both roles ───────────────────────────────────
+  for (const [who, user] of [['tenant', r12.tenant], ['landlord', r12.landlord]]) {
+    const page = await signIn(browser, WEB, user.email, PASSWORD, { width: 390, height: 1200 });
+    await page.goto(`${WEB}/account/tenancies`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(3000);
+    if (await page.locator('.cookie-notice__ok').count()) {
+      await page.locator('.cookie-notice__ok').click();
+      await page.waitForTimeout(400);
+    }
+    const txt = (sel) => page.locator(sel).first().textContent()
+      .then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+
+    check(
+      (await page.locator('.arc-row').count()) >= 1,
+      `the ${who} sees the letting on /account/tenancies`,
+    );
+    // Collapsed until asked for: the list carries counts precisely so nine
+    // past lettings do not pull nine full records to render nine rows.
+    check(
+      (await page.locator('.arc-detail').count()) === 0,
+      `…collapsed, so the ${who}'s nine past lettings do not fetch nine records`,
+    );
+    if (await page.locator('.arc-row__head').count()) {
+      await page.locator('.arc-row__head').first().click();
+      await page.waitForTimeout(2000);
+      const detail = await txt('.arc-detail');
+      check(
+        !!detail && /Rent/i.test(detail),
+        `…and opens to the record ("${detail.slice(0, 60)}…")`,
+      );
+      check(
+        /Marked paid/i.test(detail) && /Marked unpaid/i.test(detail),
+        '…with both months and what each was marked',
+      );
+      // The platform's position, on a screen full of money.
+      check(
+        /never held the rent/i.test(detail),
+        '…and it still says Mastande never held the rent or checked any of it',
+      );
+      // Said out loud rather than left as an absence.
+      check(
+        /not part of a shared record|private notes/i.test(detail),
+        '…and names what is deliberately not here, so nothing reads as lost',
+      );
+      // routerLink, not href: an href reloads the whole application in an SPA.
+      // The rendered attribute is the only way to tell them apart.
+      const msgHref = await page.locator('.arc-note__link').first()
+        .getAttribute('href').catch(() => null);
+      check(
+        msgHref === '/account/messages',
+        `…with a real in-app link to the conversation ("${msgHref}")`,
+      );
+    } else {
+      bad(`no archive row to open for the ${who}`);
+    }
+
+    for (const width of [360, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 1200 });
+      await page.waitForTimeout(400);
+      const overflow = await page.evaluate(() => ({
+        scroll: document.documentElement.scrollWidth,
+        client: document.documentElement.clientWidth,
+      }));
+      check(
+        overflow.scroll <= overflow.client + 1,
+        `${width}px (${who}): the archive does not scroll sideways (${overflow.scroll} in ${overflow.client})`,
+      );
+      const small = await page.evaluate(() => {
+        const out = [];
+        for (const el of document.querySelectorAll('.arc-row__head, .arc-detail a, .arc-detail button')) {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 && r.height === 0) continue;
+          if (r.height < 44) out.push(`${(el.textContent || 'control').trim().slice(0, 18)} ${Math.round(r.height)}px`);
+        }
+        return out;
+      });
+      check(
+        small.length === 0,
+        small.length === 0
+          ? `${width}px (${who}): every control clears 44px`
+          : `${width}px (${who}): ${small.length} under target — ${small.join(', ')}`,
+      );
+    }
+    await page.close();
+  }
+}
+
+console.log('\n── What section 12 does NOT prove ───────────────────────────');
+console.log('  ⚠️  Nothing here downloads a lease document. The payload carries');
+console.log('      no storage path, which is checked — but that a signed URL');
+console.log('      re-checks the party is lease-docs-ui-drive\'s job, not this.');
+console.log('  ⚠️  A tenancy with a HIDDEN review (isHidden, set by an admin) is');
+console.log('      filtered in the query and not exercised here. The published');
+console.log('      filter is, and they are the same clause.');
+
+
 await browser.close();
 
 console.log('\n═══════════════════════════════════════════════════════');

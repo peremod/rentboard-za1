@@ -3569,6 +3569,24 @@ check "a tenant cannot set a landlord's reminder settings" 403 "$STATUS" "$BODY"
 req GET "/api/properties/rent/00000000-0000-4000-8000-000000000000" "" "$LTOKEN"
 check "rent history for a tenancy that does not exist" 404 "$STATUS" "$BODY"
 
+# ── The archive (v1.121.0) ────────────────────────────────────────────────
+#
+# One list for both roles, because a sub-lessor lets one room and rents
+# another. The permission rules are deliberately NOT uniform and the drive
+# exercises each; these are the route-level ones.
+req GET /api/tenancies/archive "" "$LTOKEN"
+check "a landlord can read their archive" 200 "$STATUS" "$BODY"
+req GET /api/tenancies/archive "" "$TTOKEN"
+check "and so can a tenant — one list, both roles" 200 "$STATUS" "$BODY"
+req GET /api/tenancies/archive
+check "the archive needs a session" 401 "$STATUS"
+# ⚠️ 404 and not 400. The route is declared before every :id route in the
+# controller, so "archive" is never handed to ParseUUIDPipe as an id — a 400
+# here would mean the ordering had been changed and the route now 400s on its
+# own name.
+req GET "/api/tenancies/archive/00000000-0000-4000-8000-000000000000" "" "$LTOKEN"
+check "a letting that does not exist" 404 "$STATUS" "$BODY"
+
 # The tenant's side (v1.71.0). The reminder tells them to "say so on
 # Mastande", so the path that lets them has to keep working.
 req PATCH "/api/properties/rent/period/00000000-0000-4000-8000-000000000000/dispute" '{"note":"Paid on the 3rd."}' "$TTOKEN"

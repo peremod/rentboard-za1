@@ -4,6 +4,7 @@ import { TenanciesService } from './tenancies.service';
 import { TenancyFlagsService } from './tenancy-flags.service';
 import { LeaseService } from './lease.service';
 import { LeaseDocumentsService } from './lease-documents.service';
+import { TenancyArchiveService } from './tenancy-archive.service';
 import { StorageModule } from '../storage/storage.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
@@ -14,7 +15,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
   // for a letting starting or ending.
   imports: [StorageModule, NotificationsModule],
   controllers: [TenanciesController],
-  providers: [TenanciesService, TenancyFlagsService, LeaseService, LeaseDocumentsService],
+  providers: [
+    TenanciesService, TenancyFlagsService, LeaseService, LeaseDocumentsService,
+    TenancyArchiveService,
+  ],
   // ApplicationsModule opens a tenancy when an application is accepted.
   exports: [TenanciesService, TenancyFlagsService, LeaseService],
 })

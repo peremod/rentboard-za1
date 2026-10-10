@@ -83,6 +83,11 @@ export function landlordNav(badges: LandlordNavBadges = {}): PortalNavItem[] {
     // Phase 8a. The four documents a landlord keeps asking for. Points at the
     // PUBLIC page rather than a portal copy, so there is one of them.
     { label: 'Forms and templates', icon: '📄', route: '/landlord/templates' },
+    // Phase F. In /account because a sub-lessor lets one room and rents
+    // another, and their history is one list — the same reasoning as Messages
+    // two items up. A landlord loses the tenant, the dates and the whole
+    // ledger the moment a letting ends without it.
+    { label: 'Past lettings', icon: '🗂️', route: '/account/tenancies' },
     // Phase 7g. Not optional furniture: for a landlord with no email address
     // this screen is the only place a notification can be read at all.
     { label: 'Notices', icon: '🔔', route: '/account/notices', badge: badges.notices },

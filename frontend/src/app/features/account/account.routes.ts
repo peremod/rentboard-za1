@@ -33,6 +33,21 @@ export const ACCOUNT_ROUTES: Routes = [
   },
   {
     /**
+     * Lettings that are over — Phase F of the tenancy lifecycle work.
+     *
+     * In /account for the same reason as messages, and for the stronger one:
+     * a person can be the landlord of one room and the tenant of another, and
+     * their history is ONE list. A sub-lessor is both by definition (Phase 6),
+     * so splitting this by role would split one person's past by a distinction
+     * they do not have.
+     */
+    path: 'tenancies',
+    loadComponent: () => import('./tenancies/tenancies').then((m) => m.AccountTenancies),
+    data: { pageTitle: 'Past lettings' },
+    title: 'Past lettings — Mastande',
+  },
+  {
+    /**
      * Pausing or ending the account — Phase 7g.
      *
      * Its own route rather than a section under profile edits: the

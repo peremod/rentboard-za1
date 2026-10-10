@@ -121,6 +121,11 @@ const LANDLORD_PAGES = [
   // between the tick box and the sentence beside it are the whole safety of
   // the screen, not a detail of it.
   '/account/close',
+  // Phase F. The archive. Every row is a real <button> whose whole head is the
+  // target, and the record it opens is six tables of dense text — a definition
+  // list, a month ledger, star ratings — which is where contrast and heading
+  // order go wrong quietly.
+  '/account/tenancies',
 ];
 const TENANT_PAGES = [
   '/tenant/dashboard', '/tenant/rent', '/tenant/passport',
@@ -130,6 +135,10 @@ const TENANT_PAGES = [
   // Phase 7c. The same inbox from the other side — the sidebar differs, so the
   // page is not the same page.
   '/account/messages',
+  // Phase F. The archive from the tenant's side. Same reasoning as the inbox:
+  // the sidebar differs, so it is not the same page — and this screen is one
+  // list for both roles precisely because a sub-lessor is both at once.
+  '/account/tenancies',
 ];
 const ADMIN_PAGES = [
   '/admin/dashboard',

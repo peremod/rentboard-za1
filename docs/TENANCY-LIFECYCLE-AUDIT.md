@@ -896,13 +896,45 @@ exceeded by 6.42 kB. Recorded in §37 as a trade to decide rather than quietly
 made.
 
 ### Phase F — The archive, both sides
-- `/account/tenancies` and `/account/tenancies/:id`, per section F
-- One endpoint assembling the record; permissions per the F table; `LandlordNote` excluded; documents respecting `documentDeletedAt`
-- Nav entry in both `landlordNav()` and the tenant nav — one definition each, per `landlord-nav.ts`'s own history
+**Done — v1.121.0.** `/account/tenancies`, with the record expanded in place
+rather than at a separate `/:id` screen — one list, the detail fetched on open
+so nine past lettings do not pull nine full records to render nine rows.
 
-**Proof:** POPIA check — a tenant must not see landlord notes, a landlord must
-not see an unpublished review, neither sees a deleted document. Then
-reintroduce each leak and confirm the check fails.
+- `GET /tenancies/archive` and `GET /tenancies/archive/:id`, both declared
+  **before** every `:id` route in the controller: Nest matches in declaration
+  order, so otherwise "archive" is handed to `ParseUUIDPipe` and the route 400s
+  on its own name
+- `TenancyArchiveService` assembles rent, reviews, your reports, paperwork, the
+  application and the viewings in one round of parallel queries
+- **`LandlordNote` excluded for both parties**, including its author — this is
+  a shared screen
+- `cancelled` lettings listed and labelled "Never started": a letting that fell
+  through explains a gap in somebody's history
+- Nav entry in both `landlordNav()` and `tenantNav()`, one definition each
+
+⚠️ **This section's permission table was wrong on one row.** It said disputes
+were visible to "both — raiser sees own; resolution visible to both". The second
+half contradicts the defamation reasoning the schema already records, and the
+code follows the existing stricter rule: **only your own**.
+
+⚠️ **`documentDeletedAt` does not exist on `LeaseDocument`.** It is hard-deleted
+along with its file, so there is no soft-delete to respect — that column is on
+`VerificationRequest`, which this screen does not touch. What the record does
+withhold is the storage `path`, so a private file is never one guess from
+public.
+
+**Proof — done.** Drive section 12, 44 checks (206 in the file). Every rule
+reverted and confirmed to leak: the party check (a stranger read the record),
+the published-review gate (the tenant read a held review **and its words were
+in the payload**), the flag filter (the subject of a report read it), and the
+document select (`secret-lease.pdf` in the payload). **7 red, 199 passed;
+restored, 206.**
+
+⚠️ And a **fifth** vacuous pass: the document-path check read an empty
+`documents` array, so it went green with the path deliberately leaked. It now
+inserts a row first.
+
+`a11y-drive` audits the screen for both roles — 19 portal pages, not 17.
 
 ### Phase G — Notice elapsing
 - Decide what an expired notice period does. **It must not auto-end a tenancy** — that is a record of fact about where someone lives, and inferring it from a date is how the product starts asserting things it does not know. Escalate it on both inboxes instead (C8)
