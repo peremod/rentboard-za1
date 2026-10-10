@@ -863,9 +863,37 @@ with the defect fully in place. Every negative assertion in section 10 now
 proves its subject exists first.
 
 ### Phase E — Landlord-side parity
-- A past-tenancies list on the property detail screen, collapsed by default (C5)
-- Landlord dashboard reads `Tenancy.status`, not only `Room.status` (C6)
-- `room_free` fires when the room *is* free, not only before (C3)
+**Done — v1.120.0.**
+
+- Past tenants on the property screen, collapsed, newest first, capped at six
+  per room — who, the date range, what they paid, their paperwork, and whether
+  a review is still open (C5)
+- The landlord side now reads `Tenancy.status`: `room_vacant` is derived from
+  `tenancies: { none: ['pending','active'] }` rather than from `Room.status`
+  alone, which is what makes it catch a room marked let by hand with no tenancy
+  behind it (C6)
+- **A `room_vacant` TASK rather than a second `room_free` calendar entry**,
+  which is a change from the plan. The calendar is date-based and fires
+  *before* a known end date; what was missing is something that keeps asking
+  afterwards. A notice fires once; a task persists until the state changes,
+  which is what "this room is empty and nobody can find it" needs (C3)
+- **Reserve / Unreserve**, closing §34 — the control the feature never had
+
+**Proof — done.** Drive section 11, 30 checks (142 in the file), reverted in
+two halves because the backend revert masked the frontend one: **11 red** then
+**5 red**; restored, 142. Responsive at 360 / 390 / 768 / 1280.
+
+⚠️ Three findings about the drive rather than the product: it **killed itself**
+on a click for a control the revert had removed (same defect as §28, now
+guarded); a **fourth** vacuous pass, where "a paused room draws no task"
+asserted zero and zero is also what a missing feature returns (now a
+before/after comparison); and the file is now large enough to exhaust the
+60-registers-per-hour limit in two runs, so it needs an API restart between
+them.
+
+⚠️ And the initial bundle grew **1,501 bytes** of global CSS on a budget already
+exceeded by 6.42 kB. Recorded in §37 as a trade to decide rather than quietly
+made.
 
 ### Phase F — The archive, both sides
 - `/account/tenancies` and `/account/tenancies/:id`, per section F

@@ -19,6 +19,18 @@
  * feature that passes a one-sided check.
  *
  * Needs the API on :3000, the app on :4200, and a DATABASE_URL.
+ *
+ * ⚠️ **Restart the API before each run.** This file has grown to eleven
+ * sections and registers roughly 35 accounts, against a limit of 60 registers
+ * per hour counted IN MEMORY (`/auth/register`). One run is comfortably inside
+ * it; two back to back are not, and the second fails with
+ *
+ *     Error: register LANDLORD hit the rate limit (429)
+ *
+ * which reads like an auth bug and is not. `pkill -f 'node dist/main\.js'`
+ * then start it again, and the counters are gone. CLAUDE.md records the same
+ * trap for the suite as a whole; this drive is now large enough to hit it on
+ * its own.
  */
 import { chromium } from '@playwright/test';
 import { apiCall, registerUser, signIn, PASSWORD, dbQuery } from './lib/drive-session.mjs';
@@ -1172,6 +1184,255 @@ console.log('      the one fixed here.');
 console.log('  ⚠️  No archive SCREEN exists. The rent record is on the rent');
 console.log('      screen because that is where it has always been; reviews,');
 console.log('      documents and problems per tenancy are Phase F.');
+
+
+
+// ── 11. The landlord's side of a finished letting — Phase E ──────────────
+//
+// ⚠️ The mirror image of section 10, failing the opposite way. Where the
+// tenant screen said too much about a finished letting, the landlord screen
+// said nothing at all:
+//
+//   · `properties.service` asked for tenancies `['pending','active']` and that
+//     was the ONLY place a landlord could see a tenancy, so the moment a
+//     letting ended they lost the tenant, the dates, the rent paid and the
+//     ledger. A search across both codebases for "past tenant", "former
+//     tenant" or "tenancy history" returned nothing but review copy and the
+//     PAIA manual — which tells the public this platform holds "tenancy
+//     history and rent records";
+//   · the room stayed `let` with nobody in it, and the status chip said "let",
+//     which is the opposite of help. The Phase C notice fires once; a notice
+//     read and not acted on is gone;
+//   · Reserved had a route, an API write, a tailored application refusal, a
+//     board badge and five occupancy counts — and no button anywhere.
+console.log('\n── 11. Past tenants, empty rooms and Reserved ───────────────');
+
+{
+  // A property with a room, a finished letting on it, and the room left `let`.
+  const e11 = await lettingReadyToStart(Date.now() + 14000);
+  const prop = await apiCall(API, 'POST', '/api/properties',
+    { name: `Ext 9 rooms ${Date.now()}`, suburb: 'Arcadia', city: 'Pretoria', province: 'Gauteng' },
+    e11.landlord.token);
+  const propertyId = prop.body?.id;
+  dbQuery(`UPDATE rooms SET "propertyId" = '${propertyId}' WHERE id = '${e11.roomId}'`);
+
+  const t11 = await tenancyFor(e11.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${t11}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, e11.landlord.token);
+  await apiCall(API, 'POST', `/api/tenancies/${t11}/end`, {}, e11.landlord.token);
+  await new Promise((r) => setTimeout(r, 1000));
+
+  // ── 11a. The API carries the past letting and names the empty room ────
+  const dash = await apiCall(API, 'GET', '/api/properties/dashboard', null, e11.landlord.token);
+  const allRooms = [
+    ...(dash.body?.properties ?? []).flatMap((g) => g.rooms ?? []),
+    ...((dash.body?.ungrouped?.rooms) ?? []),
+  ];
+  const room11 = allRooms.find((r) => r.id === e11.roomId);
+  check(!!room11, 'the property dashboard still carries the room after the letting ended');
+  check(
+    (room11?.pastTenancies ?? []).length === 1,
+    `…with the finished letting on it (${(room11?.pastTenancies ?? []).length} past)`,
+  );
+  check(
+    (room11?.tenancies ?? []).length === 0,
+    '…and nobody listed as living there',
+  );
+  check(
+    room11?.pastTenancies?.[0]?.tenant?.fullName === 'Drive Tenant',
+    `…naming who it was ("${room11?.pastTenancies?.[0]?.tenant?.fullName}")`,
+  );
+  check(
+    !!room11?.pastTenancies?.[0]?.endDate,
+    '…and when they left, which is what makes it a record rather than a name',
+  );
+  check(
+    (dash.body?.totals?.vacantButListedAsLet ?? 0) >= 1,
+    `…and the totals count the room as empty-but-listed-as-let (${dash.body?.totals?.vacantButListedAsLet})`,
+  );
+
+  // ── 11b. The inbox keeps asking, because a notice does not ────────────
+  const inbox = await apiCall(API, 'GET', '/api/landlord/inbox', null, e11.landlord.token);
+  const vacantItems = (inbox.body?.items ?? []).filter((i) => i.kind === 'room_vacant');
+  check(
+    vacantItems.length === 1,
+    `the inbox carries one "room is empty" task (${vacantItems.length})`,
+  );
+  check(
+    /empty and not listed/i.test(vacantItems[0]?.title ?? ''),
+    `…saying so plainly ("${vacantItems[0]?.title ?? ''}")`,
+  );
+  check(
+    /nobody can find it/i.test(vacantItems[0]?.detail ?? ''),
+    '…and naming the consequence, not just the state',
+  );
+  check(
+    (vacantItems[0]?.actionPath ?? '').startsWith('/landlord/'),
+    `…with somewhere to go about it ("${vacantItems[0]?.actionPath}")`,
+  );
+  check(
+    (inbox.body?.counts?.room_vacant ?? 0) === 1,
+    'and it is counted per kind, like every other row',
+  );
+
+  // ── 11c. A room the landlord has paused draws no such task ────────────
+  //
+  // `pause()` exists so a landlord can stop enquiries without the destructive
+  // alternative. Nagging them about a room they deliberately took down would
+  // make the list something people stop reading.
+  dbQuery(`UPDATE rooms SET status='paused' WHERE id = '${e11.roomId}'`);
+  const pausedInbox = await apiCall(API, 'GET', '/api/landlord/inbox', null, e11.landlord.token);
+  const afterPause = (pausedInbox.body?.items ?? []).filter((i) => i.kind === 'room_vacant').length;
+  /**
+   * ⚠️ Compared against BEFORE, not asserted as zero on its own.
+   *
+   * "Nothing is in the list" is also true when the feature does not exist, so
+   * the bare version passed with the whole task reverted — the fourth time
+   * this shape has bitten in this file. The claim is that pausing REMOVES it,
+   * and that needs the row to have been there a moment ago.
+   */
+  check(
+    vacantItems.length === 1 && afterPause === 0,
+    `a room the landlord paused draws no "empty room" task ` +
+      `(${vacantItems.length} before pausing, ${afterPause} after)`,
+  );
+  dbQuery(`UPDATE rooms SET status='let' WHERE id = '${e11.roomId}'`);
+
+  // ── 11d. On screen: the past tenant, the marker, and the way back ─────
+  const page = await signIn(browser, WEB, e11.landlord.email, PASSWORD, { width: 390, height: 1200 });
+  await page.goto(`${WEB}/landlord/properties/${propertyId}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+  if (await page.locator('.cookie-notice__ok').count()) {
+    await page.locator('.cookie-notice__ok').click();
+    await page.waitForTimeout(400);
+  }
+  const txt = (sel) => page.locator(sel).first().textContent()
+    .then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+
+  const vacantBlock = await txt('.yard-room__vacant');
+  check(
+    !!vacantBlock && /empty and not listed/i.test(vacantBlock),
+    `the room is marked empty on the property screen ("${vacantBlock.slice(0, 60)}…")`,
+  );
+  check(
+    (await page.locator('.yard-room__vacant .link-btn').count()) === 1,
+    '…and carries the action, not just the complaint',
+  );
+
+  // Previous tenants are COLLAPSED until asked for.
+  check(
+    (await page.locator('.yard-past .link-btn').count()) >= 1,
+    'the room offers its previous tenants',
+  );
+  check(
+    (await page.locator('.yard-past__item').count()) === 0,
+    '…collapsed, so a room on its fourth tenant does not open with four closed records',
+  );
+  /**
+   * ⚠️ Guarded. Clicking a control that is not there throws
+   * `locator.click: Timeout 30000ms exceeded` and kills the whole run — so
+   * with the past-tenants feature reverted this section reported nine
+   * failures and then DIED, taking sections 11e and 11f with it and leaving
+   * the summary unprintable.
+   *
+   * A drive that dies mid-run cannot tell you the full picture, which is the
+   * same defect as OUTSTANDING §28. Every click in this file that depends on
+   * the thing under test now checks first and reports rather than throwing.
+   */
+  if (await page.locator('.yard-past .link-btn').count()) {
+    await page.locator('.yard-past .link-btn').first().click();
+    await page.waitForTimeout(800);
+    const pastItem = await txt('.yard-past__item');
+    check(
+      !!pastItem && pastItem.includes('Drive Tenant'),
+      `…and opens to name them ("${pastItem.slice(0, 70)}…")`,
+    );
+    check(
+      !!pastItem && /a month/i.test(pastItem),
+      '…with what they paid, which is the record a landlord came for',
+    );
+    // The review window is the one time-limited thing about a finished letting.
+    check(
+      (await page.locator('.yard-past__review').count()) === 1,
+      '…and flags that they can still be reviewed',
+    );
+  } else {
+    bad('no previous-tenants control to open — the three checks under it could not run');
+  }
+
+  // ── 11e. Reserved, which had no button at all ─────────────────────────
+  const r11 = await lettingReadyToStart(Date.now() + 15000);
+  dbQuery(`UPDATE rooms SET "propertyId" = '${propertyId}', status='active' WHERE id = '${r11.roomId}'`);
+  // The room belongs to a different landlord in that fixture, so move it.
+  dbQuery(`UPDATE rooms SET "landlordId" = (SELECT "landlordId" FROM rooms WHERE id = '${e11.roomId}') WHERE id = '${r11.roomId}'`);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2500);
+
+  const reserveBtn = page.locator('.link-btn', { hasText: /Reserve for someone/i });
+  check(
+    (await reserveBtn.count()) >= 1,
+    `an active room offers "Reserve for someone" (${await reserveBtn.count()}) — it had no button anywhere`,
+  );
+  if (await reserveBtn.count()) {
+    await reserveBtn.first().click();
+    await page.waitForTimeout(600);
+    // The dialog explains what it costs before doing it.
+    const dialogText = await txt('app-dialog, .dialog, [role=dialog]');
+    check(
+      /no new applications/i.test(dialogText),
+      `…and says what it does first ("${dialogText.slice(0, 70)}…")`,
+    );
+    const confirm = page.locator('[role=dialog] button, app-dialog button').filter({ hasText: /Confirm|Hold it|Yes|OK/i });
+    if (await confirm.count()) {
+      await confirm.first().click();
+      await page.waitForTimeout(2200);
+      const status = dbQuery(`SELECT status FROM rooms WHERE id = '${r11.roomId}'`);
+      check(status === 'reserved', `…and reserving it writes the status (got '${status}')`);
+    } else {
+      bad('the reserve dialog had no confirm button');
+    }
+  }
+
+  // ── 11f. At the widths a landlord actually holds ──────────────────────
+  for (const width of [360, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 1200 });
+    await page.waitForTimeout(500);
+    const overflow = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollWidth,
+      client: document.documentElement.clientWidth,
+    }));
+    check(
+      overflow.scroll <= overflow.client + 1,
+      `${width}px: the property screen does not scroll sideways (${overflow.scroll} in ${overflow.client})`,
+    );
+    const small = await page.evaluate(() => {
+      const out = [];
+      const sel = '.yard-room__vacant button, .yard-room__vacant a, .yard-past button, .yard-past a, .yard-room__reserved button';
+      for (const el of document.querySelectorAll(sel)) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) continue;
+        if (r.height < 44) out.push(`${(el.textContent || 'control').trim().slice(0, 22)} ${Math.round(r.height)}px`);
+      }
+      return out;
+    });
+    check(
+      small.length === 0,
+      small.length === 0
+        ? `${width}px: every new control clears 44px`
+        : `${width}px: ${small.length} under target — ${small.join(', ')}`,
+    );
+  }
+
+  await page.close();
+}
+
+console.log('\n── What section 11 does NOT prove ───────────────────────────');
+console.log('  ⚠️  Six past lettings per room is the API cap, and nothing here');
+console.log('      creates a seventh. A room on its tenth tenant shows the six');
+console.log('      most recent and the screen does not say so — the full record');
+console.log('      is the archive view, Phase F.');
+console.log('  ⚠️  Nothing reads reviews, problems or viewings per tenancy. The');
+console.log('      past-tenant row carries dates, rent and paperwork only.');
 
 
 await browser.close();

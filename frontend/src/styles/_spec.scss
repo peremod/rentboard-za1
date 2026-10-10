@@ -954,6 +954,67 @@ img{display:block;max-width:100%}
   flex-basis:100%;font-size:.76rem;color:var(--gold);font-weight:700;
 }
 
+/* ═══ A ROOM THAT IS EMPTY AND NOT LISTED ═══
+   The state a letting leaves behind: `let`, with nobody in it, off the public
+   board and out of the sitemap. The status chip beside it reads "let", which
+   is the opposite of help, so this says the true thing louder and carries the
+   way out of it.
+
+   Gold rather than danger red: nothing is broken and nothing is at risk, the
+   room is simply invisible and earning nothing. Red here would make a landlord
+   think they had done something wrong. */
+.yard-room__vacant{
+  flex-basis:100%;margin-top:.4rem;
+  padding:.5rem .65rem;
+  font-size:.78rem;line-height:1.55;
+  color:var(--ink);
+  background:rgba(200,144,42,.08);
+  border-left:3px solid var(--gold);
+  border-radius:0 var(--r4) var(--r4) 0;
+  display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;
+}
+.yard-room__vacant strong{color:var(--ink)}
+
+/* Reserved: held for somebody while they finalise. Sage, because this is a
+   letting going WELL — a landlord choosing this is one step from a tenancy,
+   and it should not look like a warning. */
+.yard-room__reserved{
+  flex-basis:100%;margin-top:.4rem;
+  padding:.5rem .65rem;
+  font-size:.78rem;line-height:1.55;
+  color:var(--ink);
+  background:rgba(61,112,64,.07);
+  border-left:3px solid var(--sage);
+  border-radius:0 var(--r4) var(--r4) 0;
+  display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;
+}
+
+/* ═══ WHO USED TO LIVE HERE ═══
+   Collapsed by default — a room on its fourth tenant should not open with four
+   closed records above the person living there now. */
+.yard-past{flex-basis:100%;margin-top:.4rem}
+.yard-past__list{list-style:none;margin:.5rem 0 0;padding:0}
+.yard-past__item{
+  padding:.5rem 0 .5rem .75rem;
+  border-left:3px solid var(--border);
+  margin-bottom:.4rem;
+  font-size:.8rem;line-height:1.55;
+  display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;
+}
+.yard-past__who{font-weight:700;color:var(--ink)}
+.yard-past__when{color:var(--slate);font-size:.76rem}
+/* The one time-limited thing about a finished letting, so it is the one thing
+   flagged. Terracotta: it is an action with a deadline, not a status. */
+.yard-past__review{
+  font-size:.7rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em;
+  color:var(--terra-deep);
+  background:var(--cream2);
+  border:1px solid var(--border);
+  border-radius:var(--r-full);
+  padding:.12rem .5rem;
+}
+
 .yard-new{margin-top:1rem}
 .yard-new form{
   border:1.5px solid var(--border);border-radius:var(--r4);

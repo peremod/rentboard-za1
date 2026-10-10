@@ -9,7 +9,23 @@ export type InboxKind =
   | 'notice_given'
   | 'rent_unmarked'
   | 'rent_disputed'
-  | 'unread_message';
+  | 'unread_message'
+  /**
+   * A room marked `let` with nobody in it — a letting ended and it was never
+   * put back on the board.
+   *
+   * ⚠️ This exists because a NOTICE is not a task. `TenanciesService.end`
+   * sends `room_needs_relisting` once, and a notice that is read and not acted
+   * on is gone. The room then sits `let` indefinitely: off the public board,
+   * out of the sitemap, invisible to every tenant, with nothing on any screen
+   * saying so. The landlord's only clue was a notification they may have
+   * dismissed on a bus.
+   *
+   * A task list is the right shape for this because it persists until the
+   * state changes, which is exactly what "this room is empty and nobody can
+   * find it" needs.
+   */
+  | 'room_vacant';
 
 /**
  * One thing to do, with everything the row needs to be acted on in place.
@@ -132,20 +148,22 @@ export class LandlordInboxService {
    * anyway. Run concurrently, so the inbox costs one round trip's latency.
    */
   async inbox(landlordId: string): Promise<{ items: InboxItem[]; counts: Record<InboxKind, number> }> {
-    const [applications, upcoming, rentGaps, unread] = await Promise.all([
+    const [applications, upcoming, rentGaps, unread, vacant] = await Promise.all([
       this.waitingApplications(landlordId),
       this.leaseItems(landlordId),
       this.rentItems(landlordId),
       this.unreadMessages(landlordId),
+      this.vacantRooms(landlordId),
     ]);
 
-    const items = [...applications, ...upcoming, ...rentGaps, ...unread].sort((a, b) => a.urgency - b.urgency);
+    const items = [...applications, ...upcoming, ...rentGaps, ...unread, ...vacant]
+      .sort((a, b) => a.urgency - b.urgency);
 
     // Counted per kind so the screen can say "3 applicants waiting" in a header
     // without re-deriving it from the list and getting the plural wrong.
     const counts = {
       application_waiting: 0, lease_ending: 0, notice_given: 0,
-      rent_unmarked: 0, rent_disputed: 0, unread_message: 0,
+      rent_unmarked: 0, rent_disputed: 0, unread_message: 0, room_vacant: 0,
     } as Record<InboxKind, number>;
     for (const i of items) counts[i.kind]++;
 
@@ -317,6 +335,87 @@ export class LandlordInboxService {
    * Only active tenancies, and only the current month. A tenancy that ended in
    * February should not generate an April task.
    */
+  /**
+   * Rooms that are empty but still marked as let.
+   *
+   * ── The state this catches
+   *
+   * Accepting an application sets the room `let`. Ending the tenancy does NOT
+   * set it back — deliberately, because `relist()` republishes the room with
+   * its old photos at its old price and archives every open application, and
+   * that is the landlord's decision rather than a side effect of somebody
+   * moving out. So the room waits, correctly, for them to act.
+   *
+   * What was missing is anything that keeps asking. The Phase C notice fires
+   * once; a notice read and not acted on is gone, and the room is then off the
+   * board and out of the sitemap with no screen saying so.
+   *
+   * ── Why `tenancies: none` rather than looking for an ended one
+   *
+   * `some: { status: 'ended' }` would miss a room marked let by hand through
+   * `markLet()` with no tenancy behind it at all — which is a real path, and
+   * leaves the room every bit as invisible. The question is not "did a letting
+   * end here", it is "is anybody actually in this room". So: no pending and no
+   * active tenancy.
+   *
+   * `paused` and `deleted` are not included. A landlord who paused a room has
+   * said something more recent than this, and `pause()` exists precisely so
+   * they can stop enquiries without the destructive alternative.
+   */
+  private async vacantRooms(landlordId: string): Promise<InboxItem[]> {
+    const rooms = await this.prisma.room.findMany({
+      where: {
+        landlordId,
+        status: 'let',
+        tenancies: { none: { status: { in: ['pending', 'active'] } } },
+      },
+      select: {
+        id: true, title: true, propertyId: true, letAt: true,
+        tenancies: {
+          where: { status: 'ended' },
+          orderBy: { endDate: 'desc' },
+          take: 1,
+          select: { endDate: true, tenant: { select: { fullName: true } } },
+        },
+      },
+    });
+
+    const DAY = 24 * 60 * 60 * 1000;
+    return rooms.map((room) => {
+      const last = room.tenancies[0];
+      const since = last?.endDate ?? room.letAt;
+      const days = since ? Math.floor((Date.now() - since.getTime()) / DAY) : null;
+
+      return {
+        kind: 'room_vacant' as const,
+        /**
+         * Between a lease ending and rent admin, and it gets MORE urgent the
+         * longer it sits — which is the opposite of how the dated items work
+         * and is right: an empty room is lost rent every day, and a room that
+         * has been invisible for a month is a worse problem than one empty
+         * since yesterday.
+         *
+         * Floored at 300 so it can never outrank a tenant disputing their rent
+         * record (-1000) or an application nobody has answered.
+         */
+        urgency: Math.max(300, 450 - (days ?? 0) * 5),
+        title: `"${room.title}" is empty and not listed`,
+        detail:
+          (last
+            ? `${last.tenant.fullName} moved out${days !== null ? ` ${days} day${days === 1 ? '' : 's'} ago` : ''}. `
+            : 'It is marked as let, but nobody is in it. ') +
+          'Nobody can find it or apply while it is off the board.',
+        entityId: room.id,
+        roomTitle: room.title,
+        daysUntil: null,
+        actionLabel: 'Put it back on the board',
+        actionPath: room.propertyId
+          ? `/landlord/properties/${room.propertyId}`
+          : '/landlord/dashboard',
+      };
+    });
+  }
+
   private async rentItems(landlordId: string): Promise<InboxItem[]> {
     const start = monthStart();
     const tenancies = await this.prisma.tenancy.findMany({

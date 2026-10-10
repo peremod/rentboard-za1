@@ -2117,7 +2117,11 @@ the relisting prompt surfaces as a task in the inbox is Phase E.
 
 ## 34. The Reserved status: a complete feature with no button
 
-**Open. One screen away.**
+**✅ Closed in v1.120.0 (Phase E).** The control is on the room row on the
+property screen — "Reserve for someone" on an active room, and a Reserved block
+with the way back on a reserved one. Proof is drive section 11e, which clicks
+it and reads the status back; reverted, the button is absent and the check goes
+red. The rest of this entry is the record of what was built and unreachable.
 
 `Room.reserved` means "a tenant is lined up but nothing is signed" — the room
 stays visible with a badge, takes no new applications, and existing applicants
@@ -2358,6 +2362,125 @@ Only two other rules override a hover background without a colour
 a `button` so `:where(button)` never applies to it). The gate hovers every
 distinct control style on 27 pages and passes, which is better evidence than a
 grep.
+
+---
+
+## 37. The landlord lost the tenant the moment a letting ended — Phase E
+
+**Fixed. The mirror image of §35, failing the opposite way.**
+
+### What was wrong
+
+**`properties.service.ts` asked for tenancies `['pending','active']`, and that
+was the only place a landlord could see a tenancy at all.** So the moment a
+letting ended they lost the tenant, the dates, the rent paid and the whole
+ledger. A search across both codebases for "past tenant", "former tenant" or
+"tenancy history" returned nothing but review copy and the PAIA manual — which
+tells the public this platform holds "tenancy history and rent records".
+
+The rows were always there. Nothing rendered them. Where the tenant's screen
+said too much about a finished letting, the landlord's said nothing.
+
+**The room stayed `let` with nobody in it**, and the status chip beside it read
+"let" — the opposite of help. The Phase C notice fires once, and a notice read
+and not acted on is gone.
+
+**Reserved had no button anywhere.** The route, the API write, a tailored
+application refusal, the board badge and five occupancy counts were all built
+and working (§34).
+
+### What it does now
+
+| | |
+|---|---|
+| Past tenants on the property screen | collapsed, newest first, capped at six per room by the API |
+| Each row | who, the date range, what they paid, their paperwork, and whether a review is still open |
+| A room marked let with nobody in it | marked as empty on the room itself, with the relist action on the marker |
+| `room_vacant` inbox task | persists until the state changes, which a notice cannot |
+| Reserve / Unreserve | the control the feature never had |
+
+**`room_vacant` is a task and not another notice, deliberately.** A notice
+fires once; a task list persists until the state changes, and "this room is
+empty and nobody can find it" is a state, not an event.
+
+Its urgency **rises the longer it sits** — `max(300, 450 - days * 5)` — which is
+the opposite of how the dated items work and is right: an empty room is lost
+rent every day, and one invisible for a month is worse than one empty since
+yesterday. Floored at 300 so it can never outrank a tenant disputing their rent
+record.
+
+**It asks `tenancies: { none: ... }`, not "is there an ended tenancy".** The
+latter would miss a room marked let by hand through `markLet()` with no tenancy
+behind it — a real path, and every bit as invisible. The question is not "did a
+letting end here", it is "is anybody actually in this room".
+
+**A paused room draws no task.** `pause()` exists so a landlord can stop
+enquiries without the destructive alternative; nagging them about a room they
+deliberately took down is how a list becomes something people stop reading.
+
+### ⚠️ Three things about the drive, not the product
+
+**It killed itself.** With past tenants reverted, section 11 reported nine
+failures and then **died** on `locator.click: Timeout 30000ms exceeded` for a
+control that was no longer there — taking the remaining sections and the whole
+summary with it. Same defect as §28. Every click in that section now checks
+first and reports rather than throwing.
+
+**A fourth vacuous pass.** "A room the landlord paused draws no empty-room
+task" asserted zero, and zero is also the answer when the feature does not
+exist — so it passed with the task fully reverted. It now compares **before and
+after** pausing, because the claim is that pausing *removes* it.
+
+**This drive is now one run per API restart.** Eleven sections register about
+35 accounts against a limit of 60 per hour counted in memory. One run fits;
+two back to back do not, and the second dies with a 429 that reads like an auth
+bug. Recorded in the file's own header.
+
+### ⚠️ The bundle budget got worse, and that is mine
+
+The initial bundle went from **456.42 kB to 457.92 kB** — `+1,501 bytes`, which
+is exactly the growth in `styles.css` (58,091 → 59,592) and therefore entirely
+the new rules in `_spec.scss` and `_responsive.scss`. Measured by stashing and
+rebuilding.
+
+The budget (`maximumWarning: 450kb`) was already exceeded by 6.42 kB before
+this, so it is a warning and not a build failure — but it is moving the wrong
+way and this is the first phase that moved it.
+
+The yard's styles live in the global sheet by this repo's convention, and
+`_spec.scss` records why: Angular's emulated encapsulation makes component
+styles more specific than the global sheet, which is how the responsive layer
+was silently overridden once before. Moving these rules into the yard's own
+(lazy) chunk would take them off the initial bundle and reopen that. **That is
+a trade worth a decision rather than a quiet choice**, so it is recorded here
+rather than made.
+
+### Proof
+
+Drive section 11 — 30 checks, 142 in the file. Reverted in two halves, because
+the backend revert masked the frontend one:
+
+| Reverted | Result |
+|---|---|
+| the API's tenancy filter back to `['pending','active']`, and the inbox task removed | **11 red** |
+| the yard's vacant marker, Reserved control and past-tenant list | **5 red** |
+
+Restored: 142 passed. Responsive at 360 / 390 / 768 / 1280 — no horizontal
+scroll, every new control over 44px.
+
+Everything else green: `inbox-drive`, `yard-layout-drive` (41),
+`properties-ui-drive`, `dashboard-ui-drive`, the smoke suite, `a11y-drive`
+(10 public + 17 portal pages), `template-literal-lint`, `env-parity`,
+`throttle-lint`, `route-audit`.
+
+### Not proven
+
+**Six past lettings per room is the API cap and nothing says so on screen.** A
+room on its tenth tenant shows the six most recent silently. The full record is
+the archive view, Phase F.
+
+**Nothing reads reviews, problems or viewings per tenancy.** The past-tenant row
+carries dates, rent and paperwork only.
 
 ---
 

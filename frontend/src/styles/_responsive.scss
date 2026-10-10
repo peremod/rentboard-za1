@@ -409,6 +409,25 @@
   .section { padding: 2.5rem 1rem; }
 }
 
+// The left rule and its indent cost width a 360px screen cannot spare, so at
+// the narrowest the rule becomes a top border. Breakpoints here are
+// 900 / 768 / 480 and this is the 480 band.
+@media (max-width: 480px) {
+  .yard-past__item,
+  .yard-room__vacant,
+  .yard-room__reserved {
+    border-left: none;
+    border-top: 1.5px solid var(--border);
+    padding-left: 0;
+    border-radius: 0;
+  }
+  // Both carry a control, and at this width it goes full width rather than
+  // being squeezed beside the sentence that explains it.
+  .yard-room__vacant .link-btn,
+  .yard-room__reserved .link-btn,
+  .yard-past__item .link-btn { flex: 1 1 100%; text-align: left; }
+}
+
 @media (max-width: 360px) {
   .auth__roles { grid-template-columns: 1fr; }
 }

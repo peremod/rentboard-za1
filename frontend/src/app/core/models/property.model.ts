@@ -67,13 +67,33 @@ export interface YardRoom {
   viewCount: number;
   applications: Pick<Application, 'id' | 'status' | 'createdAt'> &
     { tenant: { id: string; fullName: string; tenantProfile?: { hasPassport: boolean } | null } }[];
-  tenancies: {
-    id: string;
-    status: string;
-    startDate?: string | null;
-    rentCents: number;
-    tenant: { id: string; fullName: string };
-  }[];
+  /** Live lettings only — pending or active. */
+  tenancies: YardTenancy[];
+  /**
+   * Finished lettings, newest first, capped at six by the API.
+   *
+   * ⚠️ Optional because an older cached payload will not carry it. The
+   * property screen was the only place a landlord could see a tenancy and it
+   * asked for pending and active only, so a finished letting took the tenant,
+   * the dates and the ledger with it — the landlord half of what Phase D
+   * fixed for the tenant, failing the other way.
+   */
+  pastTenancies?: YardTenancy[];
+}
+
+/** One letting on a yard room, live or finished. */
+export interface YardTenancy {
+  id: string;
+  status: string;
+  startDate?: string | null;
+  /** Set once it has ended. */
+  endDate?: string | null;
+  /** Set by the nightly pass once the review window closes. */
+  archivedAt?: string | null;
+  /** While this is in the future, either party may still review. */
+  reviewsCloseAt?: string | null;
+  rentCents: number;
+  tenant: { id: string; fullName: string };
 }
 
 export interface YardGroup {
@@ -87,11 +107,24 @@ export interface YardGroup {
   waitingApplicants: number;
 }
 
+
+
 export interface YardDashboard {
   properties: YardGroup[];
   /** Rooms not in a yard. Never hidden — see PropertiesService.dashboard. */
   ungrouped: YardGroup | null;
-  totals: { rooms: number; vacant: number; waitingApplicants: number };
+  totals: {
+    rooms: number;
+    vacant: number;
+    waitingApplicants: number;
+    /**
+     * Rooms marked let with nobody in them.
+     *
+     * Optional: an older cached payload will not carry it. The room-level
+     * marker is what a landlord acts on; this is the count, for a header.
+     */
+    vacantButListedAsLet?: number;
+  };
   /** Days after the 1st before an unpaid month triggers a reminder. 0 is off. */
   rentGraceDays: number;
 }
