@@ -144,10 +144,10 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
             </p>
 
             @for (t of past(); track t.id) {
-              <article class="rent-past__letting">
+              <article class="rent-past__letting state-edge state--past">
                 <h3 class="rent-past__title">{{ t.room?.title || 'A room' }}</h3>
                 <p class="rent-past__when">
-                  <span class="rent-past__badge">Past letting</span>
+                  <span class="state state--past">Past letting</span>
                   @if (t.startDate && t.endDate) {
                     Lived there {{ t.startDate | date: 'd MMM yyyy' }} to {{ t.endDate | date: 'd MMM yyyy' }}.
                   } @else if (t.endDate) {
@@ -192,7 +192,13 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
             </p>
           }
           @for (p of periods; track p.id) {
-            <div class="app-card">
+            <!-- A month the tenant has answered gets the vocabulary's edge, so
+                 it is findable in a list of twelve. It was prose with a raised
+                 hand in it and nothing else: on a year of rows, the one month
+                 somebody queried looked exactly like the eleven they did not. -->
+            <div class="app-card"
+                 [class.state-edge]="!!p.tenantDisputedAt"
+                 [class.state--disputed]="!!p.tenantDisputedAt">
               <div class="app-info">
                 <div class="app-room">
                   {{ p.periodStart | date: 'MMMM yyyy' }} — {{ p.amountCents | zarCents }}
@@ -260,11 +266,10 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
        Tokens by name rather than retyped hex: --border is #E0D5C4 and this
        file is exactly where a near-miss like #DDD5C8 gets introduced. */
     .rent-past { border-top: 1.5px solid var(--border); padding-top: 1.25rem; }
-    .rent-past__letting {
-      border-left: 3px solid var(--border);
-      padding: 0 0 .25rem 1rem;
-      margin: 1.25rem 0 0;
-    }
+    /* The rule and the indent are '.state-edge', and its colour is the state's
+       own ink rather than '--border' — §H3's "the terracotta rule, not the
+       terracotta card". Only the margin is this screen's business. */
+    .rent-past__letting { margin: 1.25rem 0 0; }
     .rent-past__title { font-size: .95rem; margin: 0 0 .35rem; }
     .rent-past__when {
       margin: 0 0 .25rem;
@@ -272,29 +277,8 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
       display: flex; flex-wrap: wrap; align-items: center; gap: .4rem;
     }
     .rent-past__where { margin: 0 0 .6rem; }
-    /* The one visual assertion on this section: it is over. Terracotta on
-       cream2 rather than a grey chip, so it reads as a label and not as a
-       disabled control. */
-    .rent-past__badge {
-      flex: 0 0 auto;
-      font-size: .68rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: .06em;
-      color: var(--terra-deep);
-      background: var(--cream2);
-      border: 1px solid var(--border);
-      border-radius: var(--r-full);
-      padding: .15rem .5rem;
-    }
-    /* Breakpoints here are 900 / 768 / 480. At the narrowest the left rule and
-       its indent cost width a 360px screen does not have to spare, so the
-       indent goes and the rule becomes a top border instead. */
-    @media (max-width: 480px) {
-      .rent-past__letting {
-        border-left: none;
-        border-top: 1.5px solid var(--border);
-        padding: .85rem 0 .25rem;
-      }
-    }
+    /* The 480px behaviour — indent out, rule on top — moved into '.state-edge'
+       with the rest of the vocabulary. Breakpoints here are 900 / 768 / 480. */
   `],
 })
 export class TenantRent implements OnInit {

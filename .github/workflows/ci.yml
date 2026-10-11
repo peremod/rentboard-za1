@@ -156,6 +156,20 @@ jobs:
         # not depend on the step above.
         run: node scripts/token-lint.mjs
 
+      - name: State vocabulary — one treatment per meaning
+        if: ${{ !cancelled() }}
+        # The archive and the rent screen rendered the SAME "Past letting"
+        # chip from two separately-written rules; the yard had a third copy;
+        # and `.status--accepted` / `.status--rejected` were declared
+        # identically in two components with raw hexes, one of which folded
+        # `withdrawn` in with `rejected` so an applicant who stopped read as
+        # one the landlord had refused. Measured, two of those rules were also
+        # under the 4.5:1 small-text floor — and the accessibility drive could
+        # not see it, because its fixture never accepted or rejected anything.
+        #
+        # Reads source, so it does not depend on the build above.
+        run: node scripts/state-lint.mjs
+
       - name: Inline template and styles literals — no stray backtick
         if: ${{ !cancelled() }}
         # A backtick inside a component's inline `template:` or `styles:`

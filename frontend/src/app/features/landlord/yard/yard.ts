@@ -657,7 +657,7 @@ const UNGROUPED = 'ungrouped';
                   @if (showPast().has(room.id)) {
                     <ul class="yard-past__list">
                       @for (t of room.pastTenancies; track t.id) {
-                        <li class="yard-past__item">
+                        <li class="yard-past__item state-edge state--past">
                           <span class="yard-past__who">{{ t.tenant.fullName }}</span>
                           <span class="yard-past__when">
                             @if (t.startDate && t.endDate) {
@@ -670,7 +670,7 @@ const UNGROUPED = 'ungrouped';
                           <!-- The one time-limited thing about a finished
                                letting, so it is the one thing flagged. -->
                           @if (reviewStillOpen(t)) {
-                            <span class="yard-past__review">You can still review them</span>
+                            <span class="state state--waiting">You can still review them</span>
                           }
                           <button type="button" class="link-btn"
                                   [attr.aria-expanded]="showDocs().has(t.id)"

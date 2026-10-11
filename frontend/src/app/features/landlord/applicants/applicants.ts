@@ -14,6 +14,7 @@ import { ReviewList } from '../../../shared/components/review-list/review-list';
 import { ReviewsService } from '../../../core/services/reviews.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { TenantReferences } from '../../../core/models/review.model';
+import { applicationState, stateClass } from '../../../core/models/state.model';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 
 /**
@@ -53,14 +54,20 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
       } @else if (applications().length === 0) {
         <p class="muted">No applications yet for this room.</p>
       } @else {
+        <!-- ⚠️ h2, not h3. The portal shell supplies this screen's only h1, so
+             an h3 section heading skipped a level — H3 straight after H1. Found
+             by a11y-drive the first time it ever audited this screen: the page
+             list was static paths and this route needs a room id, so
+             applicants.ts had never been checked at all. The portfolio-wide
+             inbox at /landlord/applicants is a different component. -->
         <!-- Grouped, shortlist first. A flat list meant a landlord with
              fifteen applicants had to re-find the three they liked every time
              they came back. -->
         @if (shortlisted().length > 0) {
           <div class="applicant-group">
-            <h3 class="applicant-group__title">
+            <h2 class="applicant-group__title">
               ⭐ Shortlisted <span class="applicant-group__count">({{ shortlisted().length }})</span>
-            </h3>
+            </h2>
             <p class="applicant-group__hint">
               Arrange viewings with these, then accept one. Accepting closes the
               room and tells everyone else.
@@ -71,16 +78,16 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
         @for (app of ordered(); track app.id) {
           @if (isFirstOf(app, 'other')) {
             <div class="applicant-group">
-              <h3 class="applicant-group__title">
+              <h2 class="applicant-group__title">
                 New and viewed <span class="applicant-group__count">({{ others().length }})</span>
-              </h3>
+              </h2>
             </div>
           }
           @if (isFirstOf(app, 'decided')) {
             <div class="applicant-group">
-              <h3 class="applicant-group__title">
+              <h2 class="applicant-group__title">
                 Decided <span class="applicant-group__count">({{ decided().length }})</span>
-              </h3>
+              </h2>
               <p class="applicant-group__hint">Accepted, rejected or withdrawn. No action needed.</p>
             </div>
           }
@@ -101,7 +108,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
                 <strong>{{ app.tenant?.fullName }}</strong>
                 @if (app.tenant?.isVerified) { <span class="pill">✓ Verified</span> }
                 @if (app.tenant?.tenantProfile?.hasPassport) { <span class="pill pill--passport">🛂 Passport</span> }
-                <span class="status status--{{ app.status }}">{{ app.status }}</span>
+                <span [class]="'state ' + stateClass(applicationState(app.status))">{{ app.status }}</span>
               </span>
               <span aria-hidden="true">{{ openId() === app.id ? '▲' : '▼' }}</span>
             </button>
@@ -278,23 +285,27 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
       text-align: left; gap: .5rem; min-height: 44px;
     }
     .applicant-card__who { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
-    .pill { font-size: .6rem; font-weight: 700; background: rgba(61,112,64,.1); color: #3D7040; padding: .1rem .4rem; border-radius: 10px; margin-left: .4rem; }
-    .status { font-size: .65rem; font-weight: 700; text-transform: uppercase; padding: .15rem .5rem; border-radius: 10px; background: #F2EDE3; margin-left: .5rem; }
-    .status--accepted { background: rgba(61,112,64,.15); color: #3D7040; }
-    .status--rejected { background: rgba(214,59,59,.1); color: #D63B3B; }
+    .pill { font-size: .6rem; font-weight: 700; background: rgba(61,112,64,.1); color: var(--sage); padding: .1rem .4rem; border-radius: 10px; margin-left: .4rem; }
+    /* The chip is '.state' from styles.scss. Only the gap beside the name is
+       this screen's business. Measured before the swap: '.status--accepted'
+       (#3D7040 on sage 15%) was 4.12:1 on --cream2 and '.status--rejected'
+       (#D63B3B on red 10%) 3.46:1 — both under the 4.5:1 small-text floor, in
+       two components, and a11y-drive could not see either because its fixture
+       never accepts or rejects an application. */
+    .state { margin-left: .5rem; }
     .applicant-card__body { padding: 0 1rem 1rem; }
-    .cover-note { font-style: italic; color: #3A3228; margin: .5rem 0; }
-    .applicant-card__refs { margin: .75rem 0; padding: .75rem 0; border-top: 1px solid #E0D5C4; }
-    .refs-toggle { background: none; border: 1px solid #E0D5C4; border-radius: 6px; padding: .35rem .75rem;
-                   font-size: .78rem; font-weight: 600; cursor: pointer; color: #3A3228; }
+    .cover-note { font-style: italic; color: var(--ink2); margin: .5rem 0; }
+    .applicant-card__refs { margin: .75rem 0; padding: .75rem 0; border-top: 1px solid var(--border); }
+    .refs-toggle { background: none; border: 1px solid var(--border); border-radius: 6px; padding: .35rem .75rem;
+                   font-size: .78rem; font-weight: 600; cursor: pointer; color: var(--ink2); }
     .refs-note { font-size: .72rem; color: var(--slate); line-height: 1.6; margin-top: .6rem; }
     .undo-banner { display: flex; align-items: center; justify-content: space-between;
                    gap: .75rem; flex-wrap: wrap; padding: .7rem .9rem; margin-bottom: .4rem;
                    background: rgba(61,112,64,.08); border: 1px solid rgba(61,112,64,.25);
-                   border-radius: 8px; font-size: .85rem; color: #3A3228; }
+                   border-radius: 8px; font-size: .85rem; color: var(--ink2); }
     .undo-note { font-size: .75rem; color: var(--slate); margin-bottom: .5rem; }
     .applicant-group { margin: 1.25rem 0 .5rem; }
-    .applicant-group__title { font-size: .95rem; font-weight: 700; color: #3A3228; }
+    .applicant-group__title { font-size: .95rem; font-weight: 700; color: var(--ink2); }
     .applicant-group__count { color: var(--slate); font-weight: 400; }
     .applicant-group__hint { font-size: .8rem; color: var(--slate); line-height: 1.6; margin-top: .2rem; }
     .applicant-card__actions { display: flex; gap: .6rem; margin-bottom: .5rem; flex-wrap: wrap; }
@@ -324,7 +335,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     }
     .viewing-form .field-hint { font-weight: 400; line-height: 1.6; }
     .viewing-form__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; }
-    .applicant-card__actions .accept { background: #3D7040; color: var(--white); border: none; }
+    .applicant-card__actions .accept { background: var(--sage); color: var(--white); border: none; }
     .applicant-card__actions .reject { background: #D63B3B; color: var(--white); border: none; }
 
     /* Mobile — PRE-LAUNCH-CHECKLIST.md #9.
@@ -339,6 +350,10 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
   `],
 })
 export class Applicants implements OnInit {
+  /** The vocabulary's mapping, shared — see core/models/state.model.ts. */
+  protected readonly applicationState = applicationState;
+  protected readonly stateClass = stateClass;
+
   /**
    * Where "back" goes: the portal this screen was opened from.
    *

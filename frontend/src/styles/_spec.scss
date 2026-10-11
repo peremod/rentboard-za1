@@ -1,12 +1,36 @@
 // ═══════════════════════════════════════════════════════════════════════
-// SPEC STYLESHEET — ported from RentBoard-ZA-Visual-Preview.html
+// SPEC STYLESHEET — originally ported from RentBoard-ZA-Visual-Preview.html
 //
-// DO NOT hand-edit. This is a direct copy of the project's authoritative
-// visual spec so it can be re-synced when the preview changes. App-only
-// additions go in styles.scss.
+// ⚠️ THIS HEADER USED TO SAY "DO NOT hand-edit. … so it can be re-synced when
+// the preview changes." Corrected 11 October, because that was a rule
+// protecting a process that cannot happen.
 //
-// Only the preview's demo chrome (.page-tabs / .page-view, which exist so
-// the preview can switch screens inside one HTML file) has been removed.
+// `RentBoard-ZA-Visual-Preview.html` is NOT in this repository and never has
+// been — `git log --all -- '*Visual-Preview*'` is empty, and README.md lists it
+// under "Historical source documents … files that existed at a point in time".
+// There is nothing to re-sync FROM. The file was a one-time port in e28a035
+// and has been edited by hand in **22 commits** since, three of them in the
+// last week, one of them mine (8c94aed added the whole `.yard-past*` block
+// while citing this header as the reason not to touch the file).
+//
+// So this was a phantom control of the kind CLAUDE.md warns about: a rule that
+// looked like a constraint, could not be enforced, was routinely broken, and
+// was still being quoted as a reason to leave real defects in place. Phase H
+// left 13 literal `#FFF` here and Phase I left four dead `.nav-logo` /
+// `.footer-logo` rules, both justified by a re-sync that can never occur.
+// Both are now fixed.
+//
+// What is actually true:
+//
+//   · This is ordinary source. Edit it like any other stylesheet.
+//   · It is the GLOBAL layer and it is loaded FIRST, so a component's own
+//     `styles:` block beats it — Angular's emulated encapsulation adds an
+//     attribute selector. That is a real constraint and it is the reason
+//     PRE-LAUNCH-CHECKLIST #9 exists.
+//   · Prefer `styles.scss` for new app-only rules anyway, because keeping the
+//     ported visual language in one file still has value for reading it. That
+//     is a preference, not a prohibition.
+//   · Breakpoints belong in `_responsive.scss`, which is loaded last.
 // ═══════════════════════════════════════════════════════════════════════
 
 /* ═══════════════════════════════════════════════════════
@@ -90,13 +114,6 @@ img{display:block;max-width:100%}
   display:flex;align-items:center;gap:2rem;
   padding:0 1.5rem;height:66px;
 }
-.nav-logo{
-  font-family:var(--font-display);
-  font-size:1.6rem;font-weight:900;
-  color:var(--cream);letter-spacing:-.5px;flex-shrink:0;
-  cursor:pointer;
-}
-.nav-logo span{color:var(--terra2)}
 .nav-links{display:flex;gap:1.75rem;flex:1}
 .nav-links a{
   color:rgba(250,247,240,.65);font-size:.88rem;font-weight:500;
@@ -147,23 +164,23 @@ img{display:block;max-width:100%}
    The two local copies still win inside their own components — same colour, so
    nothing moves — and can go when somebody is next in those files. */
 .btn-danger{
-  background:#D63B3B;color:#fff;border:none;
+  background:#D63B3B;color:var(--white);border:none;
 }
 .btn-danger:hover:not(:disabled){background:#BE3333}
 .btn-danger:disabled{opacity:.5;cursor:not-allowed}
 
-.btn-primary{background:var(--terra);color:#fff}
+.btn-primary{background:var(--terra);color:var(--white)}
 /* Darkens on hover. --terra2 is the brand accent for text on dark; as a
    background under white text it is 3.56:1. See --terra-deep. */
 .btn-primary:hover{background:var(--terra-deep);transform:translateY(-1px);box-shadow:0 4px 14px rgba(192,78,40,.35)}
 .btn-ghost{background:transparent;color:rgba(250,247,240,.75);border:1.5px solid rgba(250,247,240,.25)}
 .btn-ghost:hover{border-color:rgba(250,247,240,.6);color:var(--cream)}
 .btn-outline{background:transparent;color:var(--terra);border:1.5px solid var(--terra)}
-.btn-outline:hover{background:var(--terra);color:#fff}
-.btn-sage{background:var(--sage);color:#fff}
+.btn-outline:hover{background:var(--terra);color:var(--white)}
+.btn-sage{background:var(--sage);color:var(--white)}
 /* Darkens, for the same reason --terra-deep exists: --sage2 is 3.95:1 with
    white and hover is not a state where contrast is allowed to drop. */
-.btn-sage:hover{background:var(--sage-deep);color:#fff}
+.btn-sage:hover{background:var(--sage-deep);color:var(--white)}
 .btn-sm{padding:.4rem .9rem;font-size:.8rem}
 .btn-lg{padding:.75rem 1.75rem;font-size:1rem}
 
@@ -343,9 +360,9 @@ img{display:block;max-width:100%}
   padding:.22rem .55rem;border-radius:var(--r-full);
   font-size:.68rem;font-weight:700;
 }
-.badge-featured{background:var(--gold);color:#fff}
-.badge-new{background:var(--sage);color:#fff}
-.badge-reserved{background:var(--slate);color:#fff}
+.badge-featured{background:var(--gold);color:var(--white)}
+.badge-new{background:var(--sage);color:var(--white)}
+.badge-reserved{background:var(--slate);color:var(--white)}
 /* ⚠️ 32px before Phase 7q, on every room card on the board — eleven of them
    on one screen at 360px. An icon button has no text to make it big, so both
    dimensions are set rather than a min-height. */
@@ -392,7 +409,7 @@ img{display:block;max-width:100%}
 .avatar{
   width:28px;height:28px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
-  font-size:.72rem;font-weight:700;color:#fff;flex-shrink:0;
+  font-size:.72rem;font-weight:700;color:var(--white);flex-shrink:0;
 }
 .landlord-name{font-size:.75rem;color:var(--slate);font-weight:500}
 .rating{font-size:.72rem;color:var(--gold-text);font-weight:600}
@@ -465,7 +482,7 @@ img{display:block;max-width:100%}
 .plan-card.featured::before{
   content:'Most Popular';
   position:absolute;top:0;right:0;
-  background:var(--terra);color:#fff;
+  background:var(--terra);color:var(--white);
   font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;
   padding:.3rem .85rem;border-bottom-left-radius:var(--r8);
 }
@@ -533,7 +550,7 @@ img{display:block;max-width:100%}
 .portal-avatar{
   width:44px;height:44px;border-radius:50%;background:var(--terra);
   display:flex;align-items:center;justify-content:center;
-  font-size:1.1rem;font-weight:700;color:#fff;margin-bottom:.6rem;
+  font-size:1.1rem;font-weight:700;color:var(--white);margin-bottom:.6rem;
 }
 .portal-user-name{font-size:.9rem;font-weight:700;color:var(--cream)}
 .portal-user-role{font-size:.72rem;color:rgba(250,247,240,.45)}
@@ -638,7 +655,7 @@ img{display:block;max-width:100%}
 .cookie-banner a{color:var(--gold);text-decoration:underline}
 .cookie-actions{display:flex;gap:.5rem;flex-wrap:wrap}
 .btn-cookie-reject{flex:1;padding:.5rem .85rem;border-radius:var(--r4);border:1.5px solid rgba(250,247,240,.25);background:transparent;color:rgba(250,247,240,.75);font-weight:600;cursor:pointer;font-size:.82rem;font-family:var(--font-body)}
-.btn-cookie-accept{flex:1;padding:.5rem .85rem;border-radius:var(--r4);background:var(--terra);color:#fff;border:none;font-weight:700;cursor:pointer;font-size:.82rem;font-family:var(--font-body)}
+.btn-cookie-accept{flex:1;padding:.5rem .85rem;border-radius:var(--r4);background:var(--terra);color:var(--white);border:none;font-weight:700;cursor:pointer;font-size:.82rem;font-family:var(--font-body)}
 .btn-cookie-manage{width:100%;padding:.4rem;background:transparent;color:rgba(250,247,240,.4);border:none;cursor:pointer;font-size:.78rem;font-family:var(--font-body);margin-top:.3rem}
 
 /* ═══ FOOTER ═══ */
@@ -648,11 +665,6 @@ img{display:block;max-width:100%}
   display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:3rem;
   margin-bottom:2.5rem;
 }
-.footer-logo{
-  font-family:var(--font-display);font-size:1.5rem;font-weight:900;
-  color:var(--cream);margin-bottom:.75rem;cursor:pointer;
-}
-.footer-logo span{color:var(--terra2)}
 .footer-desc{font-size:.83rem;color:rgba(250,247,240,.62);line-height:1.75;margin-bottom:.85rem}
 /* .3 alpha over --ink is 2.62:1 — barely legible, and it is the line that
    claims POPIA compliance. .5 is 4.97:1. Same change on .footer-bottom. */
@@ -679,7 +691,8 @@ img{display:block;max-width:100%}
 /* The global `a{color:var(--terra)}` puts terracotta on --ink down here:
    3.05:1, and it was 3.73:1 before the token was darkened, so this link has
    never passed. --terra2 is 5.04:1 on ink and is already the footer's accent
-   (see .footer-logo span). */
+   (it was .footer-logo span until Phase I replaced both logo copies with
+   <app-logo>; see --logo-ma in styles.scss). */
 .footer-bottom a{color:var(--terra2)}
 
 /* ═══ RENTER'S PASSPORT ═══ */
@@ -698,7 +711,7 @@ img{display:block;max-width:100%}
   display:grid;place-items:center;font-size:.8rem;font-weight:700;
   background:var(--cream2);color:var(--ink);
 }
-.passport-step.done .passport-step__mark{background:var(--sage);color:#fff}
+.passport-step.done .passport-step__mark{background:var(--sage);color:var(--white)}
 .passport-step strong{display:block;font-size:.88rem;margin-bottom:.15rem}
 .passport-step p{font-size:.78rem;color:var(--ink2);margin:0}
 
@@ -994,26 +1007,19 @@ img{display:block;max-width:100%}
    closed records above the person living there now. */
 .yard-past{flex-basis:100%;margin-top:.4rem}
 .yard-past__list{list-style:none;margin:.5rem 0 0;padding:0}
+/* The rule and the indent are now .state-edge, whose colour is the state's own
+   ink — the past-letting terracotta rather than a neutral --border. Only the
+   row's own layout is left here. */
 .yard-past__item{
-  padding:.5rem 0 .5rem .75rem;
-  border-left:3px solid var(--border);
+  padding:.5rem 0;
   margin-bottom:.4rem;
   font-size:.8rem;line-height:1.55;
   display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;
 }
 .yard-past__who{font-weight:700;color:var(--ink)}
 .yard-past__when{color:var(--slate);font-size:.76rem}
-/* The one time-limited thing about a finished letting, so it is the one thing
-   flagged. Terracotta: it is an action with a deadline, not a status. */
-.yard-past__review{
-  font-size:.7rem;font-weight:700;
-  text-transform:uppercase;letter-spacing:.05em;
-  color:var(--terra-deep);
-  background:var(--cream2);
-  border:1px solid var(--border);
-  border-radius:var(--r-full);
-  padding:.12rem .5rem;
-}
+/* .yard-past__review was a THIRD copy of the past-letting chip — see the
+   state vocabulary in styles.scss. The markup says .state .state--waiting. */
 
 .yard-new{margin-top:1rem}
 .yard-new form{

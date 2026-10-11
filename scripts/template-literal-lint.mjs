@@ -64,6 +64,59 @@ if (files.length === 0) {
  */
 const LEGAL_AFTER = /^`\s*[,\]}]/;
 
+/**
+ * ⚠️ `LEGAL_AFTER` alone has a hole, and it was found the same day it was
+ * written: a stray backtick that happens to be followed by a comma looks
+ * exactly like a correct close. In a comment reading
+ *
+ *     both 'closed`, in one place, for both screens.
+ *
+ * the backtick before the comma passed, the lint went green, and the token
+ * gate — which reads the same `styles:` ranges — silently stopped seeing nine
+ * literals in the truncated remainder and wrote a baseline 9 entries short.
+ * One blind gate quietly corrupted another gate's baseline.
+ *
+ * So a plausible close is not enough: what follows it has to be plausible too.
+ * After a real close comes either the end of the decorator object or another
+ * of ITS keys. After a stray one comes prose, or CSS, or HTML.
+ */
+const DECORATOR_KEYS = [
+  'selector', 'standalone', 'imports', 'template', 'templateUrl', 'styles',
+  'styleUrl', 'styleUrls', 'changeDetection', 'encapsulation', 'animations',
+  'providers', 'viewProviders', 'host', 'exportAs', 'inputs', 'outputs',
+  'queries', 'schemas', 'jit', 'interpolation', 'preserveWhitespaces',
+  'hostDirectives', 'deferredImports',
+];
+
+/**
+ * True when what follows the candidate close is the rest of a decorator —
+ * `})`, `],`, or one of the keys above.
+ */
+function closesCleanly(src, at) {
+  let tail = src.slice(at + 1, at + 4000);
+
+  /**
+   * ⚠️ Comments have to be stepped over, and the first version of this did not.
+   * Half the components in this repo close `template:` and then explain in a
+   * comment why there is no `styles:` block — so "the next thing is a
+   * decorator key" was false for six files that were perfectly correct. A gate
+   * with six false positives gets switched off, which is worse than the hole
+   * it was closing.
+   */
+  for (;;) {
+    const before = tail;
+    tail = tail.replace(/^[\s,\]]+/, '');
+    tail = tail.replace(/^\/\*[\s\S]*?\*\//, '');
+    tail = tail.replace(/^\/\/[^\n]*\n?/, '');
+    if (tail === before) break;
+  }
+
+  if (/^\}\s*\)/.test(tail)) return true;              // end of @Component({…})
+  if (tail === '') return true;                          // end of file, nothing to judge
+  const key = tail.match(/^([A-Za-z_$][\w$]*)\s*:/);
+  return !!key && DECORATOR_KEYS.includes(key[1]);
+}
+
 const broken = [];
 let literals = 0;
 
@@ -82,7 +135,7 @@ for (const file of files) {
     }
 
     const after = src.slice(i, i + 60).replace(/\s+/g, ' ');
-    if (!LEGAL_AFTER.test(after)) {
+    if (!LEGAL_AFTER.test(after) || !closesCleanly(src, i)) {
       broken.push({
         file: file.replace(`${ROOT}/`, ''),
         line: src.slice(0, i).split('\n').length,

@@ -85,8 +85,12 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
                       (click)="toggle(r)">
                 <span class="arc-row__title">{{ r.room?.title || 'A room' }}</span>
                 <span class="arc-row__meta">
-                  <span class="arc-row__badge"
-                        [class.arc-row__badge--fell]="r.status === 'cancelled'">
+                  <!-- One vocabulary, defined in styles.scss. A letting that
+                       never started is a different KIND of record, not a lesser
+                       one — 'closed', not a faded 'past'. -->
+                  <span class="state"
+                        [class.state--past]="r.status !== 'cancelled'"
+                        [class.state--closed]="r.status === 'cancelled'">
                     {{ r.status === 'cancelled' ? 'Never started' : 'Past letting' }}
                   </span>
                   <!-- Which side they were, and who the other person was. On a
@@ -105,7 +109,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
                     <span>{{ r.rentCents | zarCents }} a month</span>
                   }
                   @if (r.reviewsOpen) {
-                    <span class="arc-row__review">Reviews still open</span>
+                    <span class="state-text state--waiting">Reviews still open</span>
                   }
                 </span>
               </button>
@@ -368,20 +372,6 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
       display: flex; flex-wrap: wrap; align-items: center; gap: .45rem;
       font-size: .78rem; color: var(--slate); line-height: 1.5;
     }
-    .arc-row__badge {
-      flex: 0 0 auto;
-      font-size: .68rem; font-weight: 700;
-      text-transform: uppercase; letter-spacing: .06em;
-      color: var(--terra-deep);
-      background: var(--cream2);
-      border: 1px solid var(--border);
-      border-radius: var(--r-full);
-      padding: .12rem .5rem;
-    }
-    /* A letting that never started is a different kind of record, not a
-       lesser one. Slate rather than terracotta: nothing happened. */
-    .arc-row__badge--fell { color: var(--slate); }
-    .arc-row__review { color: var(--terra-deep); font-weight: 700; }
 
     .arc-detail {
       padding: .25rem .85rem 1rem;

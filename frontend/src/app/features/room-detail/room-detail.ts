@@ -213,13 +213,13 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
             <p class="landlord-trust__name">{{ landlord.fullName }}</p>
 
             @if (landlord.landlordProfile?.idVerified) {
-              <p class="landlord-trust__state landlord-trust__state--ok">
+              <p class="landlord-trust__state">
                 <span class="badge badge-verified">✓ Verified</span>
                 A Mastande reviewer checked their identity document against this
                 account. It is not a credit or criminal check.
               </p>
             } @else {
-              <p class="landlord-trust__state landlord-trust__state--none">
+              <p class="landlord-trust__state">
                 <span class="badge badge-unverified">Identity not verified</span>
                 Nobody has checked who this is. Never pay a deposit before
                 viewing the room and signing a lease.

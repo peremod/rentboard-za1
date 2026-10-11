@@ -793,6 +793,55 @@ if (!apiReachable) {
       note: 'Ask for Sipho at the gate.',
     }, accounts.LANDLORD.token);
 
+    /**
+     * ⚠️ An ACCEPTED and a REJECTED application, on a second room.
+     *
+     * The same mistake as the viewing invitation above, one level along: this
+     * drive has never accepted or rejected anything, so `.status--accepted`
+     * and `.status--rejected` — declared in BOTH `applicants.ts` and
+     * `applicants-inbox.ts` with raw hexes — were never once rendered while
+     * contrast was being measured. Measured by hand afterwards: accepted
+     * (#3D7040 on sage 15%) was 4.12:1 over --cream2 and rejected (#D63B3B on
+     * red 10%) 3.46:1, both under the 4.5:1 small-text floor, on two screens,
+     * green here for every release. A page passes this audit by not containing
+     * the failing element, which is the five-vacuous-passes lesson again.
+     *
+     * A SECOND room, so accepting does not turn the first one `let` and change
+     * what every other panel renders. A second tenant, because one applicant
+     * cannot be both accepted and rejected.
+     */
+    const room2 = await apiCall(API, 'POST', '/api/rooms', {
+      roomType: 'shared_house', title: 'Second back room, own door',
+      description: 'A quiet room at the back of the yard with its own door and a shared kitchen.',
+      rentCents: 240000, province: 'Gauteng', city: 'Johannesburg',
+      locationDisplay: 'Tembisa, Johannesburg',
+      availableFrom: new Date(Date.now() + 14 * 86400_000).toISOString().slice(0, 10),
+      propertyId: prop.body?.id,
+    }, accounts.LANDLORD.token);
+    q(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${room2.body.id}'`);
+
+    accounts.TENANT2 = await registerUser(API, 'TENANT', `${stamp}b`);
+    const toAccept = await apiCall(API, 'POST', '/api/applications',
+      { roomId: room2.body.id, coverNote: 'I can move in on the first and I have a reference.' },
+      accounts.TENANT.token);
+    const toReject = await apiCall(API, 'POST', '/api/applications',
+      { roomId: room2.body.id, coverNote: 'Looking for something closer to the taxi rank.' },
+      accounts.TENANT2.token);
+    await apiCall(API, 'POST', `/api/applications/${toAccept.body.id}/accept`, {}, accounts.LANDLORD.token);
+    await apiCall(API, 'POST', `/api/applications/${toReject.body.id}/reject`, {}, accounts.LANDLORD.token);
+
+    /**
+     * ⚠️ And the per-room applicants screen itself has never been audited.
+     *
+     * `LANDLORD_PAGES` is static paths, and this route needs a room id, so
+     * `applicants.ts` — the screen with the accepted/rejected chips, the
+     * references panel and the undo banner on it — was simply not in the list.
+     * The portfolio-wide inbox at `/landlord/applicants` is a DIFFERENT
+     * component (`applicants-inbox.ts`); auditing one has never covered the
+     * other. Pushed here, after the seed, because only the seed knows the id.
+     */
+    LANDLORD_PAGES.push(`/landlord/rooms/${room2.body.id}/applicants`);
+
     seeded = true;
   } catch (err) {
     failures.push(`the portal screens were audited EMPTY — the seed failed (${err.message}), so rows, badges and pills were never measured`);

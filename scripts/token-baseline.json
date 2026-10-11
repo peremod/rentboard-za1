@@ -5,16 +5,7 @@
       "#3A3228": 3,
       "#F2EDE3": 2
     },
-    "frontend/src/app/features/landlord/applicants-inbox/applicants-inbox.ts": {
-      "#3A3228": 1,
-      "#3D7040": 2,
-      "#F2EDE3": 2
-    },
     "frontend/src/app/features/landlord/applicants/applicants.ts": {
-      "#3A3228": 4,
-      "#3D7040": 3,
-      "#E0D5C4": 2,
-      "#F2EDE3": 1,
       "#FDFAF5": 1
     },
     "frontend/src/app/features/landlord/create-room/create-room.ts": {
@@ -61,8 +52,7 @@
       "rgb(58,50,40)": 2
     },
     "frontend/src/styles/_spec.scss": {
-      "#3D7040": 1,
-      "#FFF": 13
+      "#3D7040": 1
     }
   }
 }

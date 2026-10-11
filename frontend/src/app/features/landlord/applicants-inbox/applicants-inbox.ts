@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { applicationState, stateClass } from '../../../core/models/state.model';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ApplicationsService } from '../../../core/services/applications.service';
@@ -151,7 +152,7 @@ import {
                   @if (a.tenant?.tenantProfile?.hasPassport) {
                     <span class="pill pill--passport">🛂 Passport</span>
                   }
-                  <span class="status status--{{ a.status }}">{{ statusLabel(a.status) }}</span>
+                  <span [class]="'state ' + stateClass(applicationState(a.status))">{{ statusLabel(a.status) }}</span>
                 </div>
 
                 <p class="ai-row__where">
@@ -227,12 +228,13 @@ import {
     .ai-row__preview { color: var(--slate); overflow-wrap: anywhere; }
     .ai-row__meta { margin: .3rem 0 0; font-size: .75rem; color: var(--slate); }
     .ai-row__actions { flex-shrink: 0; }
-    .pill { font-size: .6rem; font-weight: 700; background: rgba(61,112,64,.1); color: #3D7040; padding: .1rem .4rem; border-radius: 10px; }
-    .status { font-size: .65rem; font-weight: 700; text-transform: uppercase; padding: .15rem .5rem; border-radius: 10px; background: #F2EDE3; }
-    .status--accepted { background: rgba(61,112,64,.15); color: #3D7040; }
-    .status--rejected, .status--withdrawn { background: rgba(214,59,59,.1); color: #D63B3B; }
+    .pill { font-size: .6rem; font-weight: 700; background: rgba(61,112,64,.1); color: var(--sage); padding: .1rem .4rem; border-radius: 10px; }
+    /* The chip is '.state' from styles.scss. This screen also folded
+       'withdrawn' in with 'rejected' — the same red — so an applicant who
+       stopped read as one the landlord had refused. 'applicationState' makes
+       both 'closed', in one place, for both screens. */
     .chan { font-size: .65rem; font-weight: 700; padding: .1rem .4rem; border-radius: 10px; white-space: nowrap; }
-    .chan--in_app { background: #F2EDE3; color: #3A3228; }
+    .chan--in_app { background: var(--cream2); color: var(--ink2); }
     .chan--whatsapp { background: rgba(37,211,102,.14); color: #0F7A3D; }
     .link-button {
       background: none; border: none; padding: 0; font: inherit;
@@ -246,6 +248,10 @@ import {
   `,
 })
 export class ApplicantsInbox implements OnInit {
+  /** The vocabulary's mapping, shared — see core/models/state.model.ts. */
+  protected readonly applicationState = applicationState;
+  protected readonly stateClass = stateClass;
+
   private applications = inject(ApplicationsService);
 
   readonly loading = signal(true);

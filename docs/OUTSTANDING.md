@@ -2984,6 +2984,191 @@ Proven by running both versions against the same defect: old exit 0, new exit
   header — it needs a second, darker value for light surfaces, and then MA is
   no longer one colour everywhere. Worth knowing before that request arrives.
 
+## 43. Four parallel state systems, three of the duplicates mine — Phase J1
+
+**Fixed.** Five meanings, defined once in `styles.scss`; the mapping is a
+typed function in `core/models/state.model.ts`; `scripts/state-lint.mjs` is
+the gate.
+
+### What was wrong
+
+§H4 called the state treatments "ad hoc and partial". Counted, there were four
+parallel systems:
+
+| Duplicate | Where |
+|---|---|
+| the "Past letting" chip, written **three times** | `.arc-row__badge` (archive), `.rent-past__badge` (rent), `.yard-past__review` (yard) — differing only by `.12rem` vs `.15rem` of padding |
+| `.status--accepted` / `.status--rejected`, identical, raw hexes | `applicants.ts` **and** `applicants-inbox.ts` |
+| a naming fork | `.status-accepted` (spec layer, one hyphen) vs `.status--accepted` (components, BEM). Neither shadows the other |
+| a fourth convention | `app-status status-{{ p.status }}` on the rent ledger |
+
+**Phases D, E and F wrote three of those duplicates** — this session, mine.
+
+### ⚠️ Two of those rules were under the contrast floor, and the gate for that could not see it
+
+Measured: `.status--accepted` (#3D7040 on sage 15%) is **4.12:1** over
+`--cream2`; `.status--rejected` (#D63B3B on red 10%) is **3.46:1**. The chip is
+.65rem at weight 700, so the threshold is 4.5:1. Both failed, on two screens,
+for every release.
+
+**`a11y-drive.mjs` has never accepted or rejected an application.** Neither
+chip has ever been on screen while contrast was being measured. *A page passes
+that audit by not containing the failing element* — the five-vacuous-passes
+lesson, inside the gate that exists to prevent it, and the drive's own comment
+about the viewing invitation already names the pattern.
+
+Fixed by seeding the states: a second room (so accepting does not turn the
+first one `let` and change what every other panel renders) and a second tenant
+(because one applicant cannot be both accepted and rejected).
+
+**Proven**: with the old `#D63B3B` on red-10% restored, the enriched fixture
+catches it on both screens — `/landlord/applicants` at **3.75:1** and the
+per-room screen at **3.86:1**, each measured against the surface it actually
+renders on. Before this phase, the same colour on the same two screens
+produced zero failures.
+
+### ⚠️ And the per-room applicants screen had never been audited at all
+
+`LANDLORD_PAGES` is static paths and that route needs a room id, so
+`applicants.ts` was not in the list. `/landlord/applicants` is a **different**
+component (`applicants-inbox.ts`), so auditing one never covered the other.
+Pushed onto the list from inside the seed, which is the only place that knows
+the id.
+
+**The first run of it found a real defect**: H3 straight after H1 — "Decided
+(2)", "New and viewed", "⭐ Shortlisted". The portal shell supplies the only
+`h1`, so every section heading on that screen skipped a level. Three `<h3>` →
+`<h2>`.
+
+### The vocabulary
+
+Each pair measured over `--cream`, `--cream2`, `--card` and `--white`, because
+a translucent tint composites over whatever is beneath it:
+
+| state | ink | fill | worst of four |
+|---|---|---|---:|
+| live | `--sage-deep` | sage 12% | 5.21 |
+| waiting | `--ink2` | gold 14% | 9.64 |
+| past | `--terra-deep` | `--cream2` | 6.73 |
+| closed | `--slate` | `--cream2` | 4.74 |
+| disputed | `--terra-deep` | red 10% | 5.89 |
+
+The obvious picks all fail. **`--gold-text` on its own gold tint is 4.10:1** —
+and `_spec.scss`'s comment claims it "clears both… 4.61:1 on the tint", which
+was measured against the tint over `--card` only; over `--cream2` it is 4.10,
+so `.status-pending` has been under the threshold on that surface all along.
+`--sage` on the sage tint is 4.29, `--terra` on the terra tint 4.38, `--slate`
+on any tint 4.05–4.23. Hence deep inks throughout, and `waiting` carrying its
+meaning in the FILL with near-black ink: no gold close enough to `--gold` to
+still read as gold clears 4.5:1 as small text (the nearest that does is ΔE 23
+away and reads brown).
+
+**Colour is never the only channel.** Every chip carries a word — "Past
+letting", "Never started", "Disputed" — so the ink reinforces the meaning
+rather than conveying it (WCAG 1.4.1). That is also what frees the palette from
+having to make five maximally-distinct hues out of one warm family.
+
+`.state-edge` is §H3's second identity move: a 3px rule in the state's own ink
+instead of another tinted rounded box. Both devices read the same two custom
+properties, so a meaning is defined once and rendered two ways, and the 480px
+behaviour (indent out, rule on top) moved out of `rent.ts` into the vocabulary.
+The rent ledger now marks a **disputed month** with it — that was prose with a
+raised hand in it, so on a year of rows the one month somebody queried looked
+exactly like the eleven they did not.
+
+The mapping is a typed function because **two copies of a mapping is the same
+defect as two copies of a rule**: the inbox folded `withdrawn` in with
+`rejected` — the same red — so an applicant who *stopped* read as one the
+landlord had *refused*. A new status added to either union is now a type error.
+
+### The gate
+
+`scripts/state-lint.mjs`, in `npm run audit` and CI. Four reintroductions, each
+reverted:
+
+| Reintroduced | Result |
+|---|---|
+| a sixth meaning (`state--expired`) | ❌ named with file:line |
+| a component declaring the treatment again | ❌ named with the properties it set |
+| a declared name losing its rule | ❌ "the chip renders unmodified grey" |
+| pointed where nothing uses the vocabulary | ❌ exit 2, "refusing to pass" |
+
+Its own first run produced two false positives — it matched the tail of
+`landlord-trust__state--ok` — which turned out to be a real finding anyway:
+both modifiers were in the CSS-coverage baseline as styled nowhere, and are now
+deleted (baseline 23 → 21).
+
+`.pill--*` is deliberately **not** governed: here a pill is an attribute, not a
+state ("✓ Verified", "🛂 Passport", "Couples welcome"), and forcing those into
+`live / waiting / past / closed / disputed` would mean picking a state for
+"Couples welcome". Measured on the way past: `.pill--green` (#3D7040 on sage
+10%) is 4.42:1 over `--cream2` and `.pill` is .6rem — under the floor on that
+surface, though it renders on `--card` (4.90) and `--cream` (4.80) today.
+
+## 44. `_spec.scss`'s "DO NOT hand-edit" was a phantom control, and I quoted it twice
+
+**Header corrected. Both defects it was shielding are fixed.**
+
+It said: *"DO NOT hand-edit. This is a direct copy of the project's
+authoritative visual spec so it can be re-synced when the preview changes."*
+
+**`RentBoard-ZA-Visual-Preview.html` is not in this repository and never has
+been.** `git log --all -- '*Visual-Preview*'` is empty, and `README.md` lists it
+under *"Historical source documents… files that existed at a point in time"*.
+There is nothing to re-sync from. The file was a one-time port in `e28a035`
+and has been hand-edited in **22 commits** since — one of them mine three
+commits ago (`8c94aed` added the entire `.yard-past*` block while citing that
+header as the reason not to touch the file).
+
+So: a rule that looked like a constraint, could not be enforced, was routinely
+broken, and was still being quoted as a reason to leave real defects in place.
+Exactly the defect class CLAUDE.md names, one level up from a control that
+cannot fail — a control that was never wired to anything.
+
+**I used it twice in the last two phases:**
+
+- § 40 (Phase H) left **13 literal `#FFF`** there, "because the preview has to
+  change first". Now `var(--white)`.
+- § 42 (Phase I) left **four dead `.nav-logo` / `.footer-logo` rules** there,
+  "because hand-editing a verbatim port turns the next re-sync into a
+  conflict". Now deleted.
+
+The token baseline ratchets **59 → 31** as a result (the two applicants
+screens contributed the rest, migrated on the way past).
+
+The header now says what is actually true: it is ordinary source; it is the
+global layer and is loaded first, so a component's own `styles:` block beats it
+(Angular's emulated encapsulation — the real constraint, and the reason
+PRE-LAUNCH-CHECKLIST #9 exists); `styles.scss` is still *preferred* for new
+app-only rules, as a preference rather than a prohibition; and breakpoints
+belong in `_responsive.scss`, which is loaded last.
+
+### ⚠️ One blind gate quietly corrupted another gate's baseline
+
+Also found in this phase, and the most instructive thing in it.
+`template-literal-lint.mjs` accepted a stray backtick that happened to be
+followed by a comma, because that looks exactly like a correct close:
+
+```
+both 'closed`, in one place, for both screens.
+```
+
+The lint went green. The **token gate**, which reads the same `styles:` ranges
+through `cssSource`, then silently stopped seeing nine literals in the
+truncated remainder — and `--update-baseline` wrote a baseline nine entries
+short. A gate that cannot see its subject is one thing; a gate that *feeds a
+wrong subject to another gate* is worse, because the second one reports
+success.
+
+The lint now requires that what follows a candidate close is plausible too:
+`})`, `],`, or another `@Component` key, with comments stepped over. That last
+part matters — without it, six components that correctly close `template:` and
+then explain in a comment why there is no `styles:` block all failed, and a
+gate with six false positives gets switched off.
+
+Instances nine through twelve of the backtick trap all occurred in this phase
+and all were named by the lint before any build.
+
 ## 41. A contrast gate that is claimed in a comment and does not exist
 
 **Not written. Logged so it stops being asserted in prose.**
@@ -3154,6 +3339,10 @@ node scripts/token-render-drive.mjs      # 51 checks — Phase H. The fourteen
                                          # borders that var(--line) silently
                                          # dropped, measured as PAINTED at
                                          # 360 / 390 / 768 / 1280
+node scripts/state-lint.mjs              # Phase J1. Five meanings, one
+                                         # definition; no component declares
+                                         # the treatment itself. No API, no
+                                         # browser
 node scripts/logo-drive.mjs              # 76 checks — Phase I. One wordmark
                                          # component, MA fixed at #C4522C, and
                                          # the 18.66px bold floor the 3:1

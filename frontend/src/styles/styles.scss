@@ -76,6 +76,124 @@
    it, which is this footer column. Was `.footer-logo { margin-bottom: .75rem }`. */
 .footer-brand { margin-bottom: .75rem; }
 
+// ═══════════════════════════════════════════════════════════════════════
+// STATE VOCABULARY — one treatment per meaning, defined here and nowhere else
+//
+// Audit §H4, and partly a clean-up after Phases D–F. `.arc-row__badge` in
+// the archive and `.rent-past__badge` on the rent screen are the SAME chip
+// written twice, in two components, both reading "Past letting", differing
+// only in `.12rem` vs `.15rem` of padding. `.arc-row__review` and
+// `.yard-past__review` are the same "reviews still open" treatment, also
+// twice. Beside them: `.status--accepted` and `.status--rejected` defined
+// identically in `applicants.ts` AND `applicants-inbox.ts` with raw hexes,
+// `.pill--green` and `.pill--warn` in `room-detail.ts`, `.pill--off` in
+// `admin/services.ts` — and in the spec port a PARALLEL set under a different
+// name entirely (`.status-accepted`, single hyphen, vs `.status--accepted`,
+// BEM modifier). Nothing shadows anything; they are separate systems that
+// happen to agree.
+//
+// So: five meanings, each defined once. A component that needs one writes the
+// class; it does not write the rule. `scripts/state-lint.mjs` fails on a sixth
+// meaning invented in a template, and on a component declaring its own rule
+// for any of these.
+//
+//   live      something is running now
+//   waiting   a person has to do something — the only state that asks
+//   past      over, a record, read-only
+//   closed    ended without completing: cancelled, rejected, withdrawn
+//   disputed  contested, and being looked at
+//
+// ⚠️ Colour is never the only channel. Every chip carries a WORD ("Past
+// letting", "Never started", "Disputed"), so the ink reinforces the meaning
+// rather than conveying it — WCAG 1.4.1. That is also what frees the palette
+// from having to make five maximally-distinct hues out of one warm family.
+//
+// ── Why these five pairs and not the obvious ones
+//
+// Measured over `--cream`, `--cream2`, `--card` and `--white`, because a
+// translucent tint composites over whatever is underneath and the chip appears
+// on all four. The chip is .68rem at weight 700 — 10.9px, SMALL text, so the
+// threshold is 4.5:1 and not 3:1. Worst case of the four surfaces:
+//
+//   live      --sage-deep  on sage 12%    5.21
+//   waiting   --ink2       on gold 14%    9.64
+//   past      --terra-deep on --cream2    6.73
+//   closed    --slate      on --cream2    4.74
+//   disputed  --terra-deep on red 10%     5.89
+//
+// The obvious choices fail. `--gold-text` on its own gold tint is 4.10 — and
+// the spec port's comment claims it "clears both: 5.14:1 on the card, 4.61:1
+// on the tint", which was measured against the tint over `--card` only; over
+// `--cream2` it is 4.10 and `.status-pending` has been under the threshold on
+// that surface all along. `--sage` on the sage tint is 4.29, `--terra` on the
+// terra tint 4.38, `--slate` on any tint 4.05–4.23. Every ink here is a deep
+// value for that reason, and `waiting` carries its meaning in the FILL with
+// near-black ink because no gold close enough to `--gold` to still read as
+// gold clears 4.5:1 as small text (the nearest that does is ΔE 23 away and
+// reads brown).
+//
+// ── The edge, not the card
+//
+// `.state-edge` is §H3's second identity move: a 3px rule in the state's own
+// ink, rather than another tinted rounded box. Both devices read the same two
+// custom properties, so a meaning is defined in one place and rendered two
+// ways. `rent.ts` already worked out the 480px behaviour — at the narrowest
+// width the indent costs width a 360px screen has not got, so the rule becomes
+// a top border.
+// ═══════════════════════════════════════════════════════════════════════
+
+.state,
+.state-edge {
+  // Unmodified is `closed`: the least claim a state treatment can make.
+  --state-ink: var(--slate);
+  --state-fill: var(--cream2);
+}
+
+.state--live { --state-ink: var(--sage-deep); --state-fill: rgba(61, 112, 64, .12); }
+.state--waiting { --state-ink: var(--ink2); --state-fill: rgba(200, 144, 42, .14); }
+.state--past { --state-ink: var(--terra-deep); --state-fill: var(--cream2); }
+.state--closed { --state-ink: var(--slate); --state-fill: var(--cream2); }
+.state--disputed { --state-ink: var(--terra-deep); --state-fill: rgba(214, 59, 59, .1); }
+
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--state-ink);
+  background: var(--state-fill);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  padding: .15rem .5rem;
+}
+
+// The inline form: a state said in running text rather than as a chip.
+// `.arc-row__review` and `.yard-past__review` were both this.
+.state-text {
+  font-weight: 700;
+  color: var(--state-ink);
+}
+
+.state-edge {
+  border-left: 3px solid var(--state-ink);
+  padding-left: 1rem;
+}
+
+@media (max-width: 480px) {
+  .state-edge {
+    border-left: 0;
+    border-top: 3px solid var(--state-ink);
+    padding-left: 0;
+    padding-top: .75rem;
+  }
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; scroll-behavior: smooth; }
 body {

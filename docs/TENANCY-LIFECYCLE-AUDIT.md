@@ -1110,6 +1110,94 @@ against the same defect: old exit 0, new exit 1.
 - Spacing and radius onto the scale
 - The three identity moves (H3)
 
+#### J1 — the state vocabulary. **Done, and §H4 understated it.**
+
+§H4 called the state treatments "ad hoc and partial". Counted, there were
+**four parallel systems**, and three of the duplicates were written by Phases
+D, E and F — by me, in this session:
+
+| Duplicate | Where |
+|---|---|
+| the "Past letting" chip, written **three** times | `.arc-row__badge` (archive), `.rent-past__badge` (rent), `.yard-past__review` (yard) — differing by `.12rem` vs `.15rem` of padding |
+| `.status--accepted` / `.status--rejected`, identical, raw hexes | `applicants.ts` AND `applicants-inbox.ts` |
+| a naming fork | `.status-accepted` (spec layer, one hyphen) vs `.status--accepted` (components, BEM) — neither shadows the other |
+| a fourth convention | `.app-status status-{{ p.status }}` on the rent ledger |
+
+**⚠️ Two of those rules were under the contrast floor, and the accessibility
+drive could not see it.** Measured: `.status--accepted` (#3D7040 on sage 15%)
+is **4.12:1** over `--cream2` and `.status--rejected` (#D63B3B on red 10%) is
+**3.46:1** — the chip is .65rem at weight 700, so the threshold is 4.5:1.
+`a11y-drive.mjs` has never accepted or rejected an application, so neither
+chip has ever been on screen while contrast was being measured. *A page passes
+that audit by not containing the failing element* — the five-vacuous-passes
+lesson, in the gate that exists to prevent it. The drive now accepts one
+application and rejects another on a second room, and audits the per-room
+applicants screen, which was not in its page list at all.
+
+Five meanings, defined once in `styles.scss`, each measured over `--cream`,
+`--cream2`, `--card` and `--white` because a translucent tint composites over
+whatever is beneath it:
+
+| state | ink | fill | worst of four surfaces |
+|---|---|---|---:|
+| live | `--sage-deep` | sage 12% | 5.21 |
+| waiting | `--ink2` | gold 14% | 9.64 |
+| past | `--terra-deep` | `--cream2` | 6.73 |
+| closed | `--slate` | `--cream2` | 4.74 |
+| disputed | `--terra-deep` | red 10% | 5.89 |
+
+The obvious picks all fail: `--gold-text` on its own gold tint is **4.10** —
+and `_spec.scss`'s comment claims it "clears both… 4.61:1 on the tint", which
+was measured against the tint over `--card` only, so `.status-pending` has
+been under the threshold on `--cream2` all along. `--sage` on the sage tint is
+4.29, `--terra` on the terra tint 4.38, `--slate` on any tint 4.05–4.23. Hence
+deep inks throughout, and `waiting` carrying its meaning in the FILL with
+near-black ink, because no gold close enough to `--gold` to still read as gold
+clears 4.5:1 as small text (the nearest that does is ΔE 23 away and reads
+brown).
+
+`.state-edge` is §H3's second identity move — a 3px rule in the state's own
+ink rather than another tinted box. Both devices read the same two custom
+properties, so a meaning is defined once and rendered two ways. The rent
+ledger now marks a **disputed month** with it: that was prose with a raised
+hand in it, so on a year of rows the one month somebody queried looked exactly
+like the eleven they did not.
+
+And the mapping is a typed function in `core/models/state.model.ts`, not a
+string per template, because two copies of a mapping is the same defect as two
+copies of a rule: the inbox folded `withdrawn` in with `rejected` — the same
+red — so an applicant who stopped read as one the landlord had refused. A new
+status added to either union is now a type error.
+
+**Proof — done.** `scripts/state-lint.mjs`, in `npm run audit` and CI. Four
+reintroductions, each reverted: a sixth meaning invented on a screen
+(`state--expired`, named with its file:line); a component declaring the
+treatment itself again (named with the properties it set); a declared name
+losing its rule (the chip would render unmodified grey); and the lint pointed
+at a directory where nothing uses the vocabulary (exit 2, "refusing to pass").
+Its first run also found two false positives of its own — it matched the tail
+of `landlord-trust__state--ok`, which turned out to be a real finding anyway:
+those two modifiers were in the CSS-coverage baseline as styled nowhere, and
+are now deleted.
+
+#### ⚠️ J1 also retired a phantom control I had been quoting
+
+`_spec.scss`'s header said *"DO NOT hand-edit. This is a direct copy… so it
+can be re-synced when the preview changes."* **`RentBoard-ZA-Visual-Preview.html`
+is not in this repository and never has been** — `git log --all` for it is
+empty, and `README.md` lists it under "Historical source documents… files that
+existed at a point in time". There is nothing to re-sync from. The file was a
+one-time port and has been hand-edited in **22 commits** since, one of them
+mine three commits ago (`8c94aed` added the whole `.yard-past*` block while
+citing that header).
+
+So a rule that could not be enforced, was routinely broken, and was still
+being quoted as a reason to leave defects in place. **I used it twice**: Phase
+H left 13 literal `#FFF` there and Phase I left four dead `.nav-logo` /
+`.footer-logo` rules, both justified by a re-sync that can never happen. The
+header now says what is true, and both are fixed — the token baseline ratchets
+from 59 to 31.
+
 ### Phase K — Visual polish
 Last, as asked. Nothing here is blocking.
 

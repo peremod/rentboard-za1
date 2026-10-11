@@ -1,0 +1,4 @@
+{
+  "note": "Components declaring their own rule for a .state* / .status--* / .app-card--* class, counted per file. EMPTY because the debt was paid in Phase J1, not because the scan is narrow: the three duplicated 'Past letting' chips and both copies of .status--accepted / .status--rejected were migrated onto the vocabulary. A new entry here, or any count above it, fails scripts/state-lint.mjs. The global layers (styles.scss, _spec.scss, _responsive.scss) are not scanned \u2014 each is one place. .pill--* is out of scope: in this codebase a pill is an attribute ('Verified', 'Couples welcome'), not a lifecycle state.",
+  "declarations": {}
+}
