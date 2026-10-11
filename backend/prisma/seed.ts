@@ -124,9 +124,17 @@ Optional: ADMIN_NAME="Your Name"
 
 /** Writes the house adverts. Copy and row shape live in prisma/house-ads.ts. */
 async function seedHouseAds() {
+  /**
+   * ⚠️ `update` carries the fields. It was `{}`, which meant the house
+   * advertiser's name applied only on CREATE — so every database that already
+   * had the row kept "RentBoard ZA" under every house advert for ever, and
+   * re-running the seed could not fix it. See seed-house-ads.ts for the full
+   * chain of three.
+   */
+  const { id: _houseId, ...advertiserFields } = HOUSE_ADVERTISER;
   await prisma.advertiser.upsert({
     where: { id: HOUSE_ADVERTISER_ID },
-    update: {},
+    update: advertiserFields,
     create: HOUSE_ADVERTISER,
   });
 

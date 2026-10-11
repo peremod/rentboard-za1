@@ -51,7 +51,7 @@ interface CookieAcknowledgement {
     .cookie-notice {
       position: fixed; bottom: 1rem; left: 1rem; right: 1rem; max-width: 420px;
       background: #1A1410; color: var(--white); border-radius: var(--r12); padding: 1.1rem;
-      z-index: 9999; box-shadow: 0 12px 32px rgba(0,0,0,.3);
+      z-index: 9999; box-shadow: var(--shadow-xl);
     }
     .cookie-notice__title { font-size: .95rem; margin-bottom: .4rem; }
     .cookie-notice__body {

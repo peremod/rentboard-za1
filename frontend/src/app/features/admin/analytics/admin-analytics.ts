@@ -220,7 +220,7 @@ import { Loading } from '../../../shared/components/loading/loading';
   styles: [`
     .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
                 background: var(--border); margin: 0 .4rem; vertical-align: middle; }
-    .live-dot--on { background: var(--sage); box-shadow: 0 0 0 3px rgba(61,112,64,.18); }
+    .live-dot--on { background: var(--sage); box-shadow: var(--ring-sage); }
 
     /* A sparkline rather than a chart library: it answers 'is this going up'
        at a glance, which is the only question at this scale. */

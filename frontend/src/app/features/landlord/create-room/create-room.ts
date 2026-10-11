@@ -379,7 +379,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     .save-dialog__panel {
       background: var(--card, var(--white)); border-radius: var(--r12);
       padding: 1.75rem 1.5rem; max-width: 22rem; width: 100%; text-align: center;
-      box-shadow: 0 18px 44px rgba(0, 0, 0, .22);
+      box-shadow: var(--shadow-xl);
     }
     .save-dialog__icon { font-size: 2rem; line-height: 1; margin-bottom: .5rem; }
     .save-dialog__title { font-size: 1.15rem; font-weight: 700; margin-bottom: .35rem; }

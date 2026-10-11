@@ -3532,6 +3532,196 @@ baseline like lower-case letters, which on a price reads as a rendering fault.
 `.figure` is a class in `styles.scss` so the next display figure gets the same
 treatment without a fourth opinion about it.
 
+## 51. ⚠️ "by RentBoard ZA" under every house ad — and the script to fix it could not
+
+**Fixed, three defects deep. My earlier advice to you was wrong and would not
+have worked.**
+
+You reported the advertiser name still reading RentBoard. It was on a public
+page: `ads.service.ts` returns `advertiser: campaign.advertiser.companyName`
+and `ad-slot.ts` renders `by {{ advert.advertiser }}` under **every** advert,
+so three house adverts whose own copy had been correct since the rename were
+each signed with the old brand.
+
+I had told you to run `npx ts-node prisma/seed-house-ads.ts --apply`. **That
+would have printed a calm success and changed nothing.** Reproduced, before
+fixing anything, by setting the local row back to `RentBoard ZA`:
+
+```
+[HOUSE] How it works — sidebar
+  unchanged
+[HOUSE] List a room — in-grid
+  unchanged
+[HOUSE] Safety — room detail
+  unchanged
+
+Nothing to change — the house ads already match the code.
+```
+
+…and the advertiser was still `RentBoard ZA`.
+
+### The chain of three
+
+1. **`prisma.advertiser.upsert` said `update: {}`.** So `companyName:
+   'Mastande'`, which has been correct in `house-ads.ts` all along, applied
+   **only on create**. Any database where the row already existed kept its old
+   name for ever. Present in `seed-house-ads.ts` *and* `seed.ts`.
+2. **The change detection never looked at the advertiser.** It compared four
+   fields of the CAMPAIGNS — `headline`, `body`, `ctaLabel`, `targetUrl` — and
+   nothing of the advertiser row. So the dry run reported "Nothing to change"
+   while the name was wrong: a report structurally unable to see its subject.
+3. **And because of (2), `if (!changes) return` fired first**, above the
+   advertiser upsert — so the write was never reached at all. **Fixing (1)
+   alone would have changed nothing**, which is why the second defect matters
+   more than the first.
+
+All three fixed. The dry run now prints the advertiser diff and counts it as a
+change; the upsert carries the fields; and applying it moves the row.
+
+### Why nothing in this repository could see it
+
+Every rebrand check here reads **source**. This value is a database row: not in
+the code, not in a template, and the code that governed it was correct the
+whole time. The rebrand audit, the i18n audit, the route audit and the nav
+audit all pass over a database whose rows say RentBoard, because none of them
+reads one.
+
+`scripts/house-ads-drive.mjs` reads what the **API serves**, at all three
+placements — `board_sidebar`, `board_inline`, `room_detail` — because an advert
+is only on screen if something asks for its placement, and a sweep of one
+placement would have missed two. It asserts the advertiser name and the copy,
+since "is the row in THIS database right" is a different question from "is
+`house-ads.ts` right", and the answer differed for weeks.
+
+Proven able to fail three ways, each reverted:
+
+| Reintroduced | Result |
+|---|---|
+| the advertiser set back to `RentBoard ZA` | ❌ 3 failures, one per placement, each naming what it reads |
+| stale advert copy in the row (`New to RentBoard?`) | ❌ named the headline and the placement |
+| the house adverts paused, so none is served | ❌ *"0 advert(s) were actually served and read"* — it refuses rather than passing over nothing |
+
+That last one is the point: every other assertion in the file is a **negative
+over served text**, so with no adverts they would all pass. Five vacuous
+passes have shipped in this repository; this one is guarded.
+
+### Found on the way: an unknown placement was a 500
+
+`?placement=board_grid` — a plausible guess, and the one this drive made on its
+first run — went straight into a Prisma `where` on an enum column and threw
+inside the query. A bad query parameter is the caller's mistake and must read
+as one: a 500 says the server is broken, sends somebody looking in the wrong
+place, and is indistinguishable from a real fault in a log. Now a 400 naming
+the valid values.
+
+### ⚠️ Still yours to run, and now it will work
+
+```bash
+cd backend
+DATABASE_URL=<production> npx ts-node prisma/seed-house-ads.ts            # dry run first
+DATABASE_URL=<production> npx ts-node prisma/seed-house-ads.ts --apply
+```
+
+The dry run will now show the advertiser diff. No redeploy is needed — the
+adverts are read from the database. The same applies to staging.
+
+## 52. ⚠️ A terracotta retired for failing contrast was still in use, 15 times — Phase K
+
+**Fixed.** And the token gate could not see any of them, by its own design.
+
+`#C04E28` was `--terra` until it was measured at **4.50:1 on `--cream`** — the
+WCAG AA minimum to two decimal places, so subpixel rendering tipped it to 4.49
+and the accessibility audit failed. The token moved to `#AD4222`.
+`_spec.scss` records the whole story in a comment.
+
+**Fifteen translucent uses of the retired value stayed behind**, plus two of
+`#7A6E60`, the slate retired for measuring 4.26:1 on `--cream2`. Seventeen in
+all, across six files: button lifts, focus rings, gradient stops, tinted
+backgrounds, card borders.
+
+### Why `token-lint` was blind to them, correctly
+
+Its header says so: *"Translucent `rgba()`/`hsla()`. `rgba(28,22,14,.07)`
+cannot be replaced by `var(--ink)` — it is a different value, not a copy of
+one."* That exemption is **right** for substitution and it leaves a hole: a
+colour the project deliberately retired can live on indefinitely inside an
+`rgba()`, because nothing compares the opaque *base* of a translucent value
+against anything.
+
+### The fix, measured rather than assumed
+
+All seventeen retinted to the current tokens' rgb. Before changing anything, the
+cost was measured — worst case over `--cream`, `--cream2`, `--card` and
+`--white`, with the matching token as the text colour:
+
+| Tint | retired | current | delta |
+|---|---:|---:|---:|
+| terracotta, text `--terra` | 4.81 / 4.43 / 4.94 / 5.12 | 4.75 / 4.38 / 4.89 / 5.07 | **−0.06** at worst |
+| slate, text `--slate` | 4.57 / 4.21 / 4.69 / 4.90 | 4.56 / 4.20 / 4.65 / 4.85 | **−0.04** at worst |
+
+So retinting is free. The historical comment in `_spec.scss` that *cites*
+`rgba(192,78,40,.15)` as what was replaced is untouched — the migration works
+off comment-blanked offsets, so prose about the old value survives while the
+value itself does not.
+
+### ⚠️ A pre-existing margin this surfaced, and I have not changed
+
+Both tints sit **under 4.5:1 on `--cream2`** — terracotta 4.38, slate 4.20 —
+and they carry small text in `.tpl-flag`, `.ec`, `.status-rejected` and
+`.status-withdrawn`. That was true before the retint (4.43 and 4.21) and the
+retint costs 0.05 of it. **Today they render on `--cream` and `--card`, where
+they pass**, which is why `a11y-drive` is green on them. If one of those chips
+is ever moved onto `--cream2` it fails, and nothing would say so — the drive
+measures where things are, not where they might go.
+
+## 53. Eighteen shadows for 32 uses, and three kinds of thing wearing one property — Phase K
+
+**Fixed.** Shadows now have zero tolerance, like radius.
+
+`--shadow-sm/md/lg/xl` existed and were used 8 times. The other 24 uses were
+`none` ×11 (legitimate) and **thirteen one-offs that were not all elevation**:
+
+- **Six focus and selection RINGS** — a spread with no blur — at **1px and
+  3px**, in four tints at `.15` / `.18` / `.2` / `.3`. Forcing these onto
+  `--shadow-*` would have been wrong; a ring is not a shadow. Now four
+  `--ring-terra/danger/sage/gold` tokens, **all 3px, all one alpha**. WCAG
+  2.4.11 wants a focus indicator findable, and a ring whose thickness depends
+  on which control you tabbed into is the kind of inconsistency nobody reports
+  and everybody feels.
+- **Four overlay shadows for modals**, all **black** where every token is
+  ink-tinted — and two of them *the same value written with and without spaces
+  inside the `rgba()`*. All `--shadow-xl` now: black at .22 and ink at .18 are
+  indistinguishable over a scrim, and "nothing else" is the point.
+- **A lift on the primary button**, twice, again in two spellings, tinted with
+  the **retired** terracotta (§52). Now `--shadow-lift`, retinted.
+
+**18 values → 11**, same 32 uses, and every one is a token, a composition of
+tokens, or `none`.
+
+### The gate
+
+`scale-lint.mjs` grew two dimensions. Shadows at zero tolerance; **font size
+ratcheted** — 49 values for 438 uses, with the top ten inside a 0.28rem band
+(`.78`, `.8`, `.82`, `.85`, `.88rem` each used 25–55 times). 28 off-scale
+values over 222 uses baselined.
+
+Proven able to fail three ways, each reverted: a shadow off the scale; a
+**composition** where one part is off the scale (`var(--ring-terra), 0 1px 2px
+rgba(0,0,0,.1)`); and a new off-scale font size.
+
+### ⚠️ Three bugs in the lint's own first run
+
+- **`--update-baseline` refused a first write for a new dimension**, because
+  every font size was above an empty map. A dimension with no key in the file
+  has nothing to ratchet against — the same first-write allowance
+  `token-lint` already makes.
+- **The refusal printed the wrong base map**, reporting "`.6rem` 101 → 6" by
+  comparing a font size against the *spacing* baseline. A message that invents
+  a regression out of two unrelated numbers is worse than no message.
+- **`.82rem !important` counted as a distinct value from `.82rem`**, and four
+  `clamp(1.9rem, 8vw, 2.6rem)` hero sizes were reported as off-scale when a
+  fluid size is a deliberate choice no fixed scale can express.
+
 ## 41. A contrast gate that is claimed in a comment and does not exist
 
 **Not written. Logged so it stops being asserted in prose.**
@@ -3702,8 +3892,12 @@ node scripts/token-render-drive.mjs      # 51 checks — Phase H. The fourteen
                                          # borders that var(--line) silently
                                          # dropped, measured as PAINTED at
                                          # 360 / 390 / 768 / 1280
-node scripts/scale-lint.mjs              # Phase J3. Radius on the scale with
-                                         # zero tolerance; spacing ratcheted
+node scripts/scale-lint.mjs              # Phase J3 + K. Radius and shadows on
+                                         # the scale with zero tolerance;
+                                         # spacing and font size ratcheted
+node scripts/house-ads-drive.mjs         # 13 checks — § 51. What /api/ads
+                                         # actually serves, at all three
+                                         # placements, carries no old brand
 node scripts/font-lint.mjs               # Phase J4. A font token may not name
                                          # a family nothing fetches — DM Mono
                                          # never was

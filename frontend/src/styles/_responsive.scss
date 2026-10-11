@@ -470,7 +470,7 @@
   &--draft, &--let, &--paused { color: var(--slate); }
 }
 .status-viewed    { background: rgba(30, 95, 168, .1); color: #1E5FA8; }
-.status-withdrawn { background: rgba(122, 110, 96, .1); color: var(--slate); }
+.status-withdrawn { background: rgba(115, 103, 85, .1); color: var(--slate); }
 
 .app-card--archived { background: var(--cream2); }
 .app-card--closed { opacity: .7; }
@@ -679,7 +679,7 @@
   &:hover { border-color: var(--terra2); }
 }
 .amenity-chip--on {
-  background: rgba(192, 78, 40, .08);
+  background: rgba(173, 66, 34, .08);
   border-color: var(--terra);
   color: var(--terra);
   font-weight: 600;
@@ -720,7 +720,7 @@
   position: absolute; top: calc(100% + .35rem); left: 0; right: 0; z-index: 40;
   margin: 0; padding: .3rem; list-style: none;
   background: var(--card); border: 1px solid var(--border);
-  border-radius: var(--r8); box-shadow: 0 8px 28px rgba(0,0,0,.12);
+  border-radius: var(--r8); box-shadow: var(--shadow-lg);
   max-height: 17rem; overflow-y: auto;
 
   li { margin: 0; }

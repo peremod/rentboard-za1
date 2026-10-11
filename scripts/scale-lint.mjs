@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * One radius scale, and a spacing scale that cannot quietly grow.
+ * One radius scale, one elevation language, and scales that cannot quietly grow.
  *
  * ── Why this exists
  *
@@ -33,6 +33,33 @@
  * ⚠️ What this does NOT check: whether the right step was chosen. A pill at
  * --r4 passes. That is a design review, not a lint.
  *
+ * ── Shadows — Phase K, and three kinds of thing wearing one property
+ *
+ * 18 definitions for 32 uses, with --shadow-sm/md/lg/xl already defined and
+ * used 8 times. The other 24 were `none` ×11 and thirteen one-offs, and the
+ * one-offs were not all elevation:
+ *
+ *   · six focus and selection RINGS — a spread with no blur — at 1px and 3px
+ *     in four tints. A ring whose thickness depends on which control you
+ *     tabbed into is the kind of inconsistency nobody reports and everybody
+ *     feels, and WCAG 2.4.11 wants it findable. Now four --ring-* tokens, all
+ *     3px, all one alpha.
+ *   · four overlay shadows for modals, all BLACK where every token is
+ *     ink-tinted, two of them the same value written with and without spaces
+ *     inside the rgba(). All --shadow-xl now.
+ *   · a lift on the primary button, twice, in two spellings, tinted with
+ *     rgba(192, 78, 40, …) — #C04E28, the terracotta this project RETIRED for
+ *     measuring 4.50:1 on --cream. Now --shadow-lift, retinted.
+ *
+ * Zero tolerance, like radius: that migration is done too.
+ *
+ * ── Font size — ratcheted
+ *
+ * 49 values for 438 uses, with the top ten inside a 0.28rem band: .78, .8,
+ * .82, .85 and .88rem all exist and are each used 25-55 times. A nine-step
+ * scale would cover it. Migrating 438 declarations is churn with real visual
+ * risk, so this is a ratchet, like spacing.
+ *
  *   node scripts/scale-lint.mjs
  *   node scripts/scale-lint.mjs --update-baseline
  */
@@ -62,6 +89,22 @@ const isCompoundOk = (v) =>
 
 const SPACING_PROPS = /^(margin|padding|gap|row-gap|column-gap)(-(top|right|bottom|left|block|inline|start|end))?$/;
 
+/**
+ * Everything a shadow may legitimately be: a token, `none`, or a COMPOSITION
+ * of tokens (a ring plus an elevation is one honest value, and `.app-card`
+ * uses exactly that).
+ */
+const SHADOW_TOKEN = /^(var\(--(shadow-(sm|md|lg|xl|lift))\)|var\(--ring-(terra|danger|sage|gold)\)|\$shadow-(sm|md|lg|xl))$/;
+const isShadowOk = (v) =>
+  v === 'none' || v === '0' || v.split(',').map((x) => x.trim()).every((part) => SHADOW_TOKEN.test(part));
+
+/** The scale font sizes sit on. Anything else is the tail. */
+const FONT_SIZE_OK = new Set([
+  'inherit', '1em', '100%',
+  '.7rem', '.75rem', '.8rem', '.85rem', '.9rem', '1rem',
+  '1.15rem', '1.25rem', '1.5rem', '1.75rem', '2rem', '2.5rem',
+]);
+
 /** The rhythm the app actually uses, by count. Anything else is the tail. */
 const SPACING_OK = new Set([
   '0', '0rem', '0px', 'auto',
@@ -82,7 +125,9 @@ const ok = (m) => console.log(`  ✅ ${m}`);
 const bad = (m) => { fail++; console.log(`  ❌ ${m}`); };
 
 const radii = [];
+const shadows = [];
 const spacing = {};
+const fontSizes = {};
 let declarations = 0;
 
 for (const f of [...walk(APP), ...walk(STYLES)]) {
@@ -105,6 +150,32 @@ for (const f of [...walk(APP), ...walk(STYLES)]) {
       continue;
     }
 
+    if (prop === 'box-shadow' || prop === 'text-shadow') {
+      if (!isShadowOk(t)) {
+        shadows.push({ file: f.replace(`${APP}/`, '').replace(`${STYLES}/`, ''), line: lineAt(src, vs), value: t.slice(0, 70) });
+      }
+      continue;
+    }
+
+    if (prop === 'font-size') {
+      /**
+       * ⚠️ `!important` stripped and `clamp()` allowed, both found by the
+       * lint's own first run. `.82rem !important` was being counted as a
+       * distinct value from `.82rem`, and four `clamp(1.9rem, 8vw, 2.6rem)`
+       * hero sizes were being reported as off-scale when a fluid size is a
+       * deliberate choice no fixed scale can express.
+       */
+      const n = t.replace(/\s*!important$/, '').replace(/^0+(?=\.)/, '');
+      if (
+        !FONT_SIZE_OK.has(n)
+        && !n.startsWith('var(') && !n.startsWith('$')
+        && !n.startsWith('calc(') && !n.startsWith('clamp(')
+      ) {
+        fontSizes[n] = (fontSizes[n] ?? 0) + 1;
+      }
+      continue;
+    }
+
     if (SPACING_PROPS.test(prop)) {
       for (const raw of t.split(/\s+/)) {
         /**
@@ -123,7 +194,7 @@ for (const f of [...walk(APP), ...walk(STYLES)]) {
   }
 }
 
-console.log('\n── Radius and spacing scales ───────────────────────────────');
+console.log('\n── Radius, shadows, spacing and font size ──────────────────');
 if (declarations === 0) {
   console.error('No declarations read at all. Refusing to pass vacuously.');
   process.exit(2);
@@ -139,14 +210,46 @@ if (radii.length === 0) {
   console.log('        --r4 controls, --r8 small surfaces, --r12 panels, --r-full pills.');
 }
 
-// ── Spacing: a ratchet, because 1073 uses cannot go clean in one step ────
-const baseline = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')).spacing ?? {} : {};
+// ── Shadows: zero tolerance, because that migration is done too ─────────
+if (shadows.length === 0) {
+  ok('every shadow is a token, a composition of tokens, or none');
+} else {
+  bad(`${shadows.length} shadow value(s) off the scale:`);
+  for (const r of shadows) console.log(`        ${r.file}:${r.line}  ${r.value}`);
+  console.log('        --shadow-sm/md/lg/xl for elevation, --shadow-lift for the');
+  console.log('        primary button, --ring-terra/danger/sage/gold for a focus ring.');
+}
+
+// ── Spacing and font size: ratchets, because 1073 and 438 uses cannot go ──
+const parsed = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, 'utf8')) : {};
+const baseline = parsed.spacing ?? {};
+const fontBaseline = parsed.fontSize ?? {};
 
 if (process.argv.includes('--update-baseline')) {
-  const worse = Object.entries(spacing).filter(([v, n]) => n > (baseline[v] ?? 0));
-  if (worse.length && existsSync(BASELINE)) {
+  /**
+   * ⚠️ Per DIMENSION, and this was wrong on the first attempt in two ways.
+   *
+   * The ratchet refused a first write of the font-size baseline because every
+   * value was above an empty map — but a dimension with no key in the file has
+   * nothing to ratchet against, exactly as `token-lint` allows its own first
+   * write. And the refusal printed `baseline[v]` for font sizes too, so it
+   * reported "`.6rem` 101 → 6" by comparing a font size against the SPACING
+   * baseline: a message that invents a regression out of two unrelated
+   * numbers is worse than no message.
+   */
+  const worse = [];
+  for (const [label, found, base, present] of [
+    ['spacing', spacing, baseline, 'spacing' in parsed],
+    ['font size', fontSizes, fontBaseline, 'fontSize' in parsed],
+  ]) {
+    if (!present) continue;
+    for (const [v, n] of Object.entries(found)) {
+      if (n > (base[v] ?? 0)) worse.push(`${label}  ${v}  ${base[v] ?? 0} → ${n}`);
+    }
+  }
+  if (worse.length) {
     console.error('\n  ❌ Refusing to write a baseline WORSE than the one on disk:');
-    for (const [v, n] of worse) console.error(`     ${v}  ${baseline[v] ?? 0} → ${n}`);
+    for (const w of worse) console.error(`     ${w}`);
     process.exit(1);
   }
   writeFileSync(
@@ -159,6 +262,7 @@ if (process.argv.includes('--update-baseline')) {
           'scripts/scale-lint.mjs. Radius has NO baseline: that migration is done and the ' +
           'tolerance is zero.',
         spacing: Object.fromEntries(Object.entries(spacing).sort((a, b) => b[1] - a[1])),
+        fontSize: Object.fromEntries(Object.entries(fontSizes).sort((a, b) => b[1] - a[1])),
       },
       null,
       2,
@@ -169,19 +273,24 @@ if (process.argv.includes('--update-baseline')) {
   process.exit(0);
 }
 
-const over = Object.entries(spacing).filter(([v, n]) => n > (baseline[v] ?? 0));
-const carried = Object.entries(spacing).filter(([v, n]) => n <= (baseline[v] ?? 0));
-if (over.length === 0) {
-  const t = carried.reduce((a, [, n]) => a + n, 0);
-  ok(`no NEW off-scale spacing (${carried.length} value(s), ${t} use(s), carried in the baseline)`);
-} else {
-  bad(`${over.length} off-scale spacing value(s) above the baseline:`);
-  for (const [v, n] of over.sort((a, b) => b[1] - a[1])) {
-    console.log(`        ${v}  ×${n}  (baseline allows ${baseline[v] ?? 0})`);
+for (const [label, found, base, rhythm] of [
+  ['spacing', spacing, baseline, 'The rhythm is .25 / .5 / .75 / 1 / 1.25 / 1.5 / 2 / 2.5 / 3rem.'],
+  ['font size', fontSizes, fontBaseline, 'The scale is .7 / .75 / .8 / .85 / .9 / 1 / 1.15 / 1.25 / 1.5 / 1.75 / 2 / 2.5rem.'],
+]) {
+  const over = Object.entries(found).filter(([v, n]) => n > (base[v] ?? 0));
+  const carried = Object.entries(found).filter(([v, n]) => n <= (base[v] ?? 0));
+  if (over.length === 0) {
+    const t = carried.reduce((a, [, n]) => a + n, 0);
+    ok(`no NEW off-scale ${label} (${carried.length} value(s), ${t} use(s), carried in the baseline)`);
+  } else {
+    bad(`${over.length} off-scale ${label} value(s) above the baseline:`);
+    for (const [v, n] of over.sort((a, b) => b[1] - a[1])) {
+      console.log(`        ${v}  ×${n}  (baseline allows ${base[v] ?? 0})`);
+    }
+    console.log(`        ${rhythm}`);
   }
-  console.log('        The rhythm is .25 / .5 / .75 / 1 / 1.25 / 1.5 / 2 / 2.5 / 3rem.');
 }
 
 console.log('════════════════════════════════════════════════════════════');
 if (fail) { console.log(`  ${fail} problem(s).\n`); process.exit(1); }
-console.log('  ✅ one radius scale, and spacing is not drifting.\n');
+console.log('  ✅ one radius scale, one elevation language, and nothing drifting.\n');

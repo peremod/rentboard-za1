@@ -109,7 +109,7 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
       }
   `,
   styles: [`
-    .report--urgent { border-color: rgba(178,59,59,.4); box-shadow: 0 0 0 1px rgba(178,59,59,.15); }
+    .report--urgent { border-color: rgba(178,59,59,.4); box-shadow: var(--ring-danger); }
     .report-details {
       font-size: .88rem; line-height: 1.7; color: var(--ink2);
       background: var(--cream2); border-radius: var(--r8);

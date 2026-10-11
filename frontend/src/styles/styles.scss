@@ -51,6 +51,51 @@
    * allows it because a `--x:` definition is where a literal belongs.
    */
   --danger: #B23B3B;
+
+  /**
+   * ── The elevation language — Phase K
+   *
+   * Measured before: **18 shadow definitions for 32 uses**, with
+   * `--shadow-sm/md/lg/xl` already defined and used 8 times between them.
+   * The other 24 were `none` ×11 (legitimate) and thirteen one-offs, and the
+   * one-offs were three different KINDS of thing wearing the same property:
+   *
+   *   · focus and selection RINGS — a spread with no blur. Six of them, at
+   *     1px and 3px, in four tints at .15 / .18 / .2 / .3. Not elevation at
+   *     all, so forcing them onto `--shadow-*` would have been wrong.
+   *   · overlay shadows for modals — four distinct values, all BLACK where
+   *     every token is ink-tinted, and two of them the same value written
+   *     with and without spaces inside the `rgba()`.
+   *   · a lift on the primary button — the same value twice, again in two
+   *     spellings, and tinted with `rgba(192, 78, 40, …)`: `#C04E28`, the
+   *     terracotta this project RETIRED for failing contrast.
+   *
+   * So the overlays all became `--shadow-xl` (black at .22 and ink at .18 are
+   * indistinguishable over a scrim, and "nothing else" is the point), and the
+   * two categories that are genuinely not elevation get named tokens below.
+   */
+
+  /**
+   * A focus or selection ring: spread, no blur, no offset.
+   *
+   * ⚠️ 3px for all of them, where two were 1px. WCAG 2.4.11 wants a focus
+   * indicator thick enough to find, and a ring whose thickness depends on
+   * which component you tabbed into is the kind of inconsistency nobody
+   * reports and everybody feels. One alpha too — .18 — where there were four.
+   */
+  --ring-terra: 0 0 0 3px rgba(173, 66, 34, .18);
+  --ring-danger: 0 0 0 3px rgba(178, 59, 59, .18);
+  --ring-sage: 0 0 0 3px rgba(61, 112, 64, .18);
+  --ring-gold: 0 0 0 3px rgba(200, 144, 42, .18);
+
+  /**
+   * The primary button's lift on hover.
+   *
+   * Retinted from `rgba(192, 78, 40, .35)` — `#C04E28`, retired because it
+   * measured 4.50:1 on `--cream`, which subpixel rendering tipped to 4.49.
+   * The token moved; this glow did not, in two places.
+   */
+  --shadow-lift: 0 4px 14px rgba(173, 66, 34, .35);
 }
 
 /**
@@ -406,7 +451,7 @@ input, select, textarea {
   &:focus-visible {
     outline: none;
     border-color: $color-terracotta;
-    box-shadow: 0 0 0 3px rgba(192, 78, 40, .15);
+    box-shadow: var(--ring-terra);
   }
 
   &:disabled {
@@ -418,7 +463,7 @@ input, select, textarea {
   // Angular Forms invalid state — only after the user has interacted
   &.ng-invalid.ng-touched {
     border-color: $color-danger;
-    &:focus-visible { box-shadow: 0 0 0 3px rgba(178, 59, 59, .18); }
+    &:focus-visible { box-shadow: var(--ring-danger); }
   }
 }
 
@@ -506,7 +551,7 @@ input[type='radio'] {
     color: var(--white);
     background: $color-terra-deep;
     transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(192, 78, 40, .35);
+    box-shadow: var(--shadow-lift);
   }
 
   &:focus-visible {

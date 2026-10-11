@@ -1312,6 +1312,31 @@ from 59 to 31.
 ### Phase K — Visual polish
 Last, as asked. Nothing here is blocking.
 
+**Done, and the "polish" turned out to contain two real defects.**
+
+The last untokenised axis in the handoff was shadows: **18 definitions for 32
+uses**, with `--shadow-sm/md/lg/xl` already defined and used 8 times. The
+thirteen one-offs were three different KINDS of thing wearing one property —
+six focus RINGS (a spread with no blur, at 1px and 3px, four tints), four
+black overlay shadows where every token is ink-tinted, and a button lift. Now
+four `--ring-*` tokens at one width and one alpha, `--shadow-xl` for every
+overlay, and `--shadow-lift` for the button. 18 → 11 values, same 32 uses.
+
+**⚠️ And the button lift was tinted with `#C04E28` — the terracotta this
+project RETIRED for measuring 4.50:1 on `--cream`.** Fifteen translucent uses
+of it survived the token change, plus two of the slate retired at 4.26:1.
+Seventeen across six files, and `token-lint` could not see one of them: it
+skips translucent `rgba()` by design, correctly, because `rgba(28,22,14,.07)`
+is not a copy of `var(--ink)` — which leaves a retired colour free to live on
+inside an alpha for ever. All retinted, with the cost measured first (−0.06 of
+contrast ratio at worst). `docs/OUTSTANDING.md` §§ 52–53.
+
+`scale-lint` grew shadows (zero tolerance, checking each part of a
+composition) and font size (ratcheted: 49 values for 438 uses, the top ten
+inside a 0.28rem band). Three bugs in its own first run are recorded in § 53 —
+a first-write refusal, a refusal message comparing two unrelated baselines,
+and `!important` counted as part of a value.
+
 ### Mandatory for every phase
 Per CLAUDE.md, and these are not optional:
 

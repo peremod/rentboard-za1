@@ -96,11 +96,11 @@ defines is the clearest finding there is.
 | Axis | Distinct values in use | Total uses | Read |
 |---|---:|---:|---|
 | Font family | 7 | 47 | ⚠️ **Two real faces, not three.** `--font-mono` named `'DM Mono'` and `index.html` has never requested it, so every money figure in this app rendered in Courier New. Corrected 11 October; `scripts/font-lint.mjs` now fails on a token naming a family nothing fetches — `docs/OUTSTANDING.md` § 47. |
-| Font size | **49** | 436 | A nine-step scale would cover this. The top ten sizes are `.72`–`1rem`, eight values inside a 0.28rem band — `.78`, `.8`, `.82`, `.85`, `.88` all exist and all are used 25–55 times. |
+| Font size | **49** | 436 | A nine-step scale would cover this. The top ten sizes are `.72`–`1rem`, eight values inside a 0.28rem band — `.78`, `.8`, `.82`, `.85`, `.88` all exist and all are used 25–55 times. ⚠️ **Ratcheted, not migrated** (Phase K): 28 off-scale values over 222 uses are baselined in `scripts/scale-baseline.json` and the drift is stopped — 436 declarations is churn with real visual risk and nothing reviewable. |
 | Font weight | 5 | 170 | 700 (×72) and 600 (×55) do most of the work. Healthy. |
-| Spacing | **60** | 1066 | The real rhythm is `.5rem`, `1rem`, `.75rem`, `1.5rem`. Around them sit `.6`, `.85`, `.9`, `.4`, `.3` — a second, unspoken half-step scale. |
+| Spacing | **60** | 1066 | The real rhythm is `.5rem`, `1rem`, `.75rem`, `1.5rem`. Around them sit `.6`, `.85`, `.9`, `.4`, `.3` — a second, unspoken half-step scale. ⚠️ **Ratcheted** (Phase J3): 39 off-scale values over 536 uses baselined. |
 | Border radius | 15 | 174 | ✅ **Migrated 11 October (Phase J3).** Was 28 values: `8px` ×15 (which **is** `--r8`), `6px` ×13, `10px` ×10, `4px` ×6, `12px` ×3 and a tail of singles. Now only the tokens, `50%` for circles, `0` for square, the SCSS `$r*` layer and four one-side compounds. `scripts/scale-lint.mjs` holds it at zero tolerance. |
-| Shadow | 18 | 32 | Eighteen definitions for thirty-two uses: almost every shadow is bespoke. Four tokens exist (`--shadow-sm/md/lg/xl`). |
+| Shadow | 11 | 32 | ✅ **Migrated 11 October (Phase K).** Was 18 definitions, and they were three KINDS of thing wearing one property: six focus RINGS (a spread with no blur, at 1px and 3px, four tints), four black overlay shadows where every token is ink-tinted, and a button lift — the lift tinted with `#C04E28`, the terracotta **retired for failing contrast**. Now four `--ring-*` tokens, `--shadow-lift`, and `--shadow-xl` for every overlay. `docs/OUTSTANDING.md` §§ 52–53. |
 
 **The pattern is the same in every row:** a small, sound token set, used
 correctly in most places, with a long tail of raw values that duplicate it.
@@ -111,7 +111,7 @@ Nobody chose the tail. It accumulated.
 
 Scanned 5 stylesheets and 59 components with inline styles.
 
-## Design token (var(--x)) — 37 distinct value(s)
+## Design token (var(--x)) — 42 distinct value(s)
 
 | Design token (var(--x)) | Uses | Files |
 |---|---:|---:|
@@ -134,26 +134,31 @@ Scanned 5 stylesheets and 59 components with inline styles.
 | `--font-body` | 11 | 2 |
 | `--font-mono` | 11 | 4 |
 | `--font-display` | 9 | 5 |
+| `--shadow-xl` | 8 | 7 |
 | `--terra2` | 6 | 3 |
 | `--sage-deep` | 4 | 3 |
-| `--shadow-xl` | 4 | 3 |
 | `--state-ink` | 4 | 1 |
 | `--terra-deep` | 4 | 3 |
 | `--gold-text` | 3 | 2 |
 | `--r20` | 3 | 2 |
+| `--ring-danger` | 2 | 2 |
+| `--ring-terra` | 2 | 2 |
+| `--shadow-lg` | 2 | 1 |
+| `--shadow-lift` | 2 | 2 |
 | `--shadow-sm` | 2 | 1 |
 | `--accent` | 1 | 1 |
 | `--gold2` | 1 | 1 |
 | `--line` | 1 | 1 |
 | `--logo-ma` | 1 | 1 |
 | `--nav-height` | 1 | 1 |
-| `--shadow-lg` | 1 | 1 |
+| `--ring-gold` | 1 | 1 |
+| `--ring-sage` | 1 | 1 |
 | `--shadow-md` | 1 | 1 |
 | `--state-fill` | 1 | 1 |
 | `--surface2` | 1 | 1 |
 | `--warn` | 1 | 1 |
 
-## Literal colour (bypasses the tokens) — 145 distinct value(s)
+## Literal colour (bypasses the tokens) — 133 distinct value(s)
 
 | Literal colour (bypasses the tokens) | Uses | Files |
 |---|---:|---:|
@@ -167,7 +172,6 @@ Scanned 5 stylesheets and 59 components with inline styles.
 | `rgba(61,112,64,.12)` | 4 | 1 |
 | `#1E5FA8` | 3 | 2 |
 | `rgba(173,66,34,.06)` | 3 | 2 |
-| `rgba(192,78,40,.2)` | 3 | 1 |
 | `rgba(250,247,240,.5)` | 3 | 1 |
 | `rgba(250,247,240,.62)` | 3 | 1 |
 | `rgba(61,112,64,.05)` | 3 | 1 |
@@ -183,7 +187,8 @@ Scanned 5 stylesheets and 59 components with inline styles.
 | `#FDF6EC` | 2 | 2 |
 | `#FFF` | 2 | 1 |
 | `rgb(58, 50, 40)` | 2 | 1 |
-| `rgba(192,78,40,.3)` | 2 | 1 |
+| `rgba(173, 66, 34,.2)` | 2 | 1 |
+| `rgba(173, 66, 34,.3)` | 2 | 1 |
 | `rgba(200,144,42,.12)` | 2 | 1 |
 | `rgba(214, 59, 59, .04)` | 2 | 2 |
 | `rgba(214, 59, 59, .35)` | 2 | 2 |
@@ -225,43 +230,32 @@ Scanned 5 stylesheets and 59 components with inline styles.
 | `#FDFAF4` | 1 | 1 |
 | `rgba($color-danger, .07)` | 1 | 1 |
 | `rgba($color-danger, .35)` | 1 | 1 |
-| `rgba(0, 0, 0, .22)` | 1 | 1 |
-| `rgba(0, 0, 0, .3)` | 1 | 1 |
 | `rgba(0, 0, 0, .5)` | 1 | 1 |
-| `rgba(0,0,0,.12)` | 1 | 1 |
-| `rgba(0,0,0,.22)` | 1 | 1 |
-| `rgba(0,0,0,.3)` | 1 | 1 |
 | `rgba(0,0,0,.6)` | 1 | 1 |
 | `rgba(10,8,6,.94)` | 1 | 1 |
-| `rgba(122, 110, 96, .1)` | 1 | 1 |
-| `rgba(122,110,96,.1)` | 1 | 1 |
+| `rgba(115, 103, 85, .1)` | 1 | 1 |
+| `rgba(115, 103, 85,.1)` | 1 | 1 |
+| `rgba(173, 66, 34, .07)` | 1 | 1 |
+| `rgba(173, 66, 34, .08)` | 1 | 1 |
+| `rgba(173, 66, 34, .1)` | 1 | 1 |
+| `rgba(173, 66, 34,.06)` | 1 | 1 |
+| `rgba(173, 66, 34,.08)` | 1 | 1 |
+| `rgba(173, 66, 34,.1)` | 1 | 1 |
+| `rgba(173, 66, 34,.18)` | 1 | 1 |
 | `rgba(173,66,34,.04)` | 1 | 1 |
 | `rgba(173,66,34,.1)` | 1 | 1 |
 | `rgba(173,66,34,.72)` | 1 | 1 |
 | `rgba(178, 59, 59, .08)` | 1 | 1 |
-| `rgba(178, 59, 59, .18)` | 1 | 1 |
 | `rgba(178,59,59,.07)` | 1 | 1 |
-| `rgba(178,59,59,.15)` | 1 | 1 |
 | `rgba(178,59,59,.35)` | 1 | 1 |
 | `rgba(178,59,59,.4)` | 1 | 1 |
 | `rgba(184,134,11,.12)` | 1 | 1 |
-| `rgba(192, 78, 40, .07)` | 1 | 1 |
-| `rgba(192, 78, 40, .08)` | 1 | 1 |
-| `rgba(192, 78, 40, .1)` | 1 | 1 |
-| `rgba(192, 78, 40, .15)` | 1 | 1 |
-| `rgba(192, 78, 40, .35)` | 1 | 1 |
-| `rgba(192,78,40,.06)` | 1 | 1 |
-| `rgba(192,78,40,.08)` | 1 | 1 |
-| `rgba(192,78,40,.1)` | 1 | 1 |
-| `rgba(192,78,40,.18)` | 1 | 1 |
-| `rgba(192,78,40,.35)` | 1 | 1 |
 | `rgba(200, 144, 42, .08)` | 1 | 1 |
 | `rgba(200, 144, 42, .3)` | 1 | 1 |
 | `rgba(200,144,42,.06)` | 1 | 1 |
 | `rgba(200,144,42,.08)` | 1 | 1 |
 | `rgba(200,144,42,.14)` | 1 | 1 |
 | `rgba(200,144,42,.18)` | 1 | 1 |
-| `rgba(200,144,42,.3)` | 1 | 1 |
 | `rgba(200,144,42,.9)` | 1 | 1 |
 | `rgba(201, 162, 39, .08)` | 1 | 1 |
 | `rgba(212, 168, 83, .12)` | 1 | 1 |
@@ -298,7 +292,6 @@ Scanned 5 stylesheets and 59 components with inline styles.
 | `rgba(58,50,40,.25)` | 1 | 1 |
 | `rgba(61, 112, 64, .3)` | 1 | 1 |
 | `rgba(61,112,64,.08)` | 1 | 1 |
-| `rgba(61,112,64,.18)` | 1 | 1 |
 | `rgba(61,112,64,.2)` | 1 | 1 |
 | `rgba(61,112,64,.22)` | 1 | 1 |
 | `rgba(61,112,64,.3)` | 1 | 1 |
@@ -464,25 +457,18 @@ Scanned 5 stylesheets and 59 components with inline styles.
 | `var(--r20) var(--r20) 0 0` | 1 | 1 |
 | `var(--r4) var(--r4) 0 0` | 1 | 1 |
 
-## Shadow — 18 distinct value(s)
+## Shadow — 11 distinct value(s)
 
 | Shadow | Uses | Files |
 |---|---:|---:|
 | `none` | 11 | 4 |
-| `var(--shadow-xl)` | 4 | 3 |
+| `var(--shadow-xl)` | 8 | 7 |
+| `var(--ring-danger)` | 2 | 2 |
+| `var(--shadow-lg)` | 2 | 1 |
+| `var(--shadow-lift)` | 2 | 2 |
 | `var(--shadow-sm)` | 2 | 1 |
 | `$shadow-sm` | 1 | 1 |
-| `0 0 0 1px rgba(178,59,59,.15)` | 1 | 1 |
-| `0 0 0 1px rgba(192,78,40,.2),var(--shadow-md)` | 1 | 1 |
-| `0 0 0 1px rgba(200,144,42,.3)` | 1 | 1 |
-| `0 0 0 3px rgba(178, 59, 59, .18)` | 1 | 1 |
-| `0 0 0 3px rgba(192, 78, 40, .15)` | 1 | 1 |
-| `0 0 0 3px rgba(61,112,64,.18)` | 1 | 1 |
-| `0 12px 32px rgba(0,0,0,.3)` | 1 | 1 |
-| `0 18px 44px rgba(0, 0, 0, .22)` | 1 | 1 |
-| `0 18px 44px rgba(0,0,0,.22)` | 1 | 1 |
-| `0 18px 50px rgba(0, 0, 0, .3)` | 1 | 1 |
-| `0 4px 14px rgba(192, 78, 40, .35)` | 1 | 1 |
-| `0 4px 14px rgba(192,78,40,.35)` | 1 | 1 |
-| `0 8px 28px rgba(0,0,0,.12)` | 1 | 1 |
-| `var(--shadow-lg)` | 1 | 1 |
+| `var(--ring-gold)` | 1 | 1 |
+| `var(--ring-sage)` | 1 | 1 |
+| `var(--ring-terra)` | 1 | 1 |
+| `var(--ring-terra),var(--shadow-md)` | 1 | 1 |
