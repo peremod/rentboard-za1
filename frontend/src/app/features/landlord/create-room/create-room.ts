@@ -377,7 +377,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
       display: flex; align-items: center; justify-content: center; padding: 1.5rem;
     }
     .save-dialog__panel {
-      background: var(--card, var(--white)); border-radius: 12px;
+      background: var(--card, var(--white)); border-radius: var(--r12);
       padding: 1.75rem 1.5rem; max-width: 22rem; width: 100%; text-align: center;
       box-shadow: 0 18px 44px rgba(0, 0, 0, .22);
     }
@@ -395,7 +395,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
       border: 1.5px solid #C9792B;
       border-left-width: 5px;
       background: #FDF6EC;
-      border-radius: var(--r8, 8px);
+      border-radius: var(--r8);
       padding: .85rem 1rem;
       margin-bottom: 1.25rem;
       font-size: .88rem;
@@ -404,7 +404,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     .sublet-banner p { margin: 0 0 .5rem; }
     .sublet-banner p:last-child { margin-bottom: 0; }
     .wizard__title { font-size: 1.3rem; font-weight: 700; margin: 0 0 1rem; }
-    .wizard__step { flex: 1; height: 4px; background: var(--border); border-radius: 4px; }
+    .wizard__step { flex: 1; height: 4px; background: var(--border); border-radius: var(--r4); }
     .wizard__step.active, .wizard__step.done { background: var(--terra); }
     h2 { font-size: 1.2rem; margin-bottom: 1rem; }
     /* Scoped away from checkboxes. Angular's emulated encapsulation makes a
@@ -420,7 +420,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     select,
     textarea {
       width: 100%; padding: .55rem .7rem; border: 1.5px solid var(--border);
-      border-radius: 6px; font-size: .85rem; margin-top: .3rem; font-family: inherit;
+      border-radius: var(--r4); font-size: .85rem; margin-top: .3rem; font-family: inherit;
     }
     .muted { font-size: .78rem; color: var(--slate); }
     .error { color: var(--danger); font-size: .82rem; }

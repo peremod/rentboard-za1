@@ -206,14 +206,14 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
     .ca-caveat { font-size: .85rem; max-width: 38rem; line-height: 1.6; }
     .ca-paused { border-left: 3px solid var(--terra); padding-left: .9rem; }
     .ca-danger {
-      border: 1px solid rgba(214, 59, 59, .35); border-radius: var(--r8, 8px);
+      border: 1px solid rgba(214, 59, 59, .35); border-radius: var(--r8);
       padding: 1.1rem; background: rgba(214, 59, 59, .04);
     }
     .ca-form { margin-top: 1rem; max-width: 26rem; display: flex; flex-direction: column; gap: .9rem; }
     .ca-form label { display: flex; flex-direction: column; gap: .25rem; font-size: .85rem; }
     .ca-form input[type="password"], .ca-form input[type="text"] {
       font: inherit; padding: .55rem .6rem; border: 1px solid var(--border);
-      border-radius: 6px; min-height: 44px;
+      border-radius: var(--r4); min-height: 44px;
     }
     .ca-check { flex-direction: row !important; align-items: flex-start; gap: .55rem; line-height: 1.6; }
     .ca-check input { width: 20px; height: 20px; margin-top: .15rem; flex-shrink: 0; }

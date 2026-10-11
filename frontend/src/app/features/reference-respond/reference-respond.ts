@@ -112,22 +112,22 @@ import { Loading } from '../../shared/components/loading/loading';
     .reference__q p { margin: 0 0 .6rem; }
     .reference__choices { display: flex; gap: .5rem; flex-wrap: wrap; }
     .reference__choice {
-      flex: 1 1 auto; min-height: 48px; padding: .7rem 1rem; border-radius: 8px;
+      flex: 1 1 auto; min-height: 48px; padding: .7rem 1rem; border-radius: var(--r8);
       border: 1.5px solid var(--border); background: var(--white); cursor: pointer; font-size: .9rem;
     }
     .reference__choice.active { border-color: var(--terra); background: rgba(173,66,34,.06); font-weight: 700; }
     .reference__star {
-      width: 48px; height: 48px; border-radius: 8px; border: 1.5px solid var(--border);
+      width: 48px; height: 48px; border-radius: var(--r8); border: 1.5px solid var(--border);
       background: var(--white); cursor: pointer; font-size: 1rem;
     }
     .reference__star.active { border-color: var(--terra); background: rgba(173,66,34,.06); font-weight: 700; }
     .reference__comment { display: block; margin-bottom: 1.5rem; font-size: .9rem; }
     .reference__comment textarea {
       display: block; width: 100%; margin-top: .4rem; padding: .6rem;
-      border-radius: 8px; border: 1.5px solid var(--border); font: inherit;
+      border-radius: var(--r8); border: 1.5px solid var(--border); font: inherit;
     }
     .reference__submit {
-      width: 100%; min-height: 48px; border-radius: 8px; border: none;
+      width: 100%; min-height: 48px; border-radius: var(--r8); border: none;
       background: var(--terra); color: var(--white); font-weight: 700; cursor: pointer; font-size: .95rem;
     }
     .reference__submit:disabled { opacity: .5; cursor: not-allowed; }

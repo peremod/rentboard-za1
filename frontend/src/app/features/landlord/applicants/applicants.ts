@@ -272,7 +272,7 @@ import { Loading } from '../../../shared/components/loading/loading';
     .applicants__back { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: space-between; font-size: .85rem; }
     h1 { font-size: 1.3rem; margin: .5rem 0 1.5rem; }
     .muted { color: var(--slate); }
-    .applicant-card { border: 1px solid var(--border); border-radius: 8px; margin-bottom: .75rem; overflow: hidden; }
+    .applicant-card { border: 1px solid var(--border); border-radius: var(--r8); margin-bottom: .75rem; overflow: hidden; }
     /* ⚠️ A button needs its inherited text put back BY NAME.
        The font: inherit shorthand restores family and size and NOT colour -
        which is how Phase 7c shipped inbox rows rendering white-on-cream at
@@ -286,7 +286,7 @@ import { Loading } from '../../../shared/components/loading/loading';
       text-align: left; gap: .5rem; min-height: 44px;
     }
     .applicant-card__who { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; }
-    .pill { font-size: .6rem; font-weight: 700; background: rgba(61,112,64,.1); color: var(--sage); padding: .1rem .4rem; border-radius: 10px; margin-left: .4rem; }
+    .pill { font-size: .6rem; font-weight: 700; background: rgba(61,112,64,.1); color: var(--sage); padding: .1rem .4rem; border-radius: var(--r-full); margin-left: .4rem; }
     /* The chip is '.state' from styles.scss. Only the gap beside the name is
        this screen's business. Measured before the swap: '.status--accepted'
        (#3D7040 on sage 15%) was 4.12:1 on --cream2 and '.status--rejected'
@@ -297,13 +297,13 @@ import { Loading } from '../../../shared/components/loading/loading';
     .applicant-card__body { padding: 0 1rem 1rem; }
     .cover-note { font-style: italic; color: var(--ink2); margin: .5rem 0; }
     .applicant-card__refs { margin: .75rem 0; padding: .75rem 0; border-top: 1px solid var(--border); }
-    .refs-toggle { background: none; border: 1px solid var(--border); border-radius: 6px; padding: .35rem .75rem;
+    .refs-toggle { background: none; border: 1px solid var(--border); border-radius: var(--r4); padding: .35rem .75rem;
                    font-size: .78rem; font-weight: 600; cursor: pointer; color: var(--ink2); }
     .refs-note { font-size: .72rem; color: var(--slate); line-height: 1.6; margin-top: .6rem; }
     .undo-banner { display: flex; align-items: center; justify-content: space-between;
                    gap: .75rem; flex-wrap: wrap; padding: .7rem .9rem; margin-bottom: .4rem;
                    background: rgba(61,112,64,.08); border: 1px solid rgba(61,112,64,.25);
-                   border-radius: 8px; font-size: .85rem; color: var(--ink2); }
+                   border-radius: var(--r8); font-size: .85rem; color: var(--ink2); }
     .undo-note { font-size: .75rem; color: var(--slate); margin-bottom: .5rem; }
     .applicant-group { margin: 1.25rem 0 .5rem; }
     .applicant-group__title { font-size: .95rem; font-weight: 700; color: var(--ink2); }
@@ -316,7 +316,7 @@ import { Loading } from '../../../shared/components/loading/loading';
        reversible for 30 minutes, which is why this is a size fix rather than a
        redesign of the row.) */
     .applicant-card__actions button {
-      padding: .4rem .9rem; min-height: 44px; border-radius: 6px;
+      padding: .4rem .9rem; min-height: 44px; border-radius: var(--r4);
       border: 1px solid var(--border); background: var(--white); cursor: pointer;
       font-size: .78rem; font-weight: 600;
     }
@@ -324,7 +324,7 @@ import { Loading } from '../../../shared/components/loading/loading';
       display: grid; gap: .2rem; margin: .5rem 0;
       padding: .6rem .7rem; font-size: .82rem; line-height: 1.6;
       border-left: 3px solid var(--sage); background: rgba(61,112,64,.06);
-      border-radius: var(--r4, 4px);
+      border-radius: var(--r4);
     }
     .viewing--off { border-left-color: var(--slate); background: var(--cream2); }
     .viewing-form { display: grid; gap: .7rem; margin: .6rem 0; max-width: 28rem; }
@@ -332,7 +332,7 @@ import { Loading } from '../../../shared/components/loading/loading';
     .viewing-form label { display: grid; gap: .25rem; font-size: .82rem; font-weight: 600; }
     .viewing-form input {
       font: inherit; font-weight: 400; padding: .55rem .6rem; min-height: 44px;
-      border: 1.5px solid var(--border); border-radius: 6px;
+      border: 1.5px solid var(--border); border-radius: var(--r4);
     }
     .viewing-form .field-hint { font-weight: 400; line-height: 1.6; }
     .viewing-form__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; }

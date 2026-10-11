@@ -38,7 +38,7 @@ import { HintsService } from '../../../core/services/hints.service';
       display: flex; align-items: flex-start; gap: .75rem; flex-wrap: wrap;
       margin: 0 0 1rem; padding: .85rem .9rem;
       background: #FDF6E8; border: 1.5px solid #E8D9BC; border-left-width: 4px;
-      border-radius: 8px;
+      border-radius: var(--r8);
     }
     .hint__body { flex: 1 1 14rem; min-width: 0; }
     .hint__heading { display: block; font-size: .88rem; margin-bottom: .2rem; }
@@ -65,7 +65,7 @@ import { HintsService } from '../../../core/services/hints.service';
        is somebody reading this comment. */
     .hint__close {
       min-height: 44px; padding: .5rem 1.1rem; flex: 0 0 auto;
-      border: 1.5px solid #C9B894; border-radius: 6px;
+      border: 1.5px solid #C9B894; border-radius: var(--r4);
       background: var(--white); color: #1C160E;
       font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer;
     }

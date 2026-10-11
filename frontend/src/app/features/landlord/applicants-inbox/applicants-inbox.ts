@@ -215,7 +215,7 @@ import {
     .ai-filters label { display: flex; flex-direction: column; gap: .2rem; font-size: .72rem; color: var(--slate); }
     .ai-filters select {
       font: inherit; font-size: .85rem; padding: .4rem .5rem;
-      border: 1px solid var(--border); border-radius: 6px; background: var(--white); min-width: 9rem;
+      border: 1px solid var(--border); border-radius: var(--r4); background: var(--white); min-width: 9rem;
     }
     .ai-empty { color: var(--slate); line-height: 1.6; max-width: 34rem; }
     .ai-list { list-style: none; padding: 0; margin: 1rem 0 0; }
@@ -235,12 +235,12 @@ import {
     .ai-row__preview { color: var(--slate); overflow-wrap: anywhere; }
     .ai-row__meta { margin: .3rem 0 0; font-size: .75rem; color: var(--slate); }
     .ai-row__actions { flex-shrink: 0; }
-    .pill { font-size: .6rem; font-weight: 700; background: rgba(61,112,64,.1); color: var(--sage); padding: .1rem .4rem; border-radius: 10px; }
+    .pill { font-size: .6rem; font-weight: 700; background: rgba(61,112,64,.1); color: var(--sage); padding: .1rem .4rem; border-radius: var(--r-full); }
     /* The chip is '.state' from styles.scss. This screen also folded
        'withdrawn' in with 'rejected' — the same red — so an applicant who
        stopped read as one the landlord had refused. 'applicationState' makes
        both 'closed', in one place, for both screens. */
-    .chan { font-size: .65rem; font-weight: 700; padding: .1rem .4rem; border-radius: 10px; white-space: nowrap; }
+    .chan { font-size: .65rem; font-weight: 700; padding: .1rem .4rem; border-radius: var(--r-full); white-space: nowrap; }
     .chan--in_app { background: var(--cream2); color: var(--ink2); }
     .chan--whatsapp { background: rgba(37,211,102,.14); color: #0F7A3D; }
     @media (max-width: 480px) {

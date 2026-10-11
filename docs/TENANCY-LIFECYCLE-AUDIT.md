@@ -1235,6 +1235,44 @@ measured, no build, no API, no browser. The backtick trap has happened
 thirteen times, five on 11 October alone, in the phases that wrote the lint
 for it.
 
+#### J3 — radius and spacing. **Radius done; spacing ratcheted, deliberately.**
+
+28 distinct radius values for 174 uses → **15 for the same 174**, every
+remaining one legitimate. The mapping is by what the element IS, not by
+arithmetic: controls → `--r4` (every `6px`, `5px`, `2px`, `.4rem`), small
+surfaces → `--r8`, panels → `--r12`, chips → `--r-full`.
+
+**⚠️ I kept `--r8` where §H3 said "r4 and r12 and nothing else."** 21 existing
+uses is not a rounding error and 8px is a real step between a control and a
+panel; removing it would be a 21-site visual change to satisfy the letter of a
+sentence in this document.
+
+Spacing is 60 values over 1073 uses, so it is RATCHETED rather than migrated:
+39 off-scale values over 536 uses baselined, drift stopped. A thousand-site
+spacing migration is churn with real visual risk and nothing reviewable.
+
+`scripts/scale-lint.mjs`, four reintroductions. Its own first run counted
+`.6rem` and `0.6rem` as two values — 11 of the 49 entries were a second
+spelling of another.
+
+#### J4 — the money figure. **§H3's first move applied, and half of it refused.**
+
+§H3 wanted Playfair for "every number that matters". It is right for the
+DISPLAY figures and wrong for the LEDGER ones: the rent ledger and the
+archive's month list are columns that must line up, the monospace stack gives
+fixed-width digits and a proportional serif does not. `.stat-box .val` and
+`.room-detail__price` take the display face at 900; `.app-rent` and
+`.arc-month__amount` keep monospace.
+
+**⚠️ And the monospace in question was never fetched.** `--font-mono` named
+`'DM Mono'`; `index.html` has never requested it, so every money figure in
+this app has rendered in Courier New since the token was written — while this
+project's own design handoff reported DM Mono as one of "three real faces".
+`scripts/font-lint.mjs` now fails on a token naming a family nothing asks for.
+`docs/OUTSTANDING.md` § 47, including why that check has to be static (no
+webfont loads in this container at all — a bogus family and Playfair render
+identically) and which of my own Phase I claims it weakens.
+
 #### ⚠️ J2 also found nine on-screen WhatsApp promises, and the drive for them was blind
 
 `CLAUDE.md`: *"Nothing on screen may promise a WhatsApp message while it is

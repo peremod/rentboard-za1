@@ -59,10 +59,10 @@ import { Loading } from '../loading/loading';
     </div>
   `,
   styles: [`
-    .thread { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: .75rem; }
+    .thread { border: 1px solid var(--border); border-radius: var(--r8); overflow: hidden; margin-top: .75rem; }
     .thread__messages { max-height: 260px; overflow-y: auto; padding: .75rem; display: flex; flex-direction: column; gap: .5rem; background: #FDFAF5; }
     .muted { font-size: .8rem; color: var(--slate); }
-    .thread__message { align-self: flex-start; background: #F2EDE3; padding: .5rem .7rem; border-radius: 10px; max-width: 80%; font-size: .82rem; }
+    .thread__message { align-self: flex-start; background: #F2EDE3; padding: .5rem .7rem; border-radius: var(--r12); max-width: 80%; font-size: .82rem; }
     .thread__message.mine { align-self: flex-end; background: var(--terra); color: var(--white); }
     .thread__channel { display: block; font-size: .6rem; opacity: .7; margin-top: .2rem; }
     .thread__composer { display: flex; border-top: 1px solid var(--border); }

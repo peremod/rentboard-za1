@@ -183,6 +183,29 @@ jobs:
         # applied.
         run: node scripts/feedback-lint.mjs
 
+      - name: Radius and spacing scales
+        if: ${{ !cancelled() }}
+        # 28 distinct radius values for 174 uses: the tokens existed and were
+        # used, and beside them sat 8px fifteen times (which IS --r8), 6px
+        # thirteen times, 10px ten times, 4px six times (--r4), plus 5px, 2px,
+        # 20px, 999px, .4rem and .6rem. Nobody chose that tail. Radius is now
+        # migrated and the tolerance is zero; spacing is 60 values over 1073
+        # uses, so it is ratcheted instead — the drift stops without a
+        # thousand-site churn nobody could review.
+        run: node scripts/scale-lint.mjs
+
+      - name: Fonts — a token may not name a family nothing fetches
+        if: ${{ !cancelled() }}
+        # `--font-mono` named 'DM Mono' and index.html has never requested it,
+        # so every money figure in this app has rendered in Courier New since
+        # the token was written while the design handoff reported DM Mono as
+        # one of "three real faces". Nothing could see it: the token resolves,
+        # the build does not fetch fonts, and getComputedStyle echoes the
+        # DECLARATION back — so a drive reading it "confirms" a font that is
+        # not there. Static, because no webfont loads in the agent container
+        # at all (measured: a bogus family and Playfair render identically).
+        run: node scripts/font-lint.mjs
+
       - name: Inline template and styles literals — no stray backtick
         if: ${{ !cancelled() }}
         # A backtick inside a component's inline `template:` or `styles:`

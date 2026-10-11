@@ -226,7 +226,7 @@ import { Loading } from '../../../shared/components/loading/loading';
        at a glance, which is the only question at this scale. */
     .spark { display: flex; align-items: flex-end; gap: 2px; height: 60px;
              margin: 1rem 0 .5rem; }
-    .spark__bar { flex: 1; background: var(--terra2); border-radius: 2px 2px 0 0;
+    .spark__bar { flex: 1; background: var(--terra2); border-radius: var(--r4) var(--r4) 0 0;
                   min-height: 2px; transition: height .2s ease; }
     .spark__bar:hover { background: var(--terra); }
 

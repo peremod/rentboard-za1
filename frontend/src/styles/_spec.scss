@@ -89,7 +89,27 @@
   --white:#FFFFFF;
   --font-display:'Playfair Display',Georgia,serif;
   --font-body:'DM Sans',system-ui,sans-serif;
-  --font-mono:'DM Mono','Courier New',monospace;
+  /**
+   * ⚠️ This used to name 'DM Mono' first. index.html has NEVER requested it —
+   * the Google Fonts link asks for Playfair Display 700/900 and DM Sans
+   * 400/500/600/700 and nothing else, which is readable from the file and
+   * needs no browser. So every money figure in this app has rendered in
+   * Courier New or the platform monospace since the day the token was written,
+   * while the design system said otherwise.
+   *
+   * Named honestly rather than fetched, deliberately: this product is built
+   * for a cheap Android on a metered connection, and a third webfont family
+   * for the digits in a rand figure is not worth the bytes. The system
+   * monospace on Android is Roboto Mono, on iOS Menlo — both tabular, which is
+   * the only property this token is actually relied on for (a column of
+   * amounts in the rent ledger has to line up).
+   *
+   * If DM Mono is wanted, it has to be ADDED to the font request in
+   * index.html; naming it here does not fetch it.
+   * scripts/font-lint.mjs now fails on a token naming a family nothing asks
+   * for.
+   */
+  --font-mono:ui-monospace,'Roboto Mono',Menlo,Consolas,'Courier New',monospace;
   --r4:4px;--r8:8px;--r12:12px;--r20:20px;--r-full:9999px;
   --shadow-sm:0 1px 3px rgba(28,22,14,.07);
   --shadow-md:0 4px 12px rgba(28,22,14,.1);
@@ -600,7 +620,17 @@ img{display:block;max-width:100%}
   background:var(--card);border:1px solid var(--border);
   border-radius:var(--r8);padding:1rem;text-align:center;
 }
-.stat-box .val{font-family:var(--font-mono);font-size:1.65rem;font-weight:500;color:var(--terra)}
+/* ⚠️ The display face, not the mono one — §H3's first identity move.
+   This is the hero statistic: one per box, at size, the thing a person looks
+   for first. Playfair at 900 on a letting board is immediately not-SaaS, and
+   both weights are actually fetched (font-lint.mjs asserts that now).
+   `font-variant-numeric: lining` because Playfair ships OLD-STYLE figures by
+   default: without it the 2 and the 5 in "R2 500" drop below the baseline
+   like lower-case letters, which on a number reads as a rendering fault.
+   The LEDGER figures — .app-rent, .arc-month__amount — deliberately keep the
+   monospace stack: a column of amounts has to line up, and a proportional
+   serif will not. */
+.stat-box .val{font-family:var(--font-display);font-size:1.65rem;font-weight:900;font-variant-numeric:lining;letter-spacing:-.01em;color:var(--terra)}
 .stat-box .lbl{font-size:.72rem;color:var(--slate);margin-top:.2rem}
 .dash-section{margin-bottom:2rem}
 .dash-section-title{font-size:1rem;font-weight:700;color:var(--ink);margin-bottom:1rem}
@@ -729,7 +759,7 @@ img{display:block;max-width:100%}
 .passport-card__note{font-size:.82rem;color:var(--ink2);margin:0 0 .5rem}
 
 .passport-pill{
-  font-size:.7rem;font-weight:700;padding:.2rem .55rem;border-radius:999px;white-space:nowrap;
+  font-size:.7rem;font-weight:700;padding:.2rem .55rem;border-radius:var(--r-full);white-space:nowrap;
   background:var(--cream2);color:var(--ink2);
 }
 .passport-pill--approved{background:rgba(61,112,64,.12);color:#2F5632}

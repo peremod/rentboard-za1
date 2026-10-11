@@ -4,7 +4,7 @@
 node scripts/workflow-lint.mjs
 
 # ⚠️ The three source-only gates run HERE as well as in CI, and the reason is
-# measured: 0.516s for all three together. They need no build, no API and no
+# measured: 1.075s for all six together. They need no build, no API and no
 # browser, so there is no cost to catching their defects before the commit
 # rather than after a push.
 #
@@ -18,3 +18,5 @@ node scripts/template-literal-lint.mjs
 node scripts/token-lint.mjs
 node scripts/state-lint.mjs
 node scripts/feedback-lint.mjs
+node scripts/scale-lint.mjs
+node scripts/font-lint.mjs

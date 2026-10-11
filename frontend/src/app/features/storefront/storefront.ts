@@ -183,7 +183,7 @@ import { Loading } from '../../shared/components/loading/loading';
       .badge {
         background: var(--surface2, #F4F1EC);
         border: 1px solid var(--border);
-        border-radius: 0.6rem;
+        border-radius: var(--r8);
         display: flex;
         flex-direction: column;
         gap: 0.15rem;
@@ -207,7 +207,7 @@ import { Loading } from '../../shared/components/loading/loading';
       .store-room { border-bottom: 1px solid var(--border); }
       .store-room:last-child { border-bottom: 0; }
       .store-room__link { align-items: center; display: flex; gap: 0.8rem; padding: 0.7rem 0; text-decoration: none; }
-      .store-room__img { border-radius: 0.4rem; object-fit: cover; }
+      .store-room__img { border-radius: var(--r4); object-fit: cover; }
       .store-room__text { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
       .store-room__title { font-weight: 600; }
       .store-foot { border-top: 1px solid var(--border); font-size: 0.8rem; margin-top: 2rem; padding-top: 1rem; }

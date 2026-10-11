@@ -65,6 +65,8 @@ Do not tag before `npm run verify` passes. None of this was built against real A
 | `scripts/verify-build.sh` | Everything that needs real dependencies |
 | `scripts/token-lint.mjs` | A literal hex within CIE Lab ΔE 3 of a defined token, and any `var(--x)` with no fallback naming a token defined nowhere. Ratcheting baseline in `scripts/token-baseline.json` |
 | `scripts/token-render-drive.mjs` | 51 checks: the borders `var(--line)` silently dropped, measured as painted at 360 / 390 / 768 / 1280 |
+| `scripts/scale-lint.mjs` | Radius on the `--r4/8/12/20/-full` scale with zero tolerance, including each part of a one-side compound value; spacing ratcheted against `scripts/scale-baseline.json` |
+| `scripts/font-lint.mjs` | A `--font-*` token may not name a family `index.html` never requests, and a weight used with the display face must be one that was fetched |
 | `scripts/feedback-lint.mjs` | Loading, empty and error are three components; no template writes its own loading state; `<app-loading>` still carries `role="status"` and `aria-live` |
 | `scripts/state-lint.mjs` | Five state meanings, defined once: a sixth invented in a template, or a component declaring the treatment itself, fails. Baseline in `scripts/state-baseline.json` |
 | `frontend/src/app/core/models/state.model.ts` | The state vocabulary's mapping — `applicationState`, `tenancyState`. A typed function rather than a string per template, so a new status is a type error |

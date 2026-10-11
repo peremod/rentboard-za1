@@ -94,6 +94,37 @@
 .footer-brand { margin-bottom: .75rem; }
 
 /**
+ * ⚠️ The money figure, in the display face — §H3's FIRST identity move, with
+ * one deliberate exception.
+ *
+ * The audit proposed "Playfair Display, heavy, for every number that matters —
+ * rent, the rand figure, the count on a dashboard card. Numerals in a serif
+ * display face on a letting board is immediately not-SaaS."
+ *
+ * It is right about the display figures and WRONG about the ledger ones, and
+ * the distinction is tabular numerals. The rent ledger and the archive's month
+ * list are columns of amounts that have to line up; `--font-mono` (DM Mono)
+ * gives fixed-width digits and Playfair, a proportional serif, does not. A
+ * column of rand figures that does not align is worse than a generic one. So:
+ *
+ *   · DISPLAY figures — the room's price, the hero stat, a dashboard count —
+ *     take the display face. Each appears once on a screen, at size, and is
+ *     the thing a person looks for first.
+ *   · LEDGER figures — `.app-rent` in a list, `.arc-month__amount` — keep
+ *     `--font-mono`, because alignment is the job.
+ *
+ * `font-variant-numeric: lining` because Playfair ships OLD-STYLE figures by
+ * default: without it, "R2 500" renders with the 2 and 5 dropping below the
+ * baseline like lower-case letters, which on a price reads as a typo.
+ */
+.figure {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-variant-numeric: lining;
+  letter-spacing: -.01em;
+}
+
+/**
  * A button that reads as a link — globally, once.
  *
  * ⚠️ It was declared in FOUR component scopes with identical bodies
@@ -267,7 +298,7 @@ a { color: $color-terracotta; }
 
 .disclaimer-banner {
   background: rgba(212, 168, 83, .12); border: 1px solid rgba(212, 168, 83, .35);
-  border-radius: 8px; padding: 1rem; line-height: 1.7; margin-top: 1rem;
+  border-radius: var(--r8); padding: 1rem; line-height: 1.7; margin-top: 1rem;
 }
 
 

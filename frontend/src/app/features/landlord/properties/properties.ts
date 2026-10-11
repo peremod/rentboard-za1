@@ -272,7 +272,7 @@ import { Loading } from '../../../shared/components/loading/loading';
     .rent-reminders__row label { display: flex; flex-direction: column; gap: .2rem; font-size: .8rem; }
     .rent-reminders__row input {
       font: inherit; padding: .4rem .5rem; border: 1px solid var(--border);
-      border-radius: 6px; width: 6rem;
+      border-radius: var(--r4); width: 6rem;
     }
     .prop-head {
       display: flex; align-items: center; justify-content: space-between;

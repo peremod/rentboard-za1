@@ -39,7 +39,7 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
     .stars--editable .stars__star { cursor: pointer; }
     .stars--editable .stars__star:hover { color: var(--gold2, var(--gold)); }
     .stars input { position: absolute; opacity: 0; width: 0; height: 0; }
-    .stars input:focus-visible + span { outline: 2px solid var(--terra); outline-offset: 2px; border-radius: 2px; }
+    .stars input:focus-visible + span { outline: 2px solid var(--terra); outline-offset: 2px; border-radius: var(--r4); }
     .sr-only {
       position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
       overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;

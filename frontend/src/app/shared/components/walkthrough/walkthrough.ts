@@ -322,7 +322,7 @@ const ADMIN_STEPS: Step[] = [
       padding: 1rem;
     }
     .wt-card {
-      background: var(--card, var(--white)); border-radius: var(--r12, 12px);
+      background: var(--card, var(--white)); border-radius: var(--r12);
       box-shadow: 0 18px 50px rgba(0, 0, 0, .3);
       max-width: 30rem; width: 100%; padding: 1.5rem;
       max-height: calc(100vh - 2rem); overflow-y: auto;
@@ -341,7 +341,7 @@ const ADMIN_STEPS: Step[] = [
     .wt-body { margin: 0; line-height: 1.65; color: var(--ink2); }
     .wt-dots { display: flex; gap: .3rem; margin: 1.1rem 0 1rem; }
     .wt-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
-    .wt-dot.is-on { background: var(--terra); width: 20px; border-radius: 4px; }
+    .wt-dot.is-on { background: var(--terra); width: 20px; border-radius: var(--r4); }
     .wt-actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
     .wt-actions .btn { min-height: 44px; }
     .wt-go {
@@ -354,7 +354,7 @@ const ADMIN_STEPS: Step[] = [
     @media (max-width: 480px) {
       .wt-overlay { align-items: flex-end; padding: 0; }
       .wt-card {
-        max-width: none; border-radius: var(--r12, 12px) var(--r12, 12px) 0 0;
+        max-width: none; border-radius: var(--r12) var(--r12) 0 0;
         padding: 1.25rem 1.1rem 1.5rem; max-height: 88vh;
       }
       .wt-actions .btn { flex: 1; justify-content: center; }

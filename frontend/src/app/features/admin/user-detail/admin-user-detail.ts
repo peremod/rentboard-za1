@@ -315,7 +315,7 @@ import { Loading } from '../../../shared/components/loading/loading';
     .ac-form label { display: flex; flex-direction: column; gap: .25rem; font-size: .85rem; }
     .ac-form input[type="text"] {
       font: inherit; padding: .55rem .6rem; border: 1px solid var(--border);
-      border-radius: 6px; min-height: 44px;
+      border-radius: var(--r4); min-height: 44px;
     }
     .ac-check { flex-direction: row !important; align-items: flex-start; gap: .55rem; line-height: 1.6; }
     .ac-check input { width: 20px; height: 20px; margin-top: .15rem; flex-shrink: 0; }

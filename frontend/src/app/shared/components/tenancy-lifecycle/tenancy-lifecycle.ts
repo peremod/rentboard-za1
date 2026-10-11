@@ -126,7 +126,7 @@ import { Tenancy } from '../../../core/models/tenancy.model';
     .tl__title { font-size: 1rem; margin: 0 0 .25rem; }
     .tl__lede { margin: 0 0 .75rem; font-size: .82rem; line-height: 1.55; color: #5A5047; }
     .tl__card {
-      border: 1.5px solid var(--border); border-radius: 8px; background: var(--white);
+      border: 1.5px solid var(--border); border-radius: var(--r8); background: var(--white);
       padding: .9rem; margin-bottom: .75rem;
     }
     .tl__who { display: grid; gap: .1rem; margin-bottom: .5rem; }
@@ -135,14 +135,14 @@ import { Tenancy } from '../../../core/models/tenancy.model';
     .tl__field { display: grid; gap: .25rem; font-size: .8rem; font-weight: 600; margin-bottom: .7rem; }
     .tl__field input {
       width: 100%; font: inherit; font-weight: 400; min-height: 44px;
-      padding: .5rem .6rem; border: 1.5px solid var(--border); border-radius: 4px;
+      padding: .5rem .6rem; border: 1.5px solid var(--border); border-radius: var(--r4);
     }
     .tl__actions { display: flex; flex-wrap: wrap; gap: .6rem; }
     .tl__note { margin: .6rem 0 0; font-size: .75rem; line-height: 1.5; color: #6B6055; }
     .tl__error {
       margin: .6rem 0 0; padding: .5rem .6rem; font-size: .8rem; line-height: 1.5;
       color: var(--danger); background: rgba(178,59,59,.07);
-      border: 1.5px solid rgba(178,59,59,.35); border-radius: 4px;
+      border: 1.5px solid rgba(178,59,59,.35); border-radius: var(--r4);
     }
     /* Breakpoints here are 900/768/480. At the narrowest the two buttons go
        full width rather than being squeezed side by side — one of them closes

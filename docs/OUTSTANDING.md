@@ -3346,6 +3346,158 @@ repository — five of them on 11 October alone, in the phases that wrote and
 widened the lint for it. A note in CLAUDE.md did not stop it and a CI job
 reports it ten minutes later; the hook reports it at the moment it is written.
 
+## 47. ⚠️ DM Mono has never been fetched, and every money figure rendered in Courier New
+
+**Fixed by naming the truth, with the alternative left to you.**
+
+`--font-mono: 'DM Mono', 'Courier New', monospace`. `index.html` has **never
+requested DM Mono**: the Google Fonts link asks for `Playfair+Display:wght@700;900`
+and `DM+Sans:wght@400;500;600;700` and nothing else. Readable from the file; no
+browser needed.
+
+So every money figure in this app — the room price, the hero statistic, the
+rent ledger, the archive's month amounts — has rendered in **Courier New or the
+platform monospace** since the day the token was written, while the design
+system said DM Mono and `design-handoff/TOKENS-CURRENT.md` reported it as one
+of "three real faces, plus the same three again as SCSS variables".
+
+**Nothing here could see it.** The token resolves, so `token-lint` is
+satisfied. The production build does not fetch fonts.
+`getComputedStyle().fontFamily` echoes the **declaration** back, so a drive
+reading it "confirms" a font that is not there.
+
+⚠️ **Which means one of my own claims was weaker than it read.** Phase I's
+`logo-drive` reports the wordmark's `fontFamily` as
+`"Playfair Display", Georgia, serif`. That proves the declaration, not the
+glyphs. Its load-bearing assertions — the 18.66px bold floor and the measured
+contrast — stand; the family is not evidence and is not treated as such.
+
+### Why this cannot be checked in a browser here
+
+Measured on 11 October: the strings `"DM Mono"`, `"Playfair Display"`, and two
+deliberately bogus family names all render at **identical width** in this
+container's Chromium — 292.03px for the same test string at 48px. Only the
+generic `monospace` and locally-installed `Courier New` differ. **No webfont
+loads here at all**, because `fonts.googleapis.com` is unreachable through the
+agent proxy. A rendered check would report every family as missing, including
+the two that work in production.
+
+So `scripts/font-lint.mjs` is a **static** check against the markup, which is
+where the truth is:
+
+1. Every family named in a `--font-*` token is either requested in
+   `index.html` or is a generic / system family that needs no request.
+2. Every weight used alongside `--font-display` is in the requested range — a
+   900 that was never fetched is **synthesised**, and a synthesised heavy serif
+   is the difference between a wordmark and a smeared one.
+
+Proven able to fail: putting `'DM Mono'` back → *"names "dm mono" — nothing
+requests it, so it never renders"*; changing the logo to weight 800 →
+*"display weight(s) 800 are used but NOT requested — the browser synthesises
+them"*; stripping the font request from `index.html` → refuses rather than
+passing.
+
+### The fix, and the decision left to you
+
+`--font-mono` now names
+`ui-monospace, 'Roboto Mono', Menlo, Consolas, 'Courier New', monospace` —
+honest, and the system monospace on Android is Roboto Mono, on iOS Menlo, both
+tabular, which is the only property this token is relied on for (a column of
+rand amounts has to line up).
+
+**If you want DM Mono, it has to be added to the font request** — naming it in
+a token does not fetch it. I did not add it: a third webfont family, for the
+digits in a rand figure, on a product built for a cheap Android on a metered
+connection, is a cost/identity call rather than a bug fix. One line in
+`index.html` if you want it.
+
+## 48. Twenty-eight radius values, and the 6px that §H3 said had to go — Phase J3
+
+**Fixed. Radius tolerance is now zero; spacing is ratcheted.**
+
+§H3's third identity move: *"Cream surfaces, ink structure, one radius. `--card`
+on `--cream`, hairline `--border`, `$r4` for controls and `$r12` for surfaces,
+and nothing else. Every `6px` and `8px` in a component block goes."*
+
+Measured before: **28 distinct radius values for 174 uses.** The tokens existed
+and were used — `var(--r4)` 40, `var(--r8)` 21, `var(--r-full)` 18 — and beside
+them:
+
+| Value | × | What it actually is |
+|---|---:|---|
+| `8px` | 15 | **is** `--r8` |
+| `6px` | 13 | on no scale — every one a control (button, select, input, toggle) |
+| `10px` | 10 | on no scale — six of them pills, four surfaces |
+| `4px` | 6 | **is** `--r4` |
+| `12px` | 3 | **is** `--r12` |
+| `20px`, `999px`, `5px`, `2px`, `0.4rem`, `0.6rem` | 1 each | — |
+
+Now **15 values for the same 174 uses**, and every remaining one is
+legitimate: the five tokens (147 uses), `50%` for circles (8), `0` for
+deliberately square (3), the SCSS `$r*` layer in stylesheets (10), and four
+one-side compound forms.
+
+Mapping, by what the element IS rather than by arithmetic: controls → `--r4`
+(so every `6px`, `5px`, `2px`, `0.4rem` went there); small surfaces → `--r8`;
+panels → `--r12`; chips at .6rem with .1rem padding → `--r-full`, which also
+makes them consistent with the state vocabulary's chip.
+
+**⚠️ I kept `--r8`, where §H3 said "r4 and r12 and nothing else".** 21 existing
+uses is not a rounding error and 8px is a real step between a control and a
+panel; removing it would be a 21-site visual change to satisfy the letter of a
+sentence in an audit I wrote myself.
+
+### The gate
+
+`scripts/scale-lint.mjs`. Radius: **zero tolerance**, because the migration is
+done. Spacing: **ratcheted**, because it is 60 values over 1073 uses and
+migrating it would be churn with real visual risk and no way to review it. The
+rhythm is `.25 / .5 / .75 / 1 / 1.25 / 1.5 / 2 / 2.5 / 3rem`; 39 off-scale
+values over 536 uses are baselined, led by `.6rem` ×101, `.4rem` ×66,
+`.85rem` ×45.
+
+Proven able to fail four ways, each reverted: a radius off the scale (`7px`); a
+**compound** radius with one off-scale part (`var(--r4) 3px 0 0` — the laxer
+first version of the rule let `2px 2px 0 0` through, which is how that value
+survived); a new off-scale spacing value (`.47rem`); and one MORE use of a
+value already baselined (`.6rem ×102`, baseline 101).
+
+Its own first run had a counting bug worth noting: `.6rem` and `0.6rem` were
+counted as two values (87 and 14), which made the tail look longer than it is
+and would have let a file switch spelling to get under a baseline. Normalised —
+**11 of the original 49 entries were a second spelling of another.**
+
+## 49. The money figure, in the display face — Phase J4 (§H3's first identity move)
+
+§H3: *"Playfair Display, heavy, for every number that matters — rent, the rand
+figure, the count on a dashboard card. Numerals in a serif display face on a
+letting board is immediately not-SaaS."*
+
+**Applied to the display figures, and deliberately NOT to the ledger ones.**
+
+The audit is right about the first and wrong about the second, and the reason
+is tabular numerals. The rent ledger and the archive's month list are columns
+of amounts that have to line up. The monospace stack gives fixed-width digits;
+Playfair, a proportional serif, does not. A column of rand figures that does
+not align is worse than a generic one.
+
+So:
+
+- **`.stat-box .val`** (the hero statistic) and **`.room-detail__price`** take
+  `--font-display` at weight 900 — one per screen, at size, the thing a person
+  looks for first.
+- **`.app-rent`** in a list and **`.arc-month__amount`** keep the monospace
+  stack, because alignment is the job.
+- **`.dash-count`** stays as it is: at `.85em` in slate inside a heading it is
+  a label, not a figure.
+
+`font-variant-numeric: lining` on both, because **Playfair ships old-style
+figures by default**: without it the 2 and the 5 in "R2 500" drop below the
+baseline like lower-case letters, which on a price reads as a rendering fault.
+
+`.figure` is a class in `styles.scss` so the next display figure gets the same
+treatment without a fourth opinion about it.
+
 ## 41. A contrast gate that is claimed in a comment and does not exist
 
 **Not written. Logged so it stops being asserted in prose.**
@@ -3516,6 +3668,11 @@ node scripts/token-render-drive.mjs      # 51 checks — Phase H. The fourteen
                                          # borders that var(--line) silently
                                          # dropped, measured as PAINTED at
                                          # 360 / 390 / 768 / 1280
+node scripts/scale-lint.mjs              # Phase J3. Radius on the scale with
+                                         # zero tolerance; spacing ratcheted
+node scripts/font-lint.mjs               # Phase J4. A font token may not name
+                                         # a family nothing fetches — DM Mono
+                                         # never was
 node scripts/feedback-lint.mjs           # Phase J2. Loading, empty and error
                                          # are three components, and the
                                          # loading state is announced
