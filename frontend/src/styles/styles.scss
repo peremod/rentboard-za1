@@ -26,7 +26,7 @@ a { color: $color-terracotta; }
   margin: 0 auto;
 
   section { margin-bottom: 2.5rem; }
-  h2 { font-size: 1.15rem; margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 2px solid #DDD5C8; }
+  h2 { font-size: 1.15rem; margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 2px solid var(--border); }
   h3 { font-size: 1rem; margin: 1rem 0 .5rem; }
   p, li { line-height: 1.75; margin-bottom: .5rem; }
   ul, ol { margin-left: 1.5rem; margin-bottom: .75rem; }
@@ -221,7 +221,7 @@ input[type='radio'] {
   white-space: nowrap;
   text-decoration: none;
 
-  color: #fff;
+  color: var(--white);
   background: $color-terracotta;
   border: none;
   border-radius: $r4;
@@ -242,7 +242,7 @@ input[type='radio'] {
   // the background without setting the foreground is the defect; they are one
   // decision.
   &:hover:not(:disabled) {
-    color: #fff;
+    color: var(--white);
     background: $color-terra-deep;
     transform: translateY(-1px);
     box-shadow: 0 4px 14px rgba(192, 78, 40, .35);
@@ -552,7 +552,7 @@ input[type='file']:not([hidden]) {
     }
 
     &.is-active {
-      color: #fff;
+      color: var(--white);
       background: $color-terracotta;
       border-color: $color-terracotta;
 
@@ -702,7 +702,7 @@ fieldset {
 
   // Ink is the landlord's, not ours.
   body {
-    background: #fff !important;
+    background: var(--white) !important;
     color: #000 !important;
   }
 

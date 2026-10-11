@@ -19,12 +19,21 @@
  *     A value used at three breakpoints is three uses, which is honest —
  *     it is three places to change.
  *   · SCSS variable DEFINITIONS are excluded from the count and listed
- *     separately, or every token would score one free use for existing.
+ *     separately, or every token would score one free use for existing. (This
+ *     was claimed and not true until 11 October — see the `\$?` note below.)
  *   · Values inside comments are excluded; the comments here are long and
  *     quote hex codes constantly.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  stripComments,
+  componentCss,
+  hex2rgb,
+  lab,
+  deltaE,
+  SAME_COLOUR_DELTA_E,
+} from '../../scripts/lib/css-values.mjs';
 
 const STYLES = 'frontend/src/styles';
 const APP = 'frontend/src/app';
@@ -34,56 +43,6 @@ const walk = (dir) =>
     const p = join(dir, e);
     return statSync(p).isDirectory() ? walk(p) : [p];
   });
-
-/** Blank out comments, preserving offsets. Both // and /* *\/ and SCSS //. */
-function stripComments(src) {
-  const out = src.split('');
-  let i = 0, str = null;
-  while (i < src.length) {
-    const c = src[i], n = src[i + 1];
-    if (str) {
-      if (c === '\\') { i += 2; continue; }
-      if (c === str) str = null;
-      i++; continue;
-    }
-    if (c === "'" || c === '"' || c === '`') { str = c; i++; continue; }
-    if (c === '/' && n === '/') { while (i < src.length && src[i] !== '\n') { out[i] = ' '; i++; } continue; }
-    if (c === '/' && n === '*') {
-      const end = src.indexOf('*/', i + 2);
-      const stop = end === -1 ? src.length : end + 2;
-      for (; i < stop; i++) if (src[i] !== '\n') out[i] = ' ';
-      continue;
-    }
-    i++;
-  }
-  return out.join('');
-}
-
-/** Just the CSS out of a component .ts — its `styles:` literal(s). */
-function componentCss(src) {
-  let css = '';
-  const re = /\bstyles\s*:\s*(\[|`)/g;
-  let m;
-  while ((m = re.exec(src))) {
-    // Walk forward collecting every template literal until the array closes.
-    let i = m.index + m[0].length - 1;
-    const arr = src[i] === '[';
-    if (arr) i++;
-    let guard = 0;
-    while (guard++ < 50) {
-      const tick = src.indexOf('`', i);
-      if (tick === -1) break;
-      let j = tick + 1;
-      while (j < src.length && !(src[j] === '`' && src[j - 1] !== '\\')) j++;
-      css += '\n' + src.slice(tick + 1, j);
-      i = j + 1;
-      if (!arr) break;
-      const next = src.slice(i).match(/^\s*([,\]])/);
-      if (!next || next[1] === ']') break;
-    }
-  }
-  return css;
-}
 
 const files = [];
 for (const f of walk(STYLES)) if (f.endsWith('.scss')) files.push({ f, css: readFileSync(f, 'utf8'), kind: 'scss' });
@@ -129,7 +88,18 @@ for (const { f, css: raw, kind } of files) {
   }
   // Everything below reads DECLARATIONS only, so a value in a selector name or
   // a variable definition is not mistaken for a use.
-  const decls = [...css.matchAll(/([-\w]+)\s*:\s*([^;{}]+)[;}]/g)]
+  /**
+   * ⚠️ The `\$?` is load-bearing and its absence was a silent bug for the whole
+   * life of this file. The pattern was `([-\w]+)` with a
+   * `.filter(m => !m[1].startsWith('$'))` behind it — but `[-\w]` does not
+   * match `$`, so on `$color-cream-2: #F2EDE3;` the match simply began one
+   * character later and `m[1]` was `color-cream-2`. The filter could never
+   * fire, every SCSS palette definition in `_variables.scss` was counted as a
+   * literal colour USE, and the header's claim that definitions are excluded
+   * was false for twenty of them. Exactly the defect class this repo keeps
+   * shipping: a guard that cannot see its own subject.
+   */
+  const decls = [...css.matchAll(/(\$?[-\w]+)\s*:\s*([^;{}]+)[;}]/g)]
     .filter((m) => !m[1].startsWith('$'));
 
   for (const [, prop, rawVal] of decls) {
@@ -177,23 +147,6 @@ for (const { f, css: raw, kind } of files) {
  * point. Hex distance flags the wrong pairs. ΔE below 3 is "a careful eye in
  * good light, side by side"; below 2 is "nobody, ever".
  */
-const hex2rgb = (h) => {
-  let x = h.replace('#', '');
-  if (x.length === 3) x = [...x].map((c) => c + c).join('');
-  if (x.length !== 6) return null;
-  return [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16));
-};
-const lab = (rgb) => {
-  const f = (v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
-  const [r, g, b] = rgb.map(f);
-  const X = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047;
-  const Y = (r * 0.2126 + g * 0.7152 + b * 0.0722);
-  const Z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883;
-  const k = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
-  return [116 * k(Y) - 16, 500 * (k(X) - k(Y)), 200 * (k(Y) - k(Z))];
-};
-const deltaE = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
-
 function nearDuplicates(colourRows, tokenDefRows) {
   // Token definitions join the comparison: a literal sitting 1.2 ΔE from a
   // token the system already defines is the clearest possible finding.
@@ -215,7 +168,7 @@ function nearDuplicates(colourRows, tokenDefRows) {
     const group = [pts[i]];
     for (let j = i + 1; j < pts.length; j++) {
       if (used.has(j)) continue;
-      if (deltaE(pts[i].lab, pts[j].lab) < 3) { group.push(pts[j]); used.add(j); }
+      if (deltaE(pts[i].lab, pts[j].lab) < SAME_COLOUR_DELTA_E) { group.push(pts[j]); used.add(j); }
     }
     if (group.length > 1) { used.add(i); clusters.push(group); }
   }

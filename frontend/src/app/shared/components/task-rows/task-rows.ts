@@ -76,7 +76,7 @@ export interface TaskRow {
       .inbox-list { list-style: none; margin: 0; padding: 0; }
       .inbox-row {
         align-items: flex-start;
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--border);
         display: flex;
         gap: 0.7rem;
         padding: 0.7rem 0;

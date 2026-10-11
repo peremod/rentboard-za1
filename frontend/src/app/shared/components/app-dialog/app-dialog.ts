@@ -36,7 +36,7 @@ import { DialogService } from '../../../core/services/dialog.service';
   styles: [`
     .dlg { position: fixed; inset: 0; z-index: 400; background: rgba(26,20,16,.55);
            display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
-    .dlg__panel { background: #fff; border-radius: 12px; padding: 1.75rem 1.5rem;
+    .dlg__panel { background: var(--white); border-radius: 12px; padding: 1.75rem 1.5rem;
                   max-width: 24rem; width: 100%; text-align: center;
                   box-shadow: 0 18px 44px rgba(0,0,0,.22); }
     .dlg__icon { font-size: 2rem; line-height: 1; margin-bottom: .5rem; }

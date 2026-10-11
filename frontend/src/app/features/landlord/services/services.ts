@@ -147,7 +147,7 @@ import {
       .services-filter label span { display: block; margin-bottom: 0.25rem; }
       .services-filter input { width: 100%; }
       .provider {
-        border-top: 1px solid var(--line);
+        border-top: 1px solid var(--border);
         padding: 0.75rem 0;
       }
       .provider__head {

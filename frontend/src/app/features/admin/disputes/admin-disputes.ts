@@ -130,7 +130,7 @@ import { FLAG_REASONS, OpenTenancyFlag, TenancyFlagReason } from '../../../core/
       margin: .6rem 0 0;
       padding: .6rem .8rem;
       border-left: 3px solid var(--line, #e3ded6);
-      background: #fff;
+      background: var(--white);
       font-size: .88rem;
       line-height: 1.55;
       white-space: pre-wrap;

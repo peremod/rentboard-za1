@@ -144,6 +144,26 @@ jobs:
         working-directory: frontend
         run: npx ng build --configuration development
 
+      - name: Token gate — no literal colour that duplicates a token
+        if: ${{ !cancelled() }}
+        # `--border` is #E0D5C4 and the styling also wrote #DDD5C8 nineteen
+        # times: 2.40 apart in CIE Lab, which is a difference nobody has ever
+        # seen, stored twice and only half of it moves when the token is
+        # changed. `--terra` has been changed twice for contrast, `--gold-text`
+        # twice, `--slate` once — each of those fixed the token and left the
+        # hand-written copies behind, and a hex code is always valid CSS so
+        # nothing here could see it. Reads source, not the build, so it does
+        # not depend on the step above.
+        run: node scripts/token-lint.mjs
+
+      - name: Inline template literals — no stray backtick
+        if: ${{ !cancelled() }}
+        # A backtick inside a component's inline `template:` TERMINATES the
+        # template. It has happened eight times in this repo and the error is
+        # `TS1005: ',' expected` pointing at a line far from the cause, so the
+        # build failure is real but reads as unrelated. This names file:line.
+        run: node scripts/template-literal-lint.mjs
+
       - name: Environment parity
         if: ${{ !cancelled() }}
         # Each environment file must define the same keys. A key present in

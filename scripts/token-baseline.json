@@ -1,0 +1,68 @@
+{
+  "note": "Literal colours within ΔE 3 of a token that already exists, counted per file. Debt, not permission — delete lines as they are fixed. A literal NOT in here, or one count higher than here, fails the gate. --update-baseline only ratchets down.",
+  "files": {
+    "frontend/src/app/features/account/messages/messages.ts": {
+      "#3A3228": 3,
+      "#F2EDE3": 2
+    },
+    "frontend/src/app/features/landlord/applicants-inbox/applicants-inbox.ts": {
+      "#3A3228": 1,
+      "#3D7040": 2,
+      "#F2EDE3": 2
+    },
+    "frontend/src/app/features/landlord/applicants/applicants.ts": {
+      "#3A3228": 4,
+      "#3D7040": 3,
+      "#E0D5C4": 2,
+      "#F2EDE3": 1,
+      "#FDFAF5": 1
+    },
+    "frontend/src/app/features/landlord/create-room/create-room.ts": {
+      "#FDF6EC": 1
+    },
+    "frontend/src/app/features/room-detail/room-detail.ts": {
+      "#3A3228": 1,
+      "#3D7040": 1,
+      "#F2EDE3": 1,
+      "#FDF6EC": 1
+    },
+    "frontend/src/app/features/storefront/storefront.ts": {
+      "#F4F1EC": 1
+    },
+    "frontend/src/app/shared/components/app-dialog/app-dialog.ts": {
+      "#1A1410": 1
+    },
+    "frontend/src/app/shared/components/cookie-consent/cookie-consent.ts": {
+      "#1A1410": 1
+    },
+    "frontend/src/app/shared/components/lang-switcher/lang-switcher.ts": {
+      "#1A1410": 1
+    },
+    "frontend/src/app/shared/components/lease-panel/lease-panel.ts": {
+      "#8E3519": 1
+    },
+    "frontend/src/app/shared/components/message-thread/message-thread.ts": {
+      "#1A1410": 1,
+      "#F2EDE3": 1,
+      "#FDFAF5": 2
+    },
+    "frontend/src/app/shared/components/photo-upload/photo-upload.ts": {
+      "#FDFAF5": 1
+    },
+    "frontend/src/app/shared/components/screen-hint/screen-hint.ts": {
+      "#1C160E": 1,
+      "#AD4222": 2
+    },
+    "frontend/src/app/shared/components/skeleton-card/skeleton-card.ts": {
+      "#F2EDE3": 3,
+      "#FDFAF4": 1
+    },
+    "frontend/src/styles/_responsive.scss": {
+      "rgb(58,50,40)": 2
+    },
+    "frontend/src/styles/_spec.scss": {
+      "#3D7040": 1,
+      "#FFF": 13
+    }
+  }
+}

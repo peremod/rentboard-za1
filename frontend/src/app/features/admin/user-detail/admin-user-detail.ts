@@ -319,7 +319,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
     .ac-check { flex-direction: row !important; align-items: flex-start; gap: .55rem; line-height: 1.6; }
     .ac-check input { width: 20px; height: 20px; margin-top: .15rem; flex-shrink: 0; }
     .btn-danger {
-      background: #D63B3B; color: #fff; border: none;
+      background: #D63B3B; color: var(--white); border: none;
       &:disabled { opacity: .5; cursor: not-allowed; }
     }
     @media (max-width: 480px) {

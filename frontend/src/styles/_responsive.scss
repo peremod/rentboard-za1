@@ -60,7 +60,7 @@
   &:hover { background: var(--cream2); box-shadow: none; transform: none; }
 }
 .filter-toggle-count {
-  background: var(--terra); color: #fff;
+  background: var(--terra); color: var(--white);
   font-size: .68rem; font-weight: 700;
   min-width: 1.15rem; height: 1.15rem;
   display: inline-flex; align-items: center; justify-content: center;
@@ -436,7 +436,7 @@
 .portal-nav-cta { padding: .75rem 1.25rem; margin-top: 1rem; }
 .portal-nav-cta .btn { width: 100%; font-size: .82rem; }
 .portal-nav-badge {
-  background: var(--terra); color: #fff;
+  background: var(--terra); color: var(--white);
   font-size: .6rem; font-weight: 700;
   padding: .1rem .35rem; border-radius: var(--r-full); margin-left: .35rem;
 }
@@ -542,7 +542,7 @@
 
 // Verified landlord badge. The spec predates verification existing, so it has
 // no rule for this; sage keeps it distinct from Featured (gold) and New.
-.badge-verified { background: var(--sage); color: #fff; }
+.badge-verified { background: var(--sage); color: var(--white); }
 /* Sand rather than red: an unverified landlord is the normal case today, not a
    warning about that person. Global rather than in room-detail's own styles —
    component styles are MORE specific under emulated encapsulation, which is
@@ -552,7 +552,7 @@
    a sublet is a legitimate listing with a real extra risk attached, and styling
    it as either "good" or "danger" would misdescribe it. Global, for the same
    encapsulation reason as the two above. */
-.badge-sublet { background: rgba(200,144,42,.9); color: #fff; }
+.badge-sublet { background: rgba(200,144,42,.9); color: var(--white); }
 /* The note under the household filters, which says they hide listings that have
    not described themselves. Smaller than a label, not a muted aside: it is the
    difference between "no rooms match" and "the board is broken". */
@@ -974,7 +974,7 @@
 .quick-chip--on {
   background: var(--terra);
   border-color: var(--terra);
-  color: #fff;
+  color: var(--white);
 }
 
 .quick-filters__note { font-size: .78rem; color: var(--slate); }

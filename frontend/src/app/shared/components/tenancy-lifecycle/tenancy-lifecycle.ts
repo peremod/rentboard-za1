@@ -126,7 +126,7 @@ import { Tenancy } from '../../../core/models/tenancy.model';
     .tl__title { font-size: 1rem; margin: 0 0 .25rem; }
     .tl__lede { margin: 0 0 .75rem; font-size: .82rem; line-height: 1.55; color: #5A5047; }
     .tl__card {
-      border: 1.5px solid #DDD5C8; border-radius: 8px; background: #fff;
+      border: 1.5px solid var(--border); border-radius: 8px; background: var(--white);
       padding: .9rem; margin-bottom: .75rem;
     }
     .tl__who { display: grid; gap: .1rem; margin-bottom: .5rem; }
@@ -135,7 +135,7 @@ import { Tenancy } from '../../../core/models/tenancy.model';
     .tl__field { display: grid; gap: .25rem; font-size: .8rem; font-weight: 600; margin-bottom: .7rem; }
     .tl__field input {
       width: 100%; font: inherit; font-weight: 400; min-height: 44px;
-      padding: .5rem .6rem; border: 1.5px solid #DDD5C8; border-radius: 4px;
+      padding: .5rem .6rem; border: 1.5px solid var(--border); border-radius: 4px;
     }
     .tl__actions { display: flex; flex-wrap: wrap; gap: .6rem; }
     .tl__note { margin: .6rem 0 0; font-size: .75rem; line-height: 1.5; color: #6B6055; }

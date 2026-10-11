@@ -973,6 +973,59 @@ revert is the argument — with the guard gone the room is relisted at the
 - Fail the build on a literal hex within ΔE 3 of an existing token (H1). `css-coverage-audit.mjs` is the precedent; `tokens.mjs` is the clustering
 - Then migrate `#DDD5C8` ×19 and `#FFF` ×52 — 71 of 330 in two passes
 
+**Done — and the plan above understated what was there.**
+
+`scripts/token-lint.mjs`, in `npm run audit` and in CI. 57 literals migrated
+across 20 files; `--white` went from 22 uses to 59, `--border` from 131 to 145;
+literal colour uses fell from 314 to 258. 59 remain, carried in
+`scripts/token-baseline.json` as a ratcheting baseline keyed by file, value and
+count — debt, not permission.
+
+**⚠️ The gate's second assertion found a worse defect than the one it was
+written for.** `var(--line)` is referenced **14 times across 9 components** and
+defined **nowhere**. An unresolved custom property is not a CSS error: the
+declaration is dropped, every longhand becomes `unset`, and `border-style`
+falls back to its initial value of `none`. Measured in Chromium:
+
+```
+border-bottom: 1px solid var(--line)    →  style "none",  width "0px"
+border-bottom: 1px solid var(--border)  →  style "solid", width "1px"
+```
+
+So 14 separators did not exist — the public storefront ran as one unbroken
+column, the lease panel had no rule above its sections, the landlord's private
+notes had no left bar, and every task row touched the next, on both dashboards.
+`ng build` is green over it (an unknown custom property is valid CSS), `tsc`
+never reads a `styles:` block, and `css-coverage-audit.mjs` asks whether a
+CLASS has a rule — not whether the rule's values resolve.
+
+That is this audit's own §G finding one level deeper than §G stated it. §G said
+the tokens were sound and bypassed; it did not consider that a bypass could
+name a token that does not exist, and that the failure mode of that is
+*silence* rather than a wrong colour.
+
+**Proof — done.** `scripts/token-render-drive.mjs`, 51 checks at
+360 / 390 / 768 / 1280 on the two screens carrying the only width-changing
+cases. Five reintroductions, each reverted: a migrated `#fff`, a count above
+the baseline, `--update-baseline` refusing to launder it, a `var(--bordre)`
+typo, and the gate pointed at a directory with no tokens (exit 2, "refusing to
+pass vacuously"). Reverting one `var(--border)` to `var(--line)` turns the
+drive red in eight places.
+
+**Three more phantom controls, all the same shape** (`docs/OUTSTANDING.md`
+§§ 40–41): `tokens.mjs` had a `$`-definition filter that could never fire, so
+twenty palette definitions were counted as literal colour uses and the
+handoff's headline figure was wrong for the life of the file;
+`scripts/control-contrast-audit.mjs` is asserted in a component comment and has
+never existed; and `template-literal-lint.mjs`, written in Phase F, was wired
+into no npm script, no workflow and no hook. Both real gates are now in
+`npm run audit` and in `ci.yml`.
+
+**And one Phase F miss, mine:** `.arc-review__by` on the archive screen had no
+rule at all. `css-coverage-audit.mjs` named it on this phase's build, which
+means it was red at `cc12db1` and I reported Phase F's gates as green without
+rerunning it against the build.
+
 **Already landed early, from Phase D:** `scripts/template-literal-lint.mjs`.
 Not a CSS gate, but the same argument — a backtick inside an inline
 `template:` literal terminates the template, it has happened eight times, and

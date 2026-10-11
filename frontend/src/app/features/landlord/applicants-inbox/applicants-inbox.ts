@@ -207,7 +207,7 @@ import {
     .ai-filters label { display: flex; flex-direction: column; gap: .2rem; font-size: .72rem; color: var(--slate); }
     .ai-filters select {
       font: inherit; font-size: .85rem; padding: .4rem .5rem;
-      border: 1px solid var(--border); border-radius: 6px; background: #fff; min-width: 9rem;
+      border: 1px solid var(--border); border-radius: 6px; background: var(--white); min-width: 9rem;
     }
     .ai-empty { color: var(--slate); line-height: 1.6; max-width: 34rem; }
     .ai-list { list-style: none; padding: 0; margin: 1rem 0 0; }

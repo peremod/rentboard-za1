@@ -264,7 +264,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     .applicants__back { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: space-between; font-size: .85rem; }
     h1 { font-size: 1.3rem; margin: .5rem 0 1.5rem; }
     .muted { color: var(--slate); }
-    .applicant-card { border: 1px solid #DDD5C8; border-radius: 8px; margin-bottom: .75rem; overflow: hidden; }
+    .applicant-card { border: 1px solid var(--border); border-radius: 8px; margin-bottom: .75rem; overflow: hidden; }
     /* ⚠️ A button needs its inherited text put back BY NAME.
        The font: inherit shorthand restores family and size and NOT colour -
        which is how Phase 7c shipped inbox rows rendering white-on-cream at
@@ -305,7 +305,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
        redesign of the row.) */
     .applicant-card__actions button {
       padding: .4rem .9rem; min-height: 44px; border-radius: 6px;
-      border: 1px solid #DDD5C8; background: #fff; cursor: pointer;
+      border: 1px solid var(--border); background: var(--white); cursor: pointer;
       font-size: .78rem; font-weight: 600;
     }
     .viewing {
@@ -320,12 +320,12 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     .viewing-form label { display: grid; gap: .25rem; font-size: .82rem; font-weight: 600; }
     .viewing-form input {
       font: inherit; font-weight: 400; padding: .55rem .6rem; min-height: 44px;
-      border: 1.5px solid #DDD5C8; border-radius: 6px;
+      border: 1.5px solid var(--border); border-radius: 6px;
     }
     .viewing-form .field-hint { font-weight: 400; line-height: 1.6; }
     .viewing-form__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; }
-    .applicant-card__actions .accept { background: #3D7040; color: #fff; border: none; }
-    .applicant-card__actions .reject { background: #D63B3B; color: #fff; border: none; }
+    .applicant-card__actions .accept { background: #3D7040; color: var(--white); border: none; }
+    .applicant-card__actions .reject { background: #D63B3B; color: var(--white); border: none; }
 
     /* Mobile — PRE-LAUNCH-CHECKLIST.md #9.
        480px, not 400px: the breakpoints this codebase uses are 900/768/480

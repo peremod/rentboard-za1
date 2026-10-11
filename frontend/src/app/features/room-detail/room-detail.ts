@@ -395,7 +395,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
     .gallery__thumb img { width: 100%; height: 100%; aspect-ratio: 3/2;
                           object-fit: cover; border-radius: 8px; display: block; }
     .gallery__more { position: absolute; inset: 0; display: flex; align-items: center;
-                     justify-content: center; background: rgba(26,20,16,.62); color: #fff;
+                     justify-content: center; background: rgba(26,20,16,.62); color: var(--white);
                      font-weight: 700; border-radius: 8px; font-size: 1.05rem; }
 
     @media (max-width: 700px) {
@@ -407,9 +407,9 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
                 display: flex; align-items: center; justify-content: center; padding: 2rem; }
     .lightbox img { max-width: 100%; max-height: 88vh; object-fit: contain; border-radius: 6px; }
     .lightbox__close { position: absolute; top: 1rem; right: 1.25rem; font-size: 1.6rem;
-                       background: none; border: none; color: #fff; cursor: pointer; line-height: 1; }
+                       background: none; border: none; color: var(--white); cursor: pointer; line-height: 1; }
     .lightbox__nav { position: absolute; top: 50%; transform: translateY(-50%);
-                     font-size: 2.5rem; background: none; border: none; color: #fff;
+                     font-size: 2.5rem; background: none; border: none; color: var(--white);
                      cursor: pointer; padding: 0 1rem; line-height: 1; }
     .lightbox__nav--prev { left: .25rem; }
     .lightbox__nav--next { right: .25rem; }
@@ -446,9 +446,9 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
     .sublet-notice a { font-weight: 600; }
     .shared-household { margin: .6rem 0 1rem; padding-left: 1.1rem; line-height: 1.6; }
     .shared-household li { margin-bottom: .2rem; }
-    .room-detail__apply { border-top: 1px solid #DDD5C8; padding-top: 1.5rem; }
-    .room-detail__apply textarea { width: 100%; padding: .6rem; border: 1.5px solid #DDD5C8; border-radius: 6px; margin-bottom: .6rem; font-family: inherit; }
-    .room-detail__apply button { padding: .6rem 1.2rem; border-radius: 6px; border: none; background: var(--terra); color: #fff; font-weight: 700; cursor: pointer; }
+    .room-detail__apply { border-top: 1px solid var(--border); padding-top: 1.5rem; }
+    .room-detail__apply textarea { width: 100%; padding: .6rem; border: 1.5px solid var(--border); border-radius: 6px; margin-bottom: .6rem; font-family: inherit; }
+    .room-detail__apply button { padding: .6rem 1.2rem; border-radius: 6px; border: none; background: var(--terra); color: var(--white); font-weight: 700; cursor: pointer; }
     .room-detail__apply button:disabled { opacity: .5; }
     .error { color: #D63B3B; font-size: .82rem; margin-bottom: .5rem; }
     .muted { color: var(--slate); }

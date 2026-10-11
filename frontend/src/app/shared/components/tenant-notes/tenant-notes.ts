@@ -104,10 +104,10 @@ import { DialogService } from '../../../core/services/dialog.service';
   styles: [
     `
       .notes-block { margin-top: 0.5rem; }
-      .notes-body { border-left: 3px solid var(--line); margin-top: 0.4rem; padding-left: 0.7rem; }
+      .notes-body { border-left: 3px solid var(--border); margin-top: 0.4rem; padding-left: 0.7rem; }
       .notes-privacy { font-size: 0.8rem; line-height: 1.5; }
       .notes-list { list-style: none; margin: 0.6rem 0; padding: 0; }
-      .note { border-bottom: 1px solid var(--line); padding: 0.5rem 0; }
+      .note { border-bottom: 1px solid var(--border); padding: 0.5rem 0; }
       .note:last-child { border-bottom: 0; }
       .note-body { margin: 0; white-space: pre-wrap; }
       .note-meta { display: block; font-size: 0.75rem; margin-top: 0.15rem; }

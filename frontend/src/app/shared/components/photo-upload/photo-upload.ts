@@ -47,7 +47,7 @@ export interface UploadedPhoto {
     </div>
   `,
   styles: [`
-    .photo-upload__dropzone { border: 2px dashed #DDD5C8; border-radius: 10px; padding: 2rem 1rem; text-align: center; cursor: pointer; background: #FDFAF5; }
+    .photo-upload__dropzone { border: 2px dashed var(--border); border-radius: 10px; padding: 2rem 1rem; text-align: center; cursor: pointer; background: #FDFAF5; }
     .photo-upload__dropzone:hover { border-color: var(--terra); }
     .muted { font-size: .78rem; color: var(--slate); }
     .error { color: #D63B3B; font-size: .82rem; margin-top: .5rem; }
@@ -55,8 +55,8 @@ export interface UploadedPhoto {
     .photo-upload__item { position: relative; aspect-ratio: 3/2; border-radius: 8px; overflow: hidden; border: 2px solid transparent; }
     .photo-upload__item.hero { border-color: var(--terra); }
     .photo-upload__item img { width: 100%; height: 100%; object-fit: cover; }
-    .photo-upload__badge { position: absolute; bottom: 4px; left: 4px; background: var(--terra); color: #fff; font-size: .6rem; font-weight: 700; padding: .1rem .4rem; border-radius: 4px; }
-    .photo-upload__item button { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,.6); color: #fff; border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: .7rem; }
+    .photo-upload__badge { position: absolute; bottom: 4px; left: 4px; background: var(--terra); color: var(--white); font-size: .6rem; font-weight: 700; padding: .1rem .4rem; border-radius: 4px; }
+    .photo-upload__item button { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,.6); color: var(--white); border: none; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: .7rem; }
   `],
 })
 export class PhotoUpload {

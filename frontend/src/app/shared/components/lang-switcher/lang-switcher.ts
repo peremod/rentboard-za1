@@ -36,7 +36,7 @@ import { LanguageCode, localizePath, stripLocalePrefix } from '../../../core/mod
     /* The menu entries are tap targets too — eleven languages in a list where
        every row is something to hit with a thumb. */
     .lang-switcher__menu button { width: 100%; text-align: left; background: none; border: none; color: rgba(255,255,255,.8); font-size: .78rem; padding: .4rem .6rem; border-radius: 5px; cursor: pointer; font-family: inherit; min-height: 44px; }
-    .lang-switcher__menu button:hover, .lang-switcher__menu button.active { background: rgba(255,255,255,.08); color: #fff; }
+    .lang-switcher__menu button:hover, .lang-switcher__menu button.active { background: rgba(255,255,255,.08); color: var(--white); }
     .muted { color: rgba(255,255,255,.4); font-size: .68rem; margin-left: .3rem; }
   `],
 })

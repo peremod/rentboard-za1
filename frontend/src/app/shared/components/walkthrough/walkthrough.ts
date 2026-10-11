@@ -322,7 +322,7 @@ const ADMIN_STEPS: Step[] = [
       padding: 1rem;
     }
     .wt-card {
-      background: var(--card, #fff); border-radius: var(--r12, 12px);
+      background: var(--card, var(--white)); border-radius: var(--r12, 12px);
       box-shadow: 0 18px 50px rgba(0, 0, 0, .3);
       max-width: 30rem; width: 100%; padding: 1.5rem;
       max-height: calc(100vh - 2rem); overflow-y: auto;

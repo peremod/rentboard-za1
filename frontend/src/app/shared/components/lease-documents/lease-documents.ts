@@ -143,7 +143,7 @@ function humanSize(bytes?: number | null): string {
       .doc-list { list-style: none; margin: 0.5rem 0 1rem; padding: 0; }
       .doc-row {
         align-items: flex-start;
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--border);
         display: flex;
         gap: 0.75rem;
         justify-content: space-between;

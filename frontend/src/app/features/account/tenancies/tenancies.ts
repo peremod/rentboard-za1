@@ -410,6 +410,12 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     .arc-month__answer, .arc-review__body, .arc-review__reply,
     .arc-report__detail, .arc-report__outcome { flex-basis: 100%; color: var(--ink2); }
     .arc-review__type { font-weight: 700; }
+    /* The attribution — who wrote it and when. Metadata beside the rating,
+       not part of it, and it had NO rule at all until the CSS coverage
+       audit named it: it inherited --ink and read as loudly as the review
+       itself. Phase F shipped it bare and this phase's build is where it
+       surfaced. */
+    .arc-review__by { color: var(--slate); }
     .arc-review__stars { color: var(--gold); letter-spacing: .05em; }
     .arc-review__reply, .arc-report__outcome { color: var(--slate); font-style: italic; }
     .arc-timeline li { padding: .25rem 0; color: var(--ink2); }

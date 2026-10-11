@@ -183,7 +183,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     .msg-row__main { flex: 1; min-width: 0; }
     .msg-row__who { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
     .side { font-size: .7rem; color: var(--slate); }
-    .unread { font-size: .65rem; font-weight: 700; background: var(--terra); color: #fff; padding: .1rem .4rem; border-radius: 10px; }
+    .unread { font-size: .65rem; font-weight: 700; background: var(--terra); color: var(--white); padding: .1rem .4rem; border-radius: 10px; }
     .closed { font-size: .65rem; font-weight: 700; background: #F2EDE3; color: #3A3228; padding: .1rem .4rem; border-radius: 10px; }
     .msg-row__room { margin: .25rem 0 0; font-size: .85rem; }
     .msg-row__last { margin: .3rem 0 0; font-size: .8rem; display: flex; gap: .4rem; align-items: baseline; flex-wrap: wrap; }

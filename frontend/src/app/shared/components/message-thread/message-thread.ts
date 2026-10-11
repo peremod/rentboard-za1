@@ -58,20 +58,20 @@ import { Message } from '../../../core/models/message.model';
     </div>
   `,
   styles: [`
-    .thread { border: 1px solid #DDD5C8; border-radius: 8px; overflow: hidden; margin-top: .75rem; }
+    .thread { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-top: .75rem; }
     .thread__messages { max-height: 260px; overflow-y: auto; padding: .75rem; display: flex; flex-direction: column; gap: .5rem; background: #FDFAF5; }
     .muted { font-size: .8rem; color: var(--slate); }
     .thread__message { align-self: flex-start; background: #F2EDE3; padding: .5rem .7rem; border-radius: 10px; max-width: 80%; font-size: .82rem; }
-    .thread__message.mine { align-self: flex-end; background: var(--terra); color: #fff; }
+    .thread__message.mine { align-self: flex-end; background: var(--terra); color: var(--white); }
     .thread__channel { display: block; font-size: .6rem; opacity: .7; margin-top: .2rem; }
-    .thread__composer { display: flex; border-top: 1px solid #DDD5C8; }
+    .thread__composer { display: flex; border-top: 1px solid var(--border); }
     .thread__composer input { flex: 1; border: none; padding: .6rem .7rem; font-size: .82rem; font-family: inherit; }
-    .thread__composer button { border: none; background: #1A1410; color: #fff; padding: 0 1rem; cursor: pointer; font-weight: 700; font-size: .8rem; }
+    .thread__composer button { border: none; background: #1A1410; color: var(--white); padding: 0 1rem; cursor: pointer; font-weight: 700; font-size: .8rem; }
     .thread__composer button:disabled { opacity: .5; cursor: not-allowed; }
     .thread__closed { margin: 0; padding: .6rem .7rem; font-size: .75rem; color: var(--slate);
-                      border-top: 1px solid #DDD5C8; background: #FDFAF5; line-height: 1.5; }
+                      border-top: 1px solid var(--border); background: #FDFAF5; line-height: 1.5; }
     .thread__error { margin: 0; padding: .5rem .7rem; font-size: .75rem; color: #D63B3B;
-                     border-top: 1px solid #DDD5C8; background: rgba(214,59,59,.06); }
+                     border-top: 1px solid var(--border); background: rgba(214,59,59,.06); }
   `],
 })
 export class MessageThread implements OnInit {

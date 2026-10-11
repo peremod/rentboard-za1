@@ -2707,6 +2707,156 @@ checked through the API; that they render is `inbox-drive` and
 
 ---
 
+## 40. Fourteen borders that were never drawn — Phase H
+
+**Fixed, and the gate that found it is now in CI.**
+
+### What was wrong
+
+`var(--line)` is referenced **fourteen times across nine components** and is
+defined **nowhere**. Not a wrong value: no definition at all.
+
+An unresolved custom property is not a CSS error. The declaration is dropped,
+every longhand of the shorthand becomes `unset`, and `border-style` falls back
+to its initial value of `none`. Measured in Chromium rather than read off the
+spec:
+
+```
+border-bottom: 1px solid var(--line)    →  style "none",  width "0px"
+border-bottom: 1px solid var(--border)  →  style "solid", width "1px"
+```
+
+So fourteen separators did not exist:
+
+| Component | Declaration | What a person saw |
+|---|---|---|
+| `storefront` | `.store-section` / `.store-room` / `.store-foot` border, `.badge` all four sides | the public landlord page ran as one unbroken column; the badges had no box |
+| `lease-panel` | `border-top` | no rule above the lease sections |
+| `lease-documents` | `border-bottom` | documents listed with nothing between them |
+| `task-rows` | `border-bottom` | every task row touched the next, on both dashboards |
+| `tenant-notes` | `.notes-body` `border-left: 3px`, `.note` `border-bottom` | the private-notes panel had no bar marking it off |
+| `landlord-calendar` | `border-bottom` | calendar rows ran together |
+| `admin/services`, `admin/surveys`, `landlord/services` | `border-top` / `border-bottom` | provider and survey rows with no separators |
+
+**Nothing in this repository could see it.** `ng build` succeeds — an unknown
+custom property is valid CSS. `tsc` never reads a `styles:` block.
+`css-coverage-audit.mjs` asks whether a CLASS has a rule, not whether the
+rule's values resolve. Every one of those gates was green over it.
+
+All fourteen now say `var(--border)`.
+
+### The other half of the phase: a literal that duplicates a token
+
+`--border` is `#E0D5C4`. The styling also wrote `#DDD5C8` nineteen times
+across nine files — **2.40 apart in CIE Lab**, which is a difference nobody has
+ever seen on a phone in daylight. `#FFF` appeared 52 times beside
+`--white: #FFFFFF`. The copies do not move when the token does, and this
+palette moves: `--terra` has been changed twice for contrast (once because
+`#C04E28` measured exactly 4.50:1 on cream and subpixel rendering tipped it
+under), `--gold-text` twice, `--slate` once. Each of those fixed the token and
+left the hand-written copies behind.
+
+Migrated: **57 literals in 20 files** (`#FFF`/`#FFFFFF` → `var(--white)`,
+`#DDD5C8` → `var(--border)`). 59 remain, carried in
+`scripts/token-baseline.json` as debt.
+
+### The gate
+
+`scripts/token-lint.mjs`, wired into `npm run audit`, `npm run audit:tokens`
+and CI. Two assertions:
+
+1. **A literal hex within ΔE 3 of a defined token fails.** Ratcheting baseline
+   keyed by file AND value AND count, the same design as
+   `css-coverage-baseline.json`: a new file reaching for `#FFF` fails, and so
+   does a twentieth `#DDD5C8` in a file that already had nineteen.
+   `--update-baseline` refuses to write a baseline worse than the one on disk.
+2. **A `var(--x)` with no fallback, naming a token defined nowhere, fails.**
+   This is the assertion that found `var(--line)`.
+
+Proven able to fail, four ways, each reverted afterwards:
+
+| Reintroduced | Result |
+|---|---|
+| one migrated `#fff` in `cookie-consent` | ❌ named `line 53 (color) → var(--white) #FFFFFF, ΔE 0.00` |
+| a fourth `#3A3228` in `messages` (baseline allows 3) | ❌ `#3A3228 × 4 (baseline allows 3)` |
+| `--update-baseline` run with that extra literal present | ❌ refused: *"only ratchets down"* |
+| `var(--bordre)` typo in `task-rows` | ❌ named the file, the line and the name |
+| `STYLES` pointed at a directory with no tokens | ❌ exit 2, *"Refusing to pass vacuously"* |
+
+`scripts/token-render-drive.mjs` is the other half — 51 checks, the borders
+measured as PAINTED on two real screens at 360 / 390 / 768 / 1280. Reverting
+one `var(--border)` to `var(--line)` turns it red in eight places.
+
+### Three things found on the way, all of the same shape
+
+- **`design-handoff/tools/tokens.mjs` had a filter that could never fire.** Its
+  declaration pattern was `([-\w]+)` with `.filter(m => !m[1].startsWith('$'))`
+  behind it — but `[-\w]` does not match `$`, so on
+  `$color-cream-2: #F2EDE3;` the match simply began one character later and
+  `m[1]` was `color-cream-2`. Twenty SCSS palette definitions in
+  `_variables.scss` were counted as literal colour USES, and the file's own
+  header claimed definitions were excluded. The headline count was 159
+  literals / 332 uses; it is 150 / 314.
+- **`stripComments` cannot see a CSS comment inside an inline `styles:`
+  block.** The block is a template literal, so the moment the backtick opens it
+  is in string state and leaves everything to the closing backtick alone —
+  correct for a string. The design-handoff count never noticed because it
+  EXTRACTS the CSS first and strips the extract. The first version of the token
+  gate read the `.ts` in place and rewrote `#fff` inside screen-hint's comment
+  explaining why that very declaration exists. One wrong edit in 57, invisible
+  to `tsc` and to `ng build`. Both consumers now share
+  `scripts/lib/css-values.mjs`, whose `cssSource()` blanks them.
+- **`scripts/control-contrast-audit.mjs` has never existed.** A comment in
+  `screen-hint.ts` asserted *"now fails on any rule that sets one of the pair
+  without the other"* — a gate claimed in prose and never written, which is the
+  same defect as a control that cannot fail, one step earlier. The comment now
+  says so. **The gate is still wanted and is not written** (see § 41).
+- **`.arc-review__by` had no rule at all.** Phase F shipped it; the review
+  attribution inherited `--ink` and read as loudly as the review itself.
+  `css-coverage-audit.mjs` found it on this phase's build, which means it was
+  red at `cc12db1` and I reported Phase F's gates as green without rerunning
+  it after the build. Now `color: var(--slate)`.
+
+### Still open from this phase
+
+- **`var(--surface2, #F4F1EC)`** in `storefront.ts`: a fallback standing in for
+  a token that does not exist. It renders correctly, so the gate allows it by
+  design — a `var(--x, fallback)` resolves either way. It is still a colour
+  outside the system, and `--surface2` should either be defined or the usage
+  should name an existing token.
+- **`_spec.scss` carries 13 of the 59 baselined literals** and its own header
+  forbids hand-editing it (it is a verbatim port of the visual preview). Those
+  cannot be burned down from here; the preview has to change first. They stay
+  in the baseline so a re-sync that introduces a NEW off-token colour still
+  fails, which is the signal.
+- **The initial bundle budget.** 458.07 kB before this phase, 458.19 kB after —
+  **measured by stashing and rebuilding**, not assumed. The 8 kB overrun of the
+  450 kB budget is pre-existing; this phase added 0.12 kB, because
+  `var(--white)` is eight characters longer than `#fff`.
+
+## 41. A contrast gate that is claimed in a comment and does not exist
+
+**Not written. Logged so it stops being asserted in prose.**
+
+`screen-hint.ts` carried the sentence *"scripts/control-contrast-audit.mjs now
+fails on any rule that sets one of the pair without the other."* That file has
+never existed in this repository.
+
+The defect it describes is real and has reached a person's phone: the app's
+base rule is `:where(button)` with `color: #fff` on a terracotta background at
+**zero specificity**, so a class that sets only `background` wins the
+background and INHERITS white — white text on a white button, measured at
+1.00:1, and the panel's only control rendered as an empty box.
+
+What the gate would have to assert: a rule that sets `background` or
+`background-color` on an interactive selector, and does not set `color` in the
+same rule, fails. The hard part is deciding what counts as an interactive
+selector without a false-positive rate that makes people add exemptions —
+which is how an allowlist becomes the place defects go to be forgotten.
+
+Until it is written, the only thing standing between that pairing and the next
+white-on-white button is somebody reading the comment.
+
 ## How to check the whole thing still works
 
 ```bash
@@ -2850,7 +3000,26 @@ node scripts/viewings-drive.mjs          # 35 checks — Phase 7l. Inviting an
                                          # address never reaching them
 node scripts/viewings-ui-drive.mjs       # 41 checks — the form says what it
                                          # sends, and the tenant can answer
+node scripts/token-render-drive.mjs      # 51 checks — Phase H. The fourteen
+                                         # borders that var(--line) silently
+                                         # dropped, measured as PAINTED at
+                                         # 360 / 390 / 768 / 1280
 ```
+
+Two of these need no API and no browser, so they belong in the same breath as
+`audit:env` rather than in a sweep:
+
+```bash
+node scripts/token-lint.mjs              # a literal hex within ΔE 3 of a token,
+                                         # and any var(--x) naming nothing
+node scripts/template-literal-lint.mjs   # a backtick truncating an inline
+                                         # template — eight occurrences so far
+```
+
+⚠️ Both were unwired until 11 October: `template-literal-lint.mjs` was written
+in Phase F and appeared in no npm script, no workflow and no hook. A lint
+nobody runs is the same thing as no lint. Both are now in `npm run audit` and
+in `.github/workflows/ci.yml`.
 
 ⚠️ **Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` for the a11y drive.** Without them
 it audits 10 public + 17 portal pages and SKIPS every admin screen — which is

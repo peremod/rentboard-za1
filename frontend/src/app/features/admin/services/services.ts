@@ -293,7 +293,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
       .provider-form select { width: 100%; }
       .provider-form__check { display: flex; align-items: center; gap: 0.5rem; }
       .provider-form__check span { margin: 0; }
-      .provider { border-top: 1px solid var(--line); padding: 0.75rem 0; }
+      .provider { border-top: 1px solid var(--border); padding: 0.75rem 0; }
       .provider--off { opacity: 0.72; }
       .provider__head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
       .provider__note { margin: 0.25rem 0 0.5rem; }
