@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '@env/environment';
+import { Loading } from '../../../shared/components/loading/loading';
 
 interface AggregateQuestion {
   id: string;
@@ -58,11 +59,12 @@ interface SurveyAggregate {
 @Component({
   selector: 'app-admin-surveys',
   standalone: true,
+  imports: [Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
       @if (loading()) {
-        <p class="muted">Loading results…</p>
+        <app-loading>Loading results…</app-loading>
       } @else if (error()) {
         <p class="field-error" role="alert">{{ error() }}</p>
       } @else if (data(); as d) {
@@ -168,7 +170,7 @@ interface SurveyAggregate {
       }
       .data-table th,
       .data-table td {
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--border);
         padding: 0.5rem 0.6rem;
         text-align: left;
       }
@@ -181,7 +183,7 @@ interface SurveyAggregate {
         padding: 0;
       }
       .survey-texts li {
-        border-left: 3px solid var(--line);
+        border-left: 3px solid var(--border);
         margin-bottom: 0.6rem;
         padding: 0.3rem 0 0.3rem 0.7rem;
       }

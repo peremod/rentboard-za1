@@ -4,7 +4,18 @@ export type InboxKind =
   | 'notice_given'
   | 'rent_unmarked'
   | 'rent_disputed'
-  | 'unread_message';
+  | 'unread_message'
+  /**
+   * A room marked let with nobody in it — a letting ended and it was never put
+   * back on the board.
+   *
+   * ⚠️ This is a TASK and not a notice on purpose. Ending a tenancy sends
+   * `room_needs_relisting` once, and a notice read and not acted on is gone;
+   * the room then sits off the public board and out of the sitemap with
+   * nothing on any screen saying so. A task persists until the state changes,
+   * which is what "this room is empty and nobody can find it" needs.
+   */
+  | 'room_vacant';
 
 /**
  * One thing waiting on the landlord.

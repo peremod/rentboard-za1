@@ -3,6 +3,7 @@ import { NgTemplateOutlet } from '@angular/common';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { LangSwitcher } from '../lang-switcher/lang-switcher';
+import { Logo } from '../logo/logo';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 
 /**
@@ -12,7 +13,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [NgTemplateOutlet, RouterLink, RouterLinkActive, LangSwitcher, TranslatePipe],
+  imports: [NgTemplateOutlet, RouterLink, RouterLinkActive, LangSwitcher, Logo, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <nav class="nav">
@@ -24,7 +25,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
            not fit beside a logo at 360px and belong in the drawer. One class,
            so the rule can say which. -->
       <div class="nav-inner" [class.is-signed-in]="auth.isAuthenticated()">
-        <a class="nav-logo" routerLink="/">Mas<span>tande</span></a>
+        <app-logo size="lg"/>
 
         <div class="nav-links" [class.open]="mobileOpen()">
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"

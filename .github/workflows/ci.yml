@@ -144,6 +144,82 @@ jobs:
         working-directory: frontend
         run: npx ng build --configuration development
 
+      - name: Token gate — no literal colour that duplicates a token
+        if: ${{ !cancelled() }}
+        # `--border` is #E0D5C4 and the styling also wrote #DDD5C8 nineteen
+        # times: 2.40 apart in CIE Lab, which is a difference nobody has ever
+        # seen, stored twice and only half of it moves when the token is
+        # changed. `--terra` has been changed twice for contrast, `--gold-text`
+        # twice, `--slate` once — each of those fixed the token and left the
+        # hand-written copies behind, and a hex code is always valid CSS so
+        # nothing here could see it. Reads source, not the build, so it does
+        # not depend on the step above.
+        run: node scripts/token-lint.mjs
+
+      - name: State vocabulary — one treatment per meaning
+        if: ${{ !cancelled() }}
+        # The archive and the rent screen rendered the SAME "Past letting"
+        # chip from two separately-written rules; the yard had a third copy;
+        # and `.status--accepted` / `.status--rejected` were declared
+        # identically in two components with raw hexes, one of which folded
+        # `withdrawn` in with `rejected` so an applicant who stopped read as
+        # one the landlord had refused. Measured, two of those rules were also
+        # under the 4.5:1 small-text floor — and the accessibility drive could
+        # not see it, because its fixture never accepted or rejected anything.
+        #
+        # Reads source, so it does not depend on the build above.
+        run: node scripts/state-lint.mjs
+
+      - name: Loading, empty and error — three components, announced
+        if: ${{ !cancelled() }}
+        # 38 loading states in 28 components, none of them announced: a
+        # paragraph replaced by content when a request lands is silent to a
+        # screen reader, and axe does not flag a missing live region so the
+        # accessibility drive could never report it. Three screens used ONE
+        # element for the error, the loading state AND the empty state, with
+        # role="alert" on it — so "Loading…" was announced as an alert and "we
+        # could not reach the server" looked exactly like "you have nothing",
+        # which on an applicants screen means a landlord concludes nobody
+        # applied.
+        run: node scripts/feedback-lint.mjs
+
+      - name: Radius and spacing scales
+        if: ${{ !cancelled() }}
+        # 28 distinct radius values for 174 uses: the tokens existed and were
+        # used, and beside them sat 8px fifteen times (which IS --r8), 6px
+        # thirteen times, 10px ten times, 4px six times (--r4), plus 5px, 2px,
+        # 20px, 999px, .4rem and .6rem. Nobody chose that tail. Radius is now
+        # migrated and the tolerance is zero; spacing is 60 values over 1073
+        # uses, so it is ratcheted instead — the drift stops without a
+        # thousand-site churn nobody could review.
+        run: node scripts/scale-lint.mjs
+
+      - name: Fonts — a token may not name a family nothing fetches
+        if: ${{ !cancelled() }}
+        # `--font-mono` named 'DM Mono' and index.html has never requested it,
+        # so every money figure in this app has rendered in Courier New since
+        # the token was written while the design handoff reported DM Mono as
+        # one of "three real faces". Nothing could see it: the token resolves,
+        # the build does not fetch fonts, and getComputedStyle echoes the
+        # DECLARATION back — so a drive reading it "confirms" a font that is
+        # not there. Static, because no webfont loads in the agent container
+        # at all (measured: a bogus family and Playfair render identically).
+        run: node scripts/font-lint.mjs
+
+      - name: Inline template and styles literals — no stray backtick
+        if: ${{ !cancelled() }}
+        # A backtick inside a component's inline `template:` or `styles:`
+        # literal TERMINATES it. It has happened eight times in this repo and
+        # the error is `TS1005: ',' expected` pointing at a line far from the
+        # cause, so the build failure is real but reads as unrelated. This
+        # names file:line.
+        #
+        # ⚠️ `styles:` was added after the eighth: the lint covered only
+        # `template:`, and only the first one per file, so it read GREEN over
+        # five backticks in a comment inside a `styles:` block while the
+        # production build produced twenty errors.
+        run: node scripts/template-literal-lint.mjs
+
       - name: Environment parity
         if: ${{ !cancelled() }}
         # Each environment file must define the same keys. A key present in

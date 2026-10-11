@@ -1674,6 +1674,2077 @@ AUTHENTICATION template before any of it delivers (§27).
 
 ---
 
+## 30. The rent ledger did not know whether the letting was still running
+
+**Phase A of the tenancy-lifecycle work. Fixed, with two exceptions recorded
+below that are deliberately still open.**
+
+### What was wrong
+
+`Tenancy.end()` writes four columns on one row — `status`, `endDate`,
+`endedById`, `reviewsCloseAt` — and that is the entire effect of a tenancy
+ending. Nothing downstream read them. Three consequences on the rent path:
+
+- **`RentService.mark()` refused `cancelled` and nothing else.** So a landlord
+  could record rent against a tenancy that finished two years ago, against a
+  month before the tenant moved in, or against next March. `upsert` created the
+  row, with `amountCents` snapshotted off a tenancy that was not running.
+- **`dispute()` checked the period's own status and never the tenancy's.**
+- **`history()` answered a bare `RentPeriod[]`.** A caller holding a rent ledger
+  had no way to tell a finished letting from a running one, so the tenant's rent
+  screen rendered an ended tenancy exactly like a current one: present-tense
+  heading, a `/mo` rent figure, live actions. Reported by the owner.
+
+### The invariant, which is not "the tenancy is active"
+
+A rent period belongs to **the months the tenancy actually covered**. That is
+as true of a finished letting as a live one, and the distinction matters:
+refusing every write on an `ended` tenancy would break the most ordinary thing
+in this product — a tenant moves out on the 30th owing that month, and the
+landlord records it on the 5th. Freezing the ledger at move-out makes the record
+wrong in the one case it is most needed.
+
+So `assertRentWindow` bounds the months and does not freeze the record:
+
+| | |
+|---|---|
+| `cancelled` | refused — the letting never ran |
+| `pending`, or no `startDate` | refused, naming the move-in. The tenant's rent screen has always said this; the API accepted the write anyway |
+| before the start month | refused |
+| after the current month | refused — the month has not begun |
+| after the end month, once ended | refused |
+| **inside the window, even once ended** | **accepted** |
+
+`dispute()` is deliberately **not** bounded by that window. The most
+consequential mark a tenant ever receives is the final month, entered after
+they moved out, and `TenancyFlag.unpaid_rent` can be raised off it. Taking
+their answer away at exactly that moment would leave the landlord's unverified
+word as the only record.
+
+### Still open — a tenant cannot give notice
+
+`tenancies.controller.ts` documented `POST /tenancies/:id/notice` as *"Record
+that notice was given, by either side"*, and `LeaseService.giveNotice` calls
+`assertLandlordOwns`, so a tenant gets a 403. A documented capability the code
+refuses — the same shape as the `@Throttle` decorators with no guard and the
+`documentDeletedAt` that deleted nothing.
+
+**The summary is corrected rather than the guard relaxed, and that is a
+decision, not a shortcut.** Admitting the tenant needs one column this model
+does not have. `noticeGivenById` records who notice is *attributed to*, not who
+entered it, so there is no way to distinguish a landlord's record of a tenant's
+verbal notice from a tenant's own act — and therefore no safe rule for who may
+withdraw it. Letting a landlord clear a tenant's notice resets a countdown that
+frees a room; letting a tenant clear a landlord's does the same in reverse.
+
+**What it needs:** `Tenancy.noticeRecordedById`, then the tenant route, with
+withdrawal restricted to whoever entered it. Phase B/G of
+`docs/TENANCY-LIFECYCLE-AUDIT.md`.
+
+### Still open — a tenancy is opened fire-and-forget
+
+`ApplicationsService.accept` calls
+`this.tenancies.createFromApplication(applicationId).catch(...)` — deliberately
+not awaited, so a failure there cannot fail the acceptance. Defensible, and
+nothing retries: if that call throws, the application is `accepted` and no
+tenancy exists, which no screen and no job would ever notice.
+
+It also made the drive flaky. `tenancy-lifecycle-drive.mjs` read the row with a
+bare query straight after accept and intermittently reported *"accepting opens
+a tenancy, and it starts 'pending' (got '')"* — which reads exactly like a
+broken accept flow and is not one. The drive now polls (`tenancyFor`). **The
+flake is fixed; the fire-and-forget is not.**
+
+### What the first pass got wrong — found by review, not by any check here
+
+Phase A shipped green: the drive passed 57 checks, the smoke suite passed, both
+typechecks were clean and `ng build --configuration=production` succeeded. A
+code review then found seven defects. Six are worth recording because each one
+is a shape this codebase keeps producing.
+
+**1. A runtime crash on the landlord's property screen.** The rent endpoint has
+**two** consumers — `RentService.history` for the tenant's screen and
+`PropertiesService.rentHistory` for the yard — and only the first was migrated
+to the envelope. The generic on `http.get` is an **unchecked cast**, so
+declaring `RentPeriod[]` over a response that is now an object passes `tsc` and
+`ng build` without complaint. `loadRent` put the envelope into the `rent`
+signal and `currentLabel(periods)` called `.find` on it: a TypeError on a screen
+every landlord uses.
+
+Fixed by declaring `RentLedger` **once**, in `core/models/property.model.ts`
+beside the `RentPeriod` it carries, imported by both services. Adding the shared
+type made the yard an immediate compile error, which is the point.
+
+**⚠️ And the check that was supposed to cover this could not.** A new section in
+`yard-layout-drive.mjs` opens the rent panel and reads the rendered label. Three
+of its five checks stay **green** with the bug reintroduced:
+
+| | |
+|---|---|
+| a `pageerror` listener | green — Angular catches a template expression's error and logs it, so it never reaches `window.onerror` |
+| the Paid / Not yet toggle renders | green — the `@if (rent()[id]; as periods)` guard passes, because **an object is truthy** |
+| the rendered label reads "paid" | **red** — the only visible trace |
+
+Measured: reintroducing it gives 2 failed, 39 passed, and both failures are the
+content checks. A drive that watched for errors and counted controls would have
+called this screen healthy.
+
+**2. An unrecoverable lockout.** `LeaseService.updateTerms` wrote
+`startDate: null` on request, including for an `active` tenancy. Harmless until
+the rent window started reading `startDate` — then `mark()` answers "Confirm the
+move-in first" while `confirmStart()` refuses because the tenancy is already
+active. Neither route can put the date back. It is also untrue: `confirmStart`
+sets status and startDate in one update, so a live tenancy that started on no
+particular day is a state the product cannot otherwise reach. `updateTerms` now
+refuses to clear it, and refuses a future date on an active tenancy, as
+`confirmStart` does.
+
+**3. Three drives were fabricating an impossible tenancy.**
+`account-lifecycle-drive`, `dashboard-drive` and `dashboard-ui-drive` each force
+`UPDATE tenancies SET status='active'` in raw SQL and left `startDate` null —
+a row the API cannot produce. The guard exposed the fabrication; the drives were
+what was wrong, and they now set both columns.
+
+**4. A check that could no longer fail.** `inbox-drive.mjs` read
+`(periods.body || [])[0]` — indexing the envelope object, so `period` was always
+undefined and the entire `if (period)` block (the tenant disputes a month,
+`rent_disputed` sorts to the top) was **silently skipped with no `bad()`**. It
+now reads `.periods` and says so when there is nothing to dispute.
+
+**5. A pre-existing impossible expectation.** `dashboard-drive` asked one
+tenant's inbox for `application_accepted` **and** `rent_unrecorded`. Those are
+mutually exclusive by construction: `tenant-inbox.service.ts` drops the
+acceptance row for any tenancy that is not `pending`, while a rent item needs a
+tenancy that has started. Both assertions were right about the product and
+wrong about the fixture. Verified pre-existing — 2 failures before Phase A, 4
+at Phase A, 2 again once the drives were fixed. The acceptance rule now has a
+letting of its own, left pending, and tenantA additionally proves the row is
+**gone** once the move is confirmed.
+
+**6. A timezone trap in the new drive, of the kind its own comment warns
+about.** Section 7 found a period with
+`date_trunc('month', now() - interval '2 months')`: `now()` is `timestamptz`,
+so `date_trunc` truncates in the **session's** timezone, while `periodStart` is
+a `timestamp` at UTC midnight. Confirmed against Postgres — UTC gives
+`2026-08-01 00:00:00+00`, `Pacific/Auckland` gives `2026-08-01 00:00:00+12`, and
+the equality misses. It passed only because this container runs UTC. The month
+now comes from the JS value already computed, with a `bad()` if nothing is
+found, and the drive is green under both `TZ=UTC` and `TZ=Pacific/Auckland`.
+
+### Proof
+
+`scripts/tenancy-lifecycle-drive.mjs` section 7 — 18 checks. Then, as this
+repo requires, each guard was reintroduced and the check confirmed to fail:
+
+- window guards reverted to the shipped `cancelled`-only behaviour → **7 failed, 50 passed**
+- `history()` reverted to a bare array → **3 failed, 54 passed**
+- both restored → **57 passed**
+
+The "still correctable once ended" check stays green under the first revert, by
+construction: it tests the opposite direction, and anybody can write a guard
+that refuses everything.
+
+`scripts/smoke-test.sh` §46 carries the same three assertions against the API.
+
+**Not proven:** nothing here reads the rent *screen*. The API refuses what it
+should and accepts what it must; the tenant's rent page still presents an ended
+tenancy as a current one. That is Phase D.
+
+---
+
+## 31. Pre-existing schema drift, kept out of a feature migration
+
+**Open. Needs a migration of its own.**
+
+`prisma migrate dev` generates five DROP INDEX / CREATE INDEX pairs on top of
+whatever you asked for:
+
+```
+account_recoveries_status_createdAt_idx
+phone_signups_assistedByAdminId_createdAt_idx
+service_providers_lastCheckedAt_idx
+users_deactivatedAt_idx
+users_deletedAt_idx
+```
+
+They are **drift between the schema and the database**, not part of any current
+work — confirmed by running `prisma migrate diff` with the pending schema
+changes stashed, which emits the same five pairs on its own. Two of them differ
+only by sort order: the database holds `"createdAt" DESC`, the schema declares
+plain `createdAt`.
+
+They were stripped out of `20261008095150_tenancy_archive_and_report_scope` by
+hand. **Dropping and recreating an index on `users` is a real operation on the
+busiest table in this database** — a lock, and a window with no index — and it
+has no business riding along with a feature migration where nobody reviewing
+that feature would think to question it.
+
+**What this costs:** the next `prisma migrate dev` offers those five pairs
+again, because the drift is still there. Expected. Do not fold them into
+whatever you are working on either.
+
+**What it needs:** one migration that does only this, with the two `DESC`
+indexes either declared as `@@index([status, createdAt(sort: Desc)])` in the
+schema or rebuilt ascending — a decision about whether those queries actually
+read newest-first — and a runbook line, because two of the five are on `users`.
+
+**Not urgent.** The drift costs nothing while it sits there; the indexes work.
+It matters only in that it makes every future migration diff noisy, which is
+how something real gets waved through.
+
+---
+
+## 32. The tenancy archive — Phase B
+
+**Three columns, each with a writer. Fixed.**
+
+### What was missing
+
+`ended` was doing two jobs: "ended last week, reviews open, both parties still
+acting on it" and "ended in 2024, read-only". They want different screens and
+different permissions, and there was one value for both.
+
+Separately, `Report` carried `roomId` and `reportedUserId` and nothing else, so
+"what went wrong during this letting" could not be answered — a complaint by
+one tenant about a room was indistinguishable from one by the next tenant two
+lettings later, and `ReportReason` is full of tenancy-period claims
+(`already_let`, `misleading_details`, `upfront_payment_demanded`).
+
+### What landed
+
+| Column | Written by |
+|---|---|
+| `Tenancy.archivedAt` | `ReviewsRelease.archiveClosed` once `reviewsCloseAt` passes; `TenanciesService.cancel` immediately |
+| `Tenancy.noticeRecordedById` | `LeaseService.giveNotice`, from the caller |
+| `Report.tenancyId` | `ReportsService.create`, only for a party to that tenancy |
+
+**`archivedAt` is a column, not a derived `reviewsCloseAt < now()`.** Derived
+state with many readers is how this codebase ended up with three navigation
+definitions that disagreed, and the archive will have several readers. One
+writer, one value.
+
+**It is not a fifth `TenancyStatus`.** Archival is orthogonal to how a letting
+finished; folding it in would make `cancelled` lose the reason it was cancelled
+the moment it aged.
+
+**Archiving runs on its own query, not as a field on the review release.**
+`releaseClosedWindows` selects `reviews: { some: { publishedAt: null } }`, and
+most tenancies never get a review — so hanging `archivedAt` off that query
+would have archived only the minority that happened to have one held back. A
+column set for some rows and not others is worse than no column.
+
+**`cancelled` archives at once.** It never gets a `reviewsCloseAt` (the drive
+asserts that), and the nightly pass waits for one, so it would have sat
+unarchived forever: finished, but never reading as finished.
+
+**Archived does NOT mean frozen.** A tenant may still answer a rent month on an
+archived letting — see §30 for why that is the one write which has to outlive
+the letting.
+
+### A tenant can now give notice — §30's open item, closed
+
+`noticeRecordedById` is what the tenant path waited on. `noticeGivenById` is who
+notice is *attributed to*; this is who *entered* it. A landlord logging "my
+tenant told me they are leaving" and a tenant giving notice produce the same
+attribution and are not the same act — and without the distinction there was no
+safe withdrawal rule, because a landlord who could clear a tenant's notice
+could keep them on the books.
+
+The rule is now: **whoever recorded it may withdraw it.** Rows written before
+the column have none, and those were all entered by a landlord — the only
+caller the route ever had — so a null reads as the landlord.
+
+A landlord may record either side. **A tenant may only record their own**: a
+tenant setting `givenBy: 'landlord'` would be fabricating that they had been
+served notice to leave, which is a materially different fact.
+
+### An operator route for the nightly pass
+
+`POST /reviews/release-closed`, admin-only, mirroring
+`POST /properties/rent/run-reminders`. The pass publishes reviews and sets
+`archivedAt`, and **a cron nobody can trigger cannot be driven, checked after a
+deploy, or re-run when it fails** — the only evidence it works is that nobody
+has complained, which is how this codebase ended up with a rent-reminder
+control on a screen with no route. Admin-only because it publishes ratings, and
+that is not a button for a landlord with an opinion about a tenant's review.
+
+It returns `{ archived, released }` even when both are 0, rather than a bare
+`return`: an operator running it after a deploy needs to see "0 and 0" and know
+it ran.
+
+### Two things the drive caught that the code had wrong
+
+**`POST /tenancies/:id/notice` answered 201 while its own withdraw answered
+200.** Every other lifecycle route here — `confirm-start`, `cancel`, `end`,
+`notice/withdraw` — carries `@HttpCode(OK)`. Giving notice is a state change on
+an existing tenancy, not a creation. Fixed on the route; and the drive's check
+was tightened from `200 || 201` to exactly 200, because **the tolerance is what
+let it drift in the first place.**
+
+**`ReportReason` and `TenancyFlagReason` overlap but are not the same enum.**
+`room_not_as_described` is a flag reason, not a report reason. Small trap, cost
+one red check.
+
+### Proof
+
+`scripts/tenancy-lifecycle-drive.mjs` section 8 — 17 checks, 74 in the file.
+All five behaviours were then reintroduced at once and confirmed to fail:
+
+| Reverted | Result |
+|---|---|
+| `cancel()` no longer archives | ❌ `archivedAt` reads `f` |
+| the nightly pass no longer archives | ❌ and `{"archived":0}` |
+| withdrawal open to either party | ❌ landlord cleared the tenant's notice (200, want 403) |
+| a tenant may claim the landlord served notice | ❌ 201, want 400 |
+| reports accept any `tenancyId` | ❌ a stranger attached one (201, want 403) |
+
+**8 red, 66 passed. Restored: 74 passed.**
+
+`scripts/smoke-test.sh` carries the four notice assertions. `migration-preflight`
+clean — and it correctly refused the run first, because only `DATABASE_URL` was
+exported and not `DIRECT_URL`: the exact trap that kept production down for an
+extra hour on 5 October (§5a). The gate works.
+
+### Not proven
+
+**No screen reads `archivedAt`.** The column is written and nothing renders it —
+the archive view is Phase F. Until then this is a column with one writer and no
+readers, which is half of the defect this repository keeps producing, and it is
+recorded here rather than implied away.
+
+**`Report.tenancyId` is not backfilled and never will be.** Inferring which
+letting a historical report belonged to from a room id and a date would
+manufacture facts about a complaint, and a complaint attached to the wrong
+tenancy is worse than one attached to none. Historical rows stay null and the
+archive has to say so on screen.
+
+---
+
+## 33. Ending a letting now tells both parties — Phase C
+
+**Fixed, with one gap named below rather than implied away.**
+
+### What was wrong
+
+`end()` wrote four columns on one row and that was the entire effect of a
+tenancy ending.
+
+- **The room stayed `let` indefinitely.** Off the public board
+  (`rooms.service` filters `status: 'active'`), out of the sitemap, with
+  nothing telling the landlord to relist.
+- **A letting that FELL THROUGH did the same.** Accepting sets the room `let`;
+  nothing set it back. So a room **nobody ever moved into** went invisible for
+  good, and the landlord had to find "relist" themselves.
+- **32 `Notice.kind` values existed and not one was for a letting starting or
+  ending.** The biggest event in the lifecycle logged a console line and
+  produced nothing a person could read. A tenant learned their review window
+  had opened only by happening to open the dashboard inside 30 days.
+
+### What it does now
+
+`tenancy_ended` to **both** parties, worded for who actually did it — a notice
+that tells somebody about their own action reads as a system not paying
+attention — and naming the 30-day review window, because a notice that omits
+it costs somebody their review.
+
+`room_needs_relisting` to the landlord, **and only while the room is still
+`let`**. One who has already paused, removed or relisted it has said something
+more recent, and overwriting that would be the code deciding it knows better.
+
+**A prompt, not an automatic relist, and that is a product decision.**
+`relist()` republishes the room with its old photos, its old price and its old
+description on the day a tenant moves out, and it archives every open
+application and increments `relistCount`. Destructive, and not asked for.
+Whether to let the room again, and at what rent, is the landlord's. But a room
+going quietly invisible is not an option either — so: one notice, with the
+room's own screen on the end of it.
+
+**A cancelled letting frees the room at once**, straight to `active` rather
+than through `relist()`. There is nothing to archive: `autoRejectOthers`
+rejected the other applicants when this one was accepted and they stay
+rejected, which is what actually happened. This is the shape of `undoLet` —
+the room simply was not let.
+
+`closureReason` no longer reads *"This tenancy ended and the room has been
+relisted."* `archivedAt` is set by a relist and nothing else, so that branch is
+reached whenever a landlord relists a room they had let to this person — after
+a tenancy ended, after one that fell through, or after a letting never
+recorded. It asserted the first of three as fact. It now says what is true in
+all of them.
+
+### ⚠️ The gap: no email
+
+`NoticeRouter.deliver` sends an email when it can and then returns **without**
+writing a notice row. Passing no email function therefore guarantees the in-app
+notice exists for everybody — including the phone-only landlord, for whom it is
+the only channel there is.
+
+That is the right trade, and it has a cost: **somebody who does not sign in
+within 30 days misses the review window entirely.** A review window is the one
+notification here with a deadline, which is exactly the case an email is for.
+
+**What it needs:** a `sendTenancyEndedEmail` template beside the sixteen that
+already exist, passed to `deliver` as its email function — at which point the
+in-app notice stops being written for anyone with an address, so the two
+channels need thinking about together rather than one bolted on.
+
+### Proof
+
+Drive section 9 — 14 checks, 88 in the file. All three behaviours reintroduced
+and confirmed to fail:
+
+| Reverted | Result |
+|---|---|
+| `cancel()` no longer frees the room | ❌ room reads `let` |
+| `end()` announces nothing | ❌ **9 red** |
+| the relist prompt ignores the room's own status | ❌ fires on a paused room |
+
+Revert 3 had to be run **in isolation**: with the announcement disabled nothing
+fires at all, so "a paused room draws no prompt" passed for the wrong reason.
+
+⚠️ **And one check was green when it should have been red.** *"The tenant is not
+told THEY ended it"* is a negative assertion, and with no notice at all the
+empty string matches no phrase — so disabling the announcement made it pass. It
+now requires the notice to exist first. **A negative check has to prove the
+thing it is reading is there.**
+
+### Not proven
+
+Nothing here reads the landlord **dashboard**. The notice row exists; whether
+the relisting prompt surfaces as a task in the inbox is Phase E.
+
+---
+
+## 34. The Reserved status: a complete feature with no button
+
+**✅ Closed in v1.120.0 (Phase E).** The control is on the room row on the
+property screen — "Reserve for someone" on an active room, and a Reserved block
+with the way back on a reserved one. Proof is drive section 11e, which clicks
+it and reads the status back; reverted, the button is absent and the check goes
+red. The rest of this entry is the record of what was built and unreachable.
+
+`Room.reserved` means "a tenant is lined up but nothing is signed" — the room
+stays visible with a badge, takes no new applications, and existing applicants
+are left open deliberately as the landlord's fallback.
+
+All of it is built:
+
+| | |
+|---|---|
+| `POST /rooms/:id/reserve`, `/unreserve` | work |
+| `RoomsService.markReserved` | writes the status |
+| `applications.service.ts:43` | refuses new applications with a tailored sentence — "reserved for another tenant while they finalise. It may become available again" |
+| `room-card.ts:59` | renders the **Reserved** badge |
+| `landlord-inbox`, `properties.service` | count it as occupied |
+| `admin.service`, `account-lifecycle.service` | count it as live |
+| `rooms.service` pause / let / working-on | all handle it |
+| **a control in the portal** | **none** |
+
+So the badge, the refusal sentence and the gold status dot are all unreachable,
+and a landlord with somebody lined up has only "mark as let" — which closes and
+emails every other applicant, the destructive action for a non-destructive
+reason that `pause()` was added to avoid.
+
+`frontend/.../rooms.service.ts` also carried **two** methods for that one
+endpoint, `markReserved` and `reserve`, identical but for the name. That is
+what happens to code nobody calls: neither copy was ever wrong, because neither
+was ever used. `markReserved` is deleted.
+
+**⚠️ `docs/TENANCY-LIFECYCLE-AUDIT.md` §D3 got this wrong** and said nothing
+wrote the status at all. The write is at `rooms.service.ts:533`, two lines into
+a match I read as a read. Corrected in place rather than quietly.
+
+**What it needs:** a Reserve / Unreserve control on the room row, next to the
+existing let and pause actions. Phase E.
+
+---
+
+## 35. The rent screen described a finished letting as a running one — Phase D
+
+**Fixed. This is the defect the owner reported, and the first phase visible on
+a screen.**
+
+### What was wrong, in two opposite directions
+
+**The rent screen** looped over `active`, `ended` and `pending` tenancies with
+no branch on which. A letting that finished two years ago rendered
+**identically to the room somebody lives in**: the same heading, the same
+present-tense "R3 000/mo", the same banner asking them to say so if a month was
+wrong, the same paperwork offered as current.
+
+The cause was architectural rather than cosmetic. One component was the only
+representation of rent, so it had to be both things at once.
+
+**The tenant dashboard** excluded only `active` from "Your applications":
+
+```ts
+&& a.tenancy?.status !== 'active',
+```
+
+So when a tenancy ENDED it fell straight back into that list — `tenancy.status`
+became `'ended'` (which satisfies `!== 'active'`), the Application stays
+`accepted` for good, and nothing archives it, because `archivedAt` is set by a
+relist and ending a tenancy does not relist the room. The derived note counts an
+acceptance as waiting on the tenant, so a person who had moved out six months
+earlier read:
+
+> The landlord has moved on this one — it is waiting on you.
+
+Meanwhile `currentHomes` requires `'active'`, so the room vanished from "Where
+you live now" in the same render. **Moving out moved the room backwards through
+their own dashboard.**
+
+### What it does now
+
+Two sections on the rent screen, and the past one is written in the past tense:
+a **Past letting** label, "Lived there 4 Jun to 1 Sep", and "Rent was R1 800 a
+month" instead of a live monthly figure.
+
+**What deliberately does NOT change for a finished letting:**
+
+- **The ledger stays, in full.** Previous months, amounts, dates and disputes
+  are what a person needs most once they have left. The owner asked for exactly
+  this in as many words: previous payments must not disappear.
+- **The answer button stays.** `RentService.dispute` refuses only a cancelled
+  letting, because the most consequential mark a tenant ever receives is the
+  final month — entered after they moved out, with `TenancyFlag.unpaid_rent`
+  able to rest on it.
+
+So the change is what the screen **says**, not what it permits. "It is over, so
+lock it" would have been the easy wrong fix.
+
+One ledger template rendered twice rather than two copies of the markup: the
+rows mean the same thing either way, and this repository has already paid for
+the other choice with a navigation defined six times that disagreed with itself.
+
+### A pointer, because excluding it from both lists made it vanish
+
+An ended tenancy's application is `accepted` and unarchived, so once it was out
+of "Your applications" it matched **no** section and disappeared from the
+dashboard entirely. The record belongs on the rent screen — a dashboard is for
+what needs doing — but a room somebody used to live in vanishing without trace
+is the same complaint as the hidden way back. So: one line, with the link on it.
+
+### ⚠️ Two mistakes worth recording
+
+**I reintroduced the defect I was fixing.** The first version replaced
+`!== 'active'` with `!isFinished(status)`, matching `ended` and `cancelled` —
+and in doing so **dropped the active exclusion**, so the room the tenant lives
+in came back into "Your applications" under "it is waiting on you". The drive
+caught it.
+
+The fix is a **whitelist, not a blacklist**: `tenancyHasMovedOn` returns true
+for any status except `pending`. Naming the one state that stays cannot fail
+that way — a status nobody thought of excludes itself.
+
+**A negative check passed on absence, for the third time in this file.** With
+the past section removed entirely, `pastText` is `''` and matches no pattern,
+so "the finished one does not show /mo" went **green** with the defect fully
+reintroduced. Every negative assertion in section 10 now proves its subject
+exists first.
+
+### Two traps this hit
+
+**Backticks in a template comment, twice** — the seventh and eighth occurrences
+in this codebase. `TS1005: ',' expected` points hundreds of characters past the
+cause, because everything after the stray backtick parses as code, and the
+backtick is almost always in a comment quoting an identifier.
+
+It is in CLAUDE.md and that has not been enough, so there is now
+**`scripts/template-literal-lint.mjs`** — a grep, essentially, which finds in
+milliseconds what a production build finds in half a minute. Verified: exits 1
+with a stray backtick naming the file and line, exits 0 clean, 83 inline
+templates checked.
+
+**`tsc --noEmit` does not check templates.** Passing `headingLevel="4"` to a
+component whose input is typed `2 | 3` is a template type error that **only
+`ng build` reports**. A clean typecheck says nothing about a component's
+inputs. (`LeaseDocuments.headingLevel` now accepts 4, which the past-lettings
+hierarchy needs: an h2 section, an h3 per letting, so the paperwork inside one
+is an h4.)
+
+### Proof
+
+Drive section 10 — 24 checks, 112 in the file. Every check reads **rendered
+text**, not a filter; a check on the filter would have passed before this phase
+as easily as after it. Both defects reintroduced:
+
+| Reverted | Result |
+|---|---|
+| the rent screen loops everything together | ❌ |
+| the dashboard excludes only `active` | ❌ — and the check printed the owner's own words back: *"Your applications… it is waiting on you. Old room"* |
+
+**13 red, 99 passed. Restored: 112 passed.**
+
+Responsive verified at **360 / 390 / 768 / 1280**, per CLAUDE.md: no horizontal
+scroll, and every control in the past section clears 44px at all four.
+
+### Not proven
+
+**The landlord still has no past-tenant view at all** — the opposite failure to
+the one fixed here. `properties.service` filters to `pending` and `active`, so
+their side loses the tenant, the dates and the ledger the moment a letting
+ends. Phase E.
+
+**No archive screen exists.** The rent record is on the rent screen because
+that is where it has always been; reviews, documents and problems per tenancy
+are Phase F.
+
+---
+
+## 36. A role button whose text was invisible on hover — the `:where()` trap again
+
+**Fixed. Pre-existing, found by a red gate rather than reported.**
+
+### What was wrong
+
+`scripts/a11y-drive.mjs` was failing two checks on `/auth/register-phone`, and
+had been before any of the lifecycle phases — confirmed by stashing them and
+re-running:
+
+```
+contrast 4.34:1, needs 4.5:1 at .auth__role-sub
+:hover contrast 1.17:1 (needs 4.5) on .auth__role
+```
+
+**1.17:1 is white on cream — text that cannot be seen at all.** The same class
+of defect as the 1.00:1 white-on-white button in §22, in the same session that
+found that one.
+
+### Why, exactly
+
+Asked the browser which rules won, with the `:hover` state forced through CDP:
+
+| Rule | Specificity | Sets |
+|---|---|---|
+| `.auth__role` | (0,1,0) | `color: #1C160E`, `background: #FFF` |
+| `:where(button):hover:not(:disabled)` | **(0,2,0)** | `color: #fff`, `background: --terra-deep` |
+| `.auth__role:hover:not(.is-active)` | (0,3,0) | `background: #F2EDE3` — **and nothing about colour** |
+
+`:where()` contributes **zero** specificity, so the global button-hover rule is
+only (0,2,0) — its `:hover` and `:not(:disabled)`. The auth rule at (0,3,0)
+therefore wins the **background** and overrides it to cream… and by saying
+nothing about `color`, leaves the global rule's **white** sitting on top of it.
+The resting `.auth__role` colour is (0,1,0) and loses.
+
+**So: overriding a `:where(button):hover` background without also overriding its
+colour is how a control ends up with invisible text in one state.** The resting
+state measures 15.6:1 and says nothing about it.
+
+The second failure is arithmetic: `rgba(255,255,255,.8)` over `--terra`
+composites to `#EFD9D3`, which is 4.34:1 against the `#AD4222` behind it — just
+under the 4.5 that size of text needs. `.9` gives 5.07:1 and keeps the
+sub-label quieter than the title, which is what the alpha is for; solid white
+would pass and flatten the hierarchy instead.
+
+### Proof
+
+Both reintroduced, gate red with the same two lines; restored, gate green —
+**10 public + 17 portal pages, 11 distinct control styles hovered, 38 focused,
+all over threshold.**
+
+⚠️ **The gate needed demo rooms to say that.** Without them it reports "the
+board had no rooms, so the room card was never checked" and an H2-before-H1 on
+a room built by a drive fixture, and neither is a real finding. Seed first:
+
+```bash
+cd backend
+ADMIN_EMAIL=… ADMIN_PASSWORD=… SEED_DEMO_ROOMS=true npx ts-node prisma/seed.ts
+```
+
+A gate that reports two fixture artefacts alongside two real defects is a gate
+people learn to skim.
+
+### What this says about the rest of the app
+
+Only two other rules override a hover background without a colour
+(`.spark__bar`, a chart bar with no text, and `.prop-card__link`, which is not
+a `button` so `:where(button)` never applies to it). The gate hovers every
+distinct control style on 27 pages and passes, which is better evidence than a
+grep.
+
+---
+
+## 37. The landlord lost the tenant the moment a letting ended — Phase E
+
+**Fixed. The mirror image of §35, failing the opposite way.**
+
+### What was wrong
+
+**`properties.service.ts` asked for tenancies `['pending','active']`, and that
+was the only place a landlord could see a tenancy at all.** So the moment a
+letting ended they lost the tenant, the dates, the rent paid and the whole
+ledger. A search across both codebases for "past tenant", "former tenant" or
+"tenancy history" returned nothing but review copy and the PAIA manual — which
+tells the public this platform holds "tenancy history and rent records".
+
+The rows were always there. Nothing rendered them. Where the tenant's screen
+said too much about a finished letting, the landlord's said nothing.
+
+**The room stayed `let` with nobody in it**, and the status chip beside it read
+"let" — the opposite of help. The Phase C notice fires once, and a notice read
+and not acted on is gone.
+
+**Reserved had no button anywhere.** The route, the API write, a tailored
+application refusal, the board badge and five occupancy counts were all built
+and working (§34).
+
+### What it does now
+
+| | |
+|---|---|
+| Past tenants on the property screen | collapsed, newest first, capped at six per room by the API |
+| Each row | who, the date range, what they paid, their paperwork, and whether a review is still open |
+| A room marked let with nobody in it | marked as empty on the room itself, with the relist action on the marker |
+| `room_vacant` inbox task | persists until the state changes, which a notice cannot |
+| Reserve / Unreserve | the control the feature never had |
+
+**`room_vacant` is a task and not another notice, deliberately.** A notice
+fires once; a task list persists until the state changes, and "this room is
+empty and nobody can find it" is a state, not an event.
+
+Its urgency **rises the longer it sits** — `max(300, 450 - days * 5)` — which is
+the opposite of how the dated items work and is right: an empty room is lost
+rent every day, and one invisible for a month is worse than one empty since
+yesterday. Floored at 300 so it can never outrank a tenant disputing their rent
+record.
+
+**It asks `tenancies: { none: ... }`, not "is there an ended tenancy".** The
+latter would miss a room marked let by hand through `markLet()` with no tenancy
+behind it — a real path, and every bit as invisible. The question is not "did a
+letting end here", it is "is anybody actually in this room".
+
+**A paused room draws no task.** `pause()` exists so a landlord can stop
+enquiries without the destructive alternative; nagging them about a room they
+deliberately took down is how a list becomes something people stop reading.
+
+### ⚠️ Three things about the drive, not the product
+
+**It killed itself.** With past tenants reverted, section 11 reported nine
+failures and then **died** on `locator.click: Timeout 30000ms exceeded` for a
+control that was no longer there — taking the remaining sections and the whole
+summary with it. Same defect as §28. Every click in that section now checks
+first and reports rather than throwing.
+
+**A fourth vacuous pass.** "A room the landlord paused draws no empty-room
+task" asserted zero, and zero is also the answer when the feature does not
+exist — so it passed with the task fully reverted. It now compares **before and
+after** pausing, because the claim is that pausing *removes* it.
+
+**This drive is now one run per API restart.** Eleven sections register about
+35 accounts against a limit of 60 per hour counted in memory. One run fits;
+two back to back do not, and the second dies with a 429 that reads like an auth
+bug. Recorded in the file's own header.
+
+### ⚠️ The bundle budget got worse, and that is mine
+
+The initial bundle went from **456.42 kB to 457.92 kB** — `+1,501 bytes`, which
+is exactly the growth in `styles.css` (58,091 → 59,592) and therefore entirely
+the new rules in `_spec.scss` and `_responsive.scss`. Measured by stashing and
+rebuilding.
+
+The budget (`maximumWarning: 450kb`) was already exceeded by 6.42 kB before
+this, so it is a warning and not a build failure — but it is moving the wrong
+way and this is the first phase that moved it.
+
+The yard's styles live in the global sheet by this repo's convention, and
+`_spec.scss` records why: Angular's emulated encapsulation makes component
+styles more specific than the global sheet, which is how the responsive layer
+was silently overridden once before. Moving these rules into the yard's own
+(lazy) chunk would take them off the initial bundle and reopen that. **That is
+a trade worth a decision rather than a quiet choice**, so it is recorded here
+rather than made.
+
+### Proof
+
+Drive section 11 — 30 checks, 142 in the file. Reverted in two halves, because
+the backend revert masked the frontend one:
+
+| Reverted | Result |
+|---|---|
+| the API's tenancy filter back to `['pending','active']`, and the inbox task removed | **11 red** |
+| the yard's vacant marker, Reserved control and past-tenant list | **5 red** |
+
+Restored: 142 passed. Responsive at 360 / 390 / 768 / 1280 — no horizontal
+scroll, every new control over 44px.
+
+Everything else green: `inbox-drive`, `yard-layout-drive` (41),
+`properties-ui-drive`, `dashboard-ui-drive`, the smoke suite, `a11y-drive`
+(10 public + 17 portal pages), `template-literal-lint`, `env-parity`,
+`throttle-lint`, `route-audit`.
+
+### Not proven
+
+**Six past lettings per room is the API cap and nothing says so on screen.** A
+room on its tenth tenant shows the six most recent silently. The full record is
+the archive view, Phase F.
+
+**Nothing reads reviews, problems or viewings per tenancy.** The past-tenant row
+carries dates, rent and paperwork only.
+
+---
+
+## 38. The archive — Phase F
+
+**Done. `/account/tenancies`, one list for both roles.**
+
+### What was missing
+
+Everything this screen shows was already in the database and **none of it was
+on a screen**. `RentPeriod`, `Review`, `TenancyFlag` and `LeaseDocument` all
+key on `tenancyId`, so three lettings for one tenant could never bleed into
+each other — and the only two places that read a tenancy were the tenant's rent
+screen and the landlord's property screen, both asking for live ones.
+
+So `/legal/paia` told the public this platform holds *"tenancy history and rent
+records"* with nothing behind it. Phases D and E fixed the two live screens.
+This is the record.
+
+### Why `/account` and not `/tenant` or `/landlord`
+
+The same reason `/account/messages` is there, and one stronger: **a person can
+be the landlord of one room and the tenant of another, and their history is one
+list.** A sub-lessor is both by definition (Phase 6), which in this market is
+not a corner case. Splitting the list by role would split one person's past by
+a distinction they do not have.
+
+### ⚠️ The permission rules are not uniform, and must not be made uniform
+
+This is a screen that assembles six private tables into one payload for two
+different people. Flattening the rules into "both parties were there, so show
+everything" would make it the product's largest POPIA and defamation exposure
+in a single step. Each rule, and why:
+
+| Rule | Why |
+|---|---|
+| Reviews: `publishedAt != null, isHidden: false` | **The double-blind rule.** A review is withheld until both sides have written one or the window closes. If the archive showed a held one, either party could read the other's before writing theirs, which turns a rating into a negotiation and stops honest criticism. `isHidden` is moderation — a review an admin took down must not come back through a different screen |
+| `TenancyFlag`: **only ones you raised** | The schema's own words: showing an unreviewed accusation to its subject is *"this platform's largest defamation exposure in South Africa."* Matches `TenancyFlagsService.listMine` rather than inventing a looser rule for a screen where both parties happen to be authorised |
+| `Report`: **only ones you filed** | Same reasoning. The admin's resolution is included, because whoever reported it is owed the outcome |
+| `LandlordNote`: **not at all** | *"The moment a note could be read by anyone but its author it stops being a memory aid and becomes an unregulated reference that follows a person around."* Excluded for **both** parties, including the landlord who wrote it — this is a shared screen, and a private note has no business being assembled into one |
+| `LeaseDocument.path`: never returned | An ImageKit path; the only way to read a document is a signed URL from `openUrlFor`, which re-checks the party. A path in the payload is a private file one guess away from public |
+| Messages: not here | They live at `/account/messages`, keyed on the application. A second copy means two places to get read-state wrong |
+
+**⚠️ My own audit got one of these wrong.** Section F's table said disputes were
+visible to "both — raiser sees own; resolution visible to both". The second
+half contradicts the defamation reasoning the schema already records. The code
+follows the existing stricter rule: **only your own**.
+
+### Two things said out loud rather than left as absences
+
+The API returns an `excluded` block naming what the record does not contain and
+why. And when there are no reviews the screen distinguishes **"none were
+published"** from **"not shown yet, because neither of you has written one"** —
+an empty list cannot tell those apart, and a reader who knows a review exists
+and cannot find it assumes it was lost.
+
+### `cancelled` lettings are listed, labelled "Never started"
+
+A letting that fell through is part of what happened and explains a gap in
+somebody's history. Phase D excluded it from the rent screen because there is
+no rent; here the job is completeness, so it is shown and labelled rather than
+hidden.
+
+### Performance: counts in the list, record on open
+
+The list carries `monthsRecorded` and `documentCount` and nothing else. A
+landlord with nine past lettings would otherwise pull nine full records — every
+rent month, every review, every document — to render nine collapsed rows.
+
+### Proof
+
+Drive section 12 — 44 checks, 206 in the file. **Every permission rule was
+reverted and confirmed to leak:**
+
+| Reverted | Result |
+|---|---|
+| the party check | ❌ a stranger opened the record (200, want 403) |
+| the published/hidden review gate | ❌ the tenant read a held review about them, and its words were in the payload |
+| the `raisedById` flag filter | ❌ the person a report was about read it |
+| the document `select` | ❌ `secret-lease.pdf` in the payload |
+
+**7 red, 199 passed. Restored: 206.**
+
+⚠️ **And a FIFTH vacuous pass.** The document-path check read `documents` on a
+fixture that had none — an empty array, so the regex matched nothing and it
+went **green with the path deliberately leaked back in.** It now inserts a
+`lease_documents` row first. A negative assertion needs its subject to exist,
+and this file has now paid for that lesson five times.
+
+Also caught by the drive: an inline link at **14px** against the 44px target
+this codebase holds everything to (WCAG 2.5.8 exempts a link inside a sentence,
+but the destination is the useful part of that block and deserves to be
+tappable), and an `href` where a `routerLink` belongs — an `href` reloads the
+whole application in an SPA, which on this market's connections is seconds and
+a white screen.
+
+`scripts/a11y-drive.mjs` now audits the screen for **both** roles — 19 portal
+pages, not 17. A new screen outside the gate's list is a new screen the gate
+cannot see.
+
+### A useful data point for §37
+
+The initial bundle grew **+154 bytes** (457.92 → 458.07 kB), and `styles.css`
+is **byte-identical** at 59,592. The archive's ~2 kB of CSS cost the initial
+bundle nothing, because it is an **inline component style** and therefore lands
+in that route's lazy chunk.
+
+Phase E's `+1,501 bytes` went into the global sheet by the yard's convention.
+This is direct evidence that moving those rules into the yard's own chunk would
+recover all of it — which is the trade §37 left open.
+
+### Not proven
+
+Nothing here downloads a document. The payload carries no path, which **is**
+checked; that a signed URL re-checks the party is `lease-docs-ui-drive`'s job.
+
+A tenancy with an admin-hidden review is not exercised. `isHidden: false` sits
+in the same `where` clause as the published filter, which **is** exercised.
+
+---
+
+## 39. A room could be relisted with somebody living in it — Phase G
+
+**Fixed. And my own audit described the wrong defect.**
+
+### ⚠️ What C8 got wrong
+
+`docs/TENANCY-LIFECYCLE-AUDIT.md` §C8 said an elapsed notice period produced
+nothing: *"No job watches it… still active, still generating rent reminders."*
+
+**Both inboxes already carried an escalating item.** `LeaseService.upcoming`
+computes the countdown on read, both inbox services sort by a negative day
+count so an overdue row goes first, and both already said "This date has
+already passed". The audit looked for a job and concluded there was no
+handling, when the handling was computed per read on purpose — which the file
+it was reading says in its own header.
+
+And "still generating rent reminders" is not a defect either. If nobody has
+recorded a move-out the person may still be there and rent may still be owed.
+The escalation asks; it does not decide.
+
+### The real hole, which was worse
+
+The landlord's row said *"X is leaving — get the room back on the board"* and
+pointed at relisting. `RoomsService.relist` checked the **room's** status and
+nothing about who was in it — and `let` passes that check.
+
+**Measured before the fix:** relist returned 200, the room went `active`, the
+tenancy stayed `active`, and the room was **on the public board**. Three things
+follow:
+
+- **Tenants apply for a room somebody else lives in.** That is
+  `ReportReason.already_let` — the product generating the exact complaint its
+  own report enum exists for.
+- **`relist()` archives every open application and increments `relistCount`**
+  on the way past, so it is not undone by setting the status back.
+- **Phase E's empty-room task cannot see it**, because that asks for rooms
+  still marked `let` and this one is now `active`.
+
+So the product *suggested* the step that put it into an inconsistent state.
+
+### The fix
+
+`relist()` refuses while a `pending` or `active` tenancy exists, and names the
+step rather than refusing blankly:
+
+> Drive Tenant is still recorded as living in this room. Record the move-out
+> first — then it can go back on the board.
+
+`pending` counts too: an accepted applicant who has not moved in is somebody
+expecting that room, and relisting it out from under them is the same defect
+wearing a different hat.
+
+**`relistAll` needed no change.** It calls `relist()` per room and catches each
+reason into `skipped`, so the bulk path inherited the guard and the landlord is
+told which room and why. A good seam.
+
+### And the action changes once the clock runs out
+
+While the countdown runs, relisting is the right thing to be getting ready for.
+Once it has run out, the step that unblocks everything is recording the
+move-out — the room cannot go back on the board until it exists. So:
+
+| | While running | Once elapsed |
+|---|---|---|
+| Landlord | "Get it back on the board" → the property screen | **"Record the move-out"** → `/landlord/dashboard#moving-in-out` |
+| Tenant (landlord gave notice) | "Start looking" → the board | **"Say you have moved out"** → `/tenant/rent#moving-in-out` |
+
+A row whose action 400s is its own defect, so the guard and the new action
+landed together.
+
+The tenant's change matters for a reason worth stating: sending somebody to
+browse at that point leaves a letting open behind them, and the next thing they
+hear about it is a rent reminder for a room they left.
+
+### ⚠️ What it deliberately does NOT do
+
+**An elapsed notice does not end the tenancy.** Where somebody lives is a
+record of fact, and inferring a move-out from a date is how this product would
+start asserting things it does not know — the same reasoning that keeps the
+countdown computed on read and never written. The drive asserts the tenancy is
+still `active` and `endDate` still null after the period runs out.
+
+### Proof
+
+Drive section 13 — 24 checks, 230 in the file. All three behaviours
+reintroduced: **13 red, 217 passed**; restored, 230.
+
+The cascade under revert is itself the argument. With the guard gone the room
+is relisted at the **pending** stage, so by the time the drive reaches the
+active case the room is no longer `let` and everything downstream collapses —
+which is the inconsistent state the guard exists to prevent.
+
+`smoke-test.sh` carries the guard; `room-grouping-drive` (16),
+`properties-drive`, `lease-drive`, `yard-layout-drive` (41), `inbox-drive`, the
+smoke suite and every gate are green. The bundle is unchanged — this phase is
+backend only.
+
+### Not proven
+
+Nothing here reads either **inbox on screen**. The rows and their actions are
+checked through the API; that they render is `inbox-drive` and
+`dashboard-ui-drive`.
+
+---
+
+## 40. Fourteen borders that were never drawn — Phase H
+
+**Fixed, and the gate that found it is now in CI.**
+
+### What was wrong
+
+`var(--line)` is referenced **fourteen times across nine components** and is
+defined **nowhere**. Not a wrong value: no definition at all.
+
+An unresolved custom property is not a CSS error. The declaration is dropped,
+every longhand of the shorthand becomes `unset`, and `border-style` falls back
+to its initial value of `none`. Measured in Chromium rather than read off the
+spec:
+
+```
+border-bottom: 1px solid var(--line)    →  style "none",  width "0px"
+border-bottom: 1px solid var(--border)  →  style "solid", width "1px"
+```
+
+So fourteen separators did not exist:
+
+| Component | Declaration | What a person saw |
+|---|---|---|
+| `storefront` | `.store-section` / `.store-room` / `.store-foot` border, `.badge` all four sides | the public landlord page ran as one unbroken column; the badges had no box |
+| `lease-panel` | `border-top` | no rule above the lease sections |
+| `lease-documents` | `border-bottom` | documents listed with nothing between them |
+| `task-rows` | `border-bottom` | every task row touched the next, on both dashboards |
+| `tenant-notes` | `.notes-body` `border-left: 3px`, `.note` `border-bottom` | the private-notes panel had no bar marking it off |
+| `landlord-calendar` | `border-bottom` | calendar rows ran together |
+| `admin/services`, `admin/surveys`, `landlord/services` | `border-top` / `border-bottom` | provider and survey rows with no separators |
+
+**Nothing in this repository could see it.** `ng build` succeeds — an unknown
+custom property is valid CSS. `tsc` never reads a `styles:` block.
+`css-coverage-audit.mjs` asks whether a CLASS has a rule, not whether the
+rule's values resolve. Every one of those gates was green over it.
+
+All fourteen now say `var(--border)`.
+
+### The other half of the phase: a literal that duplicates a token
+
+`--border` is `#E0D5C4`. The styling also wrote `#DDD5C8` nineteen times
+across nine files — **2.40 apart in CIE Lab**, which is a difference nobody has
+ever seen on a phone in daylight. `#FFF` appeared 52 times beside
+`--white: #FFFFFF`. The copies do not move when the token does, and this
+palette moves: `--terra` has been changed twice for contrast (once because
+`#C04E28` measured exactly 4.50:1 on cream and subpixel rendering tipped it
+under), `--gold-text` twice, `--slate` once. Each of those fixed the token and
+left the hand-written copies behind.
+
+Migrated: **57 literals in 20 files** (`#FFF`/`#FFFFFF` → `var(--white)`,
+`#DDD5C8` → `var(--border)`). 59 remain, carried in
+`scripts/token-baseline.json` as debt.
+
+### The gate
+
+`scripts/token-lint.mjs`, wired into `npm run audit`, `npm run audit:tokens`
+and CI. Two assertions:
+
+1. **A literal hex within ΔE 3 of a defined token fails.** Ratcheting baseline
+   keyed by file AND value AND count, the same design as
+   `css-coverage-baseline.json`: a new file reaching for `#FFF` fails, and so
+   does a twentieth `#DDD5C8` in a file that already had nineteen.
+   `--update-baseline` refuses to write a baseline worse than the one on disk.
+2. **A `var(--x)` with no fallback, naming a token defined nowhere, fails.**
+   This is the assertion that found `var(--line)`.
+
+Proven able to fail, four ways, each reverted afterwards:
+
+| Reintroduced | Result |
+|---|---|
+| one migrated `#fff` in `cookie-consent` | ❌ named `line 53 (color) → var(--white) #FFFFFF, ΔE 0.00` |
+| a fourth `#3A3228` in `messages` (baseline allows 3) | ❌ `#3A3228 × 4 (baseline allows 3)` |
+| `--update-baseline` run with that extra literal present | ❌ refused: *"only ratchets down"* |
+| `var(--bordre)` typo in `task-rows` | ❌ named the file, the line and the name |
+| `STYLES` pointed at a directory with no tokens | ❌ exit 2, *"Refusing to pass vacuously"* |
+
+`scripts/token-render-drive.mjs` is the other half — 51 checks, the borders
+measured as PAINTED on two real screens at 360 / 390 / 768 / 1280. Reverting
+one `var(--border)` to `var(--line)` turns it red in eight places.
+
+### Three things found on the way, all of the same shape
+
+- **`design-handoff/tools/tokens.mjs` had a filter that could never fire.** Its
+  declaration pattern was `([-\w]+)` with `.filter(m => !m[1].startsWith('$'))`
+  behind it — but `[-\w]` does not match `$`, so on
+  `$color-cream-2: #F2EDE3;` the match simply began one character later and
+  `m[1]` was `color-cream-2`. Twenty SCSS palette definitions in
+  `_variables.scss` were counted as literal colour USES, and the file's own
+  header claimed definitions were excluded. The headline count was 159
+  literals / 332 uses; it is 150 / 314.
+- **`stripComments` cannot see a CSS comment inside an inline `styles:`
+  block.** The block is a template literal, so the moment the backtick opens it
+  is in string state and leaves everything to the closing backtick alone —
+  correct for a string. The design-handoff count never noticed because it
+  EXTRACTS the CSS first and strips the extract. The first version of the token
+  gate read the `.ts` in place and rewrote `#fff` inside screen-hint's comment
+  explaining why that very declaration exists. One wrong edit in 57, invisible
+  to `tsc` and to `ng build`. Both consumers now share
+  `scripts/lib/css-values.mjs`, whose `cssSource()` blanks them.
+- **`scripts/control-contrast-audit.mjs` has never existed.** A comment in
+  `screen-hint.ts` asserted *"now fails on any rule that sets one of the pair
+  without the other"* — a gate claimed in prose and never written, which is the
+  same defect as a control that cannot fail, one step earlier. The comment now
+  says so. **The gate is still wanted and is not written** (see § 41).
+- **`.arc-review__by` had no rule at all.** Phase F shipped it; the review
+  attribution inherited `--ink` and read as loudly as the review itself.
+  `css-coverage-audit.mjs` found it on this phase's build, which means it was
+  red at `cc12db1` and I reported Phase F's gates as green without rerunning
+  it after the build. Now `color: var(--slate)`.
+
+### Still open from this phase
+
+- **`var(--surface2, #F4F1EC)`** in `storefront.ts`: a fallback standing in for
+  a token that does not exist. It renders correctly, so the gate allows it by
+  design — a `var(--x, fallback)` resolves either way. It is still a colour
+  outside the system, and `--surface2` should either be defined or the usage
+  should name an existing token.
+- **`_spec.scss` carries 13 of the 59 baselined literals** and its own header
+  forbids hand-editing it (it is a verbatim port of the visual preview). Those
+  cannot be burned down from here; the preview has to change first. They stay
+  in the baseline so a re-sync that introduces a NEW off-token colour still
+  fails, which is the signal.
+- **The initial bundle budget.** 458.07 kB before this phase, 458.19 kB after —
+  **measured by stashing and rebuilding**, not assumed. The 8 kB overrun of the
+  450 kB budget is pre-existing; this phase added 0.12 kB, because
+  `var(--white)` is eight characters longer than `#fff`.
+
+## 42. The wordmark existed twice, and MA had nothing to pin it to — Phase I
+
+**Fixed.** One component, `frontend/src/app/shared/components/logo/logo.ts`.
+
+### What was wrong
+
+```
+navbar.ts:27   <a class="nav-logo"    routerLink="/">Mas<span>tande</span></a>
+footer.ts:15   <a class="footer-logo" routerLink="/">Mas<span>tande</span></a>
+```
+
+Two copies of the markup, two copies of the rule (`.nav-logo` /
+`.nav-logo span`, `.footer-logo` / `.footer-logo span`). This repo's own
+`landlordNav` comment records where that ends: the portal nav was defined six
+times, the copies disagreed, and the sidebar shrank as a person moved through
+their own portal.
+
+**The split was `Mas` / `tande`, not `MA` / `stande`.** The requirement is that
+the **MA** portion holds its colour wherever the logo appears — and "MA" was
+part of an unnamed text node with no element of its own, inheriting whatever
+`color` the surrounding class set. There was nothing to pin.
+
+**The stem colour was `--cream`, which assumes a dark background.** Both homes
+are dark; render the same markup on cream and "Mas" goes invisible while
+"tande" stays terracotta.
+
+### What shipped, and where it differs from the plan
+
+The audit called for a `surface: 'dark' | 'light'` input. **An input with two
+values has a wrong value**, and here the wrong value renders cream on cream or
+ink on ink — the invisible wordmark the finding was about. So the stem is
+`currentColor` and there is no input to get wrong. MA is `.logo__ma` with
+`color: var(--logo-ma)` in the component's own scoped styles, which Angular
+rewrites with an attribute selector — more specific than anything a parent
+stylesheet can say, and declared rather than inherited, so a parent setting
+`color` moves the stem and cannot touch MA.
+
+### ⚠️ Three dark surfaces declared a background and no foreground
+
+`currentColor` only works if the surface says what its foreground is. It did
+not: `.nav` and `.footer` are `background: var(--ink)` with **no `color`**;
+`.portal-nav` is `background: var(--ink2)`, the same. Everything inside them
+has been naming its own colour one declaration at a time — `.nav-logo`,
+`.footer-desc`, `.footer-popia`, `.footer-col h2`, `.portal-user-name`.
+
+That is the `:where(button)` defect one level up, and the first measurement
+after the swap proved the cost: with the foreground undeclared the stem came
+back at **1.00:1** on `--ink` — the invisible-text failure this codebase has
+already shipped once as white text on a white button. All three surfaces now
+declare their foreground in `styles.scss` (the port forbids hand-editing, and
+the now-redundant per-child colours are left alone, because deleting rules
+inside a verbatim port is how a re-sync becomes a conflict).
+
+### The MA colour had to change, and the number was searched
+
+One fixed value has to be legible on `--ink` (header, footer) **and** on
+`--cream` / `--card` / `--white`. Every existing terracotta fails one side:
+
+| Token | on `--ink` | on `--cream` |
+|---|---:|---:|
+| `--terra` #AD4222 | **3.06** | 5.48 |
+| `--terra2` #E06038 | 5.04 | **3.33** |
+| `--terra-deep` #8E3519 | **2.28** | 7.34 |
+| **`--logo-ma` #C4522C** | **3.92** | **4.28** |
+
+Searched across the five surfaces rather than chosen: the best achievable
+minimum is **3.92:1**, because anything light enough for #1C160E is too light
+for #FFFFFF. #C4522C reaches that ceiling and is the closest to the brand of
+the values that do — ΔE 7.6 from `--terra`, 8.7 from `--terra2`, sitting
+between the two terracottas it replaces.
+
+**⚠️ 3.92 clears WCAG's LARGE-text threshold of 3:1, not the 4.5:1 small-text
+one.** That holds only while the wordmark is 18.66px bold or larger. It ships
+at 1.6rem / 1.5rem / 1.25rem at weight 900 — 25.6 / 24 / 20px — so the
+smallest has 1.34px of margin. **A fourth, smaller size added without changing
+the colour would be a contrast failure that looks like a styling tweak**, so
+the floor is measured rather than trusted.
+
+### The gate
+
+`scripts/logo-drive.mjs`, 76 checks, two placements × four widths. MA is
+#C4522C and the **same** value at all eight combinations, compared rather than
+asserted one at a time; MA is not the stem's colour; the rendered size and
+weight clear the floor; MA's contrast against the backdrop it is actually
+painted on is measured by walking up to the first opaque ancestor; the
+accessible name contains the visible text (WCAG 2.5.3); there is exactly one
+wordmark per page; and the drive sets `color` on the host from outside, the way
+a future stylesheet would, to prove MA does not move and the stem does.
+
+Proven able to fail, three ways, each reverted:
+
+| Reintroduced | Result |
+|---|---|
+| `.logo__ma` loses its token and inherits | ❌ 17 checks; MA and stem both `rgb(250,247,240)` |
+| `--lg` dropped to 1rem | ❌ "16px at weight 900, floor 18.66px bold" at 768 and 1280 |
+| `.nav, .footer` stop declaring a foreground | ❌ stem at **1.00:1** on `--ink` |
+
+### ⚠️ And the drive caught my own claim being false, on its first run
+
+The component header said the stem "inherits the surrounding text colour". It
+did not. The logo's root is an `<a>`, and the global
+`a { color: $color-terracotta }` in `styles.scss` has specificity (0,0,1) on
+that very element, so `currentColor` resolved to `--terra`: **3.06:1 on
+`--ink`**, passing the 3:1 floor by 0.06 and nothing like what was designed.
+`.logo { color: inherit }` fixes it — 16.77:1 now. Nothing but a measurement
+would have found this; the wordmark looked entirely plausible.
+
+### ⚠️ The backtick trap, for the eighth time, where the lint could not see it
+
+Five backticked identifiers in a comment inside the component's `styles:`
+block terminated the literal. The production build produced twenty errors,
+among them `TS2304: Cannot find name 'color'` and `TS2552: Cannot find name
+'_responsive'`.
+
+**`scripts/template-literal-lint.mjs` read green over it.** It looked only at
+`template:` literals, and only at the first one in each file. A lint that
+covers one of the two places a trap occurs is a lint that will be trusted in
+the other. It now covers `template:`, `styles:` and every element of a
+`styles: [...]` array, at every occurrence — 141 literals across 85 files.
+Proven by running both versions against the same defect: old exit 0, new exit
+1, naming `logo.ts:107 (styles:)`.
+
+### Also in this phase
+
+- **`scripts/nav-ui-drive.mjs` queried `.nav-logo`** for its overcrowding
+  check. It would have gone red rather than silent, which is the right
+  failure mode — but note the trap it now documents: `app-logo`'s host is
+  `display: contents`, so the host's own rect is 0×0 and measuring it would
+  report every header as a 0px logo. The selector is
+  `.nav app-logo .logo`, scoped because the footer carries a second wordmark.
+- **The responsive size moved into the component.**
+  `_responsive.scss` had `.nav-logo { font-size: 1.25rem }` inside the 480px
+  block, where the component could not see it.
+
+### Still open from this phase
+
+- **`.nav-logo`, `.nav-logo span`, `.footer-logo` and `.footer-logo span` are
+  now dead rules in `_spec.scss`** — roughly 0.2 kB in the initial bundle.
+  Deliberately left: that file is a verbatim port and hand-editing it turns the
+  next re-sync into a conflict, for 0.04% of a 459 kB bundle.
+- **The initial bundle grew 1.56 kB** — 458.19 kB to 459.75 kB. A new
+  component in the app shell is not lazy, because the navbar and the footer are
+  on every route. The 450 kB budget was already over by 8.07 kB before Phase H
+  (§ 40); it is now over by 9.75 kB. `bundle-budget.mjs`, which measures
+  gzipped initial JS per prerendered page, still passes with 122.1 KB to spare.
+- **`--logo-ma` is the only colour in the system chosen for a 3:1 threshold.**
+  If the brand ever wants the wordmark small — a favicon wordmark, a compact
+  header — it needs a second, darker value for light surfaces, and then MA is
+  no longer one colour everywhere. Worth knowing before that request arrives.
+
+## 43. Four parallel state systems, three of the duplicates mine — Phase J1
+
+**Fixed.** Five meanings, defined once in `styles.scss`; the mapping is a
+typed function in `core/models/state.model.ts`; `scripts/state-lint.mjs` is
+the gate.
+
+### What was wrong
+
+§H4 called the state treatments "ad hoc and partial". Counted, there were four
+parallel systems:
+
+| Duplicate | Where |
+|---|---|
+| the "Past letting" chip, written **three times** | `.arc-row__badge` (archive), `.rent-past__badge` (rent), `.yard-past__review` (yard) — differing only by `.12rem` vs `.15rem` of padding |
+| `.status--accepted` / `.status--rejected`, identical, raw hexes | `applicants.ts` **and** `applicants-inbox.ts` |
+| a naming fork | `.status-accepted` (spec layer, one hyphen) vs `.status--accepted` (components, BEM). Neither shadows the other |
+| a fourth convention | `app-status status-{{ p.status }}` on the rent ledger |
+
+**Phases D, E and F wrote three of those duplicates** — this session, mine.
+
+### ⚠️ Two of those rules were under the contrast floor, and the gate for that could not see it
+
+Measured: `.status--accepted` (#3D7040 on sage 15%) is **4.12:1** over
+`--cream2`; `.status--rejected` (#D63B3B on red 10%) is **3.46:1**. The chip is
+.65rem at weight 700, so the threshold is 4.5:1. Both failed, on two screens,
+for every release.
+
+**`a11y-drive.mjs` has never accepted or rejected an application.** Neither
+chip has ever been on screen while contrast was being measured. *A page passes
+that audit by not containing the failing element* — the five-vacuous-passes
+lesson, inside the gate that exists to prevent it, and the drive's own comment
+about the viewing invitation already names the pattern.
+
+Fixed by seeding the states: a second room (so accepting does not turn the
+first one `let` and change what every other panel renders) and a second tenant
+(because one applicant cannot be both accepted and rejected).
+
+**Proven**: with the old `#D63B3B` on red-10% restored, the enriched fixture
+catches it on both screens — `/landlord/applicants` at **3.75:1** and the
+per-room screen at **3.86:1**, each measured against the surface it actually
+renders on. Before this phase, the same colour on the same two screens
+produced zero failures.
+
+### ⚠️ And the per-room applicants screen had never been audited at all
+
+`LANDLORD_PAGES` is static paths and that route needs a room id, so
+`applicants.ts` was not in the list. `/landlord/applicants` is a **different**
+component (`applicants-inbox.ts`), so auditing one never covered the other.
+Pushed onto the list from inside the seed, which is the only place that knows
+the id.
+
+**The first run of it found a real defect**: H3 straight after H1 — "Decided
+(2)", "New and viewed", "⭐ Shortlisted". The portal shell supplies the only
+`h1`, so every section heading on that screen skipped a level. Three `<h3>` →
+`<h2>`.
+
+### The vocabulary
+
+Each pair measured over `--cream`, `--cream2`, `--card` and `--white`, because
+a translucent tint composites over whatever is beneath it:
+
+| state | ink | fill | worst of four |
+|---|---|---|---:|
+| live | `--sage-deep` | sage 12% | 5.21 |
+| waiting | `--ink2` | gold 14% | 9.64 |
+| past | `--terra-deep` | `--cream2` | 6.73 |
+| closed | `--slate` | `--cream2` | 4.74 |
+| disputed | `--terra-deep` | red 10% | 5.89 |
+
+The obvious picks all fail. **`--gold-text` on its own gold tint is 4.10:1** —
+and `_spec.scss`'s comment claims it "clears both… 4.61:1 on the tint", which
+was measured against the tint over `--card` only; over `--cream2` it is 4.10,
+so `.status-pending` has been under the threshold on that surface all along.
+`--sage` on the sage tint is 4.29, `--terra` on the terra tint 4.38, `--slate`
+on any tint 4.05–4.23. Hence deep inks throughout, and `waiting` carrying its
+meaning in the FILL with near-black ink: no gold close enough to `--gold` to
+still read as gold clears 4.5:1 as small text (the nearest that does is ΔE 23
+away and reads brown).
+
+**Colour is never the only channel.** Every chip carries a word — "Past
+letting", "Never started", "Disputed" — so the ink reinforces the meaning
+rather than conveying it (WCAG 1.4.1). That is also what frees the palette from
+having to make five maximally-distinct hues out of one warm family.
+
+`.state-edge` is §H3's second identity move: a 3px rule in the state's own ink
+instead of another tinted rounded box. Both devices read the same two custom
+properties, so a meaning is defined once and rendered two ways, and the 480px
+behaviour (indent out, rule on top) moved out of `rent.ts` into the vocabulary.
+The rent ledger now marks a **disputed month** with it — that was prose with a
+raised hand in it, so on a year of rows the one month somebody queried looked
+exactly like the eleven they did not.
+
+The mapping is a typed function because **two copies of a mapping is the same
+defect as two copies of a rule**: the inbox folded `withdrawn` in with
+`rejected` — the same red — so an applicant who *stopped* read as one the
+landlord had *refused*. A new status added to either union is now a type error.
+
+### The gate
+
+`scripts/state-lint.mjs`, in `npm run audit` and CI. Four reintroductions, each
+reverted:
+
+| Reintroduced | Result |
+|---|---|
+| a sixth meaning (`state--expired`) | ❌ named with file:line |
+| a component declaring the treatment again | ❌ named with the properties it set |
+| a declared name losing its rule | ❌ "the chip renders unmodified grey" |
+| pointed where nothing uses the vocabulary | ❌ exit 2, "refusing to pass" |
+
+Its own first run produced two false positives — it matched the tail of
+`landlord-trust__state--ok` — which turned out to be a real finding anyway:
+both modifiers were in the CSS-coverage baseline as styled nowhere, and are now
+deleted (baseline 23 → 21).
+
+`.pill--*` is deliberately **not** governed: here a pill is an attribute, not a
+state ("✓ Verified", "🛂 Passport", "Couples welcome"), and forcing those into
+`live / waiting / past / closed / disputed` would mean picking a state for
+"Couples welcome". Measured on the way past: `.pill--green` (#3D7040 on sage
+10%) is 4.42:1 over `--cream2` and `.pill` is .6rem — under the floor on that
+surface, though it renders on `--card` (4.90) and `--cream` (4.80) today.
+
+## 44. `_spec.scss`'s "DO NOT hand-edit" was a phantom control, and I quoted it twice
+
+**Header corrected. Both defects it was shielding are fixed.**
+
+It said: *"DO NOT hand-edit. This is a direct copy of the project's
+authoritative visual spec so it can be re-synced when the preview changes."*
+
+**`RentBoard-ZA-Visual-Preview.html` is not in this repository and never has
+been.** `git log --all -- '*Visual-Preview*'` is empty, and `README.md` lists it
+under *"Historical source documents… files that existed at a point in time"*.
+There is nothing to re-sync from. The file was a one-time port in `e28a035`
+and has been hand-edited in **22 commits** since — one of them mine three
+commits ago (`8c94aed` added the entire `.yard-past*` block while citing that
+header as the reason not to touch the file).
+
+So: a rule that looked like a constraint, could not be enforced, was routinely
+broken, and was still being quoted as a reason to leave real defects in place.
+Exactly the defect class CLAUDE.md names, one level up from a control that
+cannot fail — a control that was never wired to anything.
+
+**I used it twice in the last two phases:**
+
+- § 40 (Phase H) left **13 literal `#FFF`** there, "because the preview has to
+  change first". Now `var(--white)`.
+- § 42 (Phase I) left **four dead `.nav-logo` / `.footer-logo` rules** there,
+  "because hand-editing a verbatim port turns the next re-sync into a
+  conflict". Now deleted.
+
+The token baseline ratchets **59 → 31** as a result (the two applicants
+screens contributed the rest, migrated on the way past).
+
+The header now says what is actually true: it is ordinary source; it is the
+global layer and is loaded first, so a component's own `styles:` block beats it
+(Angular's emulated encapsulation — the real constraint, and the reason
+PRE-LAUNCH-CHECKLIST #9 exists); `styles.scss` is still *preferred* for new
+app-only rules, as a preference rather than a prohibition; and breakpoints
+belong in `_responsive.scss`, which is loaded last.
+
+### ⚠️ One blind gate quietly corrupted another gate's baseline
+
+Also found in this phase, and the most instructive thing in it.
+`template-literal-lint.mjs` accepted a stray backtick that happened to be
+followed by a comma, because that looks exactly like a correct close:
+
+```
+both 'closed`, in one place, for both screens.
+```
+
+The lint went green. The **token gate**, which reads the same `styles:` ranges
+through `cssSource`, then silently stopped seeing nine literals in the
+truncated remainder — and `--update-baseline` wrote a baseline nine entries
+short. A gate that cannot see its subject is one thing; a gate that *feeds a
+wrong subject to another gate* is worse, because the second one reports
+success.
+
+The lint now requires that what follows a candidate close is plausible too:
+`})`, `],`, or another `@Component` key, with comments stepped over. That last
+part matters — without it, six components that correctly close `template:` and
+then explain in a comment why there is no `styles:` block all failed, and a
+gate with six false positives gets switched off.
+
+Instances nine through twelve of the backtick trap all occurred in this phase
+and all were named by the lint before any build.
+
+## 45. Eleven on-screen promises of a WhatsApp message that is never sent
+
+**Fixed. All of them read the flag now, and there is no baseline — the
+tolerance is zero.**
+
+CLAUDE.md is unconditional: *"Nothing on screen may promise a WhatsApp message
+while it is off."* `WHATSAPP_ENABLED` is `false` on both the API and the
+browser. Eleven sentences across six screens said otherwise:
+
+| File | × | What it said | What it says while the channel is off |
+|---|---:|---|---|
+| `walkthrough.ts` | 3 | two onboarding cards **titled** "Messages reach you on WhatsApp too", and "send the photos to us on WhatsApp and finish it later" | "Every conversation in one inbox" / "Your conversations, in one place"; "A listing saves as you go, so you can add the photos later" |
+| `messages.ts` | 2 | the screen hint, and `replyGoesTo()` — **both branches** named WhatsApp, and neither was true | the hint describes the inbox; the reply line says "sent in the app and emailed to them" and stops |
+| `account-settings.ts` | 3 | "Used for WhatsApp notifications"; "you can sign in with a WhatsApp code"; "Verifying lets you sign in with a WhatsApp code" | "Used to verify who you are…"; "Signing in with a code is switched off at the moment, so use your email"; "Verifying needs a code sent to this number, which is switched off — there is nothing you need to do" |
+| `passport-verify.ts` | 1 | "We send them one WhatsApp asking two questions" | "Somebody from Mastande phones them and asks two questions" |
+| `close-account.ts` | 1 | "closing it needs a code on WhatsApp" | "codes to a number are switched off at the moment — so closing it here needs a password" |
+| `register-phone.ts` | 2 | the whole page | **unchanged, and exempt** — see below |
+
+### Gated, not deleted, and that is the point
+
+Every one reads `WHATSAPP_ENABLED`, the way `login.ts`, `register.ts`,
+`home.ts` and `auth.routes.ts` already do. So the honest sentence shows while
+the channel is off and **the WhatsApp sentence returns by itself when the flag
+flips** — which is what CLAUDE.md asks for: *"WhatsApp is deferred, not
+abandoned… one variable brings the channel back; rebuilding it later is
+waste."* Deleting the copy would have been the wrong fix.
+
+**Verified both ways.** With the flag `true`, "Messages reach you on WhatsApp
+too" is back in the production bundle. With it `false`, the landlord tour was
+walked card by card at 390px — all eight cards read, card 1 "A listing saves
+as you go", card 3 "Every conversation in one inbox", **no WhatsApp anywhere**
+— and the settings screen shows "Used to verify who you are" with the
+WhatsApp hint absent.
+
+### Two things the fix uncovered
+
+- **`account-settings.ts` had a dead control, not just wrong copy.** The
+  "Verify this number" button calls `requestPhoneVerification`, which sends the
+  code over WhatsApp, and the API refuses with a 503. A button that can only
+  fail is worse than no button, so while the channel is off the sentence says
+  so and **the button is not rendered**.
+- **`passport-verify.ts` was telling a tenant their referee had been
+  contacted when nobody had.** `ReferencesService` attempts WhatsApp, gets
+  `delivered: false`, records `reference_send_failed`, and the admin screen
+  tells an operator to phone the referee instead. The tenant-facing copy now
+  says a person phones them, which is what actually happens.
+
+### `register-phone.ts` is exempt, by a rule rather than a list
+
+Its whole page describes a WhatsApp sign-up — and the route is behind
+`whatsappOnlyGuard`, which redirects to `/auth/register` while the flag is
+false. The copy cannot be on screen while the promise is untrue.
+
+So the sweep reads the guarded component paths **out of `auth.routes.ts`**
+rather than carrying a hardcoded exemption or a baseline entry. A baseline
+would be permanent debt for copy that is already correct; a hardcoded
+exemption would go stale the moment the guard was removed. **Proven**:
+deleting `canActivate: [whatsappOnlyGuard]` makes that page's two promises
+fail the sweep immediately.
+
+### The drive that guards this rule could not see any of them
+
+`scripts/whatsapp-off-drive.mjs` checked **four hardcoded files** —
+`login.ts`, `register.ts`, `auth.routes.ts`, `home.ts` — and asserted each read
+the flag. A check structurally incapable of seeing the thing it exists for,
+which is this repo's signature defect: a nav audit that could not see a dead
+link, nineteen `@Throttle` decorators with no guard, a `documentDeletedAt` that
+deleted nothing.
+
+It now sweeps every component, skipping comments, files that read the flag, and
+components behind the guard. **The promise pattern had to be widened once**:
+the first version matched `account-settings.ts` on "Used for WhatsApp
+notifications" and missed two more claims in the same file, because a promise
+is not only "we send" — it is any claim that something will arrive *or that a
+WhatsApp-dependent thing can be done*.
+
+Proven able to fail three ways, each reverted: a new promise anywhere
+(`properties.ts`); the route guard removed; and the sweep pointed at a
+directory with no WhatsApp text, which **refuses** rather than passing — the
+vacuous-pass guard had to be rewritten to count *files scanned* rather than
+*findings*, because zero findings is now the correct answer.
+
+`scripts/whatsapp-promise-baseline.json` is **deleted**. It existed for a few
+hours.
+
+### Deliberately not swept
+
+The privacy policy naming Meta as a processor, every `wa.me` link, the
+close-account page listing "no WhatsApp messages" among what stops, the admin
+screens an operator drives, and the deferred backend code. Those are mentions,
+not promises, and CLAUDE.md protects the `wa.me` links explicitly.
+
+## 50. A first-use hint that could never be dismissed — Phase F, found today
+
+**Fixed.** `scripts/hints-drive.mjs` exists for exactly this, and I did not run
+it during Phase F.
+
+The archive screen shipped with `key="account-tenancies"`, and that key was
+never added to `SCREEN_HINTS` on the server. So the panel showed, "Got it"
+posted to `/users/me/hints/account-tenancies`, the API answered **400**, the
+optimistic patch rolled back, and the hint came straight back on the next
+visit. `screen-hint.ts`'s own header says it: *"a hint you cannot put away is
+worse than no hint at all."*
+
+Found by running the drive while verifying something else. Proven by removing
+the key again: *"1 key(s) the server would reject, so the hint never goes away:
+account-tenancies"*.
+
+## 46. Loading, empty and error were thirty-eight paragraphs — Phase J2
+
+**Fixed.** Three components, `scripts/feedback-lint.mjs` is the gate.
+
+### What was wrong
+
+§G5 said there was "no system, so the twentieth screen will invent a
+twenty-first phrasing". Counted, the copy was *already* consistent — 23 of the
+38 loading states were the identical paragraph. The real defect was different
+and worse:
+
+**⚠️ Not one of the 38 was announced.** A paragraph replaced by content when a
+request lands is silent to a screen reader: no `role`, no `aria-live`, so
+nothing says a screen is busy and nothing says it has finished. There are 81
+live regions in this app; 68 are `role="alert"` on field errors and exactly 11
+paragraphs carry `role="status"`, none of them a loading state in a template.
+**`axe` does not flag a missing live region, so `a11y-drive` has never
+reported this and never could.**
+
+**Three screens used ONE element for three states.** `notices`, `messages` and
+`applicants-inbox` each had `<p class="{notices,msg,ai}-empty" role="alert">`
+doing the error, the loading state *and* the empty state. Two consequences:
+"Loading…" was announced as an **alert**, the politeness level reserved for
+something going wrong; and "we could not reach the server" looked exactly like
+"you have nothing" — which on an applicants screen means a landlord concludes
+**nobody applied**. The screens' own comments say "Three states, not two", and
+the markup then used one element for all three.
+
+**The whole-screen error had no error styling at all** — muted body text, the
+same defect `.form-error` had before `css-coverage-audit` found it.
+
+### What shipped
+
+- **`<app-loading>`** — `role="status" aria-live="polite"`, with `<ng-content>`
+  **fallback content** so the ten screens with better wording keep it. 38 call
+  sites in 28 components.
+- **`<app-error-state>`** — `role="alert"`, a `retry` output, the state
+  vocabulary's edge treatment, and `var(--danger)`.
+- **`<app-empty-state>`** — deliberately thin. §G5 says the copy is "genuinely
+  better than most" and it is, so the copy stays projected; what the component
+  adds is a slot for the ACTION, which several empty states lacked entirely.
+
+### ⚠️ `--danger` did not exist, and eight components had each typed a worse red
+
+`$color-danger: #B23B3B` has been in `_variables.scss` from the start and is
+**5.48:1** on `--cream`. But an SCSS variable is invisible to an inline
+`styles:` block — the audit's §H2 finding — so eight components typed a red
+from memory and every one of them landed on `#D63B3B`: **4.32:1 on `--cream`,
+3.96:1 on `--cream2`**, at .82rem. Eight independent contrast failures caused
+by a token the components could not reach.
+
+`--danger` is now a custom property with the same value, and all eight say
+`var(--danger)`. Adding the token immediately made the gate see a ninth
+literal (`#B23B3B` in `tenancy-lifecycle.ts`) that had been invisible because
+nothing matched it — defining a token is what makes its bypasses visible.
+
+### `.link-button` was declared in four component scopes and nowhere global
+
+The `.btn-danger` defect again, which `css-coverage-audit`'s own header
+records. Four identical bodies in `close-account`, `messages`, `notices` and
+`applicants-inbox`; no global rule. So the fifth component to write
+`class="link-button"` got an unstyled `<button>` — default chrome, default
+padding, in the middle of a sentence. Phase J2's error-state was that fifth,
+and the audit named it on the first run. Now global, once, with the four copies
+deleted.
+
+### ⚠️ And two gates had false positives of their own
+
+- **`css-coverage-audit` read class names out of COMMENTS.** The error-state
+  component documents the three screens it replaced, including
+  `<p class="notices-empty" role="alert">`, and the audit reported
+  `.notices-empty`, `.msg-empty`, `.ai-empty` and `.link-button` as used and
+  unstyled. Four false positives from one explanatory comment, in the gate
+  whose entire job is to be trustworthy about missing rules. It now reads
+  `onScreenSource()` — JSDoc, `//` comments and HTML comments inside the
+  template blanked, offsets preserved. Verified still able to fail: a real bare
+  class (`.err--loud`) is still caught.
+- **`feedback-lint`'s own first assertion could not fail.** It checked that the
+  loading component carries `role="status"` by searching the whole file — and
+  the component's header *explains* why it carries `role="status"`, so the
+  check matched its own documentation. Verified by deleting the attribute: the
+  lint stayed green. It now strips comments first, and deleting the attribute
+  produces two failures.
+
+### The gate
+
+`scripts/feedback-lint.mjs`, in `npm run audit`, CI **and the pre-commit hook**.
+Three reintroductions, each reverted: a screen writing its own loading state
+(named with file:line and the tag); the loading component losing `role="status"`
+and `aria-live`; a component declaring a feedback treatment itself (named with
+the properties it set). Plus two vacuous-pass guards: no loading component on
+disk, and nothing using the three components, both exit 2.
+
+### The pre-commit hook now runs the four fast gates
+
+`template-literal-lint`, `token-lint`, `state-lint` and `feedback-lint`:
+**0.516s for all of them**, measured. None needs a build, an API or a browser.
+
+The backtick trap is why. It has now happened **thirteen times** in this
+repository — five of them on 11 October alone, in the phases that wrote and
+widened the lint for it. A note in CLAUDE.md did not stop it and a CI job
+reports it ten minutes later; the hook reports it at the moment it is written.
+
+## 47. ⚠️ DM Mono has never been fetched, and every money figure rendered in Courier New
+
+**Fixed by naming the truth, with the alternative left to you.**
+
+`--font-mono: 'DM Mono', 'Courier New', monospace`. `index.html` has **never
+requested DM Mono**: the Google Fonts link asks for `Playfair+Display:wght@700;900`
+and `DM+Sans:wght@400;500;600;700` and nothing else. Readable from the file; no
+browser needed.
+
+So every money figure in this app — the room price, the hero statistic, the
+rent ledger, the archive's month amounts — has rendered in **Courier New or the
+platform monospace** since the day the token was written, while the design
+system said DM Mono and `design-handoff/TOKENS-CURRENT.md` reported it as one
+of "three real faces, plus the same three again as SCSS variables".
+
+**Nothing here could see it.** The token resolves, so `token-lint` is
+satisfied. The production build does not fetch fonts.
+`getComputedStyle().fontFamily` echoes the **declaration** back, so a drive
+reading it "confirms" a font that is not there.
+
+⚠️ **Which means one of my own claims was weaker than it read.** Phase I's
+`logo-drive` reports the wordmark's `fontFamily` as
+`"Playfair Display", Georgia, serif`. That proves the declaration, not the
+glyphs. Its load-bearing assertions — the 18.66px bold floor and the measured
+contrast — stand; the family is not evidence and is not treated as such.
+
+### Why this cannot be checked in a browser here
+
+Measured on 11 October: the strings `"DM Mono"`, `"Playfair Display"`, and two
+deliberately bogus family names all render at **identical width** in this
+container's Chromium — 292.03px for the same test string at 48px. Only the
+generic `monospace` and locally-installed `Courier New` differ. **No webfont
+loads here at all**, because `fonts.googleapis.com` is unreachable through the
+agent proxy. A rendered check would report every family as missing, including
+the two that work in production.
+
+So `scripts/font-lint.mjs` is a **static** check against the markup, which is
+where the truth is:
+
+1. Every family named in a `--font-*` token is either requested in
+   `index.html` or is a generic / system family that needs no request.
+2. Every weight used alongside `--font-display` is in the requested range — a
+   900 that was never fetched is **synthesised**, and a synthesised heavy serif
+   is the difference between a wordmark and a smeared one.
+
+Proven able to fail: putting `'DM Mono'` back → *"names "dm mono" — nothing
+requests it, so it never renders"*; changing the logo to weight 800 →
+*"display weight(s) 800 are used but NOT requested — the browser synthesises
+them"*; stripping the font request from `index.html` → refuses rather than
+passing.
+
+### The fix, and the decision left to you
+
+`--font-mono` now names
+`ui-monospace, 'Roboto Mono', Menlo, Consolas, 'Courier New', monospace` —
+honest, and the system monospace on Android is Roboto Mono, on iOS Menlo, both
+tabular, which is the only property this token is relied on for (a column of
+rand amounts has to line up).
+
+**If you want DM Mono, it has to be added to the font request** — naming it in
+a token does not fetch it. I did not add it: a third webfont family, for the
+digits in a rand figure, on a product built for a cheap Android on a metered
+connection, is a cost/identity call rather than a bug fix. One line in
+`index.html` if you want it.
+
+## 48. Twenty-eight radius values, and the 6px that §H3 said had to go — Phase J3
+
+**Fixed. Radius tolerance is now zero; spacing is ratcheted.**
+
+§H3's third identity move: *"Cream surfaces, ink structure, one radius. `--card`
+on `--cream`, hairline `--border`, `$r4` for controls and `$r12` for surfaces,
+and nothing else. Every `6px` and `8px` in a component block goes."*
+
+Measured before: **28 distinct radius values for 174 uses.** The tokens existed
+and were used — `var(--r4)` 40, `var(--r8)` 21, `var(--r-full)` 18 — and beside
+them:
+
+| Value | × | What it actually is |
+|---|---:|---|
+| `8px` | 15 | **is** `--r8` |
+| `6px` | 13 | on no scale — every one a control (button, select, input, toggle) |
+| `10px` | 10 | on no scale — six of them pills, four surfaces |
+| `4px` | 6 | **is** `--r4` |
+| `12px` | 3 | **is** `--r12` |
+| `20px`, `999px`, `5px`, `2px`, `0.4rem`, `0.6rem` | 1 each | — |
+
+Now **15 values for the same 174 uses**, and every remaining one is
+legitimate: the five tokens (147 uses), `50%` for circles (8), `0` for
+deliberately square (3), the SCSS `$r*` layer in stylesheets (10), and four
+one-side compound forms.
+
+Mapping, by what the element IS rather than by arithmetic: controls → `--r4`
+(so every `6px`, `5px`, `2px`, `0.4rem` went there); small surfaces → `--r8`;
+panels → `--r12`; chips at .6rem with .1rem padding → `--r-full`, which also
+makes them consistent with the state vocabulary's chip.
+
+**⚠️ I kept `--r8`, where §H3 said "r4 and r12 and nothing else".** 21 existing
+uses is not a rounding error and 8px is a real step between a control and a
+panel; removing it would be a 21-site visual change to satisfy the letter of a
+sentence in an audit I wrote myself.
+
+### The gate
+
+`scripts/scale-lint.mjs`. Radius: **zero tolerance**, because the migration is
+done. Spacing: **ratcheted**, because it is 60 values over 1073 uses and
+migrating it would be churn with real visual risk and no way to review it. The
+rhythm is `.25 / .5 / .75 / 1 / 1.25 / 1.5 / 2 / 2.5 / 3rem`; 39 off-scale
+values over 536 uses are baselined, led by `.6rem` ×101, `.4rem` ×66,
+`.85rem` ×45.
+
+Proven able to fail four ways, each reverted: a radius off the scale (`7px`); a
+**compound** radius with one off-scale part (`var(--r4) 3px 0 0` — the laxer
+first version of the rule let `2px 2px 0 0` through, which is how that value
+survived); a new off-scale spacing value (`.47rem`); and one MORE use of a
+value already baselined (`.6rem ×102`, baseline 101).
+
+Its own first run had a counting bug worth noting: `.6rem` and `0.6rem` were
+counted as two values (87 and 14), which made the tail look longer than it is
+and would have let a file switch spelling to get under a baseline. Normalised —
+**11 of the original 49 entries were a second spelling of another.**
+
+## 49. The money figure, in the display face — Phase J4 (§H3's first identity move)
+
+§H3: *"Playfair Display, heavy, for every number that matters — rent, the rand
+figure, the count on a dashboard card. Numerals in a serif display face on a
+letting board is immediately not-SaaS."*
+
+**Applied to the display figures, and deliberately NOT to the ledger ones.**
+
+The audit is right about the first and wrong about the second, and the reason
+is tabular numerals. The rent ledger and the archive's month list are columns
+of amounts that have to line up. The monospace stack gives fixed-width digits;
+Playfair, a proportional serif, does not. A column of rand figures that does
+not align is worse than a generic one.
+
+So:
+
+- **`.stat-box .val`** (the hero statistic) and **`.room-detail__price`** take
+  `--font-display` at weight 900 — one per screen, at size, the thing a person
+  looks for first.
+- **`.app-rent`** in a list and **`.arc-month__amount`** keep the monospace
+  stack, because alignment is the job.
+- **`.dash-count`** stays as it is: at `.85em` in slate inside a heading it is
+  a label, not a figure.
+
+`font-variant-numeric: lining` on both, because **Playfair ships old-style
+figures by default**: without it the 2 and the 5 in "R2 500" drop below the
+baseline like lower-case letters, which on a price reads as a rendering fault.
+
+`.figure` is a class in `styles.scss` so the next display figure gets the same
+treatment without a fourth opinion about it.
+
+## 51. ⚠️ "by RentBoard ZA" under every house ad — and the script to fix it could not
+
+**Fixed, three defects deep. My earlier advice to you was wrong and would not
+have worked.**
+
+You reported the advertiser name still reading RentBoard. It was on a public
+page: `ads.service.ts` returns `advertiser: campaign.advertiser.companyName`
+and `ad-slot.ts` renders `by {{ advert.advertiser }}` under **every** advert,
+so three house adverts whose own copy had been correct since the rename were
+each signed with the old brand.
+
+I had told you to run `npx ts-node prisma/seed-house-ads.ts --apply`. **That
+would have printed a calm success and changed nothing.** Reproduced, before
+fixing anything, by setting the local row back to `RentBoard ZA`:
+
+```
+[HOUSE] How it works — sidebar
+  unchanged
+[HOUSE] List a room — in-grid
+  unchanged
+[HOUSE] Safety — room detail
+  unchanged
+
+Nothing to change — the house ads already match the code.
+```
+
+…and the advertiser was still `RentBoard ZA`.
+
+### The chain of three
+
+1. **`prisma.advertiser.upsert` said `update: {}`.** So `companyName:
+   'Mastande'`, which has been correct in `house-ads.ts` all along, applied
+   **only on create**. Any database where the row already existed kept its old
+   name for ever. Present in `seed-house-ads.ts` *and* `seed.ts`.
+2. **The change detection never looked at the advertiser.** It compared four
+   fields of the CAMPAIGNS — `headline`, `body`, `ctaLabel`, `targetUrl` — and
+   nothing of the advertiser row. So the dry run reported "Nothing to change"
+   while the name was wrong: a report structurally unable to see its subject.
+3. **And because of (2), `if (!changes) return` fired first**, above the
+   advertiser upsert — so the write was never reached at all. **Fixing (1)
+   alone would have changed nothing**, which is why the second defect matters
+   more than the first.
+
+All three fixed. The dry run now prints the advertiser diff and counts it as a
+change; the upsert carries the fields; and applying it moves the row.
+
+### Why nothing in this repository could see it
+
+Every rebrand check here reads **source**. This value is a database row: not in
+the code, not in a template, and the code that governed it was correct the
+whole time. The rebrand audit, the i18n audit, the route audit and the nav
+audit all pass over a database whose rows say RentBoard, because none of them
+reads one.
+
+`scripts/house-ads-drive.mjs` reads what the **API serves**, at all three
+placements — `board_sidebar`, `board_inline`, `room_detail` — because an advert
+is only on screen if something asks for its placement, and a sweep of one
+placement would have missed two. It asserts the advertiser name and the copy,
+since "is the row in THIS database right" is a different question from "is
+`house-ads.ts` right", and the answer differed for weeks.
+
+Proven able to fail three ways, each reverted:
+
+| Reintroduced | Result |
+|---|---|
+| the advertiser set back to `RentBoard ZA` | ❌ 3 failures, one per placement, each naming what it reads |
+| stale advert copy in the row (`New to RentBoard?`) | ❌ named the headline and the placement |
+| the house adverts paused, so none is served | ❌ *"0 advert(s) were actually served and read"* — it refuses rather than passing over nothing |
+
+That last one is the point: every other assertion in the file is a **negative
+over served text**, so with no adverts they would all pass. Five vacuous
+passes have shipped in this repository; this one is guarded.
+
+### Found on the way: an unknown placement was a 500
+
+`?placement=board_grid` — a plausible guess, and the one this drive made on its
+first run — went straight into a Prisma `where` on an enum column and threw
+inside the query. A bad query parameter is the caller's mistake and must read
+as one: a 500 says the server is broken, sends somebody looking in the wrong
+place, and is indistinguishable from a real fault in a log. Now a 400 naming
+the valid values.
+
+### ⚠️ Still yours to run, and now it will work
+
+```bash
+cd backend
+DATABASE_URL=<production> npx ts-node prisma/seed-house-ads.ts            # dry run first
+DATABASE_URL=<production> npx ts-node prisma/seed-house-ads.ts --apply
+```
+
+The dry run will now show the advertiser diff. No redeploy is needed — the
+adverts are read from the database. The same applies to staging.
+
+## 52. ⚠️ A terracotta retired for failing contrast was still in use, 15 times — Phase K
+
+**Fixed.** And the token gate could not see any of them, by its own design.
+
+`#C04E28` was `--terra` until it was measured at **4.50:1 on `--cream`** — the
+WCAG AA minimum to two decimal places, so subpixel rendering tipped it to 4.49
+and the accessibility audit failed. The token moved to `#AD4222`.
+`_spec.scss` records the whole story in a comment.
+
+**Fifteen translucent uses of the retired value stayed behind**, plus two of
+`#7A6E60`, the slate retired for measuring 4.26:1 on `--cream2`. Seventeen in
+all, across six files: button lifts, focus rings, gradient stops, tinted
+backgrounds, card borders.
+
+### Why `token-lint` was blind to them, correctly
+
+Its header says so: *"Translucent `rgba()`/`hsla()`. `rgba(28,22,14,.07)`
+cannot be replaced by `var(--ink)` — it is a different value, not a copy of
+one."* That exemption is **right** for substitution and it leaves a hole: a
+colour the project deliberately retired can live on indefinitely inside an
+`rgba()`, because nothing compares the opaque *base* of a translucent value
+against anything.
+
+### The fix, measured rather than assumed
+
+All seventeen retinted to the current tokens' rgb. Before changing anything, the
+cost was measured — worst case over `--cream`, `--cream2`, `--card` and
+`--white`, with the matching token as the text colour:
+
+| Tint | retired | current | delta |
+|---|---:|---:|---:|
+| terracotta, text `--terra` | 4.81 / 4.43 / 4.94 / 5.12 | 4.75 / 4.38 / 4.89 / 5.07 | **−0.06** at worst |
+| slate, text `--slate` | 4.57 / 4.21 / 4.69 / 4.90 | 4.56 / 4.20 / 4.65 / 4.85 | **−0.04** at worst |
+
+So retinting is free. The historical comment in `_spec.scss` that *cites*
+`rgba(192,78,40,.15)` as what was replaced is untouched — the migration works
+off comment-blanked offsets, so prose about the old value survives while the
+value itself does not.
+
+### ⚠️ A pre-existing margin this surfaced, and I have not changed
+
+Both tints sit **under 4.5:1 on `--cream2`** — terracotta 4.38, slate 4.20 —
+and they carry small text in `.tpl-flag`, `.ec`, `.status-rejected` and
+`.status-withdrawn`. That was true before the retint (4.43 and 4.21) and the
+retint costs 0.05 of it. **Today they render on `--cream` and `--card`, where
+they pass**, which is why `a11y-drive` is green on them. If one of those chips
+is ever moved onto `--cream2` it fails, and nothing would say so — the drive
+measures where things are, not where they might go.
+
+## 53. Eighteen shadows for 32 uses, and three kinds of thing wearing one property — Phase K
+
+**Fixed.** Shadows now have zero tolerance, like radius.
+
+`--shadow-sm/md/lg/xl` existed and were used 8 times. The other 24 uses were
+`none` ×11 (legitimate) and **thirteen one-offs that were not all elevation**:
+
+- **Six focus and selection RINGS** — a spread with no blur — at **1px and
+  3px**, in four tints at `.15` / `.18` / `.2` / `.3`. Forcing these onto
+  `--shadow-*` would have been wrong; a ring is not a shadow. Now four
+  `--ring-terra/danger/sage/gold` tokens, **all 3px, all one alpha**. WCAG
+  2.4.11 wants a focus indicator findable, and a ring whose thickness depends
+  on which control you tabbed into is the kind of inconsistency nobody reports
+  and everybody feels.
+- **Four overlay shadows for modals**, all **black** where every token is
+  ink-tinted — and two of them *the same value written with and without spaces
+  inside the `rgba()`*. All `--shadow-xl` now: black at .22 and ink at .18 are
+  indistinguishable over a scrim, and "nothing else" is the point.
+- **A lift on the primary button**, twice, again in two spellings, tinted with
+  the **retired** terracotta (§52). Now `--shadow-lift`, retinted.
+
+**18 values → 11**, same 32 uses, and every one is a token, a composition of
+tokens, or `none`.
+
+### The gate
+
+`scale-lint.mjs` grew two dimensions. Shadows at zero tolerance; **font size
+ratcheted** — 49 values for 438 uses, with the top ten inside a 0.28rem band
+(`.78`, `.8`, `.82`, `.85`, `.88rem` each used 25–55 times). 28 off-scale
+values over 222 uses baselined.
+
+Proven able to fail three ways, each reverted: a shadow off the scale; a
+**composition** where one part is off the scale (`var(--ring-terra), 0 1px 2px
+rgba(0,0,0,.1)`); and a new off-scale font size.
+
+### ⚠️ Three bugs in the lint's own first run
+
+- **`--update-baseline` refused a first write for a new dimension**, because
+  every font size was above an empty map. A dimension with no key in the file
+  has nothing to ratchet against — the same first-write allowance
+  `token-lint` already makes.
+- **The refusal printed the wrong base map**, reporting "`.6rem` 101 → 6" by
+  comparing a font size against the *spacing* baseline. A message that invents
+  a regression out of two unrelated numbers is worse than no message.
+- **`.82rem !important` counted as a distinct value from `.82rem`**, and four
+  `clamp(1.9rem, 8vw, 2.6rem)` hero sizes were reported as off-scale when a
+  fluid size is a deliberate choice no fixed scale can express.
+
+## 41. A contrast gate that is claimed in a comment and does not exist
+
+**Not written. Logged so it stops being asserted in prose.**
+
+`screen-hint.ts` carried the sentence *"scripts/control-contrast-audit.mjs now
+fails on any rule that sets one of the pair without the other."* That file has
+never existed in this repository.
+
+The defect it describes is real and has reached a person's phone: the app's
+base rule is `:where(button)` with `color: #fff` on a terracotta background at
+**zero specificity**, so a class that sets only `background` wins the
+background and INHERITS white — white text on a white button, measured at
+1.00:1, and the panel's only control rendered as an empty box.
+
+What the gate would have to assert: a rule that sets `background` or
+`background-color` on an interactive selector, and does not set `color` in the
+same rule, fails. The hard part is deciding what counts as an interactive
+selector without a false-positive rate that makes people add exemptions —
+which is how an allowlist becomes the place defects go to be forgotten.
+
+Until it is written, the only thing standing between that pairing and the next
+white-on-white button is somebody reading the comment.
+
 ## How to check the whole thing still works
 
 ```bash
@@ -1817,7 +3888,47 @@ node scripts/viewings-drive.mjs          # 35 checks — Phase 7l. Inviting an
                                          # address never reaching them
 node scripts/viewings-ui-drive.mjs       # 41 checks — the form says what it
                                          # sends, and the tenant can answer
+node scripts/token-render-drive.mjs      # 51 checks — Phase H. The fourteen
+                                         # borders that var(--line) silently
+                                         # dropped, measured as PAINTED at
+                                         # 360 / 390 / 768 / 1280
+node scripts/scale-lint.mjs              # Phase J3 + K. Radius and shadows on
+                                         # the scale with zero tolerance;
+                                         # spacing and font size ratcheted
+node scripts/house-ads-drive.mjs         # 13 checks — § 51. What /api/ads
+                                         # actually serves, at all three
+                                         # placements, carries no old brand
+node scripts/font-lint.mjs               # Phase J4. A font token may not name
+                                         # a family nothing fetches — DM Mono
+                                         # never was
+node scripts/feedback-lint.mjs           # Phase J2. Loading, empty and error
+                                         # are three components, and the
+                                         # loading state is announced
+node scripts/state-lint.mjs              # Phase J1. Five meanings, one
+                                         # definition; no component declares
+                                         # the treatment itself. No API, no
+                                         # browser
+node scripts/logo-drive.mjs              # 76 checks — Phase I. One wordmark
+                                         # component, MA fixed at #C4522C, and
+                                         # the 18.66px bold floor the 3:1
+                                         # contrast threshold depends on.
+                                         # Needs the web server only, no API
 ```
+
+Two of these need no API and no browser, so they belong in the same breath as
+`audit:env` rather than in a sweep:
+
+```bash
+node scripts/token-lint.mjs              # a literal hex within ΔE 3 of a token,
+                                         # and any var(--x) naming nothing
+node scripts/template-literal-lint.mjs   # a backtick truncating an inline
+                                         # template — eight occurrences so far
+```
+
+⚠️ Both were unwired until 11 October: `template-literal-lint.mjs` was written
+in Phase F and appeared in no npm script, no workflow and no hook. A lint
+nobody runs is the same thing as no lint. Both are now in `npm run audit` and
+in `.github/workflows/ci.yml`.
 
 ⚠️ **Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` for the a11y drive.** Without them
 it audits 10 public + 17 portal pages and SKIPS every admin screen — which is

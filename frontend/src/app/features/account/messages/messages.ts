@@ -5,6 +5,9 @@ import { AuthService } from '../../../core/services/auth.service';
 import { MessagesService } from '../../../core/services/messages.service';
 import { MessageThreadSummary } from '../../../core/models/message.model';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
+import { Loading } from '../../../shared/components/loading/loading';
+import { ErrorState } from '../../../shared/components/error-state/error-state';
+import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 
 /**
  * Your messages — Phase 7c.
@@ -42,11 +45,16 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 @Component({
   selector: 'app-messages',
   standalone: true,
-  imports: [MessageThread, DatePipe, ScreenHint],
+  imports: [MessageThread, DatePipe, ScreenHint, Loading, ErrorState],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="messages" heading="Every conversation, in one place">
-        A thread starts when somebody applies for your room, or you apply for theirs. Messages reach you on WhatsApp too, and a reply there lands back in the same conversation.
+        A thread starts when somebody applies for your room, or you apply for theirs.
+        @if (whatsappOn) {
+          Messages reach you on WhatsApp too, and a reply there lands back in the same conversation.
+        } @else {
+          Everything said about a room stays with that room, so you can come back a month later and still find it.
+        }
       </app-screen-hint>
 
       <section class="dash-section">
@@ -64,13 +72,12 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
              somebody nobody has written to them, which is exactly the wrong
              thing to say when the request simply did not come back. -->
         @if (failed()) {
-          <p class="msg-empty" role="alert">
+          <app-error-state (retry)="load()">
             We could not load your messages just now — this is a problem at our
             end, not an empty inbox.
-            <button type="button" class="link-button" (click)="load()">Try again</button>.
-          </p>
+          </app-error-state>
         } @else if (loading()) {
-          <p class="msg-empty">Loading…</p>
+          <app-loading/>
         } @else if (threads().length === 0) {
           <p class="msg-empty">
             No conversations yet. A message is always about one application, so a
@@ -183,8 +190,8 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     .msg-row__main { flex: 1; min-width: 0; }
     .msg-row__who { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
     .side { font-size: .7rem; color: var(--slate); }
-    .unread { font-size: .65rem; font-weight: 700; background: var(--terra); color: #fff; padding: .1rem .4rem; border-radius: 10px; }
-    .closed { font-size: .65rem; font-weight: 700; background: #F2EDE3; color: #3A3228; padding: .1rem .4rem; border-radius: 10px; }
+    .unread { font-size: .65rem; font-weight: 700; background: var(--terra); color: var(--white); padding: .1rem .4rem; border-radius: var(--r-full); }
+    .closed { font-size: .65rem; font-weight: 700; background: #F2EDE3; color: #3A3228; padding: .1rem .4rem; border-radius: var(--r-full); }
     .msg-row__room { margin: .25rem 0 0; font-size: .85rem; }
     .msg-row__last { margin: .3rem 0 0; font-size: .8rem; display: flex; gap: .4rem; align-items: baseline; flex-wrap: wrap; }
     /* ⚠️ min-width: 0, and without it the whole page scrolled sideways.
@@ -204,22 +211,21 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     .msg-row__meta { margin: .3rem 0 0; font-size: .75rem; color: var(--slate); }
     .msg-row__chev { color: var(--slate); font-size: .7rem; flex-shrink: 0; }
     .msg-row__body { padding: 0 0 1rem; }
-    .chan { font-size: .65rem; font-weight: 700; padding: .1rem .4rem; border-radius: 10px; white-space: nowrap; }
+    .chan { font-size: .65rem; font-weight: 700; padding: .1rem .4rem; border-radius: var(--r-full); white-space: nowrap; }
     .chan--in_app { background: #F2EDE3; color: #3A3228; }
     .chan--whatsapp { background: rgba(37,211,102,.14); color: #0F7A3D; }
     .chan-warn {
       margin: 0 0 .5rem; padding: .6rem .75rem; font-size: .78rem; line-height: 1.5;
       background: rgba(214,154,59,.1); border: 1px solid rgba(214,154,59,.35);
-      border-radius: 8px; color: #3A3228;
+      border-radius: var(--r8); color: #3A3228;
     }
     .chan-note { margin: .4rem 0 0; font-size: .72rem; color: var(--slate); line-height: 1.5; }
-    .link-button {
-      background: none; border: none; padding: 0; font: inherit;
-      color: var(--terra); text-decoration: underline; cursor: pointer;
-    }
   `,
 })
 export class MessagesInbox implements OnInit {
+  /** Phase 8j — see feature-flags.ts. Nothing may promise a message that is never sent. */
+  protected readonly whatsappOn = WHATSAPP_ENABLED;
+
   private auth = inject(AuthService);
   private messages = inject(MessagesService);
 
@@ -277,6 +283,17 @@ export class MessagesInbox implements OnInit {
    * over WhatsApp even when the message they are answering arrived on it.
    */
   replyGoesTo(t: MessageThreadSummary): string {
+    /**
+     * ⚠️ Both branches named WhatsApp, and while the channel is off neither was
+     * true: nothing is sent to WhatsApp and nothing arrives from it, so telling
+     * a landlord "if you answer in WhatsApp instead, that answer shows up here
+     * too" describes a round trip that does not happen.
+     */
+    if (!WHATSAPP_ENABLED) {
+      return t.iAmLandlord
+        ? 'A reply you type here is sent in the app and emailed to them.'
+        : 'A reply you type here is sent in the app and emailed to them.';
+    }
     return t.iAmLandlord
       ? 'A reply you type here is sent in the app and emailed to them. It does not ' +
         'go out on WhatsApp. If you answer in WhatsApp instead, that answer shows up here too.'

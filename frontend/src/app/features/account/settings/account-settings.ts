@@ -3,6 +3,7 @@ import { FormBuilder, FormsModule, ReactiveFormsModule, Validators } from '@angu
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { WalkthroughService } from '../../../core/services/walkthrough.service';
+import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 
 /**
  * Account settings, shared by landlords and tenants — the needs are identical,
@@ -29,7 +30,17 @@ import { WalkthroughService } from '../../../core/services/walkthrough.service';
             <label for="phone">Phone number</label>
             <input id="phone" type="tel" formControlName="phone" autocomplete="tel"
                    placeholder="e.g. 082 123 4567"/>
-            <p class="field-hint">Used for WhatsApp notifications. Never shown publicly.</p>
+            <!-- ⚠️ This said "Used for WhatsApp notifications." Nothing is sent
+                 to WhatsApp while the channel is off, so the field claimed a
+                 purpose it does not serve. -->
+            <p class="field-hint">
+              @if (whatsappOn) {
+                Used for WhatsApp notifications. Never shown publicly.
+              } @else {
+                Used to verify who you are, and for a landlord to reach you if you
+                ask them to. Never shown publicly.
+              }
+            </p>
 
             <!-- Without verification the number cannot sign anyone in, which
                  is how phone sign-in shipped: saved numbers, and a login that
@@ -87,19 +98,36 @@ import { WalkthroughService } from '../../../core/services/walkthrough.service';
                   }
                 } @else {
                   <p class="field-hint">
-                    ✅ Verified — you can sign in with a WhatsApp code using this number.
+                    @if (whatsappOn) {
+                      ✅ Verified — you can sign in with a WhatsApp code using this number.
+                    } @else {
+                      ✅ Verified. Signing in with a code to this number is switched off
+                      at the moment, so use your email address and password.
+                    }
                     Changing it here will need verifying again.
                   </p>
                 }
               } @else if (verifyStep() === 'idle') {
+                <!-- ⚠️ The control under this sentence cannot work while the
+                     channel is off: requestPhoneVerification sends the code over
+                     WhatsApp and the API refuses with a 503. A button that
+                     always fails is worse than no button, so the sentence says
+                     so and the button is not offered. -->
                 <p class="field-hint">
-                  Not verified yet. Verifying lets you sign in with a WhatsApp code
-                  instead of a password.
+                  @if (whatsappOn) {
+                    Not verified yet. Verifying lets you sign in with a WhatsApp code
+                    instead of a password.
+                  } @else {
+                    Not verified. Verifying needs a code sent to this number, which is
+                    switched off at the moment — there is nothing you need to do.
+                  }
                 </p>
-                <button type="button" class="btn btn-sm btn-outline"
-                        [disabled]="verifying()" (click)="startVerification()">
-                  {{ verifying() ? 'Sending…' : 'Verify this number' }}
-                </button>
+                @if (whatsappOn) {
+                  <button type="button" class="btn btn-sm btn-outline"
+                          [disabled]="verifying()" (click)="startVerification()">
+                    {{ verifying() ? 'Sending…' : 'Verify this number' }}
+                  </button>
+                }
               } @else {
                 <p class="field-hint">{{ verifyMessage() }}</p>
                 <div class="form-row">
@@ -340,6 +368,9 @@ import { WalkthroughService } from '../../../core/services/walkthrough.service';
   `],
 })
 export class AccountSettings {
+  /** Phase 8j — see feature-flags.ts. Nothing may promise a message that is never sent. */
+  protected readonly whatsappOn = WHATSAPP_ENABLED;
+
   private fb = inject(FormBuilder);
   auth = inject(AuthService);
   private walkthrough = inject(WalkthroughService);

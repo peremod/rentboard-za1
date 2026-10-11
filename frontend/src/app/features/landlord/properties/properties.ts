@@ -6,6 +6,7 @@ import { PropertiesService } from '../../../core/services/properties.service';
 import { YardDashboard, YardGroup } from '../../../core/models/property.model';
 import { SA_PROVINCES } from '../../../core/models/room.model';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * My properties — Phase 7b.
@@ -35,7 +36,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 @Component({
   selector: 'app-properties',
   standalone: true,
-  imports: [RouterLink, FormsModule, NgOptimizedImage, ScreenHint],
+  imports: [RouterLink, FormsModule, NgOptimizedImage, ScreenHint, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-properties" heading="A property groups the rooms at one address">
@@ -44,7 +45,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 
 
       @if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       } @else if (dash(); as d) {
         @if (error()) { <div class="form-error" role="alert">{{ error() }}</div> }
 
@@ -271,7 +272,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     .rent-reminders__row label { display: flex; flex-direction: column; gap: .2rem; font-size: .8rem; }
     .rent-reminders__row input {
       font: inherit; padding: .4rem .5rem; border: 1px solid var(--border);
-      border-radius: 6px; width: 6rem;
+      border-radius: var(--r4); width: 6rem;
     }
     .prop-head {
       display: flex; align-items: center; justify-content: space-between;

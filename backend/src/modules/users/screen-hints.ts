@@ -22,6 +22,15 @@ export const SCREEN_HINTS = [
   'messages',
   'tenant-dashboard',
   'tenant-rent',
+  /**
+   * ⚠️ Added 11 October. Phase F shipped the archive screen with
+   * `key="account-tenancies"` and never added it here, so the hint could be
+   * shown and never dismissed: `POST /users/me/hints/account-tenancies`
+   * answered 400, the optimistic patch was rolled back, and the panel came
+   * straight back on the next visit. Found by `scripts/hints-drive.mjs`, which
+   * exists for exactly this and which I did not run during that phase.
+   */
+  'account-tenancies',
 ] as const;
 
 export type ScreenHintKey = (typeof SCREEN_HINTS)[number];

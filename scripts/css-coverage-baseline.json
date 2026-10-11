@@ -1,5 +1,5 @@
 {
-  "note": "Classes used in a template with no rule anywhere. Debt, not permission — delete lines as they are fixed. A class NOT in here fails the audit.",
+  "note": "Classes used in a template with no rule anywhere. Debt, not permission \u2014 delete lines as they are fixed. A class NOT in here fails the audit.",
   "classes": [
     "ac-sub",
     "auth__alt",
@@ -12,8 +12,6 @@
     "detail__section",
     "growth-table",
     "landlord-trust",
-    "landlord-trust__state--none",
-    "landlord-trust__state--ok",
     "lead-agree",
     "linkish",
     "notice-main",

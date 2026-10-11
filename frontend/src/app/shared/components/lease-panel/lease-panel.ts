@@ -92,7 +92,7 @@ import { DialogService } from '../../../core/services/dialog.service';
   styles: [
     `
       .lease-row {
-        border-top: 1px solid var(--line);
+        border-top: 1px solid var(--border);
         padding: 0.75rem 0;
       }
       .lease-row--overdue .lease-row__when strong {

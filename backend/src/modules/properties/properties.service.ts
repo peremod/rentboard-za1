@@ -218,11 +218,38 @@ export class PropertiesService {
             },
             orderBy: { createdAt: 'desc' },
           },
+          /**
+           * Current AND finished lettings, split in the mapping below.
+           *
+           * ⚠️ One relation, one filter — Prisma has no way to select the same
+           * relation twice under two names, so the split cannot live in the
+           * query. It was `['pending','active']`, and that was the ONLY place
+           * a landlord could see a tenancy at all: the moment a letting ended
+           * they lost the tenant, the dates, the rent they paid and the whole
+           * ledger. There was no past-tenant view anywhere in the product — a
+           * search across both codebases for "past tenant", "former tenant" or
+           * "tenancy history" returned nothing but review copy and the PAIA
+           * manual, which tells the public this platform holds "tenancy
+           * history and rent records".
+           *
+           * The rows were always there. Nothing rendered them. This is the
+           * landlord half of the defect Phase D fixed for the tenant, failing
+           * the opposite way: too little rather than too much.
+           *
+           * `cancelled` stays out. Nobody moved in, so there is no past tenant
+           * — listing one would tell a landlord somebody had lived there who
+           * never did.
+           */
           tenancies: {
-            where: { status: { in: ['pending', 'active'] } },
+            where: { status: { in: ['pending', 'active', 'ended'] } },
+            orderBy: { startDate: 'desc' },
             select: {
-              id: true, status: true, startDate: true, rentCents: true,
+              id: true, status: true, startDate: true, endDate: true,
+              rentCents: true, archivedAt: true,
               tenant: { select: { id: true, fullName: true } },
+              // So the screen can say whether a review is still open — the one
+              // thing about a finished letting that is time-limited.
+              reviewsCloseAt: true,
             },
           },
         },
@@ -237,11 +264,32 @@ export class PropertiesService {
       }),
     ]);
 
+    /**
+     * Split the one relation into the two things a screen needs.
+     *
+     * Done here because Prisma cannot select the same relation twice under two
+     * names — see the include above. The shape the frontend gets is unchanged
+     * for `tenancies` (still only the live ones), with `pastTenancies` beside
+     * it, so nothing that already read this payload has to change.
+     *
+     * Past lettings are capped at six per room. A landlord opening a property
+     * wants to know who was here recently, not to page through a decade; the
+     * full record is the archive view.
+     */
+    const shaped = rooms.map((room) => {
+      const live = room.tenancies.filter((t) => t.status === 'pending' || t.status === 'active');
+      const past = room.tenancies
+        .filter((t) => t.status === 'ended')
+        .sort((a, b) => (b.endDate?.getTime() ?? 0) - (a.endDate?.getTime() ?? 0))
+        .slice(0, 6);
+      return { ...room, tenancies: live, pastTenancies: past };
+    });
+
     // Only current-cycle applications count as waiting. `archivedAt: null`
     // above already excludes previous cycles, but a room relisted in the same
     // request window can still carry one, so the cycle is checked too.
     const group = (propertyId: string | null) => {
-      const inGroup = rooms.filter((r) => r.propertyId === propertyId);
+      const inGroup = shaped.filter((r) => r.propertyId === propertyId);
       return {
         rooms: inGroup,
         roomCount: inGroup.length,
@@ -261,9 +309,25 @@ export class PropertiesService {
       /// Rooms the landlord has not put in a yard. Never hidden.
       ungrouped: ungrouped.roomCount > 0 ? ungrouped : null,
       totals: {
-        rooms: rooms.length,
-        vacant: rooms.filter((r) => r.status === 'active').length,
-        waitingApplicants: rooms.reduce((n, r) => n + r.applications.length, 0),
+        rooms: shaped.length,
+        vacant: shaped.filter((r) => r.status === 'active').length,
+        waitingApplicants: shaped.reduce((n, r) => n + r.applications.length, 0),
+        /**
+         * Rooms marked `let` with nobody actually in them.
+         *
+         * ⚠️ This is the state a letting leaves behind. `end()` does not
+         * relist the room — deliberately, because relisting republishes old
+         * photos at an old price and archives every open application — so the
+         * room sits `let` until the landlord acts on the Phase C prompt. If
+         * they miss that notice, the room is simply off the board and out of
+         * the sitemap with nothing on any screen saying so.
+         *
+         * A count is not the fix on its own; `LandlordInboxService` carries
+         * the task. It is here so the property screen can mark the room.
+         */
+        vacantButListedAsLet: shaped.filter(
+          (r) => r.status === 'let' && r.tenancies.length === 0,
+        ).length,
       },
       // Days after the 1st before an unpaid month triggers a reminder; 0 is
       // off. Defaulted here to the schema's own default so a landlord with no

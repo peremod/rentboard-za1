@@ -118,12 +118,12 @@ import { ApplicationsService, UpcomingViewing } from '../../../core/services/app
     .vi__reason { display: grid; gap: .2rem; font-size: .8rem; flex: 1 1 14rem; }
     .vi__reason input {
       font: inherit; padding: .55rem .6rem; min-height: 44px;
-      border: 1.5px solid var(--border); border-radius: var(--r4, 4px);
+      border: 1.5px solid var(--border); border-radius: var(--r4);
     }
     .vi__safety {
       font-size: .8rem; line-height: 1.7; max-width: 42rem;
       margin: .9rem 0 0; padding: .6rem .8rem;
-      background: rgba(214, 59, 59, .05); border-radius: var(--r4, 4px);
+      background: rgba(214, 59, 59, .05); border-radius: var(--r4);
     }
     /* Two columns once there is room, so the time and the place sit side by
        side rather than the time floating above a wide empty row. */

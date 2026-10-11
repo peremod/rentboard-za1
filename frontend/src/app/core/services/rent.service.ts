@@ -1,6 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '@env/environment';
+// ⚠️ One declaration of the envelope, in the models file beside the
+// RentPeriod it carries. See RentLedger there for why a local copy here is
+// how the landlord's yard broke at runtime with a green build.
+import { RentLedger } from '../models/property.model';
+export type { RentLedger, RentLedgerTenancy } from '../models/property.model';
 
 /** What a month of rent can be. `waived` means the landlord is not chasing it. */
 export type RentStatus = 'unpaid' | 'paid' | 'partial' | 'waived';
@@ -34,7 +39,7 @@ export class RentService {
 
   /** Either party may read their own tenancy's history. */
   history(tenancyId: string) {
-    return this.http.get<RentPeriod[]>(`${this.api}/properties/rent/${tenancyId}`);
+    return this.http.get<RentLedger>(`${this.api}/properties/rent/${tenancyId}`);
   }
 
   /**

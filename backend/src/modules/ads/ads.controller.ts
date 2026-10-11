@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Body, Param, Query, Res, UseGuards, ParseUUIDPipe, HttpCode, HttpStatus, Header } from '@nestjs/common';
+  Controller, Get, Post, Patch, Body, Param, Query, Res, UseGuards, ParseUUIDPipe, HttpCode, HttpStatus, Header, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -35,8 +35,26 @@ export class AdsController {
     @Query('roomType') roomType?: string,
     @Query('limit') limit?: string,
   ) {
+    /**
+     * ⚠️ Validated, because an unknown placement used to be a 500.
+     *
+     * The value went straight into a Prisma `where` on an enum column, so
+     * `?placement=board_grid` — a plausible guess, and the one a drive made on
+     * its first run — threw inside the query and surfaced as a server error.
+     * A bad query parameter is the caller's mistake and must read as one: a
+     * 500 says the server is broken, which sends somebody looking in the wrong
+     * place, and it is indistinguishable from a real fault in a log.
+     */
+    const allowed = ['board_sidebar', 'board_inline', 'room_detail'] as const;
+    const chosen = placement || 'board_sidebar';
+    if (!(allowed as readonly string[]).includes(chosen)) {
+      throw new BadRequestException(
+        `Unknown placement "${chosen}". One of: ${allowed.join(', ')}.`,
+      );
+    }
+
     return this.adsService.getForContext({
-      placement: placement || 'board_sidebar',
+      placement: chosen,
       province, city, suburbSlug, roomType,
       limit: limit ? Math.min(+limit, 3) : 1,
     });

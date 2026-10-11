@@ -41,6 +41,11 @@ export function tenantNav(badges: TenantNavBadges = {}): PortalNavItem[] {
     // applicants are, and a nav item that opens a four-step form is a trap for
     // somebody who only wanted to look.
     { label: 'Rooms you let', icon: '🔑', route: '/tenant/dashboard', fragment: 'your-sublets' },
+    // Phase F. The record of every letting that is over, both sides — in
+    // /account for the same reason as Messages above, and because a sub-lessor
+    // has history on both sides at once. Phase D keeps the rent ledger on the
+    // rent screen; this is the whole record, reviews and paperwork included.
+    { label: 'Past lettings', icon: '🗂️', route: '/account/tenancies' },
     // Phase 7g. Not optional furniture: for an account with no email address
     // this screen is the only place a notification can be read at all.
     { label: 'Notices', icon: '🔔', route: '/account/notices', badge: badges.notices },

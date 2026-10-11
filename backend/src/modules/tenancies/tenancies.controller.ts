@@ -10,6 +10,7 @@ import { ConfirmStartDto, EndTenancyDto, CancelTenancyDto } from './dto/tenancy.
 import { RaiseFlagDto } from './dto/raise-flag.dto';
 import { ReviewFlagDto } from './dto/review-flag.dto';
 import { LeaseService } from './lease.service';
+import { TenancyArchiveService } from './tenancy-archive.service';
 import { GiveNoticeDto, UpdateLeaseTermsDto } from './dto/lease.dto';
 import { LeaseDocumentsService } from './lease-documents.service';
 import { AddLeaseDocumentDto, UpdateLeaseDocumentDto } from './dto/lease-document.dto';
@@ -28,6 +29,7 @@ export class TenanciesController {
     private flags: TenancyFlagsService,
     private lease: LeaseService,
     private documents: LeaseDocumentsService,
+    private archive: TenancyArchiveService,
   ) {}
 
   // ── Lease terms, renewal and notice ──────────────────────────────────────
@@ -57,7 +59,21 @@ export class TenanciesController {
   }
 
   @Post(':id/notice')
-  @ApiOperation({ summary: 'Record that notice was given, by either side' })
+  // 200, like every other lifecycle route here — confirm-start, cancel, end
+  // and this route's own withdraw all carry it. Giving notice is a state
+  // change on an existing tenancy, not a creation, and it answered 201 while
+  // its own mirror answered 200.
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Record that notice was given, by either side',
+    description:
+      'Either party may call this. `givenBy` says which side gave it, and is ' +
+      'stored separately from who entered it (`noticeRecordedById`) — a ' +
+      'landlord logging "my tenant told me" and a tenant giving notice are ' +
+      'not the same act. A landlord may record either side; a tenant may only ' +
+      'record their own notice. Whoever recorded it is the only one who may ' +
+      'withdraw it.',
+  })
   giveNotice(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: GiveNoticeDto,
@@ -68,9 +84,49 @@ export class TenanciesController {
 
   @Post(':id/notice/withdraw')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Notice was given in error, or withdrawn' })
+  @ApiOperation({
+    summary: 'Notice was given in error, or withdrawn',
+    description:
+      'Only whoever RECORDED the notice may withdraw it. Withdrawing resets a ' +
+      'countdown that frees a room, so neither party gets to undo the other\'s act.',
+  })
   withdrawNotice(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
     return this.lease.withdrawNotice(id, user.id);
+  }
+
+  /**
+   * The archive — Phase F.
+   *
+   * ⚠️ Declared BEFORE every `:id` route in this controller, and that ordering
+   * is load-bearing. Nest matches in declaration order, so with these below
+   * `GET :id/documents` the word "archive" would be handed to `ParseUUIDPipe`
+   * as an id and answer 400 — a route that exists, is correct, and 400s on its
+   * own name.
+   */
+  @Get('archive')
+  @ApiOperation({
+    summary: 'Finished lettings you were part of, either side, newest first',
+    description:
+      'Ended AND cancelled. A letting that fell through is part of what happened ' +
+      'and explains a gap in somebody history, so it is listed and labelled rather ' +
+      'than hidden.',
+  })
+  archiveList(@CurrentUser() user: { id: string }) {
+    return this.archive.list(user.id);
+  }
+
+  @Get('archive/:id')
+  @ApiOperation({
+    summary: 'One finished letting, assembled: rent, reviews, your reports, paperwork, how it began',
+    description:
+      'Either party may read it. The permission rules are deliberately NOT uniform: ' +
+      'reviews only once published (the double-blind rule), tenancy flags and reports ' +
+      'only the ones YOU raised (an unreviewed accusation is not shown to its subject), ' +
+      'and landlord notes not at all — they are private to their author. See ' +
+      'TenancyArchiveService for the reasoning on each.',
+  })
+  archiveRecord(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: { id: string }) {
+    return this.archive.record(id, user.id);
   }
 
   @Get('mine')

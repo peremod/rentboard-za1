@@ -2,3 +2,21 @@
 # never runs, so a job inside it can never report the problem. See
 # scripts/workflow-lint.mjs.
 node scripts/workflow-lint.mjs
+
+# ⚠️ The three source-only gates run HERE as well as in CI, and the reason is
+# measured: 1.075s for all six together. They need no build, no API and no
+# browser, so there is no cost to catching their defects before the commit
+# rather than after a push.
+#
+# The backtick trap is why. A backtick inside a component's inline template or
+# styles literal terminates it, the build then fails with `TS1005: ',' expected`
+# pointing at a line far from the cause, and it has now happened THIRTEEN times
+# in this repository — five of them on 11 October alone, in the phases that
+# wrote the lint. A note in CLAUDE.md did not stop it; a CI job catches it ten
+# minutes later; this catches it at the moment it is written.
+node scripts/template-literal-lint.mjs
+node scripts/token-lint.mjs
+node scripts/state-lint.mjs
+node scripts/feedback-lint.mjs
+node scripts/scale-lint.mjs
+node scripts/font-lint.mjs

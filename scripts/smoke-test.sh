@@ -1607,6 +1607,33 @@ if [[ -n "$TEN_ROOM" ]]; then
       req POST "/api/tenancies/$TEN_ID/cancel" '{}' "$TTOKEN"
       check "cannot cancel once active" 400 "$STATUS" "$BODY"
 
+      # Either party may give notice (v1.117.0). The route documented "by
+      # either side" from the day it shipped while the service called
+      # assertLandlordOwns, so a tenant got a 403 on their own home. It needed
+      # Tenancy.noticeRecordedById first: noticeGivenById says who notice is
+      # attributed to, not who entered it, so there was no safe rule for who
+      # may withdraw — and a landlord who could clear a tenant's notice could
+      # keep them on the books.
+      # ⚠️ A room somebody is recorded as living in cannot be relisted (v1.122.0).
+      # The status check on the room passes for `let`, so this was accepted —
+      # putting an occupied room back on the PUBLIC BOARD, archiving every open
+      # application and bumping relistCount on the way. That is
+      # ReportReason.already_let, the complaint the report enum exists for.
+      req POST "/api/rooms/$TEN_ROOM/relist" '{}' "$LTOKEN"
+      check "a room with somebody living in it cannot be relisted" 400 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/notice" '{"givenBy":"landlord"}' "$TTOKEN"
+      check "a tenant cannot record that the LANDLORD gave notice" 400 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/notice" '{"givenBy":"tenant"}' "$TTOKEN"
+      check "a tenant CAN give notice on their own home" 200 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/notice/withdraw" '{}' "$LTOKEN"
+      check "the landlord cannot withdraw the tenant's notice" 403 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/notice/withdraw" '{}' "$TTOKEN"
+      check "…but whoever recorded it can" 200 "$STATUS" "$BODY"
+
       req POST "/api/tenancies/$TEN_ID/end" '{"reason":"Moved closer to work"}' "$LTOKEN"
       check "landlord ends the tenancy" 200 "$STATUS" "$BODY"
 
@@ -3550,6 +3577,24 @@ check "a tenant cannot set a landlord's reminder settings" 403 "$STATUS" "$BODY"
 req GET "/api/properties/rent/00000000-0000-4000-8000-000000000000" "" "$LTOKEN"
 check "rent history for a tenancy that does not exist" 404 "$STATUS" "$BODY"
 
+# ── The archive (v1.121.0) ────────────────────────────────────────────────
+#
+# One list for both roles, because a sub-lessor lets one room and rents
+# another. The permission rules are deliberately NOT uniform and the drive
+# exercises each; these are the route-level ones.
+req GET /api/tenancies/archive "" "$LTOKEN"
+check "a landlord can read their archive" 200 "$STATUS" "$BODY"
+req GET /api/tenancies/archive "" "$TTOKEN"
+check "and so can a tenant — one list, both roles" 200 "$STATUS" "$BODY"
+req GET /api/tenancies/archive
+check "the archive needs a session" 401 "$STATUS"
+# ⚠️ 404 and not 400. The route is declared before every :id route in the
+# controller, so "archive" is never handed to ParseUUIDPipe as an id — a 400
+# here would mean the ordering had been changed and the route now 400s on its
+# own name.
+req GET "/api/tenancies/archive/00000000-0000-4000-8000-000000000000" "" "$LTOKEN"
+check "a letting that does not exist" 404 "$STATUS" "$BODY"
+
 # The tenant's side (v1.71.0). The reminder tells them to "say so on
 # Mastande", so the path that lets them has to keep working.
 req PATCH "/api/properties/rent/period/00000000-0000-4000-8000-000000000000/dispute" '{"note":"Paid on the 3rd."}' "$TTOKEN"
@@ -3567,6 +3612,38 @@ if [[ -n "$TEN_ID" ]]; then
 
   req GET "/api/properties/rent/$TEN_ID" "" "$TTOKEN"
   check "a tenant can read their own rent record" 200 "$STATUS" "$BODY"
+
+  # The ledger carries the tenancy's own state (v1.116.0). It used to answer a
+  # bare array, so a caller holding a rent record could not tell a finished
+  # letting from a running one — and the tenant's rent screen duly rendered
+  # both the same way. A screen cannot describe a record it has not been told
+  # the state of.
+  LEDGER_STATE=$(echo "$BODY" | jq -r '.tenancy.status // empty')
+  if [[ -n "$LEDGER_STATE" ]]; then
+    green "  PASS  the ledger says which state the tenancy is in ($LEDGER_STATE)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the rent ledger carries no tenancy state — { tenancy, periods }?"; FAIL=$((FAIL+1))
+  fi
+
+  # ── The rent window (v1.116.0) ─────────────────────────────────────────
+  #
+  # A rent period belongs to the months the tenancy actually covered. That is
+  # the invariant, and it is NOT "the tenancy is active": $TEN_ID has already
+  # ended by this point, and a landlord must still be able to record the month
+  # a tenant moved out owing. `mark()` previously refused `cancelled` and
+  # nothing else, so it accepted a month before the move-in, a month after the
+  # move-out, and next March.
+  THIS_MONTH=$(date -u +%Y-%m-01)
+  NEXT_MONTH=$(date -u -d '1 month' +%Y-%m-01 2>/dev/null || date -u -v+1m +%Y-%m-01)
+
+  req PATCH "/api/properties/rent/$TEN_ID/mark" "{\"periodStart\":\"$THIS_MONTH\",\"status\":\"unpaid\"}" "$LTOKEN"
+  check "a month inside a FINISHED letting is still correctable" 200 "$STATUS" "$BODY"
+
+  req PATCH "/api/properties/rent/$TEN_ID/mark" "{\"periodStart\":\"$NEXT_MONTH\",\"status\":\"unpaid\"}" "$LTOKEN"
+  check "a month that has not started is refused" 400 "$STATUS" "$BODY"
+
+  req PATCH "/api/properties/rent/$TEN_ID/mark" '{"periodStart":"2020-01-01","status":"unpaid"}' "$LTOKEN"
+  check "a month before the tenant moved in is refused" 400 "$STATUS" "$BODY"
 else
   skipped "tenant rent record — no tenancy was created earlier"
 fi

@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { LeaseDocumentsService } from '../../../core/services/lease-documents.service';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { Loading } from '../loading/loading';
 import {
   LEASE_DOC_KIND_LABELS, LeaseDocument, LeaseDocumentKind,
 } from '../../../core/models/lease-document.model';
@@ -43,14 +44,16 @@ function humanSize(bytes?: number | null): string {
 @Component({
   selector: 'app-lease-documents',
   standalone: true,
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dash-section" id="lease-documents">
       @if (headingLevel() === 2) {
         <h2 class="dash-section-title">Lease and paperwork</h2>
-      } @else {
+      } @else if (headingLevel() === 3) {
         <h3 class="dash-section-title">Lease and paperwork</h3>
+      } @else {
+        <h4 class="dash-section-title">Lease and paperwork</h4>
       }
 
       <p class="muted">
@@ -60,7 +63,7 @@ function humanSize(bytes?: number | null): string {
       </p>
 
       @if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       } @else {
 
         @if (docs().length === 0) {
@@ -141,7 +144,7 @@ function humanSize(bytes?: number | null): string {
       .doc-list { list-style: none; margin: 0.5rem 0 1rem; padding: 0; }
       .doc-row {
         align-items: flex-start;
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--border);
         display: flex;
         gap: 0.75rem;
         justify-content: space-between;
@@ -168,7 +171,22 @@ export class LeaseDocuments implements OnInit {
    * slot both hardcoded a level and broke heading order on the page that used
    * them.
    */
-  readonly headingLevel = input<2 | 3>(2);
+  /**
+   * Which heading this panel's title should be, so it never skips a level.
+   *
+   * 4 exists for the tenant's past-lettings section: that is an h2 ("Rooms you
+   * have left") containing an h3 per letting, so the paperwork inside one is
+   * an h4. Rendering it as an h3 there would make it a sibling of the letting
+   * it belongs to, and an h2 would skip back up two levels — both of which a
+   * screen reader reads as a different document structure than the one on
+   * screen.
+   *
+   * ⚠️ The union is what caught the mistake. Passing 4 while this read
+   * `2 | 3` is a template type error — and `tsc --noEmit` does NOT check
+   * templates, so it came from `ng build` and nowhere else. Worth knowing:
+   * a clean typecheck says nothing about a component's inputs.
+   */
+  readonly headingLevel = input<2 | 3 | 4>(2);
 
   readonly docs = signal<LeaseDocument[]>([]);
   readonly loading = signal(true);

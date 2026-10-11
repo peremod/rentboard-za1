@@ -99,7 +99,7 @@ interface MonthGroup {
       .cal-list { list-style: none; margin: 0; padding: 0; }
       .cal-row {
         align-items: baseline;
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--border);
         display: flex;
         gap: 0.6rem;
         padding: 0.5rem 0;

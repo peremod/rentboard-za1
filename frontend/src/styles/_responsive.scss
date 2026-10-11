@@ -60,7 +60,7 @@
   &:hover { background: var(--cream2); box-shadow: none; transform: none; }
 }
 .filter-toggle-count {
-  background: var(--terra); color: #fff;
+  background: var(--terra); color: var(--white);
   font-size: .68rem; font-weight: 700;
   min-width: 1.15rem; height: 1.15rem;
   display: inline-flex; align-items: center; justify-content: center;
@@ -393,7 +393,8 @@
   }
   .nav-links-auth .btn { width: 100%; justify-content: center; }
   .nav-inner { padding: 0 .85rem; gap: .5rem; }
-  .nav-logo { font-size: 1.25rem; }
+  // `.nav-logo` is gone — the wordmark is <app-logo> and owns its own sizes,
+  // including this breakpoint. Phase I.
   .nav-actions .btn { padding: .45rem .7rem; font-size: .78rem; }
 
   .legal-page { padding: 2rem 1rem; }
@@ -409,6 +410,25 @@
   .section { padding: 2.5rem 1rem; }
 }
 
+// The left rule and its indent cost width a 360px screen cannot spare, so at
+// the narrowest the rule becomes a top border. Breakpoints here are
+// 900 / 768 / 480 and this is the 480 band.
+@media (max-width: 480px) {
+  .yard-past__item,
+  .yard-room__vacant,
+  .yard-room__reserved {
+    border-left: none;
+    border-top: 1.5px solid var(--border);
+    padding-left: 0;
+    border-radius: 0;
+  }
+  // Both carry a control, and at this width it goes full width rather than
+  // being squeezed beside the sentence that explains it.
+  .yard-room__vacant .link-btn,
+  .yard-room__reserved .link-btn,
+  .yard-past__item .link-btn { flex: 1 1 100%; text-align: left; }
+}
+
 @media (max-width: 360px) {
   .auth__roles { grid-template-columns: 1fr; }
 }
@@ -417,7 +437,7 @@
 .portal-nav-cta { padding: .75rem 1.25rem; margin-top: 1rem; }
 .portal-nav-cta .btn { width: 100%; font-size: .82rem; }
 .portal-nav-badge {
-  background: var(--terra); color: #fff;
+  background: var(--terra); color: var(--white);
   font-size: .6rem; font-weight: 700;
   padding: .1rem .35rem; border-radius: var(--r-full); margin-left: .35rem;
 }
@@ -450,7 +470,7 @@
   &--draft, &--let, &--paused { color: var(--slate); }
 }
 .status-viewed    { background: rgba(30, 95, 168, .1); color: #1E5FA8; }
-.status-withdrawn { background: rgba(122, 110, 96, .1); color: var(--slate); }
+.status-withdrawn { background: rgba(115, 103, 85, .1); color: var(--slate); }
 
 .app-card--archived { background: var(--cream2); }
 .app-card--closed { opacity: .7; }
@@ -523,7 +543,7 @@
 
 // Verified landlord badge. The spec predates verification existing, so it has
 // no rule for this; sage keeps it distinct from Featured (gold) and New.
-.badge-verified { background: var(--sage); color: #fff; }
+.badge-verified { background: var(--sage); color: var(--white); }
 /* Sand rather than red: an unverified landlord is the normal case today, not a
    warning about that person. Global rather than in room-detail's own styles —
    component styles are MORE specific under emulated encapsulation, which is
@@ -533,7 +553,7 @@
    a sublet is a legitimate listing with a real extra risk attached, and styling
    it as either "good" or "danger" would misdescribe it. Global, for the same
    encapsulation reason as the two above. */
-.badge-sublet { background: rgba(200,144,42,.9); color: #fff; }
+.badge-sublet { background: rgba(200,144,42,.9); color: var(--white); }
 /* The note under the household filters, which says they hide listings that have
    not described themselves. Smaller than a label, not a muted aside: it is the
    difference between "no rooms match" and "the board is broken". */
@@ -659,7 +679,7 @@
   &:hover { border-color: var(--terra2); }
 }
 .amenity-chip--on {
-  background: rgba(192, 78, 40, .08);
+  background: rgba(173, 66, 34, .08);
   border-color: var(--terra);
   color: var(--terra);
   font-weight: 600;
@@ -700,7 +720,7 @@
   position: absolute; top: calc(100% + .35rem); left: 0; right: 0; z-index: 40;
   margin: 0; padding: .3rem; list-style: none;
   background: var(--card); border: 1px solid var(--border);
-  border-radius: var(--r8); box-shadow: 0 8px 28px rgba(0,0,0,.12);
+  border-radius: var(--r8); box-shadow: var(--shadow-lg);
   max-height: 17rem; overflow-y: auto;
 
   li { margin: 0; }
@@ -955,7 +975,7 @@
 .quick-chip--on {
   background: var(--terra);
   border-color: var(--terra);
-  color: #fff;
+  color: var(--white);
 }
 
 .quick-filters__note { font-size: .78rem; color: var(--slate); }

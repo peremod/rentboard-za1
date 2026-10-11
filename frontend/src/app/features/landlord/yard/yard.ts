@@ -5,7 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { PropertiesService } from '../../../core/services/properties.service';
 import {
   Expense, ExpenseCategory, ExpenseSummary, HousemateProfile, Property,
-  RentPeriod, RentStatus, YardGroup,
+  RentPeriod, RentStatus, YardGroup, YardRoom, YardTenancy,
 } from '../../../core/models/property.model';
 
 /** Plain English for each category, in a landlord's words not an accountant's. */
@@ -30,10 +30,12 @@ const HOUSEMATE_LABELS: Record<Exclude<HousemateProfile, 'unstated'>, string> = 
 };
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { DialogService } from '../../../core/services/dialog.service';
+import { RoomsService } from '../../../core/services/rooms.service';
 import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 import { LeasePanel } from '../../../shared/components/lease-panel/lease-panel';
 import { LeaseDocuments } from '../../../shared/components/lease-documents/lease-documents';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * The yard dashboard.
@@ -62,7 +64,7 @@ const UNGROUPED = 'ungrouped';
 @Component({
   selector: 'app-yard',
   standalone: true,
-  imports: [PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink, ZarCentsPipe, LeasePanel, LeaseDocuments, ScreenHint],
+  imports: [PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink, ZarCentsPipe, LeasePanel, LeaseDocuments, ScreenHint, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-property" heading="Everything about this address">
@@ -71,7 +73,7 @@ const UNGROUPED = 'ungrouped';
 
 
       @if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       } @else if (propertyId() && !scoped()) {
         <!-- A property id that is not this landlord's, or has been deleted.
              Said as what it is, rather than drawn as an empty screen. -->
@@ -424,7 +426,7 @@ const UNGROUPED = 'ungrouped';
               @if (openExpenses() === group.property.id) {
                 <div [id]="'expenses-' + group.property.id">
                 @if (loadingExpenses()) {
-                  <p class="muted">Loading…</p>
+                  <app-loading/>
                 } @else {
                   @if (expenses().length === 0) {
                     <p class="muted">Nothing recorded yet. Add the municipal bill, a repair, anything you paid for.</p>
@@ -511,6 +513,61 @@ const UNGROUPED = 'ungrouped';
                 </a>
               }
 
+              <!-- A room marked let with nobody in it.
+
+                   This is what a letting leaves behind. Ending a tenancy does
+                   not relist the room, deliberately, so it waits for the
+                   landlord to act. The notice telling them fires once; if it
+                   is missed, the room is off the public board and out of the
+                   sitemap with nothing on any screen saying so. The status
+                   chip above says "let", which is the opposite of help.
+
+                   The inbox carries the task; this is the marker on the room
+                   itself, and it carries the action rather than only naming
+                   the problem. -->
+              @if (isVacantButLet(room)) {
+                <div class="yard-room__vacant">
+                  <strong>Empty and not listed.</strong>
+                  Nobody can find this room or apply while it is off the board.
+                  <button type="button" class="link-btn" [disabled]="busy()"
+                          (click)="relistRoom(room.id, room.title)">
+                    Put it back on the board
+                  </button>
+                </div>
+              }
+
+              <!-- Reserved: somebody is lined up but nothing is signed.
+
+                   ⚠️ The whole feature existed with NO button anywhere. The
+                   route, the API write, a tailored application refusal ("this
+                   room is reserved for another tenant while they finalise"),
+                   the board badge and five separate occupancy counts were all
+                   built and working, and nothing in the portal could set it.
+                   So a landlord with somebody lined up had only "mark as let",
+                   which closes and emails every other applicant — the
+                   destructive action for a non-destructive reason, which is
+                   the same gap pause() was added to close.
+
+                   Only from active or reserved, which is what the API accepts;
+                   offering it on a let room would be a button that 400s. -->
+              @if (room.status === 'active') {
+                <div class="yard-room__actions">
+                  <button type="button" class="link-btn" [disabled]="busy()"
+                          (click)="reserveRoom(room.id, room.title)">
+                    Reserve for someone
+                  </button>
+                </div>
+              } @else if (room.status === 'reserved') {
+                <div class="yard-room__reserved">
+                  Held for someone while they finalise. It takes no new
+                  applications, and the ones already in are still open.
+                  <button type="button" class="link-btn" [disabled]="busy()"
+                          (click)="unreserveRoom(room.id)">
+                    Put it back on the board
+                  </button>
+                </div>
+              }
+
               <!-- Per-room actions — Phase 7b asks for them to be clear and
                    separately visible. "Edit listing" and "Take out of this
                    property" are different jobs and landlords conflate them, so
@@ -572,6 +629,64 @@ const UNGROUPED = 'ungrouped';
                        the definition. -->
                   <app-lease-documents [tenancyId]="tenancy.id" [headingLevel]="2"/>
                 }
+              }
+              <!-- Who used to live here.
+
+                   ⚠️ This is the landlord half of what Phase D fixed for the
+                   tenant, and it failed the other way. The property screen was
+                   the ONLY place a landlord could see a tenancy, and it asked
+                   for pending and active only — so the moment a letting ended
+                   they lost the tenant, the dates, the rent they paid and the
+                   whole ledger. There was no past-tenant view anywhere in the
+                   product, while the PAIA manual tells the public this
+                   platform holds "tenancy history and rent records".
+
+                   Collapsed by default: a room on its fourth tenant should not
+                   open with four closed records above the person living there
+                   now. -->
+              @if (room.pastTenancies?.length) {
+                <div class="yard-past">
+                  <button type="button" class="link-btn"
+                          [attr.aria-expanded]="showPast().has(room.id)"
+                          (click)="togglePast(room.id)">
+                    {{ showPast().has(room.id) ? 'Hide' : 'Show' }}
+                    {{ room.pastTenancies.length === 1
+                       ? 'the previous tenant'
+                       : room.pastTenancies.length + ' previous tenants' }}
+                  </button>
+
+                  @if (showPast().has(room.id)) {
+                    <ul class="yard-past__list">
+                      @for (t of room.pastTenancies; track t.id) {
+                        <li class="yard-past__item state-edge state--past">
+                          <span class="yard-past__who">{{ t.tenant.fullName }}</span>
+                          <span class="yard-past__when">
+                            @if (t.startDate && t.endDate) {
+                              {{ t.startDate | date: 'MMM yyyy' }} to {{ t.endDate | date: 'MMM yyyy' }}
+                            } @else if (t.endDate) {
+                              until {{ t.endDate | date: 'MMM yyyy' }}
+                            }
+                            · {{ t.rentCents | zarCents }} a month
+                          </span>
+                          <!-- The one time-limited thing about a finished
+                               letting, so it is the one thing flagged. -->
+                          @if (reviewStillOpen(t)) {
+                            <span class="state state--waiting">You can still review them</span>
+                          }
+                          <button type="button" class="link-btn"
+                                  [attr.aria-expanded]="showDocs().has(t.id)"
+                                  [attr.aria-label]="'Paperwork for ' + t.tenant.fullName"
+                                  (click)="toggleDocs(t.id)">
+                            {{ showDocs().has(t.id) ? 'Hide paperwork' : 'Paperwork' }}
+                          </button>
+                          @if (showDocs().has(t.id)) {
+                            <app-lease-documents [tenancyId]="t.id" [headingLevel]="2"/>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  }
+                </div>
               }
             </div>
           } @empty {
@@ -639,6 +754,9 @@ const UNGROUPED = 'ungrouped';
 export class Yard implements OnInit {
   private properties = inject(PropertiesService);
   private dialogs = inject(DialogService);
+  // Reserve, unreserve and relist all live on RoomsService — the yard shows the
+  // rooms but does not own their listing state.
+  private rooms = inject(RoomsService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
@@ -757,6 +875,118 @@ export class Yard implements OnInit {
       if (next.has(tenancyId)) next.delete(tenancyId);
       else next.add(tenancyId);
       return next;
+    });
+  }
+
+  /**
+   * Which rooms have their previous tenants expanded.
+   *
+   * Collapsed by default: a room on its fourth tenant should not open with
+   * four closed records sitting above the person living there now.
+   */
+  protected readonly showPast = signal<Set<string>>(new Set());
+
+  protected togglePast(roomId: string) {
+    this.showPast.update((open) => {
+      const next = new Set(open);
+      if (next.has(roomId)) next.delete(roomId);
+      else next.add(roomId);
+      return next;
+    });
+  }
+
+  /**
+   * Marked let, with nobody in it.
+   *
+   * ⚠️ Derived from the TENANCIES, not from the status alone. `let` is correct
+   * for both "somebody lives here" and "the letting ended and I have not
+   * relisted", and those want opposite things on screen. It also catches a
+   * room marked let by hand through `markLet()` with no tenancy behind it at
+   * all, which is a real path and leaves the room every bit as invisible.
+   *
+   * `tenancies` is the live list — the API filters it to pending and active —
+   * so an empty one means nobody is in the room.
+   */
+  protected isVacantButLet(room: YardRoom): boolean {
+    return room.status === 'let' && room.tenancies.length === 0;
+  }
+
+  /** Whether either party can still review this finished letting. */
+  protected reviewStillOpen(t: YardTenancy): boolean {
+    return !!t.reviewsCloseAt && new Date(t.reviewsCloseAt).getTime() > Date.now();
+  }
+
+  /**
+   * Put a room back on the board after a letting.
+   *
+   * ⚠️ `relist`, not a bare status write. Relisting is the operation that
+   * closes out the previous cycle — it archives the old applications and
+   * increments `relistCount`, so last letting's applicants do not reappear as
+   * if they were new. That is exactly right here, and it is also why ending a
+   * tenancy does NOT do it automatically: republishing somebody's room with
+   * its old photos at its old price on the day their tenant leaves is their
+   * decision, not a side effect.
+   */
+  protected async relistRoom(roomId: string, title: string) {
+    const confirmed = await this.dialogs.confirm(
+      `Put "${title}" back on the board?`,
+      'It goes live again at the same rent, and you can change that afterwards. ' +
+      'Applications from the last letting are closed off so they do not look new.',
+    );
+    if (!confirmed) return;
+
+    this.busy.set(true);
+    this.rooms.relistRoom(roomId, {}).subscribe({
+      next: () => { this.busy.set(false); this.reload(); },
+      error: (err: { error?: { message?: string } }) => {
+        this.busy.set(false);
+        this.error.set(err?.error?.message ?? 'Could not put that room back on the board.');
+      },
+    });
+  }
+
+  /**
+   * Hold a room for somebody while they finalise.
+   *
+   * ⚠️ The feature behind this existed with no button anywhere. The route, the
+   * API write, a tailored application refusal, the board badge and five
+   * occupancy counts were all built and working, and nothing in the portal
+   * could set it — so a landlord with somebody lined up had only "mark as
+   * let", which closes and emails every other applicant. The destructive
+   * action for a non-destructive reason, which is the same gap `pause()` was
+   * added to close.
+   */
+  protected async reserveRoom(roomId: string, title: string) {
+    const confirmed = await this.dialogs.confirm(
+      `Hold "${title}" for someone?`,
+      'It stays visible with a Reserved badge and takes no new applications. ' +
+      'The applications already in stay open, so you keep a fallback if this one ' +
+      'falls through.',
+    );
+    if (!confirmed) return;
+
+    this.busy.set(true);
+    this.rooms.reserve(roomId).subscribe({
+      next: () => { this.busy.set(false); this.reload(); },
+      error: (err) => {
+        this.busy.set(false);
+        this.error.set(err?.error?.message ?? 'Could not reserve that room.');
+      },
+    });
+  }
+
+  /**
+   * Reserved back to active. No confirmation: it is the undo, and it destroys
+   * nothing — the applications were never closed.
+   */
+  protected unreserveRoom(roomId: string) {
+    this.busy.set(true);
+    this.rooms.unreserve(roomId).subscribe({
+      next: () => { this.busy.set(false); this.reload(); },
+      error: (err) => {
+        this.busy.set(false);
+        this.error.set(err?.error?.message ?? 'Could not put that room back on the board.');
+      },
     });
   }
 
@@ -923,7 +1153,15 @@ export class Yard implements OnInit {
 
   protected loadRent(tenancyId: string) {
     this.properties.rentHistory(tenancyId).subscribe({
-      next: (periods) => this.rent.update((m) => ({ ...m, [tenancyId]: periods })),
+      // ⚠️ `.periods`, not the whole response. The endpoint answers
+      // `{ tenancy, periods }` so a caller can tell a finished letting from a
+      // running one; storing the envelope here put an object where
+      // `currentLabel(periods)` calls `.find`, which is a TypeError on the
+      // landlord's own property screen. It passed `tsc` and `ng build`
+      // because the generic on `http.get` is an unchecked cast — caught by a
+      // review, not by a compiler. `RentLedger` is now declared once so the
+      // next change to this shape is a compile error.
+      next: (ledger) => this.rent.update((m) => ({ ...m, [tenancyId]: ledger.periods })),
       error: () => this.error.set('Could not load the rent record.'),
     });
   }

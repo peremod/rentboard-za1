@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { AdminService, ReferralStats, LaunchCode } from '../../../core/services/admin.service';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * Referral performance and the launch invite codes.
@@ -10,6 +11,7 @@ import { AdminService, ReferralStats, LaunchCode } from '../../../core/services/
 @Component({
   selector: 'app-admin-referrals',
   standalone: true,
+  imports: [Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -60,7 +62,7 @@ import { AdminService, ReferralStats, LaunchCode } from '../../../core/services/
 
               @if (openCity() === c.city) {
                 @if (loadingCodes()) {
-                  <p class="muted">Loading…</p>
+                  <app-loading/>
                 } @else {
                   <div class="code-grid">
                     @for (code of codes(); track code.id) {
@@ -80,7 +82,7 @@ import { AdminService, ReferralStats, LaunchCode } from '../../../core/services/
           }
         </section>
       } @else if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       }
   `,
   styles: [`

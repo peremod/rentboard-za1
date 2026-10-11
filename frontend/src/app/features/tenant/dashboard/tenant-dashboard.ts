@@ -21,11 +21,12 @@ import { TenantInboxPanel } from '../../../shared/components/tenant-inbox/tenant
 import { ViewingInvitations } from '../../../shared/components/viewing-invitations/viewing-invitations';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/tenancy-lifecycle';
+import { Loading } from '../../../shared/components/loading/loading';
 
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
-  imports: [RouterLink, DatePipe, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations, ScreenHint, TenancyLifecycle],
+  imports: [RouterLink, DatePipe, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations, ScreenHint, TenancyLifecycle, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="tenant-dashboard" heading="Where you stand, on everything you applied for">
@@ -110,6 +111,26 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
         </section>
       }
 
+      <!-- ⚠️ A pointer, not a copy — Phase D.
+           Excluding finished lettings from "Your applications" (where they had
+           been sitting under "it is waiting on you") left them in NEITHER
+           list: an ended tenancy's application stays accepted and unarchived,
+           so it matched no section and simply disappeared from this screen.
+           The record itself is on the rent screen, in full, and that is where
+           it belongs — a dashboard is for what needs doing. But a room
+           somebody used to live in vanishing without trace is the same
+           complaint as the burger-menu one: the way back is hidden. So: one
+           line, with the way there on it. -->
+      @if (pastLettings().length > 0) {
+        <p class="dash-week" id="past-lettings-pointer">
+          {{ pastLettings().length === 1
+             ? 'You have one past letting.'
+             : 'You have ' + pastLettings().length + ' past lettings.' }}
+          The rent record and paperwork are kept —
+          <a routerLink="/tenant/rent" fragment="past-lettings">see rooms you have left</a>.
+        </p>
+      }
+
       <section class="dash-section" id="your-applications">
         <h2 class="dash-section-title">Your applications</h2>
         @if (activeApplicationsNote()) {
@@ -117,7 +138,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
         }
 
         @if (loading()) {
-          <p class="muted">Loading…</p>
+          <app-loading/>
         } @else if (applications().length === 0) {
           <div class="empty-state">
             <h3>No applications yet</h3>
@@ -298,7 +319,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
         </h2>
 
         @if (loadingSublets()) {
-          <p class="muted">Loading your listings…</p>
+          <app-loading>Loading your listings…</app-loading>
         } @else if (sublets().length === 0) {
           <p class="muted">
             Renting a place with a spare room? You can let it out here. Listing is
@@ -354,7 +375,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
             No saved rooms yet. Tap the ♡ on any room to keep it here while you decide.
           </p>
         } @else if (loadingSaved()) {
-          <p class="muted">Loading saved rooms…</p>
+          <app-loading>Loading saved rooms…</app-loading>
         } @else {
           <div class="room-grid">
             @for (room of savedRoomList(); track room.id) {
@@ -612,13 +633,63 @@ export class TenantDashboard implements OnInit {
   activeApplications() {
     return this.applications().filter(
       (a) => !a.isArchived && a.status !== 'withdrawn' && a.status !== 'rejected'
-        && a.tenancy?.status !== 'active',
+        // ⚠️ Every FINISHED state, not just `active` — Phase D.
+        //
+        // This excluded `active` and stopped there, so when a tenancy ENDED it
+        // fell straight back into this list: `tenancy.status` became 'ended'
+        // (which satisfies `!== 'active'`), the Application stays 'accepted'
+        // for good, and nothing archives it — `archivedAt` is set by a relist
+        // and ending a tenancy does not relist the room.
+        //
+        // The row then reappeared under "Your applications", and
+        // `activeApplicationsNote` counts an acceptance as waiting on the
+        // TENANT, so a person who had moved out six months earlier was told
+        // "The landlord has moved on this one — it is waiting on you."
+        // Meanwhile `currentHomes` requires 'active', so the room vanished
+        // from "Where you live now" in the same render. Moving out moved the
+        // room BACKWARDS through their own dashboard.
+        //
+        // Same class of defect as the fix the comment above describes — that
+        // one covered `active` and went no further.
+        && !this.tenancyHasMovedOn(a.tenancy?.status),
     );
+  }
+
+  /**
+   * Whether the letting has moved past being an application.
+   *
+   * ⚠️ This is a WHITELIST of the one status that still belongs in a list of
+   * applications, and it is deliberately not a blacklist of the finished ones.
+   *
+   * The first attempt at this fix was `!isFinished(status)`, matching `ended`
+   * and `cancelled` — and it dropped the original `!== 'active'` exclusion,
+   * so the room the tenant LIVES IN came back into "Your applications" under
+   * "it is waiting on you". That is the exact defect the comment above
+   * describes, reintroduced while fixing its sibling. The drive caught it.
+   *
+   * Naming the one state that stays cannot fail that way: a status nobody
+   * thought of excludes itself. Only `pending` stays, because then the letting
+   * is genuinely still in progress — accepted, with nobody having confirmed
+   * the move.
+   */
+  private tenancyHasMovedOn(status?: string | null): boolean {
+    return !!status && status !== 'pending';
   }
 
   /** Rooms this tenant has moved into and not moved out of. */
   currentHomes() {
     return this.applications().filter((a) => a.tenancy?.status === 'active');
+  }
+
+  /**
+   * Rooms they have left.
+   *
+   * `ended` only. A `cancelled` letting means nobody ever moved in, so there
+   * is no room they "used to live in" and nothing kept — counting it here
+   * would tell somebody they had lived somewhere they never did.
+   */
+  pastLettings() {
+    return this.applications().filter((a) => a.tenancy?.status === 'ended');
   }
 
   /**
@@ -634,6 +705,10 @@ export class TenantDashboard implements OnInit {
   activeApplicationsNote(): string {
     const apps = this.activeApplications();
     if (apps.length === 0) return '';
+    // Nothing here can be a finished letting any more — activeApplications
+    // excludes them — so an `accepted` row genuinely is waiting on this
+    // person. That was the false premise this sentence rested on.
+
     const yours = apps.filter((a) => a.status === 'accepted' || a.status === 'shortlisted').length;
     const theirs = apps.length - yours;
     if (yours && theirs) {

@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminService, PendingVerification } from '../../../core/services/admin.service';
 import { VerificationService } from '../../../core/services/verification.service';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * Verification review queue.
@@ -19,7 +20,7 @@ import { VerificationService } from '../../../core/services/verification.service
 @Component({
   selector: 'app-admin-verifications',
   standalone: true,
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -33,7 +34,7 @@ import { VerificationService } from '../../../core/services/verification.service
       </div>
 
       @if (loading()) {
-        <p class="muted">Loading queue…</p>
+        <app-loading>Loading queue…</app-loading>
       } @else if (error()) {
         <p class="field-error" role="alert">{{ error() }}</p>
       } @else if (requests().length === 0) {

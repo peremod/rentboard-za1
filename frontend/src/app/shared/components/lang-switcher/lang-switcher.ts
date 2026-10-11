@@ -31,12 +31,12 @@ import { LanguageCode, localizePath, stripLocalePrefix } from '../../../core/mod
     /* 24px before Phase 7q — the smallest tap target measured anywhere in the
        app, on the control that switches the whole site's language. Not a .btn
        and not an input, so neither app-wide rule reached it. */
-    .lang-switcher > button { background: none; border: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.85); font-size: .75rem; padding: .3rem .6rem; border-radius: 6px; cursor: pointer; font-family: inherit; min-height: 44px; }
-    .lang-switcher__menu { position: absolute; top: calc(100% + 4px); right: 0; background: #1A1410; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; list-style: none; padding: .3rem; min-width: 180px; max-height: 320px; overflow-y: auto; z-index: 60; }
+    .lang-switcher > button { background: none; border: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.85); font-size: .75rem; padding: .3rem .6rem; border-radius: var(--r4); cursor: pointer; font-family: inherit; min-height: 44px; }
+    .lang-switcher__menu { position: absolute; top: calc(100% + 4px); right: 0; background: #1A1410; border: 1px solid rgba(255,255,255,.15); border-radius: var(--r8); list-style: none; padding: .3rem; min-width: 180px; max-height: 320px; overflow-y: auto; z-index: 60; }
     /* The menu entries are tap targets too — eleven languages in a list where
        every row is something to hit with a thumb. */
-    .lang-switcher__menu button { width: 100%; text-align: left; background: none; border: none; color: rgba(255,255,255,.8); font-size: .78rem; padding: .4rem .6rem; border-radius: 5px; cursor: pointer; font-family: inherit; min-height: 44px; }
-    .lang-switcher__menu button:hover, .lang-switcher__menu button.active { background: rgba(255,255,255,.08); color: #fff; }
+    .lang-switcher__menu button { width: 100%; text-align: left; background: none; border: none; color: rgba(255,255,255,.8); font-size: .78rem; padding: .4rem .6rem; border-radius: var(--r4); cursor: pointer; font-family: inherit; min-height: 44px; }
+    .lang-switcher__menu button:hover, .lang-switcher__menu button.active { background: rgba(255,255,255,.08); color: var(--white); }
     .muted { color: rgba(255,255,255,.4); font-size: .68rem; margin-left: .3rem; }
   `],
 })

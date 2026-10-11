@@ -1,18 +1,19 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { Logo } from '../logo/logo';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 
 @Component({
   selector: 'app-footer',
   standalone: true,
-  imports: [RouterLink, TranslatePipe],
+  imports: [RouterLink, Logo, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <footer class="footer">
       <div class="footer-inner">
         <div>
-          <a class="footer-logo" routerLink="/">Mas<span>tande</span></a>
+          <div class="footer-brand"><app-logo size="md"/></div>
           <p class="footer-desc">
             South Africa's dedicated room-letting notice board. Find rooms direct from
             landlords — no estate agent, no fees to apply.

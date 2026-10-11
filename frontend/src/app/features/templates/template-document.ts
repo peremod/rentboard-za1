@@ -169,7 +169,7 @@ import { SeoService } from '../../core/services/seo.service';
 
     .tpl-warn {
       border: 2px solid var(--terra);
-      background: rgba(192, 78, 40, .07);
+      background: rgba(173, 66, 34, .07);
       border-radius: var(--r8);
       padding: 1rem 1.1rem;
       font-size: .9rem;

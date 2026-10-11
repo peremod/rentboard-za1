@@ -73,11 +73,6 @@ export class RoomsService {
     return this.http.post<Room>(`${this.api}/rooms/${id}/publish`, {});
   }
 
-  markReserved(id: string): Observable<Room> {
-    this.bustCache();
-    return this.http.post<Room>(`${this.api}/rooms/${id}/reserve`, {});
-  }
-
   markLet(id: string): Observable<Room> {
     this.bustCache();
     return this.http.post<Room>(`${this.api}/rooms/${id}/let`, {});
@@ -96,7 +91,25 @@ export class RoomsService {
     );
   }
 
-  /** Reserved: visible with a badge, but closed to new applications. */
+  /**
+   * Reserved: visible with a badge, but closed to new applications.
+   *
+   * ⚠️ **Nothing calls this, and that is the defect — not the status.**
+   *
+   * `POST /rooms/:id/reserve` works, `RoomsService.markReserved` on the API
+   * writes it, `applications.service` has a tailored refusal for it ("reserved
+   * for another tenant while they finalise — it may become available again"),
+   * `room-card` renders a Reserved badge, and the landlord dashboard and
+   * portfolio-health counts both include it. The whole feature is built and
+   * there is no button anywhere in the portal that reaches it.
+   *
+   * This file also carried TWO methods for the same endpoint — `markReserved`
+   * and `reserve`, identical but for the name — which is how a thing nobody
+   * calls ends up duplicated: neither copy was ever wrong, because neither was
+   * ever used. `markReserved` is gone; `reserve`/`unreserve` pair up.
+   *
+   * See docs/OUTSTANDING.md §34 for the one screen this needs.
+   */
   reserve(id: string) {
     this.bustCache();
     return this.http.post<Room>(`${this.api}/rooms/${id}/reserve`, {});

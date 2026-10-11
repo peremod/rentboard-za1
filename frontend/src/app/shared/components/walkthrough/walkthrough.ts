@@ -4,6 +4,7 @@ import {
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { WalkthroughService } from '../../../core/services/walkthrough.service';
+import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 
 /** One card of the tour. `route` is where the thing being described lives. */
 interface Step {
@@ -46,8 +47,12 @@ const LANDLORD_STEPS: Step[] = [
     title: 'Listing a room is free, and stays free',
     body:
       'No fee to post, no fee to keep it up, no commission when you let it. Up to '
-      + '20 photos a room. You can start a listing here or just send the photos to '
-      + 'us on WhatsApp and finish it later.',
+      + '20 photos a room. '
+      + (WHATSAPP_ENABLED
+        ? 'You can start a listing here or just send the photos to us on WhatsApp '
+          + 'and finish it later.'
+        : 'A listing saves as you go, so you can add the photos later from the '
+          + 'same screen.'),
     route: '/landlord/rooms/new',
     linkLabel: 'List a room',
   },
@@ -63,11 +68,16 @@ const LANDLORD_STEPS: Step[] = [
   },
   {
     icon: '💬',
-    title: 'Messages reach you on WhatsApp too',
-    body:
-      'When somebody writes to you we send it to WhatsApp as well, and your reply '
-      + 'there lands back in the same conversation. The inbox says which way each '
-      + 'message came in, so you always know where your last answer went.',
+    title: WHATSAPP_ENABLED
+      ? 'Messages reach you on WhatsApp too'
+      : 'Every conversation in one inbox',
+    body: WHATSAPP_ENABLED
+      ? 'When somebody writes to you we send it to WhatsApp as well, and your reply '
+        + 'there lands back in the same conversation. The inbox says which way each '
+        + 'message came in, so you always know where your last answer went.'
+      : 'A thread starts when somebody applies for one of your rooms. Everything '
+        + 'said about a room stays with that room, so you can come back a month '
+        + 'later and still find it.',
     route: '/account/messages',
     linkLabel: 'Open messages',
   },
@@ -176,11 +186,15 @@ const TENANT_STEPS: Step[] = [
   },
   {
     icon: '💬',
-    title: 'Messages reach you on WhatsApp too',
-    body:
-      'A thread starts when you apply for a room. We send it to WhatsApp as well, '
-      + 'and a reply there lands back in the same conversation, so you do not have '
-      + 'to keep the site open to hear back.',
+    title: WHATSAPP_ENABLED
+      ? 'Messages reach you on WhatsApp too'
+      : 'Your conversations, in one place',
+    body: WHATSAPP_ENABLED
+      ? 'A thread starts when you apply for a room. We send it to WhatsApp as well, '
+        + 'and a reply there lands back in the same conversation, so you do not have '
+        + 'to keep the site open to hear back.'
+      : 'A thread starts when you apply for a room, and the landlord answers in the '
+        + 'same place. Check back here — this screen is where a reply appears.',
     route: '/account/messages',
     linkLabel: 'Open messages',
   },
@@ -322,8 +336,8 @@ const ADMIN_STEPS: Step[] = [
       padding: 1rem;
     }
     .wt-card {
-      background: var(--card, #fff); border-radius: var(--r12, 12px);
-      box-shadow: 0 18px 50px rgba(0, 0, 0, .3);
+      background: var(--card, var(--white)); border-radius: var(--r12);
+      box-shadow: var(--shadow-xl);
       max-width: 30rem; width: 100%; padding: 1.5rem;
       max-height: calc(100vh - 2rem); overflow-y: auto;
     }
@@ -341,7 +355,7 @@ const ADMIN_STEPS: Step[] = [
     .wt-body { margin: 0; line-height: 1.65; color: var(--ink2); }
     .wt-dots { display: flex; gap: .3rem; margin: 1.1rem 0 1rem; }
     .wt-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
-    .wt-dot.is-on { background: var(--terra); width: 20px; border-radius: 4px; }
+    .wt-dot.is-on { background: var(--terra); width: 20px; border-radius: var(--r4); }
     .wt-actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
     .wt-actions .btn { min-height: 44px; }
     .wt-go {
@@ -354,7 +368,7 @@ const ADMIN_STEPS: Step[] = [
     @media (max-width: 480px) {
       .wt-overlay { align-items: flex-end; padding: 0; }
       .wt-card {
-        max-width: none; border-radius: var(--r12, 12px) var(--r12, 12px) 0 0;
+        max-width: none; border-radius: var(--r12) var(--r12) 0 0;
         padding: 1.25rem 1.1rem 1.5rem; max-height: 88vh;
       }
       .wt-actions .btn { flex: 1; justify-content: center; }

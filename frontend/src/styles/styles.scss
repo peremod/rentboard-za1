@@ -8,6 +8,312 @@
 // Responsive layer last so its media queries override the desktop-only spec.
 @use 'responsive';
 
+:root {
+  /**
+   * The wordmark's MA — Phase I.
+   *
+   * ⚠️ Here rather than in `_spec.scss` because that file is a verbatim port
+   * of the visual preview and its own header forbids hand-editing it; app-only
+   * additions belong in this file.
+   *
+   * One fixed value, because the requirement is that MA is the same colour
+   * wherever the logo appears — header, footer, portal sidebar, and any light
+   * surface somebody puts it on next. Every existing terracotta fails one side
+   * of that: `--terra` (#AD4222) is 3.06:1 on `--ink`, `--terra2` (#E06038) is
+   * 3.33:1 on `--cream`, `--terra-deep` is 2.28:1 on ink.
+   *
+   * Searched rather than chosen: across `--ink`, `--cream`, `--cream2`,
+   * `--card` and `--white` the best achievable minimum contrast is 3.92:1 —
+   * anything light enough for #1C160E is too light for #FFFFFF. This hits that
+   * ceiling and is the closest to the brand of the values that do (ΔE 7.6 from
+   * `--terra`, 8.7 from `--terra2`).
+   *
+   * 3.92 clears WCAG's LARGE-text threshold of 3:1, not the 4.5:1 small-text
+   * one. That holds only while the wordmark is 18.66px bold or larger, which
+   * `scripts/logo-drive.mjs` measures at every placement and width rather than
+   * assuming. A smaller logo size is a contrast failure, not a styling tweak.
+   */
+  --logo-ma: #C4522C;
+
+  /**
+   * Danger, reachable from a component — Phase J2.
+   *
+   * ⚠️ `$color-danger: #B23B3B` has existed in `_variables.scss` since the
+   * start and is correct: 5.48:1 on `--cream`, 5.03:1 on `--cream2`. But an
+   * SCSS variable is invisible to a component's inline `styles:` block — §H2's
+   * finding — so `photo-upload`, `create-room` and `room-detail` each typed a
+   * red from memory and all three landed on `#D63B3B`, which is **4.32:1 on
+   * cream and 3.96:1 on cream2** at .82rem. Three independent contrast
+   * failures, caused by a token the components could not reach.
+   *
+   * Same value as `$color-danger`, as a custom property. The duplicate exists
+   * because SCSS and CSS variables cannot see each other; `token-lint.mjs`
+   * allows it because a `--x:` definition is where a literal belongs.
+   */
+  --danger: #B23B3B;
+
+  /**
+   * ── The elevation language — Phase K
+   *
+   * Measured before: **18 shadow definitions for 32 uses**, with
+   * `--shadow-sm/md/lg/xl` already defined and used 8 times between them.
+   * The other 24 were `none` ×11 (legitimate) and thirteen one-offs, and the
+   * one-offs were three different KINDS of thing wearing the same property:
+   *
+   *   · focus and selection RINGS — a spread with no blur. Six of them, at
+   *     1px and 3px, in four tints at .15 / .18 / .2 / .3. Not elevation at
+   *     all, so forcing them onto `--shadow-*` would have been wrong.
+   *   · overlay shadows for modals — four distinct values, all BLACK where
+   *     every token is ink-tinted, and two of them the same value written
+   *     with and without spaces inside the `rgba()`.
+   *   · a lift on the primary button — the same value twice, again in two
+   *     spellings, and tinted with `rgba(192, 78, 40, …)`: `#C04E28`, the
+   *     terracotta this project RETIRED for failing contrast.
+   *
+   * So the overlays all became `--shadow-xl` (black at .22 and ink at .18 are
+   * indistinguishable over a scrim, and "nothing else" is the point), and the
+   * two categories that are genuinely not elevation get named tokens below.
+   */
+
+  /**
+   * A focus or selection ring: spread, no blur, no offset.
+   *
+   * ⚠️ 3px for all of them, where two were 1px. WCAG 2.4.11 wants a focus
+   * indicator thick enough to find, and a ring whose thickness depends on
+   * which component you tabbed into is the kind of inconsistency nobody
+   * reports and everybody feels. One alpha too — .18 — where there were four.
+   */
+  --ring-terra: 0 0 0 3px rgba(173, 66, 34, .18);
+  --ring-danger: 0 0 0 3px rgba(178, 59, 59, .18);
+  --ring-sage: 0 0 0 3px rgba(61, 112, 64, .18);
+  --ring-gold: 0 0 0 3px rgba(200, 144, 42, .18);
+
+  /**
+   * The primary button's lift on hover.
+   *
+   * Retinted from `rgba(192, 78, 40, .35)` — `#C04E28`, retired because it
+   * measured 4.50:1 on `--cream`, which subpixel rendering tipped to 4.49.
+   * The token moved; this glow did not, in two places.
+   */
+  --shadow-lift: 0 4px 14px rgba(173, 66, 34, .35);
+}
+
+/**
+ * ⚠️ Three dark surfaces that declare a background and no foreground.
+ *
+ * `.nav` and `.footer` are `background: var(--ink)`; `.portal-nav` is
+ * `background: var(--ink2)`. None of the three sets `color`, so anything
+ * inside them inherits `--ink` from `body` and is invisible unless it names
+ * its own colour. Every child that needed light text has been doing exactly
+ * that, one declaration at a time — `.nav-logo`, `.footer-desc`,
+ * `.footer-popia`, `.footer-col h2`, `.portal-user-name`, each with its own
+ * `color: var(--cream)` or its own rgba.
+ *
+ * That is the `:where(button)` defect one level up: setting a background
+ * without setting a foreground is a single decision taken half way, and it
+ * reached a phone once already as white text on a white button at 1.00:1.
+ * It also makes `currentColor` unusable inside these regions, which is what
+ * `<app-logo>`'s stem needs in order to be legible on any surface without
+ * being told which surface it is on.
+ *
+ * Declared here rather than in `_spec.scss`, which is a verbatim port of the
+ * visual preview and forbids hand-editing; app-only additions belong here and
+ * this file is loaded after it. The per-child colours above are now redundant
+ * rather than wrong, and are left alone: deleting rules inside the port is how
+ * a re-sync turns into a conflict.
+ */
+.nav, .footer { color: var(--cream); }
+.portal-nav { color: var(--cream); }
+
+/* ⚠️ No wordmark is added to the portal sidebar, and the audit's §G3 finding 4
+   said one was missing. It was wrong: `app.ts` renders `<app-navbar/>` above
+   `<router-outlet/>`, so the global header — and its logo — is on every portal
+   screen at every width. A second wordmark inside the sidebar would put the
+   brand on screen twice, and below 900px that sidebar is a horizontally
+   scrolling tab strip where `.portal-user` is already hidden for taking room
+   from navigation. Corrected in docs/TENANCY-LIFECYCLE-AUDIT.md §G3. */
+
+/* The wordmark's own box. `<app-logo>` is `display: contents`, so it has no
+   box to carry placement with — spacing around it belongs to the thing placing
+   it, which is this footer column. Was `.footer-logo { margin-bottom: .75rem }`. */
+.footer-brand { margin-bottom: .75rem; }
+
+/**
+ * ⚠️ The money figure, in the display face — §H3's FIRST identity move, with
+ * one deliberate exception.
+ *
+ * The audit proposed "Playfair Display, heavy, for every number that matters —
+ * rent, the rand figure, the count on a dashboard card. Numerals in a serif
+ * display face on a letting board is immediately not-SaaS."
+ *
+ * It is right about the display figures and WRONG about the ledger ones, and
+ * the distinction is tabular numerals. The rent ledger and the archive's month
+ * list are columns of amounts that have to line up; `--font-mono` (DM Mono)
+ * gives fixed-width digits and Playfair, a proportional serif, does not. A
+ * column of rand figures that does not align is worse than a generic one. So:
+ *
+ *   · DISPLAY figures — the room's price, the hero stat, a dashboard count —
+ *     take the display face. Each appears once on a screen, at size, and is
+ *     the thing a person looks for first.
+ *   · LEDGER figures — `.app-rent` in a list, `.arc-month__amount` — keep
+ *     `--font-mono`, because alignment is the job.
+ *
+ * `font-variant-numeric: lining` because Playfair ships OLD-STYLE figures by
+ * default: without it, "R2 500" renders with the 2 and 5 dropping below the
+ * baseline like lower-case letters, which on a price reads as a typo.
+ */
+.figure {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-variant-numeric: lining;
+  letter-spacing: -.01em;
+}
+
+/**
+ * A button that reads as a link — globally, once.
+ *
+ * ⚠️ It was declared in FOUR component scopes with identical bodies
+ * (close-account, messages, notices, applicants-inbox) and nowhere global. So
+ * any fifth component writing `class="link-button"` got an unstyled
+ * <button>: default chrome, default padding, in the middle of a sentence.
+ * Phase J2's error-state component was that fifth, and css-coverage-audit
+ * named it immediately — which is the same finding as `.btn-danger`, used by
+ * seven components and written in two, that the audit's own header records.
+ *
+ * Here rather than in `_spec.scss` because it is an app-only addition, and
+ * global rather than in `error-state` because three other screens use it for
+ * the same thing: a real <button> that must not look like one, so an action
+ * inside a sentence is reachable by keyboard without being a div with a click
+ * handler.
+ */
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--terra);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// STATE VOCABULARY — one treatment per meaning, defined here and nowhere else
+//
+// Audit §H4, and partly a clean-up after Phases D–F. `.arc-row__badge` in
+// the archive and `.rent-past__badge` on the rent screen are the SAME chip
+// written twice, in two components, both reading "Past letting", differing
+// only in `.12rem` vs `.15rem` of padding. `.arc-row__review` and
+// `.yard-past__review` are the same "reviews still open" treatment, also
+// twice. Beside them: `.status--accepted` and `.status--rejected` defined
+// identically in `applicants.ts` AND `applicants-inbox.ts` with raw hexes,
+// `.pill--green` and `.pill--warn` in `room-detail.ts`, `.pill--off` in
+// `admin/services.ts` — and in the spec port a PARALLEL set under a different
+// name entirely (`.status-accepted`, single hyphen, vs `.status--accepted`,
+// BEM modifier). Nothing shadows anything; they are separate systems that
+// happen to agree.
+//
+// So: five meanings, each defined once. A component that needs one writes the
+// class; it does not write the rule. `scripts/state-lint.mjs` fails on a sixth
+// meaning invented in a template, and on a component declaring its own rule
+// for any of these.
+//
+//   live      something is running now
+//   waiting   a person has to do something — the only state that asks
+//   past      over, a record, read-only
+//   closed    ended without completing: cancelled, rejected, withdrawn
+//   disputed  contested, and being looked at
+//
+// ⚠️ Colour is never the only channel. Every chip carries a WORD ("Past
+// letting", "Never started", "Disputed"), so the ink reinforces the meaning
+// rather than conveying it — WCAG 1.4.1. That is also what frees the palette
+// from having to make five maximally-distinct hues out of one warm family.
+//
+// ── Why these five pairs and not the obvious ones
+//
+// Measured over `--cream`, `--cream2`, `--card` and `--white`, because a
+// translucent tint composites over whatever is underneath and the chip appears
+// on all four. The chip is .68rem at weight 700 — 10.9px, SMALL text, so the
+// threshold is 4.5:1 and not 3:1. Worst case of the four surfaces:
+//
+//   live      --sage-deep  on sage 12%    5.21
+//   waiting   --ink2       on gold 14%    9.64
+//   past      --terra-deep on --cream2    6.73
+//   closed    --slate      on --cream2    4.74
+//   disputed  --terra-deep on red 10%     5.89
+//
+// The obvious choices fail. `--gold-text` on its own gold tint is 4.10 — and
+// the spec port's comment claims it "clears both: 5.14:1 on the card, 4.61:1
+// on the tint", which was measured against the tint over `--card` only; over
+// `--cream2` it is 4.10 and `.status-pending` has been under the threshold on
+// that surface all along. `--sage` on the sage tint is 4.29, `--terra` on the
+// terra tint 4.38, `--slate` on any tint 4.05–4.23. Every ink here is a deep
+// value for that reason, and `waiting` carries its meaning in the FILL with
+// near-black ink because no gold close enough to `--gold` to still read as
+// gold clears 4.5:1 as small text (the nearest that does is ΔE 23 away and
+// reads brown).
+//
+// ── The edge, not the card
+//
+// `.state-edge` is §H3's second identity move: a 3px rule in the state's own
+// ink, rather than another tinted rounded box. Both devices read the same two
+// custom properties, so a meaning is defined in one place and rendered two
+// ways. `rent.ts` already worked out the 480px behaviour — at the narrowest
+// width the indent costs width a 360px screen has not got, so the rule becomes
+// a top border.
+// ═══════════════════════════════════════════════════════════════════════
+
+.state,
+.state-edge {
+  // Unmodified is `closed`: the least claim a state treatment can make.
+  --state-ink: var(--slate);
+  --state-fill: var(--cream2);
+}
+
+.state--live { --state-ink: var(--sage-deep); --state-fill: rgba(61, 112, 64, .12); }
+.state--waiting { --state-ink: var(--ink2); --state-fill: rgba(200, 144, 42, .14); }
+.state--past { --state-ink: var(--terra-deep); --state-fill: var(--cream2); }
+.state--closed { --state-ink: var(--slate); --state-fill: var(--cream2); }
+.state--disputed { --state-ink: var(--terra-deep); --state-fill: rgba(214, 59, 59, .1); }
+
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--state-ink);
+  background: var(--state-fill);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  padding: .15rem .5rem;
+}
+
+// The inline form: a state said in running text rather than as a chip.
+// `.arc-row__review` and `.yard-past__review` were both this.
+.state-text {
+  font-weight: 700;
+  color: var(--state-ink);
+}
+
+.state-edge {
+  border-left: 3px solid var(--state-ink);
+  padding-left: 1rem;
+}
+
+@media (max-width: 480px) {
+  .state-edge {
+    border-left: 0;
+    border-top: 3px solid var(--state-ink);
+    padding-left: 0;
+    padding-top: .75rem;
+  }
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; scroll-behavior: smooth; }
 body {
@@ -26,7 +332,7 @@ a { color: $color-terracotta; }
   margin: 0 auto;
 
   section { margin-bottom: 2.5rem; }
-  h2 { font-size: 1.15rem; margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 2px solid #DDD5C8; }
+  h2 { font-size: 1.15rem; margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 2px solid var(--border); }
   h3 { font-size: 1rem; margin: 1rem 0 .5rem; }
   p, li { line-height: 1.75; margin-bottom: .5rem; }
   ul, ol { margin-left: 1.5rem; margin-bottom: .75rem; }
@@ -37,7 +343,7 @@ a { color: $color-terracotta; }
 
 .disclaimer-banner {
   background: rgba(212, 168, 83, .12); border: 1px solid rgba(212, 168, 83, .35);
-  border-radius: 8px; padding: 1rem; line-height: 1.7; margin-top: 1rem;
+  border-radius: var(--r8); padding: 1rem; line-height: 1.7; margin-top: 1rem;
 }
 
 
@@ -145,7 +451,7 @@ input, select, textarea {
   &:focus-visible {
     outline: none;
     border-color: $color-terracotta;
-    box-shadow: 0 0 0 3px rgba(192, 78, 40, .15);
+    box-shadow: var(--ring-terra);
   }
 
   &:disabled {
@@ -157,7 +463,7 @@ input, select, textarea {
   // Angular Forms invalid state — only after the user has interacted
   &.ng-invalid.ng-touched {
     border-color: $color-danger;
-    &:focus-visible { box-shadow: 0 0 0 3px rgba(178, 59, 59, .18); }
+    &:focus-visible { box-shadow: var(--ring-danger); }
   }
 }
 
@@ -221,7 +527,7 @@ input[type='radio'] {
   white-space: nowrap;
   text-decoration: none;
 
-  color: #fff;
+  color: var(--white);
   background: $color-terracotta;
   border: none;
   border-radius: $r4;
@@ -242,10 +548,10 @@ input[type='radio'] {
   // the background without setting the foreground is the defect; they are one
   // decision.
   &:hover:not(:disabled) {
-    color: #fff;
+    color: var(--white);
     background: $color-terra-deep;
     transform: translateY(-1px);
-    box-shadow: 0 4px 14px rgba(192, 78, 40, .35);
+    box-shadow: var(--shadow-lift);
   }
 
   &:focus-visible {
@@ -530,16 +836,38 @@ input[type='file']:not([hidden]) {
 
     &:hover:not(.is-active) {
       background: $color-cream-2;
+      // ⚠️ `color` is NOT redundant here, and leaving it out made this button's
+      // own text invisible on hover — 1.17:1, white on cream.
+      //
+      // `:where(button):hover:not(:disabled)` in _spec.scss sets
+      // `color: #fff; background: --terra-deep`. `:where()` contributes ZERO
+      // specificity, so that rule is (0,2,0) — :hover plus :not(:disabled) —
+      // while this one is (0,3,0). This rule therefore wins the BACKGROUND and
+      // overrides it to cream… and, by saying nothing about `color`, leaves the
+      // global rule's white in place over it. The resting `.auth__role` colour
+      // is only (0,1,0) and loses.
+      //
+      // So: overriding a `:where(button):hover` background without overriding
+      // its colour is how a control ends up with invisible text in one state.
+      // Found by scripts/a11y-drive.mjs, which hovers every distinct control
+      // and reads the computed style — the resting state measures 15.6:1 and
+      // says nothing about this.
+      color: $color-ink;
       transform: none;
       box-shadow: none;
     }
 
     &.is-active {
-      color: #fff;
+      color: var(--white);
       background: $color-terracotta;
       border-color: $color-terracotta;
 
-      .auth__role-sub { color: rgba(255, 255, 255, .8); }
+      // .8 over --terra composites to #EFD9D3, which is 4.34:1 against the
+      // #AD4222 behind it — just under the 4.5 this size of text needs. .9
+      // gives 5.07:1 and keeps the sub-label quieter than the title, which is
+      // what the alpha is for. Going to solid white would pass and flatten the
+      // hierarchy instead.
+      .auth__role-sub { color: rgba(255, 255, 255, .9); }
     }
   }
 
@@ -680,7 +1008,7 @@ fieldset {
 
   // Ink is the landlord's, not ours.
   body {
-    background: #fff !important;
+    background: var(--white) !important;
     color: #000 !important;
   }
 

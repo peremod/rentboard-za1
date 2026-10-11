@@ -8,6 +8,7 @@ import {
 import { PaymentsService, RefundDue } from '../../../core/services/payments.service';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { PluralPipe } from '../../../shared/pipes/plural.pipe';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * Admin overview: platform counts, and account support.
@@ -19,7 +20,7 @@ import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 @Component({
   selector: 'app-admin-dashboard',
   standalone: true,
-  imports: [PluralPipe, RouterLink, DatePipe, LowerCasePipe, FormsModule, ZarCentsPipe],
+  imports: [PluralPipe, RouterLink, DatePipe, LowerCasePipe, FormsModule, ZarCentsPipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -128,7 +129,7 @@ import { PluralPipe } from '../../../shared/pipes/plural.pipe';
           <div class="stat-box"><div class="val">{{ s.users.suspended }}</div><div class="lbl">Suspended</div></div>
         </div>
       } @else if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       }
 
       @if (refunds().length) {
