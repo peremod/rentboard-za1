@@ -63,6 +63,75 @@ export function stripComments(src) {
 }
 
 /**
+ * The byte ranges of a named decorator literal within a component's source —
+ * `styles` or `template`.
+ *
+ * Generalised from `componentCssRanges`, which was the `styles` case, because
+ * `css-coverage-audit` needs the TEMPLATE range for the same reason: a class
+ * name shown as example markup in a doc comment is not a class the component
+ * uses, and telling the two apart means knowing where the literal is.
+ */
+export function literalRanges(src, key) {
+  const ranges = [];
+  const re = new RegExp(`\\b${key}\\s*:\\s*(\\[|\`)`, 'g');
+  let m;
+  while ((m = re.exec(src))) {
+    let i = m.index + m[0].length - 1;
+    const arr = src[i] === '[';
+    if (arr) i++;
+    let guard = 0;
+    while (guard++ < 50) {
+      const tick = src.indexOf('`', i);
+      if (tick === -1) break;
+      let j = tick + 1;
+      while (j < src.length && !(src[j] === '`' && src[j - 1] !== '\\')) j++;
+      ranges.push([tick + 1, j]);
+      i = j + 1;
+      if (!arr) break;
+      const next = src.slice(i).match(/^\s*([,\]])/);
+      if (!next || next[1] === ']') break;
+    }
+  }
+  return ranges;
+}
+
+/** Blank HTML comments inside a slice, preserving offsets. */
+export function blankHtmlComments(slice) {
+  const out = slice.split('');
+  let i = 0;
+  while (i < slice.length) {
+    if (slice.startsWith('<!--', i)) {
+      const end = slice.indexOf('-->', i + 4);
+      const stop = end === -1 ? slice.length : end + 3;
+      for (; i < stop; i++) if (slice[i] !== '\n') out[i] = ' ';
+      continue;
+    }
+    i++;
+  }
+  return out.join('');
+}
+
+/**
+ * A component's source with everything that is NOT on screen blanked, offsets
+ * preserved: JSDoc and `//` comments, and HTML comments inside the template.
+ *
+ * ⚠️ `css-coverage-audit` read the raw source and so counted class names shown
+ * as example markup in a doc comment as real usages. Phase J2's error-state
+ * component documents the three screens it replaced —
+ * `<p class="notices-empty" role="alert">` and two more — and the audit
+ * reported all three, plus `.link-button`, as classes used in a template and
+ * styled nowhere. Four false positives from one explanatory comment, in the
+ * gate whose whole job is to be trustworthy about missing rules.
+ */
+export function onScreenSource(src) {
+  let out = stripComments(src);
+  for (const [a, b] of literalRanges(src, 'template')) {
+    out = out.slice(0, a) + blankHtmlComments(src.slice(a, b)) + out.slice(b);
+  }
+  return out;
+}
+
+/**
  * The byte ranges of a component's `styles:` literal(s) within its own source.
  *
  * Ranges rather than the concatenated CSS, because the caller needs to know

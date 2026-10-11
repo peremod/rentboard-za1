@@ -27,7 +27,7 @@
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -201,6 +201,80 @@ for (const [label, file] of [
     /WHATSAPP_ENABLED/.test(src),
     `${label} reads the flag rather than deciding for itself`,
   );
+}
+
+// ── 5b. EVERY screen, not four of them ────────────────────────────────────
+//
+// ⚠️ The four files above are a hardcoded list, and that is the defect this
+// repo keeps shipping: a check structurally incapable of seeing the thing it
+// exists for. CLAUDE.md's rule is absolute — "Nothing on screen may promise a
+// WhatsApp message while it is off" — and it is a claim about EVERY template,
+// not about four of them.
+//
+// Swept on 11 October, while Phase J2 was rewriting two empty states that
+// happened to contain one each. Found: eight more screens promising a message
+// that is never sent, none of them in the list above, none of them visible to
+// any check in this repository. The two inside the elements that phase was
+// already editing were fixed; the rest are copy decisions across onboarding,
+// settings and the message screens, so they are BASELINED here — counted and
+// named on every run — rather than silently rewritten.
+//
+// A promise is a sentence that tells a person a message will arrive. A mention
+// is not: the privacy policy naming Meta as a processor, a `wa.me` link, the
+// close-account page listing "no WhatsApp messages" among what stops, and the
+// deferred code itself all stay. So this matches the PROMISE shapes and
+// excludes a file that reads the flag.
+console.log('\n── 5b. Every screen, swept ───────────────────────────────');
+
+const PROMISE = /(we send|we will send|we'll send|we will tell|also sent on|reach(es)? you on|sent to you on|used for whatsapp notification|go out on whatsapp)/i;
+
+const baselinePath = join(ROOT, 'scripts/whatsapp-promise-baseline.json');
+const promiseBaseline = existsSync(baselinePath)
+  ? JSON.parse(readFileSync(baselinePath, 'utf8')).files ?? {}
+  : {};
+
+const walkTs = (dir) =>
+  readdirSync(dir).flatMap((e) => {
+    const p = join(dir, e);
+    return statSync(p).isDirectory() ? walkTs(p) : [p];
+  });
+
+const promises = {};
+for (const file of walkTs(join(ROOT, 'frontend/src/app')).filter((f) => f.endsWith('.ts') && !f.endsWith('.spec.ts'))) {
+  const src = readFileSync(file, 'utf8');
+  if (!/WhatsApp/i.test(src)) continue;
+  // A file that reads the flag has already decided; it is not guessing.
+  if (/WHATSAPP_ENABLED/.test(src)) continue;
+  const rel = file.slice(join(ROOT, 'frontend/src/app/').length);
+  for (const line of src.split('\n')) {
+    const t = line.trim();
+    // Comments are not on screen.
+    if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue;
+    if (!/WhatsApp/i.test(t) || !PROMISE.test(t)) continue;
+    promises[rel] = (promises[rel] ?? 0) + 1;
+  }
+}
+
+const total = Object.values(promises).reduce((a, b) => a + b, 0);
+if (total === 0 && Object.keys(promiseBaseline).length === 0) {
+  // Nothing found and nothing expected: make sure the sweep is actually
+  // looking at something, or this reads green over an empty directory.
+  check(false, 'the sweep found no WhatsApp text at all — it is not reading the app');
+} else {
+  const over = Object.entries(promises).filter(([f, n]) => n > (promiseBaseline[f] ?? 0));
+  check(
+    over.length === 0,
+    over.length === 0
+      ? `no NEW on-screen WhatsApp promise (${total} baselined across ${Object.keys(promises).length} file(s))`
+      : `NEW on-screen WhatsApp promise: ${over.map(([f, n]) => `${f} (${n}, baseline ${promiseBaseline[f] ?? 0})`).join('; ')}`,
+  );
+  const carried = Object.entries(promises).filter(([f, n]) => n <= (promiseBaseline[f] ?? 0));
+  if (carried.length) {
+    console.log(`     ⚠️  ${total} promise(s) carried in scripts/whatsapp-promise-baseline.json:`);
+    for (const [f, n] of carried.sort()) console.log(`        ${f}  ×${n}`);
+    console.log('        Each tells somebody a message will arrive that is never sent.');
+    console.log('        docs/OUTSTANDING.md § 45 — copy decisions, not a refactor.');
+  }
 }
 
 // ── 6. What is deliberately NOT switched off ──────────────────────────────

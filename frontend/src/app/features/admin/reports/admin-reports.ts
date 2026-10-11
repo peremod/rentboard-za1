@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ReportsService } from '../../../core/services/reports.service';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /** Reasons that mean someone may be about to lose money. Surfaced first. */
 const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_real_listing'];
@@ -10,7 +11,7 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
 @Component({
   selector: 'app-admin-reports',
   standalone: true,
-  imports: [RouterLink, DatePipe, FormsModule],
+  imports: [RouterLink, DatePipe, FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -24,7 +25,7 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
       </div>
 
       @if (loading()) {
-        <p class="muted">Loading reports…</p>
+        <app-loading>Loading reports…</app-loading>
       } @else if (reports().length === 0) {
         <div class="empty-state">
           <h2>Nothing open</h2>

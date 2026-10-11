@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { LandlordNotesService } from '../../../core/services/landlord-notes.service';
 import { LandlordNote } from '../../../core/models/landlord-note.model';
 import { DialogService } from '../../../core/services/dialog.service';
+import { Loading } from '../loading/loading';
 
 /**
  * A landlord's private notes about one person — Phase 5e.
@@ -31,7 +32,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 @Component({
   selector: 'app-tenant-notes',
   standalone: true,
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="notes-block">
@@ -51,7 +52,7 @@ import { DialogService } from '../../../core/services/dialog.service';
           </p>
 
           @if (loading()) {
-            <p class="muted">Loading…</p>
+            <app-loading/>
           } @else {
             @if (notes().length === 0) {
               <p class="muted">Nothing written yet.</p>

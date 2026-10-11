@@ -19,6 +19,7 @@ import {
   AMENITY_LABELS, HouseholdCleanliness, HouseholdSchedule, HouseholdSocial,
 } from '../../core/models/room.model';
 import { environment } from '@env/environment';
+import { Loading } from '../../shared/components/loading/loading';
 
 /** Plain English, in a tenant's terms. `unstated` has no entry: it is never shown. */
 const HOUSEMATE_SENTENCE: Record<'professionals' | 'students' | 'mixed' | 'couples', string> = {
@@ -67,7 +68,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
 @Component({
   selector: 'app-room-detail',
   standalone: true,
-  imports: [NgOptimizedImage, DatePipe, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot, TranslatePipe],
+  imports: [NgOptimizedImage, DatePipe, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot, TranslatePipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="room-detail">
@@ -326,7 +327,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
         <section class="detail__section">
           <h2>What previous tenants said</h2>
           @if (loadingReviews()) {
-            <p class="muted">Loading reviews…</p>
+            <app-loading>Loading reviews…</app-loading>
           } @else {
             <app-review-list
               [reviews]="roomReviews()"
@@ -373,7 +374,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
           moment.
         </p>
       } @else {
-        <p>Loading…</p>
+        <app-loading/>
       }
     </div>
   `,
@@ -450,7 +451,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
     .room-detail__apply textarea { width: 100%; padding: .6rem; border: 1.5px solid var(--border); border-radius: 6px; margin-bottom: .6rem; font-family: inherit; }
     .room-detail__apply button { padding: .6rem 1.2rem; border-radius: 6px; border: none; background: var(--terra); color: var(--white); font-weight: 700; cursor: pointer; }
     .room-detail__apply button:disabled { opacity: .5; }
-    .error { color: #D63B3B; font-size: .82rem; margin-bottom: .5rem; }
+    .error { color: var(--danger); font-size: .82rem; margin-bottom: .5rem; }
     .muted { color: var(--slate); }
   `],
 })

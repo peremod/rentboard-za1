@@ -3,6 +3,9 @@ import { applicationState, stateClass } from '../../../core/models/state.model';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ApplicationsService } from '../../../core/services/applications.service';
+import { Loading } from '../../../shared/components/loading/loading';
+import { ErrorState } from '../../../shared/components/error-state/error-state';
+import { EmptyState } from '../../../shared/components/empty-state/empty-state';
 import {
   ApplicantInboxRow, ApplicantInboxFilters, ApplicationStatus,
 } from '../../../core/models/application.model';
@@ -42,7 +45,7 @@ import {
 @Component({
   selector: 'app-applicants-inbox',
   standalone: true,
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, Loading, ErrorState, EmptyState],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <section class="dash-section">
@@ -118,13 +121,12 @@ import {
              landlord nobody wants their room, which is the one thing this
              screen must not get wrong. Same rule as the notices screen. -->
         @if (failed()) {
-          <p class="ai-empty" role="alert">
+          <app-error-state (retry)="load()">
             We could not load your applicants just now — this is a problem at our
             end, not an empty list.
-            <button type="button" class="link-button" (click)="load()">Try again</button>.
-          </p>
+          </app-error-state>
         } @else if (loading()) {
-          <p class="ai-empty">Loading…</p>
+          <app-loading/>
         } @else if (rows().length === 0) {
           @if (anyFilter()) {
             <p class="ai-empty">
@@ -134,11 +136,16 @@ import {
               </button>.
             </p>
           } @else {
-            <p class="ai-empty">
+            <!-- ⚠️ This used to say "we will tell you on WhatsApp and in your
+                 notices when one does, so you do not have to keep checking."
+                 WHATSAPP_ENABLED is false — so the sentence promised a message
+                 that is never sent AND told a landlord they need not check,
+                 which is the worse half. Notices are real; WhatsApp is not,
+                 while the flag is off. -->
+            <app-empty-state>
               Nobody has applied yet. Applications arrive here from your published
-              rooms — and we will tell you on WhatsApp and in your notices when
-              one does, so you do not have to keep checking.
-            </p>
+              rooms, and a notice appears in your account when one does.
+            </app-empty-state>
           }
         }
 
@@ -236,10 +243,6 @@ import {
     .chan { font-size: .65rem; font-weight: 700; padding: .1rem .4rem; border-radius: 10px; white-space: nowrap; }
     .chan--in_app { background: var(--cream2); color: var(--ink2); }
     .chan--whatsapp { background: rgba(37,211,102,.14); color: #0F7A3D; }
-    .link-button {
-      background: none; border: none; padding: 0; font: inherit;
-      color: var(--terra); text-decoration: underline; cursor: pointer;
-    }
     @media (max-width: 480px) {
       .ai-filters label, .ai-filters select { width: 100%; }
       .ai-row__actions { width: 100%; }

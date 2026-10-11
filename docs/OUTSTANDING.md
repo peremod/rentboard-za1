@@ -3169,6 +3169,183 @@ gate with six false positives gets switched off.
 Instances nine through twelve of the backtick trap all occurred in this phase
 and all were named by the lint before any build.
 
+## 45. ⚠️ NINE on-screen promises of a WhatsApp message that is never sent — YOUR DECISION
+
+**Found, gated, and NOT fixed. Five screens, nine sentences. This needs a copy
+decision from you, not a refactor from me.**
+
+CLAUDE.md is unconditional: *"Nothing on screen may promise a WhatsApp message
+while it is off."* `WHATSAPP_ENABLED` is `false` on both the API and the
+browser. These sentences are on screen anyway:
+
+| File | × | What it says |
+|---|---:|---|
+| `shared/components/walkthrough/walkthrough.ts` | 4 | two onboarding cards **titled** "Messages reach you on WhatsApp too", plus "When somebody writes to you we send it to WhatsApp as well, and your reply…" and "…us on WhatsApp and finish it later" |
+| `features/account/messages/messages.ts` | 2 | the screen hint: "Messages reach you on WhatsApp too, and a reply there lands back in the same conversation", and "…go out on WhatsApp. If you answer in WhatsApp instead, that answer shows up here too" |
+| `features/account/settings/account-settings.ts` | 1 | the phone field's hint: "Used for WhatsApp notifications" |
+| `features/auth/register-phone/register-phone.ts` | 1 | "We send a 6-digit code to this number on WhatsApp" |
+| `features/tenant/passport-verify/passport-verify.ts` | 1 | "We send them one WhatsApp asking two questions" |
+
+**Why I have not rewritten them.** Four of the nine are onboarding card
+titles and bodies, and one is the copy that explains what the messages screen
+is *for*. Rewriting those is a product decision about what the product claims
+to be — and WhatsApp-first is the stated goal, merely paused for cost, so the
+wording you want while it is off is not something I should pick. The two that
+sat inside empty states Phase J2 was already rewriting were fixed (see below);
+these nine are named, counted and held.
+
+**What each would have to say instead** — if you want the conservative version:
+
+- the walkthrough cards: drop both, or retitle to "Messages live in your
+  account" and describe the notices screen, which is real.
+- the messages hint: "A thread starts when somebody applies for your room, or
+  you apply for theirs." Stop there.
+- the settings hint: "Used to verify your number and to sign in." (Note the
+  sign-in path is itself refused with a 503 while the flag is off — § 29.)
+- `register-phone`: that whole route is already gated by `auth.routes.ts`
+  reading the flag, so the copy may be unreachable. **Worth confirming before
+  editing it** — I have not proven it either way.
+- `passport-verify`: the referee flow. Admin-initiated, and the admin screen
+  says "Send WhatsApp request", so this one may be describing a real action an
+  operator takes manually. Also unproven.
+
+### ⚠️ The drive that guards this rule could not see any of them
+
+`scripts/whatsapp-off-drive.mjs` checked **four hardcoded files** —
+`login.ts`, `register.ts`, `auth.routes.ts`, `home.ts` — and asserted each
+read the flag. That is a check structurally incapable of seeing the thing it
+exists for, which is this repo's signature defect: a nav audit that could not
+see a dead link, nineteen `@Throttle` decorators with no guard, a
+`documentDeletedAt` that deleted nothing.
+
+The rule is a claim about **every template**. The drive now sweeps every
+component, matches promise-shaped sentences, skips comments, and skips any file
+that reads the flag (a file that reads it has already decided). The nine are
+carried in `scripts/whatsapp-promise-baseline.json` — counted and named on
+every run, with the count only allowed to go down.
+
+**Proven able to fail**: a line reading "We send you a WhatsApp when this
+changes." added to `properties.ts` → `❌ NEW on-screen WhatsApp promise:
+features/landlord/properties/properties.ts (1, baseline 0)`. Reverted.
+
+**What is deliberately not swept**: the privacy policy naming Meta as a
+processor, every `wa.me` link, the close-account page listing "no WhatsApp
+messages" among what stops, and the deferred backend code. Those are mentions,
+not promises, and CLAUDE.md protects the `wa.me` links explicitly.
+
+### Two were fixed, because Phase J2 was editing those exact lines
+
+- **`notices.ts`**: the empty state ended "— and on WhatsApp if we can reach
+  you there." Now: "This screen is the record — nothing is sent anywhere else."
+- **`applicants-inbox.ts`**: "we will tell you on WhatsApp and in your notices
+  when one does, **so you do not have to keep checking**." The second half is
+  the worse half — it told a landlord to stop checking a screen that is the
+  only place the information appears. Now: "a notice appears in your account
+  when one does."
+
+## 46. Loading, empty and error were thirty-eight paragraphs — Phase J2
+
+**Fixed.** Three components, `scripts/feedback-lint.mjs` is the gate.
+
+### What was wrong
+
+§G5 said there was "no system, so the twentieth screen will invent a
+twenty-first phrasing". Counted, the copy was *already* consistent — 23 of the
+38 loading states were the identical paragraph. The real defect was different
+and worse:
+
+**⚠️ Not one of the 38 was announced.** A paragraph replaced by content when a
+request lands is silent to a screen reader: no `role`, no `aria-live`, so
+nothing says a screen is busy and nothing says it has finished. There are 81
+live regions in this app; 68 are `role="alert"` on field errors and exactly 11
+paragraphs carry `role="status"`, none of them a loading state in a template.
+**`axe` does not flag a missing live region, so `a11y-drive` has never
+reported this and never could.**
+
+**Three screens used ONE element for three states.** `notices`, `messages` and
+`applicants-inbox` each had `<p class="{notices,msg,ai}-empty" role="alert">`
+doing the error, the loading state *and* the empty state. Two consequences:
+"Loading…" was announced as an **alert**, the politeness level reserved for
+something going wrong; and "we could not reach the server" looked exactly like
+"you have nothing" — which on an applicants screen means a landlord concludes
+**nobody applied**. The screens' own comments say "Three states, not two", and
+the markup then used one element for all three.
+
+**The whole-screen error had no error styling at all** — muted body text, the
+same defect `.form-error` had before `css-coverage-audit` found it.
+
+### What shipped
+
+- **`<app-loading>`** — `role="status" aria-live="polite"`, with `<ng-content>`
+  **fallback content** so the ten screens with better wording keep it. 38 call
+  sites in 28 components.
+- **`<app-error-state>`** — `role="alert"`, a `retry` output, the state
+  vocabulary's edge treatment, and `var(--danger)`.
+- **`<app-empty-state>`** — deliberately thin. §G5 says the copy is "genuinely
+  better than most" and it is, so the copy stays projected; what the component
+  adds is a slot for the ACTION, which several empty states lacked entirely.
+
+### ⚠️ `--danger` did not exist, and eight components had each typed a worse red
+
+`$color-danger: #B23B3B` has been in `_variables.scss` from the start and is
+**5.48:1** on `--cream`. But an SCSS variable is invisible to an inline
+`styles:` block — the audit's §H2 finding — so eight components typed a red
+from memory and every one of them landed on `#D63B3B`: **4.32:1 on `--cream`,
+3.96:1 on `--cream2`**, at .82rem. Eight independent contrast failures caused
+by a token the components could not reach.
+
+`--danger` is now a custom property with the same value, and all eight say
+`var(--danger)`. Adding the token immediately made the gate see a ninth
+literal (`#B23B3B` in `tenancy-lifecycle.ts`) that had been invisible because
+nothing matched it — defining a token is what makes its bypasses visible.
+
+### `.link-button` was declared in four component scopes and nowhere global
+
+The `.btn-danger` defect again, which `css-coverage-audit`'s own header
+records. Four identical bodies in `close-account`, `messages`, `notices` and
+`applicants-inbox`; no global rule. So the fifth component to write
+`class="link-button"` got an unstyled `<button>` — default chrome, default
+padding, in the middle of a sentence. Phase J2's error-state was that fifth,
+and the audit named it on the first run. Now global, once, with the four copies
+deleted.
+
+### ⚠️ And two gates had false positives of their own
+
+- **`css-coverage-audit` read class names out of COMMENTS.** The error-state
+  component documents the three screens it replaced, including
+  `<p class="notices-empty" role="alert">`, and the audit reported
+  `.notices-empty`, `.msg-empty`, `.ai-empty` and `.link-button` as used and
+  unstyled. Four false positives from one explanatory comment, in the gate
+  whose entire job is to be trustworthy about missing rules. It now reads
+  `onScreenSource()` — JSDoc, `//` comments and HTML comments inside the
+  template blanked, offsets preserved. Verified still able to fail: a real bare
+  class (`.err--loud`) is still caught.
+- **`feedback-lint`'s own first assertion could not fail.** It checked that the
+  loading component carries `role="status"` by searching the whole file — and
+  the component's header *explains* why it carries `role="status"`, so the
+  check matched its own documentation. Verified by deleting the attribute: the
+  lint stayed green. It now strips comments first, and deleting the attribute
+  produces two failures.
+
+### The gate
+
+`scripts/feedback-lint.mjs`, in `npm run audit`, CI **and the pre-commit hook**.
+Three reintroductions, each reverted: a screen writing its own loading state
+(named with file:line and the tag); the loading component losing `role="status"`
+and `aria-live`; a component declaring a feedback treatment itself (named with
+the properties it set). Plus two vacuous-pass guards: no loading component on
+disk, and nothing using the three components, both exit 2.
+
+### The pre-commit hook now runs the four fast gates
+
+`template-literal-lint`, `token-lint`, `state-lint` and `feedback-lint`:
+**0.516s for all of them**, measured. None needs a build, an API or a browser.
+
+The backtick trap is why. It has now happened **thirteen times** in this
+repository — five of them on 11 October alone, in the phases that wrote and
+widened the lint for it. A note in CLAUDE.md did not stop it and a CI job
+reports it ten minutes later; the hook reports it at the moment it is written.
+
 ## 41. A contrast gate that is claimed in a comment and does not exist
 
 **Not written. Logged so it stops being asserted in prose.**
@@ -3339,6 +3516,9 @@ node scripts/token-render-drive.mjs      # 51 checks — Phase H. The fourteen
                                          # borders that var(--line) silently
                                          # dropped, measured as PAINTED at
                                          # 360 / 390 / 768 / 1280
+node scripts/feedback-lint.mjs           # Phase J2. Loading, empty and error
+                                         # are three components, and the
+                                         # loading state is announced
 node scripts/state-lint.mjs              # Phase J1. Five meanings, one
                                          # definition; no component declares
                                          # the treatment itself. No API, no

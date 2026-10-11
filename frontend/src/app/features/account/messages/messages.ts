@@ -5,6 +5,8 @@ import { AuthService } from '../../../core/services/auth.service';
 import { MessagesService } from '../../../core/services/messages.service';
 import { MessageThreadSummary } from '../../../core/models/message.model';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
+import { Loading } from '../../../shared/components/loading/loading';
+import { ErrorState } from '../../../shared/components/error-state/error-state';
 
 /**
  * Your messages — Phase 7c.
@@ -42,7 +44,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 @Component({
   selector: 'app-messages',
   standalone: true,
-  imports: [MessageThread, DatePipe, ScreenHint],
+  imports: [MessageThread, DatePipe, ScreenHint, Loading, ErrorState],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="messages" heading="Every conversation, in one place">
@@ -64,13 +66,12 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
              somebody nobody has written to them, which is exactly the wrong
              thing to say when the request simply did not come back. -->
         @if (failed()) {
-          <p class="msg-empty" role="alert">
+          <app-error-state (retry)="load()">
             We could not load your messages just now — this is a problem at our
             end, not an empty inbox.
-            <button type="button" class="link-button" (click)="load()">Try again</button>.
-          </p>
+          </app-error-state>
         } @else if (loading()) {
-          <p class="msg-empty">Loading…</p>
+          <app-loading/>
         } @else if (threads().length === 0) {
           <p class="msg-empty">
             No conversations yet. A message is always about one application, so a
@@ -213,10 +214,6 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
       border-radius: 8px; color: #3A3228;
     }
     .chan-note { margin: .4rem 0 0; font-size: .72rem; color: var(--slate); line-height: 1.5; }
-    .link-button {
-      background: none; border: none; padding: 0; font: inherit;
-      color: var(--terra); text-decoration: underline; cursor: pointer;
-    }
   `,
 })
 export class MessagesInbox implements OnInit {

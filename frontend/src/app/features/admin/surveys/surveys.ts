@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '@env/environment';
+import { Loading } from '../../../shared/components/loading/loading';
 
 interface AggregateQuestion {
   id: string;
@@ -58,11 +59,12 @@ interface SurveyAggregate {
 @Component({
   selector: 'app-admin-surveys',
   standalone: true,
+  imports: [Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
       @if (loading()) {
-        <p class="muted">Loading results…</p>
+        <app-loading>Loading results…</app-loading>
       } @else if (error()) {
         <p class="field-error" role="alert">{{ error() }}</p>
       } @else if (data(); as d) {

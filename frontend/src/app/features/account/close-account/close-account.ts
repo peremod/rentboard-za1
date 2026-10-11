@@ -226,12 +226,8 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
        affects every button in the app and is not this phase's to change. */
     .ca-paused .btn, .dash-section > .btn { min-height: 44px; }
     .btn-danger {
-      background: #D63B3B; color: var(--white); border: none; min-height: 44px;
+      background: var(--danger); color: var(--white); border: none; min-height: 44px;
       &:disabled { opacity: .5; cursor: not-allowed; }
-    }
-    .link-button {
-      background: none; border: none; padding: 0; font: inherit;
-      color: var(--terra); text-decoration: underline; cursor: pointer;
     }
     @media (max-width: 480px) {
       .ca-form, .ca-lead, .ca-list { max-width: none; }

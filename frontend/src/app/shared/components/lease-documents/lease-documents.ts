@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { LeaseDocumentsService } from '../../../core/services/lease-documents.service';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { DialogService } from '../../../core/services/dialog.service';
+import { Loading } from '../loading/loading';
 import {
   LEASE_DOC_KIND_LABELS, LeaseDocument, LeaseDocumentKind,
 } from '../../../core/models/lease-document.model';
@@ -43,7 +44,7 @@ function humanSize(bytes?: number | null): string {
 @Component({
   selector: 'app-lease-documents',
   standalone: true,
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dash-section" id="lease-documents">
@@ -62,7 +63,7 @@ function humanSize(bytes?: number | null): string {
       </p>
 
       @if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       } @else {
 
         @if (docs().length === 0) {

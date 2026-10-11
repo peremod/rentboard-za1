@@ -9,6 +9,7 @@ import { PublicStorefront } from '../../core/models/storefront.model';
 import { ZarCentsPipe } from '../../shared/pipes/zar-cents.pipe';
 import { PluralPipe } from '../../shared/pipes/plural.pipe';
 import { SeoService } from '../../core/services/seo.service';
+import { Loading } from '../../shared/components/loading/loading';
 
 /**
  * A landlord's public page — Phase 5b, carrying 5h's badges.
@@ -42,11 +43,11 @@ import { SeoService } from '../../core/services/seo.service';
 @Component({
   selector: 'app-storefront',
   standalone: true,
-  imports: [DatePipe, RouterLink, ZarCentsPipe, PluralPipe, NgOptimizedImage],
+  imports: [DatePipe, RouterLink, ZarCentsPipe, PluralPipe, NgOptimizedImage, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading()) {
-      <div class="store-wrap"><p class="muted">Loading…</p></div>
+      <div class="store-wrap"><app-loading/></div>
     } @else if (notFound()) {
       <div class="store-wrap">
         <h1>No such page</h1>

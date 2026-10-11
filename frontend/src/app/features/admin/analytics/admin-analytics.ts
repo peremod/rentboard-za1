@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 
 import { AdminService, Funnels, ContentSignals, Growth } from '../../../core/services/admin.service';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * UX measurement, aggregate only.
@@ -13,6 +14,7 @@ import { AdminService, Funnels, ContentSignals, Growth } from '../../../core/ser
 @Component({
   selector: 'app-admin-analytics',
   standalone: true,
+  imports: [Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -180,7 +182,7 @@ import { AdminService, Funnels, ContentSignals, Growth } from '../../../core/ser
           </div>
         </section>
       } @else if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       }
 
       @if (signals(); as sig) {

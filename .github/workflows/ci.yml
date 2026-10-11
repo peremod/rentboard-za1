@@ -170,6 +170,19 @@ jobs:
         # Reads source, so it does not depend on the build above.
         run: node scripts/state-lint.mjs
 
+      - name: Loading, empty and error — three components, announced
+        if: ${{ !cancelled() }}
+        # 38 loading states in 28 components, none of them announced: a
+        # paragraph replaced by content when a request lands is silent to a
+        # screen reader, and axe does not flag a missing live region so the
+        # accessibility drive could never report it. Three screens used ONE
+        # element for the error, the loading state AND the empty state, with
+        # role="alert" on it — so "Loading…" was announced as an alert and "we
+        # could not reach the server" looked exactly like "you have nothing",
+        # which on an applicants screen means a landlord concludes nobody
+        # applied.
+        run: node scripts/feedback-lint.mjs
+
       - name: Inline template and styles literals — no stray backtick
         if: ${{ !cancelled() }}
         # A backtick inside a component's inline `template:` or `styles:`

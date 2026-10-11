@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../core/services/auth.service';
 import { MessagesService } from '../../../core/services/messages.service';
 import { Message } from '../../../core/models/message.model';
+import { Loading } from '../loading/loading';
 
 /**
  * Reusable conversation thread — embedded in the tenant dashboard (per
@@ -19,13 +20,13 @@ import { Message } from '../../../core/models/message.model';
 @Component({
   selector: 'app-message-thread',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="thread">
       <div class="thread__messages">
         @if (loading()) {
-          <p class="muted">Loading conversation…</p>
+          <app-loading>Loading conversation…</app-loading>
         } @else if (messages().length === 0) {
           <p class="muted">No messages yet — say hello 👋</p>
         } @else {
@@ -70,7 +71,7 @@ import { Message } from '../../../core/models/message.model';
     .thread__composer button:disabled { opacity: .5; cursor: not-allowed; }
     .thread__closed { margin: 0; padding: .6rem .7rem; font-size: .75rem; color: var(--slate);
                       border-top: 1px solid var(--border); background: #FDFAF5; line-height: 1.5; }
-    .thread__error { margin: 0; padding: .5rem .7rem; font-size: .75rem; color: #D63B3B;
+    .thread__error { margin: 0; padding: .5rem .7rem; font-size: .75rem; color: var(--danger);
                      border-top: 1px solid var(--border); background: rgba(214,59,59,.06); }
   `],
 })

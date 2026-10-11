@@ -34,6 +34,23 @@
    * assuming. A smaller logo size is a contrast failure, not a styling tweak.
    */
   --logo-ma: #C4522C;
+
+  /**
+   * Danger, reachable from a component — Phase J2.
+   *
+   * ⚠️ `$color-danger: #B23B3B` has existed in `_variables.scss` since the
+   * start and is correct: 5.48:1 on `--cream`, 5.03:1 on `--cream2`. But an
+   * SCSS variable is invisible to a component's inline `styles:` block — §H2's
+   * finding — so `photo-upload`, `create-room` and `room-detail` each typed a
+   * red from memory and all three landed on `#D63B3B`, which is **4.32:1 on
+   * cream and 3.96:1 on cream2** at .82rem. Three independent contrast
+   * failures, caused by a token the components could not reach.
+   *
+   * Same value as `$color-danger`, as a custom property. The duplicate exists
+   * because SCSS and CSS variables cannot see each other; `token-lint.mjs`
+   * allows it because a `--x:` definition is where a literal belongs.
+   */
+  --danger: #B23B3B;
 }
 
 /**
@@ -75,6 +92,33 @@
    box to carry placement with — spacing around it belongs to the thing placing
    it, which is this footer column. Was `.footer-logo { margin-bottom: .75rem }`. */
 .footer-brand { margin-bottom: .75rem; }
+
+/**
+ * A button that reads as a link — globally, once.
+ *
+ * ⚠️ It was declared in FOUR component scopes with identical bodies
+ * (close-account, messages, notices, applicants-inbox) and nowhere global. So
+ * any fifth component writing `class="link-button"` got an unstyled
+ * <button>: default chrome, default padding, in the middle of a sentence.
+ * Phase J2's error-state component was that fifth, and css-coverage-audit
+ * named it immediately — which is the same finding as `.btn-danger`, used by
+ * seven components and written in two, that the audit's own header records.
+ *
+ * Here rather than in `_spec.scss` because it is an app-only addition, and
+ * global rather than in `error-state` because three other screens use it for
+ * the same thing: a real <button> that must not look like one, so an action
+ * inside a sentence is reachable by keyboard without being a div with a click
+ * handler.
+ */
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--terra);
+  text-decoration: underline;
+  cursor: pointer;
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // STATE VOCABULARY — one treatment per meaning, defined here and nowhere else

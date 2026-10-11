@@ -16,6 +16,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { TenantReferences } from '../../../core/models/review.model';
 import { applicationState, stateClass } from '../../../core/models/state.model';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * Applicant manager — one room's full applicant list, with shortlist/accept/
@@ -26,7 +27,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 @Component({
   selector: 'app-applicants',
   standalone: true,
-  imports: [DatePipe, FormsModule, RouterLink, MessageThread, ReviewList, TenantNotes, ScreenHint],
+  imports: [DatePipe, FormsModule, RouterLink, MessageThread, ReviewList, TenantNotes, ScreenHint, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-applicants" heading="Everyone who applied, across every room">
@@ -50,7 +51,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
       </p>
 
       @if (loading()) {
-        <p>Loading…</p>
+        <app-loading/>
       } @else if (applications().length === 0) {
         <p class="muted">No applications yet for this room.</p>
       } @else {
@@ -242,7 +243,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 
                   @if (openRefs() === app.id) {
                     @if (refsLoading()) {
-                      <p class="muted">Loading…</p>
+                      <app-loading/>
                     } @else if (refsError()) {
                       <p class="field-error">{{ refsError() }}</p>
                     } @else if (refs(); as data) {
@@ -336,7 +337,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     .viewing-form .field-hint { font-weight: 400; line-height: 1.6; }
     .viewing-form__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; }
     .applicant-card__actions .accept { background: var(--sage); color: var(--white); border: none; }
-    .applicant-card__actions .reject { background: #D63B3B; color: var(--white); border: none; }
+    .applicant-card__actions .reject { background: var(--danger); color: var(--white); border: none; }
 
     /* Mobile — PRE-LAUNCH-CHECKLIST.md #9.
        480px, not 400px: the breakpoints this codebase uses are 900/768/480

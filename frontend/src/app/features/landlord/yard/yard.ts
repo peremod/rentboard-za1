@@ -35,6 +35,7 @@ import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 import { LeasePanel } from '../../../shared/components/lease-panel/lease-panel';
 import { LeaseDocuments } from '../../../shared/components/lease-documents/lease-documents';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * The yard dashboard.
@@ -63,7 +64,7 @@ const UNGROUPED = 'ungrouped';
 @Component({
   selector: 'app-yard',
   standalone: true,
-  imports: [PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink, ZarCentsPipe, LeasePanel, LeaseDocuments, ScreenHint],
+  imports: [PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink, ZarCentsPipe, LeasePanel, LeaseDocuments, ScreenHint, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-property" heading="Everything about this address">
@@ -72,7 +73,7 @@ const UNGROUPED = 'ungrouped';
 
 
       @if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       } @else if (propertyId() && !scoped()) {
         <!-- A property id that is not this landlord's, or has been deleted.
              Said as what it is, rather than drawn as an empty screen. -->
@@ -425,7 +426,7 @@ const UNGROUPED = 'ungrouped';
               @if (openExpenses() === group.property.id) {
                 <div [id]="'expenses-' + group.property.id">
                 @if (loadingExpenses()) {
-                  <p class="muted">Loading…</p>
+                  <app-loading/>
                 } @else {
                   @if (expenses().length === 0) {
                     <p class="muted">Nothing recorded yet. Add the municipal bill, a repair, anything you paid for.</p>

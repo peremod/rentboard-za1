@@ -141,7 +141,7 @@ import { Tenancy } from '../../../core/models/tenancy.model';
     .tl__note { margin: .6rem 0 0; font-size: .75rem; line-height: 1.5; color: #6B6055; }
     .tl__error {
       margin: .6rem 0 0; padding: .5rem .6rem; font-size: .8rem; line-height: 1.5;
-      color: #B23B3B; background: rgba(178,59,59,.07);
+      color: var(--danger); background: rgba(178,59,59,.07);
       border: 1.5px solid rgba(178,59,59,.35); border-radius: 4px;
     }
     /* Breakpoints here are 900/768/480. At the narrowest the two buttons go

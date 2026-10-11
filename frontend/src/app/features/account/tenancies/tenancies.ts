@@ -5,6 +5,7 @@ import { TenancyArchiveService } from '../../../core/services/tenancy-archive.se
 import { ArchiveListRow, ArchiveRecord } from '../../../core/models/tenancy-archive.model';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * Lettings that are over — Phase F.
@@ -49,7 +50,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 @Component({
   selector: 'app-account-tenancies',
   standalone: true,
-  imports: [DatePipe, RouterLink, ZarCentsPipe, ScreenHint],
+  imports: [DatePipe, RouterLink, ZarCentsPipe, ScreenHint, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-screen-hint key="account-tenancies" heading="Everywhere you have let or rented">
@@ -57,7 +58,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
     </app-screen-hint>
 
     @if (loading()) {
-      <p class="muted">Loading…</p>
+      <app-loading/>
     } @else if (error()) {
       <div class="field-error" role="alert">{{ error() }}</div>
     } @else if (!rows().length) {
@@ -331,7 +332,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
                     <div class="field-error" role="alert">{{ detailError() }}</div>
                   </div>
                 } @else {
-                  <div class="arc-detail"><p class="muted">Loading the record…</p></div>
+                  <div class="arc-detail"><app-loading>Loading the record…</app-loading></div>
                 }
               }
             </li>

@@ -8,6 +8,7 @@ import { Tenancy } from '../../../core/models/tenancy.model';
 import { LeaseDocuments } from '../../../shared/components/lease-documents/lease-documents';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/tenancy-lifecycle';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * The tenant's side of rent tracking.
@@ -66,7 +67,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
 @Component({
   selector: 'app-tenant-rent',
   standalone: true,
-  imports: [DatePipe, NgTemplateOutlet, FormsModule, ZarCentsPipe, LeaseDocuments, ScreenHint, TenancyLifecycle],
+  imports: [DatePipe, NgTemplateOutlet, FormsModule, ZarCentsPipe, LeaseDocuments, ScreenHint, TenancyLifecycle, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="tenant-rent" heading="This is your landlord's record, and your answer to it">
@@ -86,7 +87,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
       </div>
 
       @if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       } @else if (!current().length && !past().length) {
         <div class="empty-state">
           <!-- h2: this replaces the page's whole content, so it follows the
@@ -254,7 +255,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
             </div>
           }
         } @else {
-          <p class="muted">Loading rent record…</p>
+          <app-loading>Loading rent record…</app-loading>
         }
       </ng-template>
   `,

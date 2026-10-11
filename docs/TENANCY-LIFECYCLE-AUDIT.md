@@ -1180,6 +1180,75 @@ of `landlord-trust__state--ok`, which turned out to be a real finding anyway:
 those two modifiers were in the CSS-coverage baseline as styled nowhere, and
 are now deleted.
 
+#### J2 — loading, empty and error. **Done, and §G5 named the wrong defect.**
+
+§G5 said "the copy is good… but there is no system, so the twentieth screen
+will invent a twenty-first phrasing." Counted, the copy was *already*
+consistent — 23 of 38 loading states were the identical paragraph. The real
+defect was elsewhere:
+
+**⚠️ Not one of the 38 was announced.** No `role`, no `aria-live`, so a
+paragraph replaced by content when a request lands is silent to a screen
+reader. 81 live regions exist in this app; 68 are `role="alert"` on field
+errors and exactly 11 paragraphs carry `role="status"`, none of them a loading
+state in a template. **`axe` does not flag a missing live region**, so
+`a11y-drive` has never reported this and never could — a gap in the gate, not
+in the screens.
+
+**Three screens used ONE element for three states.** `notices`, `messages` and
+`applicants-inbox` each had `<p class="{notices,msg,ai}-empty" role="alert">`
+doing error, loading *and* empty. So "Loading…" was announced as an **alert**,
+and "we could not reach the server" looked exactly like "you have nothing" —
+which on an applicants screen means a landlord concludes nobody applied. Each
+of those screens carries a comment reading "Three states, not two"; the markup
+then used one element for all three.
+
+Three components now: `<app-loading>` (`role="status"`, `aria-live="polite"`,
+`ng-content` fallback so the ten screens with better wording keep it),
+`<app-error-state>` (`role="alert"`, a `retry` output, the vocabulary's edge,
+`var(--danger)`), and `<app-empty-state>` — deliberately thin, because §G5 is
+right that the copy is good, so what it adds is a slot for the ACTION several
+empty states lacked.
+
+**⚠️ `--danger` did not exist, and eight components had each typed a worse
+red.** `$color-danger: #B23B3B` has been in `_variables.scss` from the start at
+5.48:1 on `--cream`; an SCSS variable is invisible to an inline `styles:` block
+— §H2 — so eight components typed `#D63B3B`: **4.32:1 on cream, 3.96:1 on
+cream2** at .82rem. Eight contrast failures caused by a token they could not
+reach. This is §H2's finding with a measurable cost attached.
+
+`.link-button` was declared in four component scopes and nowhere global — the
+`.btn-danger` defect `css-coverage-audit`'s own header records. The fifth
+component to use it got an unstyled `<button>` mid-sentence, and the audit
+named it on the first run.
+
+**Proof — done.** `scripts/feedback-lint.mjs`, three reintroductions and two
+vacuous-pass guards, all reverted. And two gates had false positives of their
+own: `css-coverage-audit` read class names out of **comments** (four, from the
+error component's own documentation of the screens it replaced), and
+`feedback-lint`'s first assertion matched its own doc comment, so it stayed
+green with `role="status"` deleted. Both fixed; both verified still able to
+fail.
+
+The four source-only gates now run in the **pre-commit hook** — 0.516s
+measured, no build, no API, no browser. The backtick trap has happened
+thirteen times, five on 11 October alone, in the phases that wrote the lint
+for it.
+
+#### ⚠️ J2 also found nine on-screen WhatsApp promises, and the drive for them was blind
+
+`CLAUDE.md`: *"Nothing on screen may promise a WhatsApp message while it is
+off."* `WHATSAPP_ENABLED` is false. Nine sentences across five screens say it
+anyway — four of them onboarding card titles and bodies, one the copy
+explaining what the messages screen is for.
+
+`whatsapp-off-drive.mjs` checked **four hardcoded files**. The rule is a claim
+about every template. It now sweeps all of them. Two promises inside the empty
+states this phase was rewriting were fixed; the other nine are baselined and
+**handed to the user** — rewriting onboarding copy is a decision about what the
+product claims to be, and WhatsApp-first is the stated goal, paused for cost.
+`docs/OUTSTANDING.md` § 45.
+
 #### ⚠️ J1 also retired a phantom control I had been quoting
 
 `_spec.scss`'s header said *"DO NOT hand-edit. This is a direct copy… so it

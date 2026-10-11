@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AdminService } from '../../../core/services/admin.service';
 import { FLAG_REASONS, OpenTenancyFlag, TenancyFlagReason } from '../../../core/models/tenancy.model';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * The post-tenancy dispute queue.
@@ -27,7 +28,7 @@ import { FLAG_REASONS, OpenTenancyFlag, TenancyFlagReason } from '../../../core/
 @Component({
   selector: 'app-admin-disputes',
   standalone: true,
-  imports: [DatePipe, LowerCasePipe, FormsModule, RouterLink],
+  imports: [DatePipe, LowerCasePipe, FormsModule, RouterLink, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <div class="insight-banner">
@@ -41,7 +42,7 @@ import { FLAG_REASONS, OpenTenancyFlag, TenancyFlagReason } from '../../../core/
       </div>
 
       @if (loading()) {
-        <p class="muted">Loading the queue…</p>
+        <app-loading>Loading the queue…</app-loading>
       } @else if (error()) {
         <p class="field-error" role="alert">{{ error() }}</p>
       } @else if (flags().length === 0) {

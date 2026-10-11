@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ServiceDirectoryService } from '../../../core/services/service-directory.service';
+import { Loading } from '../../../shared/components/loading/loading';
 import {
   SERVICE_LABELS, ServiceCategory, ServiceProvider, checksFor, whatsappLink,
 } from '../../../core/models/service-provider.model';
@@ -19,7 +20,7 @@ import {
 @Component({
   selector: 'app-landlord-services',
   standalone: true,
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule, DatePipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -64,7 +65,7 @@ import {
       </div>
 
       @if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       } @else if (providers().length === 0) {
         <div class="empty-state">
           <h2>Nobody listed yet</h2>

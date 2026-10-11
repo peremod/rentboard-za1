@@ -6,6 +6,7 @@ import { environment } from '@env/environment';
 import { StorefrontService } from '../../../core/services/storefront.service';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { MyStorefront } from '../../../core/models/storefront.model';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * The landlord's own view of their public page — Phase 5b.
@@ -28,7 +29,7 @@ import { MyStorefront } from '../../../core/models/storefront.model';
 @Component({
   selector: 'app-storefront-settings',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -42,7 +43,7 @@ import { MyStorefront } from '../../../core/models/storefront.model';
       </div>
 
       @if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       } @else if (store(); as s) {
 
         <section class="dash-section">

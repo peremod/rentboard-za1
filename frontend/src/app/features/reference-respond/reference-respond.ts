@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { VerificationService } from '../../core/services/verification.service';
 import { ReferenceRequestView } from '../../core/models/verification.model';
+import { Loading } from '../../shared/components/loading/loading';
 
 /**
  * A previous landlord answering a reference request.
@@ -25,12 +26,12 @@ import { ReferenceRequestView } from '../../core/models/verification.model';
 @Component({
   selector: 'app-reference-respond',
   standalone: true,
-  imports: [DatePipe, FormsModule],
+  imports: [DatePipe, FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main class="reference">
       @if (loading()) {
-        <p class="reference__muted">Loading…</p>
+        <app-loading/>
       } @else if (fatal()) {
         <h1>{{ fatal() }}</h1>
         <p class="reference__muted">

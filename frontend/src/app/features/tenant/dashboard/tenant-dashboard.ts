@@ -21,11 +21,12 @@ import { TenantInboxPanel } from '../../../shared/components/tenant-inbox/tenant
 import { ViewingInvitations } from '../../../shared/components/viewing-invitations/viewing-invitations';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/tenancy-lifecycle';
+import { Loading } from '../../../shared/components/loading/loading';
 
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
-  imports: [RouterLink, DatePipe, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations, ScreenHint, TenancyLifecycle],
+  imports: [RouterLink, DatePipe, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations, ScreenHint, TenancyLifecycle, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="tenant-dashboard" heading="Where you stand, on everything you applied for">
@@ -137,7 +138,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
         }
 
         @if (loading()) {
-          <p class="muted">Loading…</p>
+          <app-loading/>
         } @else if (applications().length === 0) {
           <div class="empty-state">
             <h3>No applications yet</h3>
@@ -318,7 +319,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
         </h2>
 
         @if (loadingSublets()) {
-          <p class="muted">Loading your listings…</p>
+          <app-loading>Loading your listings…</app-loading>
         } @else if (sublets().length === 0) {
           <p class="muted">
             Renting a place with a spare room? You can let it out here. Listing is
@@ -374,7 +375,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
             No saved rooms yet. Tap the ♡ on any room to keep it here while you decide.
           </p>
         } @else if (loadingSaved()) {
-          <p class="muted">Loading saved rooms…</p>
+          <app-loading>Loading saved rooms…</app-loading>
         } @else {
           <div class="room-grid">
             @for (room of savedRoomList(); track room.id) {

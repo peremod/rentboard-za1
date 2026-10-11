@@ -423,7 +423,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
       border-radius: 6px; font-size: .85rem; margin-top: .3rem; font-family: inherit;
     }
     .muted { font-size: .78rem; color: var(--slate); }
-    .error { color: #D63B3B; font-size: .82rem; }
+    .error { color: var(--danger); font-size: .82rem; }
     /* ⚠️ There was a bare button rule here setting background, colour and
        border, and it is the same trap the comment above records for labels:
        Angular's emulated encapsulation appends an attribute selector, so
