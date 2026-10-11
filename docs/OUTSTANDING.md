@@ -3169,79 +3169,113 @@ gate with six false positives gets switched off.
 Instances nine through twelve of the backtick trap all occurred in this phase
 and all were named by the lint before any build.
 
-## 45. ⚠️ NINE on-screen promises of a WhatsApp message that is never sent — YOUR DECISION
+## 45. Eleven on-screen promises of a WhatsApp message that is never sent
 
-**Found, gated, and NOT fixed. Five screens, nine sentences. This needs a copy
-decision from you, not a refactor from me.**
+**Fixed. All of them read the flag now, and there is no baseline — the
+tolerance is zero.**
 
 CLAUDE.md is unconditional: *"Nothing on screen may promise a WhatsApp message
 while it is off."* `WHATSAPP_ENABLED` is `false` on both the API and the
-browser. These sentences are on screen anyway:
+browser. Eleven sentences across six screens said otherwise:
 
-| File | × | What it says |
-|---|---:|---|
-| `shared/components/walkthrough/walkthrough.ts` | 4 | two onboarding cards **titled** "Messages reach you on WhatsApp too", plus "When somebody writes to you we send it to WhatsApp as well, and your reply…" and "…us on WhatsApp and finish it later" |
-| `features/account/messages/messages.ts` | 2 | the screen hint: "Messages reach you on WhatsApp too, and a reply there lands back in the same conversation", and "…go out on WhatsApp. If you answer in WhatsApp instead, that answer shows up here too" |
-| `features/account/settings/account-settings.ts` | 1 | the phone field's hint: "Used for WhatsApp notifications" |
-| `features/auth/register-phone/register-phone.ts` | 1 | "We send a 6-digit code to this number on WhatsApp" |
-| `features/tenant/passport-verify/passport-verify.ts` | 1 | "We send them one WhatsApp asking two questions" |
+| File | × | What it said | What it says while the channel is off |
+|---|---:|---|---|
+| `walkthrough.ts` | 3 | two onboarding cards **titled** "Messages reach you on WhatsApp too", and "send the photos to us on WhatsApp and finish it later" | "Every conversation in one inbox" / "Your conversations, in one place"; "A listing saves as you go, so you can add the photos later" |
+| `messages.ts` | 2 | the screen hint, and `replyGoesTo()` — **both branches** named WhatsApp, and neither was true | the hint describes the inbox; the reply line says "sent in the app and emailed to them" and stops |
+| `account-settings.ts` | 3 | "Used for WhatsApp notifications"; "you can sign in with a WhatsApp code"; "Verifying lets you sign in with a WhatsApp code" | "Used to verify who you are…"; "Signing in with a code is switched off at the moment, so use your email"; "Verifying needs a code sent to this number, which is switched off — there is nothing you need to do" |
+| `passport-verify.ts` | 1 | "We send them one WhatsApp asking two questions" | "Somebody from Mastande phones them and asks two questions" |
+| `close-account.ts` | 1 | "closing it needs a code on WhatsApp" | "codes to a number are switched off at the moment — so closing it here needs a password" |
+| `register-phone.ts` | 2 | the whole page | **unchanged, and exempt** — see below |
 
-**Why I have not rewritten them.** Four of the nine are onboarding card
-titles and bodies, and one is the copy that explains what the messages screen
-is *for*. Rewriting those is a product decision about what the product claims
-to be — and WhatsApp-first is the stated goal, merely paused for cost, so the
-wording you want while it is off is not something I should pick. The two that
-sat inside empty states Phase J2 was already rewriting were fixed (see below);
-these nine are named, counted and held.
+### Gated, not deleted, and that is the point
 
-**What each would have to say instead** — if you want the conservative version:
+Every one reads `WHATSAPP_ENABLED`, the way `login.ts`, `register.ts`,
+`home.ts` and `auth.routes.ts` already do. So the honest sentence shows while
+the channel is off and **the WhatsApp sentence returns by itself when the flag
+flips** — which is what CLAUDE.md asks for: *"WhatsApp is deferred, not
+abandoned… one variable brings the channel back; rebuilding it later is
+waste."* Deleting the copy would have been the wrong fix.
 
-- the walkthrough cards: drop both, or retitle to "Messages live in your
-  account" and describe the notices screen, which is real.
-- the messages hint: "A thread starts when somebody applies for your room, or
-  you apply for theirs." Stop there.
-- the settings hint: "Used to verify your number and to sign in." (Note the
-  sign-in path is itself refused with a 503 while the flag is off — § 29.)
-- `register-phone`: that whole route is already gated by `auth.routes.ts`
-  reading the flag, so the copy may be unreachable. **Worth confirming before
-  editing it** — I have not proven it either way.
-- `passport-verify`: the referee flow. Admin-initiated, and the admin screen
-  says "Send WhatsApp request", so this one may be describing a real action an
-  operator takes manually. Also unproven.
+**Verified both ways.** With the flag `true`, "Messages reach you on WhatsApp
+too" is back in the production bundle. With it `false`, the landlord tour was
+walked card by card at 390px — all eight cards read, card 1 "A listing saves
+as you go", card 3 "Every conversation in one inbox", **no WhatsApp anywhere**
+— and the settings screen shows "Used to verify who you are" with the
+WhatsApp hint absent.
 
-### ⚠️ The drive that guards this rule could not see any of them
+### Two things the fix uncovered
+
+- **`account-settings.ts` had a dead control, not just wrong copy.** The
+  "Verify this number" button calls `requestPhoneVerification`, which sends the
+  code over WhatsApp, and the API refuses with a 503. A button that can only
+  fail is worse than no button, so while the channel is off the sentence says
+  so and **the button is not rendered**.
+- **`passport-verify.ts` was telling a tenant their referee had been
+  contacted when nobody had.** `ReferencesService` attempts WhatsApp, gets
+  `delivered: false`, records `reference_send_failed`, and the admin screen
+  tells an operator to phone the referee instead. The tenant-facing copy now
+  says a person phones them, which is what actually happens.
+
+### `register-phone.ts` is exempt, by a rule rather than a list
+
+Its whole page describes a WhatsApp sign-up — and the route is behind
+`whatsappOnlyGuard`, which redirects to `/auth/register` while the flag is
+false. The copy cannot be on screen while the promise is untrue.
+
+So the sweep reads the guarded component paths **out of `auth.routes.ts`**
+rather than carrying a hardcoded exemption or a baseline entry. A baseline
+would be permanent debt for copy that is already correct; a hardcoded
+exemption would go stale the moment the guard was removed. **Proven**:
+deleting `canActivate: [whatsappOnlyGuard]` makes that page's two promises
+fail the sweep immediately.
+
+### The drive that guards this rule could not see any of them
 
 `scripts/whatsapp-off-drive.mjs` checked **four hardcoded files** —
-`login.ts`, `register.ts`, `auth.routes.ts`, `home.ts` — and asserted each
-read the flag. That is a check structurally incapable of seeing the thing it
-exists for, which is this repo's signature defect: a nav audit that could not
-see a dead link, nineteen `@Throttle` decorators with no guard, a
-`documentDeletedAt` that deleted nothing.
+`login.ts`, `register.ts`, `auth.routes.ts`, `home.ts` — and asserted each read
+the flag. A check structurally incapable of seeing the thing it exists for,
+which is this repo's signature defect: a nav audit that could not see a dead
+link, nineteen `@Throttle` decorators with no guard, a `documentDeletedAt` that
+deleted nothing.
 
-The rule is a claim about **every template**. The drive now sweeps every
-component, matches promise-shaped sentences, skips comments, and skips any file
-that reads the flag (a file that reads it has already decided). The nine are
-carried in `scripts/whatsapp-promise-baseline.json` — counted and named on
-every run, with the count only allowed to go down.
+It now sweeps every component, skipping comments, files that read the flag, and
+components behind the guard. **The promise pattern had to be widened once**:
+the first version matched `account-settings.ts` on "Used for WhatsApp
+notifications" and missed two more claims in the same file, because a promise
+is not only "we send" — it is any claim that something will arrive *or that a
+WhatsApp-dependent thing can be done*.
 
-**Proven able to fail**: a line reading "We send you a WhatsApp when this
-changes." added to `properties.ts` → `❌ NEW on-screen WhatsApp promise:
-features/landlord/properties/properties.ts (1, baseline 0)`. Reverted.
+Proven able to fail three ways, each reverted: a new promise anywhere
+(`properties.ts`); the route guard removed; and the sweep pointed at a
+directory with no WhatsApp text, which **refuses** rather than passing — the
+vacuous-pass guard had to be rewritten to count *files scanned* rather than
+*findings*, because zero findings is now the correct answer.
 
-**What is deliberately not swept**: the privacy policy naming Meta as a
-processor, every `wa.me` link, the close-account page listing "no WhatsApp
-messages" among what stops, and the deferred backend code. Those are mentions,
+`scripts/whatsapp-promise-baseline.json` is **deleted**. It existed for a few
+hours.
+
+### Deliberately not swept
+
+The privacy policy naming Meta as a processor, every `wa.me` link, the
+close-account page listing "no WhatsApp messages" among what stops, the admin
+screens an operator drives, and the deferred backend code. Those are mentions,
 not promises, and CLAUDE.md protects the `wa.me` links explicitly.
 
-### Two were fixed, because Phase J2 was editing those exact lines
+## 50. A first-use hint that could never be dismissed — Phase F, found today
 
-- **`notices.ts`**: the empty state ended "— and on WhatsApp if we can reach
-  you there." Now: "This screen is the record — nothing is sent anywhere else."
-- **`applicants-inbox.ts`**: "we will tell you on WhatsApp and in your notices
-  when one does, **so you do not have to keep checking**." The second half is
-  the worse half — it told a landlord to stop checking a screen that is the
-  only place the information appears. Now: "a notice appears in your account
-  when one does."
+**Fixed.** `scripts/hints-drive.mjs` exists for exactly this, and I did not run
+it during Phase F.
+
+The archive screen shipped with `key="account-tenancies"`, and that key was
+never added to `SCREEN_HINTS` on the server. So the panel showed, "Got it"
+posted to `/users/me/hints/account-tenancies`, the API answered **400**, the
+optimistic patch rolled back, and the hint came straight back on the next
+visit. `screen-hint.ts`'s own header says it: *"a hint you cannot put away is
+worse than no hint at all."*
+
+Found by running the drive while verifying something else. Proven by removing
+the key again: *"1 key(s) the server would reject, so the hint never goes away:
+account-tenancies"*.
 
 ## 46. Loading, empty and error were thirty-eight paragraphs — Phase J2
 

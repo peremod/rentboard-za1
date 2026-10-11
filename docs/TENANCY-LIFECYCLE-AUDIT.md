@@ -1281,11 +1281,15 @@ anyway — four of them onboarding card titles and bodies, one the copy
 explaining what the messages screen is for.
 
 `whatsapp-off-drive.mjs` checked **four hardcoded files**. The rule is a claim
-about every template. It now sweeps all of them. Two promises inside the empty
-states this phase was rewriting were fixed; the other nine are baselined and
-**handed to the user** — rewriting onboarding copy is a decision about what the
-product claims to be, and WhatsApp-first is the stated goal, paused for cost.
-`docs/OUTSTANDING.md` § 45.
+about every template. It now sweeps all of them.
+
+**All eleven are fixed** (the count rose from nine when the promise pattern was
+widened — the first version missed two claims in a file it had already
+flagged). Every one reads `WHATSAPP_ENABLED` rather than being deleted, so the
+honest sentence shows while the channel is off and the WhatsApp one returns by
+itself when the flag flips — paused, not abandoned. Verified both ways,
+including walking the landlord tour card by card at 390px. The baseline is
+deleted and the tolerance is zero. `docs/OUTSTANDING.md` § 45.
 
 #### ⚠️ J1 also retired a phantom control I had been quoting
 

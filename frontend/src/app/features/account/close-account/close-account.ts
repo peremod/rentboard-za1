@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { AccountLifecycleService, DeletionPreview } from '../../../core/services/account-lifecycle.service';
 import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
+import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 
 /**
  * Pausing an account, or ending it — Phase 7g, item 3 of the UX brief.
@@ -161,8 +162,17 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
                    one). Rather than inventing a weaker confirmation, this says
                    what to do: the API refuses without a fresh code. -->
               <p class="ca-lead">
-                Your account signs in with your phone number, so closing it needs
-                a code on WhatsApp.
+                @if (whatsappOn) {
+                  Your account signs in with your phone number, so closing it needs
+                  a code on WhatsApp.
+                } @else {
+                  <!-- ⚠️ While the channel is off no code can be sent, so the
+                       route this sentence described does not exist. The two
+                       alternatives below are the ones that work. -->
+                  Your account signs in with your phone number, and codes to a
+                  number are switched off at the moment — so closing it here needs
+                  a password.
+                }
                 <a routerLink="/account/settings">Set a password first</a>, or ask
                 us to close it for you from
                 <a routerLink="/account/notices">your notices</a>.
@@ -236,6 +246,9 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
   `,
 })
 export class CloseAccount implements OnInit {
+  /** Phase 8j — see feature-flags.ts. Nothing may promise a message that is never sent. */
+  protected readonly whatsappOn = WHATSAPP_ENABLED;
+
   private auth = inject(AuthService);
   private lifecycle = inject(AccountLifecycleService);
   private router = inject(Router);

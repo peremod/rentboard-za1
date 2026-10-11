@@ -7,6 +7,7 @@ import { MessageThreadSummary } from '../../../core/models/message.model';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { Loading } from '../../../shared/components/loading/loading';
 import { ErrorState } from '../../../shared/components/error-state/error-state';
+import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 
 /**
  * Your messages — Phase 7c.
@@ -48,7 +49,12 @@ import { ErrorState } from '../../../shared/components/error-state/error-state';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="messages" heading="Every conversation, in one place">
-        A thread starts when somebody applies for your room, or you apply for theirs. Messages reach you on WhatsApp too, and a reply there lands back in the same conversation.
+        A thread starts when somebody applies for your room, or you apply for theirs.
+        @if (whatsappOn) {
+          Messages reach you on WhatsApp too, and a reply there lands back in the same conversation.
+        } @else {
+          Everything said about a room stays with that room, so you can come back a month later and still find it.
+        }
       </app-screen-hint>
 
       <section class="dash-section">
@@ -217,6 +223,9 @@ import { ErrorState } from '../../../shared/components/error-state/error-state';
   `,
 })
 export class MessagesInbox implements OnInit {
+  /** Phase 8j — see feature-flags.ts. Nothing may promise a message that is never sent. */
+  protected readonly whatsappOn = WHATSAPP_ENABLED;
+
   private auth = inject(AuthService);
   private messages = inject(MessagesService);
 
@@ -274,6 +283,17 @@ export class MessagesInbox implements OnInit {
    * over WhatsApp even when the message they are answering arrived on it.
    */
   replyGoesTo(t: MessageThreadSummary): string {
+    /**
+     * ⚠️ Both branches named WhatsApp, and while the channel is off neither was
+     * true: nothing is sent to WhatsApp and nothing arrives from it, so telling
+     * a landlord "if you answer in WhatsApp instead, that answer shows up here
+     * too" describes a round trip that does not happen.
+     */
+    if (!WHATSAPP_ENABLED) {
+      return t.iAmLandlord
+        ? 'A reply you type here is sent in the app and emailed to them.'
+        : 'A reply you type here is sent in the app and emailed to them.';
+    }
     return t.iAmLandlord
       ? 'A reply you type here is sent in the app and emailed to them. It does not ' +
         'go out on WhatsApp. If you answer in WhatsApp instead, that answer shows up here too.'

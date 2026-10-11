@@ -6,6 +6,7 @@ import { UploadsService } from '../../../core/services/uploads.service';
 import { RoomsService } from '../../../core/services/rooms.service';
 import { Room } from '../../../core/models/room.model';
 import { VerificationType } from '../../../core/models/verification.model';
+import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 
 /**
  * Renter's Passport — the tenant side of verification.
@@ -194,9 +195,19 @@ import { VerificationType } from '../../../core/models/verification.model';
                 <input type="text" name="propertyDescription" [(ngModel)]="propertyDescription"
                        maxlength="200" placeholder="Back room, Ext 7, Tembisa"/>
               </label>
+              <!-- ⚠️ This said "We send them one WhatsApp asking two questions."
+                   While the channel is off nothing is sent: ReferencesService
+                   records reference_send_failed and the admin screen tells an
+                   operator to phone the referee instead. So the tenant was told
+                   their referee had been contacted when nobody had been. -->
               <p class="passport-card__guidance">
-                We send them one WhatsApp asking two questions. They do not need an
-                account, and we do not message them again.
+                @if (whatsappOn) {
+                  We send them one WhatsApp asking two questions. They do not need an
+                  account, and we do not message them again.
+                } @else {
+                  Somebody from Mastande phones them and asks two questions. They do
+                  not need an account, and we do not contact them again.
+                }
               </p>
               <button type="submit" class="btn btn-primary" [disabled]="submitting()">
                 {{ submitting() ? 'Sending…' : 'Ask them for a reference' }}
@@ -209,6 +220,9 @@ import { VerificationType } from '../../../core/models/verification.model';
   `,
 })
 export class PassportVerify implements OnInit {
+  /** Phase 8j — see feature-flags.ts. Nothing may promise a message that is never sent. */
+  protected readonly whatsappOn = WHATSAPP_ENABLED;
+
   protected readonly verification = inject(VerificationService);
   private uploads = inject(UploadsService);
   private rooms = inject(RoomsService);
