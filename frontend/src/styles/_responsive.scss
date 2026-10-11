@@ -393,7 +393,8 @@
   }
   .nav-links-auth .btn { width: 100%; justify-content: center; }
   .nav-inner { padding: 0 .85rem; gap: .5rem; }
-  .nav-logo { font-size: 1.25rem; }
+  // `.nav-logo` is gone — the wordmark is <app-logo> and owns its own sizes,
+  // including this breakpoint. Phase I.
   .nav-actions .btn { padding: .45rem .7rem; font-size: .78rem; }
 
   .legal-page { padding: 2rem 1rem; }

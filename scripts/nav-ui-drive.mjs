@@ -317,7 +317,12 @@ for (const width of [360, 390, 430]) {
   // Overcrowding is not only overflow: the logo must still be readable and
   // nothing may overlap the burger.
   const overlap = await visitor.evaluate(() => {
-    const logo = document.querySelector('.nav-logo')?.getBoundingClientRect();
+    // ⚠️ '.nav app-logo .logo', not '.nav-logo' and not 'app-logo'. The
+    // wordmark is <app-logo> since Phase I, and its HOST is display:contents,
+    // so the host's own rect is 0×0 — measuring it would report an overcrowded
+    // header as a 0px logo and an uncrowded one the same way. '.nav' scopes it
+    // to the header, since the footer carries a second wordmark.
+    const logo = document.querySelector('.nav app-logo .logo')?.getBoundingClientRect();
     const actions = document.querySelector('.nav-actions')?.getBoundingClientRect();
     const burger = document.querySelector('.nav-burger')?.getBoundingClientRect();
     if (!logo || !actions) return 'missing';

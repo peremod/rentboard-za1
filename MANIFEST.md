@@ -65,7 +65,8 @@ Do not tag before `npm run verify` passes. None of this was built against real A
 | `scripts/verify-build.sh` | Everything that needs real dependencies |
 | `scripts/token-lint.mjs` | A literal hex within CIE Lab ΔE 3 of a defined token, and any `var(--x)` with no fallback naming a token defined nowhere. Ratcheting baseline in `scripts/token-baseline.json` |
 | `scripts/token-render-drive.mjs` | 51 checks: the borders `var(--line)` silently dropped, measured as painted at 360 / 390 / 768 / 1280 |
-| `scripts/template-literal-lint.mjs` | A backtick inside a component's inline `template:` literal, which terminates the template |
+| `scripts/logo-drive.mjs` | 76 checks: one wordmark component, MA fixed at `#C4522C` at every placement and width, and the 18.66px bold floor the 3:1 contrast threshold depends on |
+| `scripts/template-literal-lint.mjs` | A backtick inside a component's inline `template:` **or `styles:`** literal, which terminates it. Every occurrence, not just the first |
 | `scripts/lib/css-values.mjs` | Shared by the design-handoff count and the token gate: comment stripping that preserves offsets, inline `styles:` ranges, and the sRGB→Lab ΔE maths |
 | `e2e/locale-and-seo.spec.ts` | Locale preservation, metadata in served HTML |
 | `lighthouserc.json` | CI budgets, mobile, slow 4G |

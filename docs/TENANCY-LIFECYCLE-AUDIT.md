@@ -608,8 +608,19 @@ Four findings:
    markup on cream — an auth screen, a portal sidebar, a light modal — and
    "Mas" goes invisible while "tande" stays terracotta. The logo is one
    placement away from breaking, and nothing prevents that placement.
-4. **The portal shell has no wordmark at all.** `portal-shell.ts` contains no
-   logo — a signed-in landlord never sees the brand.
+4. ~~**The portal shell has no wordmark at all.** `portal-shell.ts` contains no
+   logo — a signed-in landlord never sees the brand.~~
+
+   **⚠️ Wrong, corrected 11 October in Phase I.** `app.ts` renders
+   `<app-navbar/>` above `<router-outlet/>`, so the global header — and its
+   logo — is on every portal screen at every width. A signed-in landlord sees
+   the brand on every page. I read `portal-shell.ts` and concluded from its
+   absence there, without reading the component that wraps it.
+
+   A wordmark was added to the sidebar and then removed: a second one puts the
+   brand on screen twice, and below 900px that sidebar is a horizontally
+   scrolling tab strip where `.portal-user` is already hidden for taking room
+   from navigation that this repo fought to keep visible.
 
 ### G4 — Navigation: the two hard constraints are already met
 
@@ -1035,6 +1046,63 @@ production build finds in half a minute.
 ### Phase I — `<app-logo>`
 - One component, `surface` input, **MA** in its own span with its own token
 - Delete both markup copies and both rule pairs (G3)
+
+**Done, and the plan's `surface` input was a worse design than what shipped.**
+
+An input with two values has a wrong value, and here the wrong value renders
+cream on cream or ink on ink — an invisible wordmark, which is the exact
+failure G3 was about. So the stem is `currentColor`: it follows the
+surrounding text colour, which is by definition right for the surface it is on
+and is already measured there by `a11y-drive`. There is no input to get wrong.
+
+**⚠️ That required fixing a defect one level up.** `.nav` and `.footer` are
+`background: var(--ink)` and set **no `color`** at all; `.portal-nav` is
+`background: var(--ink2)` and the same. Every child needing light text has
+been declaring it individually — `.nav-logo`, `.footer-desc`, `.footer-popia`,
+`.footer-col h2`, `.portal-user-name`, one `color: var(--cream)` at a time.
+That is the `:where(button)` defect one level up: a background without a
+foreground is one decision taken half way, and it reached a phone once already
+as white text on a white button at 1.00:1. All three now declare their
+foreground, in `styles.scss` (the port forbids hand-editing).
+
+**The MA colour had to change, and the number was searched rather than
+chosen.** One fixed value must be legible on `--ink` AND on
+`--cream`/`--card`/`--white`. Every existing terracotta fails one side:
+`--terra` is 3.06:1 on ink, `--terra2` is 3.33:1 on cream, `--terra-deep` is
+2.28:1 on ink. The best achievable minimum across those five surfaces is
+**3.92:1** — anything light enough for #1C160E is too light for #FFFFFF.
+`--logo-ma: #C4522C` reaches that ceiling and is the closest to the brand of
+the values that do (ΔE 7.6 from `--terra`, 8.7 from `--terra2`).
+
+3.92 clears WCAG's **large-text** threshold of 3:1, not the 4.5:1 small-text
+one, and that holds only while the wordmark is 18.66px bold or larger. So the
+justification is asserted rather than trusted: `scripts/logo-drive.mjs`
+measures the rendered font size and weight at every placement and width.
+
+**Proof — done.** 76 checks. Three reintroductions, each reverted:
+
+| Reintroduced | Result |
+|---|---|
+| `.logo__ma` loses its token and inherits | ❌ 17 checks, including MA = stem = `rgb(250,247,240)` |
+| a smaller `--lg` size (1rem) | ❌ "16px at weight 900, floor 18.66px bold" at 768 and 1280 |
+| `.nav, .footer` stop declaring a foreground | ❌ stem at **1.00:1** on `--ink` — the invisible-text failure, caught |
+
+**And the drive caught my own design claim being false on its first run.** The
+header said the stem "inherits the surrounding text colour". It did not: the
+logo's root is an `<a>`, and the global `a { color: $color-terracotta }` has
+specificity (0,0,1) on that very element, so `currentColor` resolved to
+`--terra` — 3.06:1 on `--ink`, passing the 3:1 floor by 0.06 and nothing like
+what was designed. `.logo { color: inherit }` fixes it; it is 16.77:1 now.
+
+**⚠️ And the backtick trap, for the eighth time — in a place the lint could not
+see.** Five backticked identifiers in a comment inside the component's
+`styles:` block terminated the literal; the production build produced twenty
+errors including `TS2304: Cannot find name 'color'`.
+`scripts/template-literal-lint.mjs` read **green** over it, because it looked
+only at `template:` literals and only at the first one per file. It now covers
+`template:`, `styles:` and each element of a `styles: [...]` array, every
+occurrence — 141 literals across 85 files. Proven by diffing the two versions
+against the same defect: old exit 0, new exit 1.
 
 ### Phase J — Design system consolidation
 - State vocabulary for the archive (H4)

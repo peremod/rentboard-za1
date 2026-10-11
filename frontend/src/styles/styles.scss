@@ -8,6 +8,74 @@
 // Responsive layer last so its media queries override the desktop-only spec.
 @use 'responsive';
 
+:root {
+  /**
+   * The wordmark's MA — Phase I.
+   *
+   * ⚠️ Here rather than in `_spec.scss` because that file is a verbatim port
+   * of the visual preview and its own header forbids hand-editing it; app-only
+   * additions belong in this file.
+   *
+   * One fixed value, because the requirement is that MA is the same colour
+   * wherever the logo appears — header, footer, portal sidebar, and any light
+   * surface somebody puts it on next. Every existing terracotta fails one side
+   * of that: `--terra` (#AD4222) is 3.06:1 on `--ink`, `--terra2` (#E06038) is
+   * 3.33:1 on `--cream`, `--terra-deep` is 2.28:1 on ink.
+   *
+   * Searched rather than chosen: across `--ink`, `--cream`, `--cream2`,
+   * `--card` and `--white` the best achievable minimum contrast is 3.92:1 —
+   * anything light enough for #1C160E is too light for #FFFFFF. This hits that
+   * ceiling and is the closest to the brand of the values that do (ΔE 7.6 from
+   * `--terra`, 8.7 from `--terra2`).
+   *
+   * 3.92 clears WCAG's LARGE-text threshold of 3:1, not the 4.5:1 small-text
+   * one. That holds only while the wordmark is 18.66px bold or larger, which
+   * `scripts/logo-drive.mjs` measures at every placement and width rather than
+   * assuming. A smaller logo size is a contrast failure, not a styling tweak.
+   */
+  --logo-ma: #C4522C;
+}
+
+/**
+ * ⚠️ Three dark surfaces that declare a background and no foreground.
+ *
+ * `.nav` and `.footer` are `background: var(--ink)`; `.portal-nav` is
+ * `background: var(--ink2)`. None of the three sets `color`, so anything
+ * inside them inherits `--ink` from `body` and is invisible unless it names
+ * its own colour. Every child that needed light text has been doing exactly
+ * that, one declaration at a time — `.nav-logo`, `.footer-desc`,
+ * `.footer-popia`, `.footer-col h2`, `.portal-user-name`, each with its own
+ * `color: var(--cream)` or its own rgba.
+ *
+ * That is the `:where(button)` defect one level up: setting a background
+ * without setting a foreground is a single decision taken half way, and it
+ * reached a phone once already as white text on a white button at 1.00:1.
+ * It also makes `currentColor` unusable inside these regions, which is what
+ * `<app-logo>`'s stem needs in order to be legible on any surface without
+ * being told which surface it is on.
+ *
+ * Declared here rather than in `_spec.scss`, which is a verbatim port of the
+ * visual preview and forbids hand-editing; app-only additions belong here and
+ * this file is loaded after it. The per-child colours above are now redundant
+ * rather than wrong, and are left alone: deleting rules inside the port is how
+ * a re-sync turns into a conflict.
+ */
+.nav, .footer { color: var(--cream); }
+.portal-nav { color: var(--cream); }
+
+/* ⚠️ No wordmark is added to the portal sidebar, and the audit's §G3 finding 4
+   said one was missing. It was wrong: `app.ts` renders `<app-navbar/>` above
+   `<router-outlet/>`, so the global header — and its logo — is on every portal
+   screen at every width. A second wordmark inside the sidebar would put the
+   brand on screen twice, and below 900px that sidebar is a horizontally
+   scrolling tab strip where `.portal-user` is already hidden for taking room
+   from navigation. Corrected in docs/TENANCY-LIFECYCLE-AUDIT.md §G3. */
+
+/* The wordmark's own box. `<app-logo>` is `display: contents`, so it has no
+   box to carry placement with — spacing around it belongs to the thing placing
+   it, which is this footer column. Was `.footer-logo { margin-bottom: .75rem }`. */
+.footer-brand { margin-bottom: .75rem; }
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; scroll-behavior: smooth; }
 body {

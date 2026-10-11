@@ -156,12 +156,18 @@ jobs:
         # not depend on the step above.
         run: node scripts/token-lint.mjs
 
-      - name: Inline template literals — no stray backtick
+      - name: Inline template and styles literals — no stray backtick
         if: ${{ !cancelled() }}
-        # A backtick inside a component's inline `template:` TERMINATES the
-        # template. It has happened eight times in this repo and the error is
-        # `TS1005: ',' expected` pointing at a line far from the cause, so the
-        # build failure is real but reads as unrelated. This names file:line.
+        # A backtick inside a component's inline `template:` or `styles:`
+        # literal TERMINATES it. It has happened eight times in this repo and
+        # the error is `TS1005: ',' expected` pointing at a line far from the
+        # cause, so the build failure is real but reads as unrelated. This
+        # names file:line.
+        #
+        # ⚠️ `styles:` was added after the eighth: the lint covered only
+        # `template:`, and only the first one per file, so it read GREEN over
+        # five backticks in a comment inside a `styles:` block while the
+        # production build produced twenty errors.
         run: node scripts/template-literal-lint.mjs
 
       - name: Environment parity

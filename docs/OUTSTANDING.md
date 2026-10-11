@@ -2834,6 +2834,156 @@ one `var(--border)` to `var(--line)` turns it red in eight places.
   450 kB budget is pre-existing; this phase added 0.12 kB, because
   `var(--white)` is eight characters longer than `#fff`.
 
+## 42. The wordmark existed twice, and MA had nothing to pin it to — Phase I
+
+**Fixed.** One component, `frontend/src/app/shared/components/logo/logo.ts`.
+
+### What was wrong
+
+```
+navbar.ts:27   <a class="nav-logo"    routerLink="/">Mas<span>tande</span></a>
+footer.ts:15   <a class="footer-logo" routerLink="/">Mas<span>tande</span></a>
+```
+
+Two copies of the markup, two copies of the rule (`.nav-logo` /
+`.nav-logo span`, `.footer-logo` / `.footer-logo span`). This repo's own
+`landlordNav` comment records where that ends: the portal nav was defined six
+times, the copies disagreed, and the sidebar shrank as a person moved through
+their own portal.
+
+**The split was `Mas` / `tande`, not `MA` / `stande`.** The requirement is that
+the **MA** portion holds its colour wherever the logo appears — and "MA" was
+part of an unnamed text node with no element of its own, inheriting whatever
+`color` the surrounding class set. There was nothing to pin.
+
+**The stem colour was `--cream`, which assumes a dark background.** Both homes
+are dark; render the same markup on cream and "Mas" goes invisible while
+"tande" stays terracotta.
+
+### What shipped, and where it differs from the plan
+
+The audit called for a `surface: 'dark' | 'light'` input. **An input with two
+values has a wrong value**, and here the wrong value renders cream on cream or
+ink on ink — the invisible wordmark the finding was about. So the stem is
+`currentColor` and there is no input to get wrong. MA is `.logo__ma` with
+`color: var(--logo-ma)` in the component's own scoped styles, which Angular
+rewrites with an attribute selector — more specific than anything a parent
+stylesheet can say, and declared rather than inherited, so a parent setting
+`color` moves the stem and cannot touch MA.
+
+### ⚠️ Three dark surfaces declared a background and no foreground
+
+`currentColor` only works if the surface says what its foreground is. It did
+not: `.nav` and `.footer` are `background: var(--ink)` with **no `color`**;
+`.portal-nav` is `background: var(--ink2)`, the same. Everything inside them
+has been naming its own colour one declaration at a time — `.nav-logo`,
+`.footer-desc`, `.footer-popia`, `.footer-col h2`, `.portal-user-name`.
+
+That is the `:where(button)` defect one level up, and the first measurement
+after the swap proved the cost: with the foreground undeclared the stem came
+back at **1.00:1** on `--ink` — the invisible-text failure this codebase has
+already shipped once as white text on a white button. All three surfaces now
+declare their foreground in `styles.scss` (the port forbids hand-editing, and
+the now-redundant per-child colours are left alone, because deleting rules
+inside a verbatim port is how a re-sync becomes a conflict).
+
+### The MA colour had to change, and the number was searched
+
+One fixed value has to be legible on `--ink` (header, footer) **and** on
+`--cream` / `--card` / `--white`. Every existing terracotta fails one side:
+
+| Token | on `--ink` | on `--cream` |
+|---|---:|---:|
+| `--terra` #AD4222 | **3.06** | 5.48 |
+| `--terra2` #E06038 | 5.04 | **3.33** |
+| `--terra-deep` #8E3519 | **2.28** | 7.34 |
+| **`--logo-ma` #C4522C** | **3.92** | **4.28** |
+
+Searched across the five surfaces rather than chosen: the best achievable
+minimum is **3.92:1**, because anything light enough for #1C160E is too light
+for #FFFFFF. #C4522C reaches that ceiling and is the closest to the brand of
+the values that do — ΔE 7.6 from `--terra`, 8.7 from `--terra2`, sitting
+between the two terracottas it replaces.
+
+**⚠️ 3.92 clears WCAG's LARGE-text threshold of 3:1, not the 4.5:1 small-text
+one.** That holds only while the wordmark is 18.66px bold or larger. It ships
+at 1.6rem / 1.5rem / 1.25rem at weight 900 — 25.6 / 24 / 20px — so the
+smallest has 1.34px of margin. **A fourth, smaller size added without changing
+the colour would be a contrast failure that looks like a styling tweak**, so
+the floor is measured rather than trusted.
+
+### The gate
+
+`scripts/logo-drive.mjs`, 76 checks, two placements × four widths. MA is
+#C4522C and the **same** value at all eight combinations, compared rather than
+asserted one at a time; MA is not the stem's colour; the rendered size and
+weight clear the floor; MA's contrast against the backdrop it is actually
+painted on is measured by walking up to the first opaque ancestor; the
+accessible name contains the visible text (WCAG 2.5.3); there is exactly one
+wordmark per page; and the drive sets `color` on the host from outside, the way
+a future stylesheet would, to prove MA does not move and the stem does.
+
+Proven able to fail, three ways, each reverted:
+
+| Reintroduced | Result |
+|---|---|
+| `.logo__ma` loses its token and inherits | ❌ 17 checks; MA and stem both `rgb(250,247,240)` |
+| `--lg` dropped to 1rem | ❌ "16px at weight 900, floor 18.66px bold" at 768 and 1280 |
+| `.nav, .footer` stop declaring a foreground | ❌ stem at **1.00:1** on `--ink` |
+
+### ⚠️ And the drive caught my own claim being false, on its first run
+
+The component header said the stem "inherits the surrounding text colour". It
+did not. The logo's root is an `<a>`, and the global
+`a { color: $color-terracotta }` in `styles.scss` has specificity (0,0,1) on
+that very element, so `currentColor` resolved to `--terra`: **3.06:1 on
+`--ink`**, passing the 3:1 floor by 0.06 and nothing like what was designed.
+`.logo { color: inherit }` fixes it — 16.77:1 now. Nothing but a measurement
+would have found this; the wordmark looked entirely plausible.
+
+### ⚠️ The backtick trap, for the eighth time, where the lint could not see it
+
+Five backticked identifiers in a comment inside the component's `styles:`
+block terminated the literal. The production build produced twenty errors,
+among them `TS2304: Cannot find name 'color'` and `TS2552: Cannot find name
+'_responsive'`.
+
+**`scripts/template-literal-lint.mjs` read green over it.** It looked only at
+`template:` literals, and only at the first one in each file. A lint that
+covers one of the two places a trap occurs is a lint that will be trusted in
+the other. It now covers `template:`, `styles:` and every element of a
+`styles: [...]` array, at every occurrence — 141 literals across 85 files.
+Proven by running both versions against the same defect: old exit 0, new exit
+1, naming `logo.ts:107 (styles:)`.
+
+### Also in this phase
+
+- **`scripts/nav-ui-drive.mjs` queried `.nav-logo`** for its overcrowding
+  check. It would have gone red rather than silent, which is the right
+  failure mode — but note the trap it now documents: `app-logo`'s host is
+  `display: contents`, so the host's own rect is 0×0 and measuring it would
+  report every header as a 0px logo. The selector is
+  `.nav app-logo .logo`, scoped because the footer carries a second wordmark.
+- **The responsive size moved into the component.**
+  `_responsive.scss` had `.nav-logo { font-size: 1.25rem }` inside the 480px
+  block, where the component could not see it.
+
+### Still open from this phase
+
+- **`.nav-logo`, `.nav-logo span`, `.footer-logo` and `.footer-logo span` are
+  now dead rules in `_spec.scss`** — roughly 0.2 kB in the initial bundle.
+  Deliberately left: that file is a verbatim port and hand-editing it turns the
+  next re-sync into a conflict, for 0.04% of a 459 kB bundle.
+- **The initial bundle grew 1.56 kB** — 458.19 kB to 459.75 kB. A new
+  component in the app shell is not lazy, because the navbar and the footer are
+  on every route. The 450 kB budget was already over by 8.07 kB before Phase H
+  (§ 40); it is now over by 9.75 kB. `bundle-budget.mjs`, which measures
+  gzipped initial JS per prerendered page, still passes with 122.1 KB to spare.
+- **`--logo-ma` is the only colour in the system chosen for a 3:1 threshold.**
+  If the brand ever wants the wordmark small — a favicon wordmark, a compact
+  header — it needs a second, darker value for light surfaces, and then MA is
+  no longer one colour everywhere. Worth knowing before that request arrives.
+
 ## 41. A contrast gate that is claimed in a comment and does not exist
 
 **Not written. Logged so it stops being asserted in prose.**
@@ -3004,6 +3154,11 @@ node scripts/token-render-drive.mjs      # 51 checks — Phase H. The fourteen
                                          # borders that var(--line) silently
                                          # dropped, measured as PAINTED at
                                          # 360 / 390 / 768 / 1280
+node scripts/logo-drive.mjs              # 76 checks — Phase I. One wordmark
+                                         # component, MA fixed at #C4522C, and
+                                         # the 18.66px bold floor the 3:1
+                                         # contrast threshold depends on.
+                                         # Needs the web server only, no API
 ```
 
 Two of these need no API and no browser, so they belong in the same breath as
