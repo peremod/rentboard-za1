@@ -1,7 +1,11 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { applicationState, stateClass } from '../../../core/models/state.model';
 import { DatePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ApplicationsService } from '../../../core/services/applications.service';
+import { Loading } from '../../../shared/components/loading/loading';
+import { ErrorState } from '../../../shared/components/error-state/error-state';
+import { EmptyState } from '../../../shared/components/empty-state/empty-state';
 import {
   ApplicantInboxRow, ApplicantInboxFilters, ApplicationStatus,
 } from '../../../core/models/application.model';
@@ -41,7 +45,7 @@ import {
 @Component({
   selector: 'app-applicants-inbox',
   standalone: true,
-  imports: [RouterLink, DatePipe],
+  imports: [RouterLink, DatePipe, Loading, ErrorState, EmptyState],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <section class="dash-section">
@@ -117,13 +121,12 @@ import {
              landlord nobody wants their room, which is the one thing this
              screen must not get wrong. Same rule as the notices screen. -->
         @if (failed()) {
-          <p class="ai-empty" role="alert">
+          <app-error-state (retry)="load()">
             We could not load your applicants just now — this is a problem at our
             end, not an empty list.
-            <button type="button" class="link-button" (click)="load()">Try again</button>.
-          </p>
+          </app-error-state>
         } @else if (loading()) {
-          <p class="ai-empty">Loading…</p>
+          <app-loading/>
         } @else if (rows().length === 0) {
           @if (anyFilter()) {
             <p class="ai-empty">
@@ -133,11 +136,16 @@ import {
               </button>.
             </p>
           } @else {
-            <p class="ai-empty">
+            <!-- ⚠️ This used to say "we will tell you on WhatsApp and in your
+                 notices when one does, so you do not have to keep checking."
+                 WHATSAPP_ENABLED is false — so the sentence promised a message
+                 that is never sent AND told a landlord they need not check,
+                 which is the worse half. Notices are real; WhatsApp is not,
+                 while the flag is off. -->
+            <app-empty-state>
               Nobody has applied yet. Applications arrive here from your published
-              rooms — and we will tell you on WhatsApp and in your notices when
-              one does, so you do not have to keep checking.
-            </p>
+              rooms, and a notice appears in your account when one does.
+            </app-empty-state>
           }
         }
 
@@ -151,7 +159,7 @@ import {
                   @if (a.tenant?.tenantProfile?.hasPassport) {
                     <span class="pill pill--passport">🛂 Passport</span>
                   }
-                  <span class="status status--{{ a.status }}">{{ statusLabel(a.status) }}</span>
+                  <span [class]="'state ' + stateClass(applicationState(a.status))">{{ statusLabel(a.status) }}</span>
                 </div>
 
                 <p class="ai-row__where">
@@ -207,7 +215,7 @@ import {
     .ai-filters label { display: flex; flex-direction: column; gap: .2rem; font-size: .72rem; color: var(--slate); }
     .ai-filters select {
       font: inherit; font-size: .85rem; padding: .4rem .5rem;
-      border: 1px solid var(--border); border-radius: 6px; background: #fff; min-width: 9rem;
+      border: 1px solid var(--border); border-radius: var(--r4); background: var(--white); min-width: 9rem;
     }
     .ai-empty { color: var(--slate); line-height: 1.6; max-width: 34rem; }
     .ai-list { list-style: none; padding: 0; margin: 1rem 0 0; }
@@ -227,17 +235,14 @@ import {
     .ai-row__preview { color: var(--slate); overflow-wrap: anywhere; }
     .ai-row__meta { margin: .3rem 0 0; font-size: .75rem; color: var(--slate); }
     .ai-row__actions { flex-shrink: 0; }
-    .pill { font-size: .6rem; font-weight: 700; background: rgba(61,112,64,.1); color: #3D7040; padding: .1rem .4rem; border-radius: 10px; }
-    .status { font-size: .65rem; font-weight: 700; text-transform: uppercase; padding: .15rem .5rem; border-radius: 10px; background: #F2EDE3; }
-    .status--accepted { background: rgba(61,112,64,.15); color: #3D7040; }
-    .status--rejected, .status--withdrawn { background: rgba(214,59,59,.1); color: #D63B3B; }
-    .chan { font-size: .65rem; font-weight: 700; padding: .1rem .4rem; border-radius: 10px; white-space: nowrap; }
-    .chan--in_app { background: #F2EDE3; color: #3A3228; }
+    .pill { font-size: .6rem; font-weight: 700; background: rgba(61,112,64,.1); color: var(--sage); padding: .1rem .4rem; border-radius: var(--r-full); }
+    /* The chip is '.state' from styles.scss. This screen also folded
+       'withdrawn' in with 'rejected' — the same red — so an applicant who
+       stopped read as one the landlord had refused. 'applicationState' makes
+       both 'closed', in one place, for both screens. */
+    .chan { font-size: .65rem; font-weight: 700; padding: .1rem .4rem; border-radius: var(--r-full); white-space: nowrap; }
+    .chan--in_app { background: var(--cream2); color: var(--ink2); }
     .chan--whatsapp { background: rgba(37,211,102,.14); color: #0F7A3D; }
-    .link-button {
-      background: none; border: none; padding: 0; font: inherit;
-      color: var(--terra); text-decoration: underline; cursor: pointer;
-    }
     @media (max-width: 480px) {
       .ai-filters label, .ai-filters select { width: 100%; }
       .ai-row__actions { width: 100%; }
@@ -246,6 +251,10 @@ import {
   `,
 })
 export class ApplicantsInbox implements OnInit {
+  /** The vocabulary's mapping, shared — see core/models/state.model.ts. */
+  protected readonly applicationState = applicationState;
+  protected readonly stateClass = stateClass;
+
   private applications = inject(ApplicationsService);
 
   readonly loading = signal(true);

@@ -19,6 +19,7 @@ import {
   AMENITY_LABELS, HouseholdCleanliness, HouseholdSchedule, HouseholdSocial,
 } from '../../core/models/room.model';
 import { environment } from '@env/environment';
+import { Loading } from '../../shared/components/loading/loading';
 
 /** Plain English, in a tenant's terms. `unstated` has no entry: it is never shown. */
 const HOUSEMATE_SENTENCE: Record<'professionals' | 'students' | 'mixed' | 'couples', string> = {
@@ -67,7 +68,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
 @Component({
   selector: 'app-room-detail',
   standalone: true,
-  imports: [NgOptimizedImage, DatePipe, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot, TranslatePipe],
+  imports: [NgOptimizedImage, DatePipe, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot, TranslatePipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="room-detail">
@@ -132,7 +133,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
         }
 
         <h1>{{ r.title }}</h1>
-        <p class="room-detail__price">{{ r.rentCents | zarCents:'monthly' }} @if (r.billsIncluded) { <span class="pill">Bills included</span> }</p>
+        <p class="room-detail__price figure">{{ r.rentCents | zarCents:'monthly' }} @if (r.billsIncluded) { <span class="pill">Bills included</span> }</p>
         <p class="room-detail__location">📍 {{ r.locationDisplay }}</p>
 
         <!-- Sub-let notice — Phase 6.
@@ -213,13 +214,13 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
             <p class="landlord-trust__name">{{ landlord.fullName }}</p>
 
             @if (landlord.landlordProfile?.idVerified) {
-              <p class="landlord-trust__state landlord-trust__state--ok">
+              <p class="landlord-trust__state">
                 <span class="badge badge-verified">✓ Verified</span>
                 A Mastande reviewer checked their identity document against this
                 account. It is not a credit or criminal check.
               </p>
             } @else {
-              <p class="landlord-trust__state landlord-trust__state--none">
+              <p class="landlord-trust__state">
                 <span class="badge badge-unverified">Identity not verified</span>
                 Nobody has checked who this is. Never pay a deposit before
                 viewing the room and signing a lease.
@@ -326,7 +327,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
         <section class="detail__section">
           <h2>What previous tenants said</h2>
           @if (loadingReviews()) {
-            <p class="muted">Loading reviews…</p>
+            <app-loading>Loading reviews…</app-loading>
           } @else {
             <app-review-list
               [reviews]="roomReviews()"
@@ -373,7 +374,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
           moment.
         </p>
       } @else {
-        <p>Loading…</p>
+        <app-loading/>
       }
     </div>
   `,
@@ -389,14 +390,14 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
     .gallery--solo { grid-template-columns: 1fr; }
     .gallery button { padding: 0; border: none; background: none; cursor: pointer; display: block; }
     .gallery__main img { width: 100%; height: 100%; aspect-ratio: 3/2;
-                         object-fit: cover; border-radius: 10px; display: block; }
+                         object-fit: cover; border-radius: var(--r12); display: block; }
     .gallery__side { display: grid; grid-template-rows: repeat(2, 1fr); gap: .5rem; }
     .gallery__thumb { position: relative; }
     .gallery__thumb img { width: 100%; height: 100%; aspect-ratio: 3/2;
-                          object-fit: cover; border-radius: 8px; display: block; }
+                          object-fit: cover; border-radius: var(--r8); display: block; }
     .gallery__more { position: absolute; inset: 0; display: flex; align-items: center;
-                     justify-content: center; background: rgba(26,20,16,.62); color: #fff;
-                     font-weight: 700; border-radius: 8px; font-size: 1.05rem; }
+                     justify-content: center; background: rgba(26,20,16,.62); color: var(--white);
+                     font-weight: 700; border-radius: var(--r8); font-size: 1.05rem; }
 
     @media (max-width: 700px) {
       .gallery { grid-template-columns: 1fr; }
@@ -405,11 +406,11 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
 
     .lightbox { position: fixed; inset: 0; z-index: 200; background: rgba(10,8,6,.94);
                 display: flex; align-items: center; justify-content: center; padding: 2rem; }
-    .lightbox img { max-width: 100%; max-height: 88vh; object-fit: contain; border-radius: 6px; }
+    .lightbox img { max-width: 100%; max-height: 88vh; object-fit: contain; border-radius: var(--r4); }
     .lightbox__close { position: absolute; top: 1rem; right: 1.25rem; font-size: 1.6rem;
-                       background: none; border: none; color: #fff; cursor: pointer; line-height: 1; }
+                       background: none; border: none; color: var(--white); cursor: pointer; line-height: 1; }
     .lightbox__nav { position: absolute; top: 50%; transform: translateY(-50%);
-                     font-size: 2.5rem; background: none; border: none; color: #fff;
+                     font-size: 2.5rem; background: none; border: none; color: var(--white);
                      cursor: pointer; padding: 0 1rem; line-height: 1; }
     .lightbox__nav--prev { left: .25rem; }
     .lightbox__nav--next { right: .25rem; }
@@ -419,7 +420,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
     .room-detail__price { font-size: 1.15rem; font-weight: 700; color: var(--terra); margin-bottom: .3rem; }
     .room-detail__location { color: var(--slate); margin-bottom: .8rem; }
     .room-detail__flags { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
-    .pill { font-size: .72rem; font-weight: 700; background: #F2EDE3; padding: .2rem .6rem; border-radius: 20px; }
+    .pill { font-size: .72rem; font-weight: 700; background: #F2EDE3; padding: .2rem .6rem; border-radius: var(--r20); }
     .pill--green { background: rgba(61,112,64,.1); color: #3D7040; }
     /* Amber, not green: "Sublet" is a fact a tenant must weigh, not a feature
        of the room. Contrast checked by the accessibility drive. */
@@ -446,11 +447,11 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
     .sublet-notice a { font-weight: 600; }
     .shared-household { margin: .6rem 0 1rem; padding-left: 1.1rem; line-height: 1.6; }
     .shared-household li { margin-bottom: .2rem; }
-    .room-detail__apply { border-top: 1px solid #DDD5C8; padding-top: 1.5rem; }
-    .room-detail__apply textarea { width: 100%; padding: .6rem; border: 1.5px solid #DDD5C8; border-radius: 6px; margin-bottom: .6rem; font-family: inherit; }
-    .room-detail__apply button { padding: .6rem 1.2rem; border-radius: 6px; border: none; background: var(--terra); color: #fff; font-weight: 700; cursor: pointer; }
+    .room-detail__apply { border-top: 1px solid var(--border); padding-top: 1.5rem; }
+    .room-detail__apply textarea { width: 100%; padding: .6rem; border: 1.5px solid var(--border); border-radius: var(--r4); margin-bottom: .6rem; font-family: inherit; }
+    .room-detail__apply button { padding: .6rem 1.2rem; border-radius: var(--r4); border: none; background: var(--terra); color: var(--white); font-weight: 700; cursor: pointer; }
     .room-detail__apply button:disabled { opacity: .5; }
-    .error { color: #D63B3B; font-size: .82rem; margin-bottom: .5rem; }
+    .error { color: var(--danger); font-size: .82rem; margin-bottom: .5rem; }
     .muted { color: var(--slate); }
   `],
 })

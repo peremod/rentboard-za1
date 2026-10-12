@@ -9,6 +9,7 @@ import {
 import { DialogService } from '../../../core/services/dialog.service';
 import { ContractorLeadSummary } from '../../../core/services/service-directory.service';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * Curating the contractor directory.
@@ -24,7 +25,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 @Component({
   selector: 'app-admin-services',
   standalone: true,
-  imports: [FormsModule, DatePipe, ZarCentsPipe],
+  imports: [FormsModule, DatePipe, ZarCentsPipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -78,7 +79,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
       </section>
 
       @if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       } @else if (providers().length === 0) {
         <div class="empty-state">
           <h2>Nobody in the directory</h2>
@@ -293,7 +294,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
       .provider-form select { width: 100%; }
       .provider-form__check { display: flex; align-items: center; gap: 0.5rem; }
       .provider-form__check span { margin: 0; }
-      .provider { border-top: 1px solid var(--line); padding: 0.75rem 0; }
+      .provider { border-top: 1px solid var(--border); padding: 0.75rem 0; }
       .provider--off { opacity: 0.72; }
       .provider__head { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: baseline; }
       .provider__note { margin: 0.25rem 0 0.5rem; }

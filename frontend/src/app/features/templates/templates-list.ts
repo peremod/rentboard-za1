@@ -68,7 +68,7 @@ import { SeoService } from '../../core/services/seo.service';
       display: inline-block; font-size: .72rem; font-weight: 700;
       padding: .3rem .6rem; border-radius: var(--r-full);
     }
-    .tpl-flag { background: rgba(192, 78, 40, .1); color: var(--terra); }
+    .tpl-flag { background: rgba(173, 66, 34, .1); color: var(--terra); }
     .tpl-ok { background: rgba(61, 112, 64, .12); color: var(--sage-deep); }
   `],
 })

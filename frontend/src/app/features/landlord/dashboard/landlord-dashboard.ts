@@ -19,6 +19,7 @@ import { SurveyPrompt } from '../../../shared/components/survey-prompt/survey-pr
 import { SurveyService } from '../../../core/services/survey';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/tenancy-lifecycle';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * Billing (Upgrade link, Boost button) is hidden behind BILLING_ENABLED —
@@ -30,7 +31,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
 @Component({
   selector: 'app-landlord-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel, ReferralPanel, SurveyPrompt, LandlordInboxPanel, LandlordCalendar, ScreenHint, TenancyLifecycle],
+  imports: [RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel, ReferralPanel, SurveyPrompt, LandlordInboxPanel, LandlordCalendar, ScreenHint, TenancyLifecycle, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-dashboard" heading="This is your whole letting, on one screen">
@@ -151,7 +152,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
         <h2 class="dash-section-title">Active listings</h2>
 
         @if (loading()) {
-          <p class="muted">Loading…</p>
+          <app-loading/>
         } @else if (rooms().length === 0) {
           <div class="empty-state">
             <h3>No rooms listed yet</h3>
@@ -299,7 +300,7 @@ import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/t
         <h2 class="dash-section-title">Previously let — relist instantly</h2>
 
         @if (loadingArchived()) {
-          <p class="muted">Loading…</p>
+          <app-loading/>
         } @else if (archivedRooms().length === 0) {
           <p class="muted">No let rooms yet. When you mark a room as let it will appear here, ready to relist.</p>
         } @else {

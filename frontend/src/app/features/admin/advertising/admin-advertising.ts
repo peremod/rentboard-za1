@@ -7,6 +7,7 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { getImageUrl } from '../../../shared/utils/imagekit.utils';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * Advertising: the enquiry pipeline and campaign management in one place,
@@ -15,7 +16,7 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
 @Component({
   selector: 'app-admin-advertising',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, LowerCasePipe, FormsModule, ReactiveFormsModule, ZarCentsPipe],
+  imports: [DatePipe, DecimalPipe, LowerCasePipe, FormsModule, ReactiveFormsModule, ZarCentsPipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -97,7 +98,7 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
         </h2>
 
         @if (loadingEnquiries()) {
-          <p class="muted">Loading…</p>
+          <app-loading/>
         } @else if (enquiries().length === 0) {
           <p class="muted">No enquiries yet. They arrive from the Advertise page.</p>
         } @else {
@@ -301,7 +302,7 @@ import { getImageUrl } from '../../../shared/utils/imagekit.utils';
         </h2>
 
         @if (loadingCampaigns()) {
-          <p class="muted">Loading…</p>
+          <app-loading/>
         } @else if (campaigns().length === 0) {
           <p class="muted">No campaigns yet. Create one above once an enquiry converts.</p>
         } @else {

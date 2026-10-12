@@ -64,6 +64,54 @@ async function main() {
   const before = new Map(existing.map((row) => [row.id, row]));
 
   let changes = 0;
+
+  /**
+   * ⚠️ THE ADVERTISER ROW, which this script could not see or fix.
+   *
+   * Reported from a live board: every house ad still reads "by RentBoard ZA".
+   * `ads.service.ts` returns `advertiser: campaign.advertiser.companyName` and
+   * `ad-slot.ts` renders `by {{ advert.advertiser }}` under every advert, so
+   * the old brand name was on a public page under three adverts whose own copy
+   * had been correct since the rename.
+   *
+   * Three defects in a chain, all in this file and in seed.ts:
+   *
+   *   1. the upsert said `update: {}`, so `companyName: 'Mastande'` applied
+   *      only on CREATE. Any database where the row already existed kept its
+   *      old name for ever.
+   *   2. the comparison below read four fields of the CAMPAIGNS and nothing of
+   *      the advertiser, so the dry run reported "Nothing to change" while the
+   *      name was wrong — a report structurally unable to see its subject.
+   *   3. and because of (2) the `if (!changes) return` below fired first, so
+   *      the advertiser upsert was never reached at all. Fixing (1) alone would
+   *      have changed nothing.
+   *
+   * Reproduced before fixing: with the row set back to 'RentBoard ZA', this
+   * script with --apply printed "Nothing to change — the house ads already
+   * match the code" and left it exactly as it was.
+   */
+  const advertiser = await prisma.advertiser.findUnique({
+    where: { id: HOUSE_ADVERTISER_ID },
+    select: { companyName: true, contactName: true, contactEmail: true },
+  });
+  console.log('House advertiser');
+  if (!advertiser) {
+    console.log('  + not in this database — will be created');
+    console.log(`    companyName: ${HOUSE_ADVERTISER.companyName}`);
+    changes++;
+  } else {
+    let differs = false;
+    for (const field of ['companyName', 'contactName', 'contactEmail'] as const) {
+      if (advertiser[field] !== HOUSE_ADVERTISER[field]) {
+        console.log(`  - ${field}: ${advertiser[field]}`);
+        console.log(`  + ${field}: ${HOUSE_ADVERTISER[field]}`);
+        differs = true;
+      }
+    }
+    if (differs) changes++;
+    else console.log('  unchanged');
+  }
+  console.log('');
   for (const ad of HOUSE_ADS) {
     const current = before.get(ad.id);
     console.log(`${ad.name}`);
@@ -98,9 +146,14 @@ async function main() {
     return;
   }
 
+  /**
+   * `update` carries the fields, not `{}`. The id is deliberately left out of
+   * the update: it is the key.
+   */
+  const { id: _houseId, ...advertiserFields } = HOUSE_ADVERTISER;
   await prisma.advertiser.upsert({
     where: { id: HOUSE_ADVERTISER_ID },
-    update: {},
+    update: advertiserFields,
     create: HOUSE_ADVERTISER,
   });
 

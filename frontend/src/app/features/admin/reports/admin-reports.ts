@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ReportsService } from '../../../core/services/reports.service';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /** Reasons that mean someone may be about to lose money. Surfaced first. */
 const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_real_listing'];
@@ -10,7 +11,7 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
 @Component({
   selector: 'app-admin-reports',
   standalone: true,
-  imports: [RouterLink, DatePipe, FormsModule],
+  imports: [RouterLink, DatePipe, FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -24,7 +25,7 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
       </div>
 
       @if (loading()) {
-        <p class="muted">Loading reports…</p>
+        <app-loading>Loading reports…</app-loading>
       } @else if (reports().length === 0) {
         <div class="empty-state">
           <h2>Nothing open</h2>
@@ -108,7 +109,7 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
       }
   `,
   styles: [`
-    .report--urgent { border-color: rgba(178,59,59,.4); box-shadow: 0 0 0 1px rgba(178,59,59,.15); }
+    .report--urgent { border-color: rgba(178,59,59,.4); box-shadow: var(--ring-danger); }
     .report-details {
       font-size: .88rem; line-height: 1.7; color: var(--ink2);
       background: var(--cream2); border-radius: var(--r8);

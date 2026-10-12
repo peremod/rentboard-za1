@@ -314,7 +314,10 @@ export class RoomsService {
      * nothing, because an owner groups rooms deliberately and must not have a
      * property appear behind their back.
      */
-    let propertyId: string | null = null;
+    // Declared without an initialiser on purpose: both branches below assign
+    // it, so a `= null` here is a value nothing can read, and eslint's
+    // no-useless-assignment says so.
+    let propertyId: string | null;
     if (requestedPropertyId) {
       const own = await this.prisma.property.findFirst({
         where: { id: requestedPropertyId, landlordId: lister.id },
@@ -719,6 +722,52 @@ export class RoomsService {
     const room = await this.assertOwner(id, landlordId);
     if (!['let', 'paused', 'deleted'].includes(room.status)) {
       throw new BadRequestException('Only let, paused or removed rooms can be relisted');
+    }
+
+    /**
+     * ⚠️ Not while somebody is recorded as living there.
+     *
+     * This was missing, and the consequence was not subtle: the status check
+     * above passes for a `let` room, so a landlord could relist a room with an
+     * ACTIVE tenancy on it. Measured — the room went back to `active`, onto
+     * the PUBLIC BOARD, with the tenancy untouched. Three things follow:
+     *
+     *   · tenants apply for a room somebody else is living in, which is
+     *     `ReportReason.already_let` — the product generating the exact
+     *     complaint its own report enum exists for;
+     *   · `relist()` archives every open application and increments
+     *     `relistCount` on the way past, so the damage is not undoable by
+     *     setting the status back;
+     *   · the empty-room task added in Phase E cannot see it, because that
+     *     asks for rooms still marked `let` and this one is now `active`.
+     *
+     * And the landlord was POINTED here. Their inbox says "X is leaving — get
+     * the room back on the board" with this as the action, so the product
+     * suggested the step that put it into an inconsistent state.
+     *
+     * The fix is not to block them. It is to name the step they have skipped:
+     * the move-out is a record of fact, and this platform does not infer one
+     * from a date (see LeaseService.upcoming on why the notice countdown is
+     * computed and never written). So the guard says whose move-out is
+     * missing and where to record it.
+     *
+     * `pending` counts too. An accepted applicant who has not moved in yet is
+     * somebody expecting this room, and relisting it out from under them
+     * without cancelling is the same defect wearing a different hat.
+     */
+    const live = await this.prisma.tenancy.findFirst({
+      where: { roomId: id, status: { in: ['pending', 'active'] } },
+      select: { status: true, tenant: { select: { fullName: true } } },
+    });
+    if (live) {
+      const who = live.tenant?.fullName ?? 'Somebody';
+      throw new BadRequestException(
+        live.status === 'active'
+          ? `${who} is still recorded as living in this room. Record the move-out first — ` +
+            'then it can go back on the board.'
+          : `${who} has been accepted for this room and has not moved in yet. ` +
+            'Confirm the move-in, or mark it as fallen through, before relisting.',
+      );
     }
     // Billing paused — no plan-limit check here either. See file header comment.
 

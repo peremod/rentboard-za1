@@ -1201,6 +1201,31 @@ check "the directory needs a session" 401 "$STATUS"
 # own `if type=="array" ... else true` guard then PASSED it. A check that cannot
 # see its subject and reports success is worse than no check, and this file's
 # header warns about exactly this: `req` overwrites $BODY.
+# ⚠️ The two body assertions below both require `length>0`, deliberately: an
+# earlier version reported success on any body that was not a list, which is
+# the vacuous pass this file keeps finding. But nothing in this suite, or in
+# `prisma/seed.ts`, had ever CREATED a live provider — every create it attempts
+# is one it expects to be refused. So on a database with providers left over
+# from an earlier drive the two checks passed, and on a freshly seeded one they
+# failed, which is what CI did the first time it ever reached this step.
+#
+# A check must carry its own subject rather than inherit one. One live provider
+# is created here, by the admin route, with the number already rung so it can be
+# active at all. Without an admin token that is impossible, and the two checks
+# below then SKIP with the reason named rather than failing on an empty
+# directory or — worse — passing on one.
+DIRECTORY_SUBJECT=""
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  req POST /api/services/admin '{"category":"plumber","name":"Smoke Directory Subject","phone":"082 111 4444","areas":["Tembisa"],"phoneConfirmedAt":"2026-09-18T10:00:00.000Z","active":true}' "$ADMIN_TOKEN"
+  if [[ "$STATUS" == "201" || "$STATUS" == "200" ]]; then
+    DIRECTORY_SUBJECT="yes"
+    green "  PASS  a live provider can be added once the number has been rung  ($STATUS)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  could not create a provider to check the directory against  ($STATUS)"; FAIL=$((FAIL+1))
+    grey "        $(echo "$BODY" | head -c 300)"
+  fi
+fi
+
 req GET /api/services "" "$LTOKEN"
 check "a landlord can read the directory" 200 "$STATUS" "$BODY"
 
@@ -1208,7 +1233,9 @@ check "a landlord can read the directory" 200 "$STATUS" "$BODY"
 # Same correction as the sponsorship check below, for the same reason: this one
 # also reported success on any body that was not a list, and also looked only at
 # the first row.
-if echo "$BODY" | jq -e 'type=="array" and length>0 and (map(select(has("checkedByAdminId"))) | length) == 0' >/dev/null 2>&1; then
+if [[ -z "$DIRECTORY_SUBJECT" ]] && [[ "$(echo "$BODY" | jq -r 'if type=="array" then length else "x" end' 2>/dev/null)" == "0" ]]; then
+  skipped "what the directory withholds — no provider exists to check it against; set ADMIN_TOKEN"
+elif echo "$BODY" | jq -e 'type=="array" and length>0 and (map(select(has("checkedByAdminId"))) | length) == 0' >/dev/null 2>&1; then
   green "  PASS  the directory withholds which admin signed a provider off"; PASS=$((PASS+1))
 else
   red "  FAIL  the directory leaks checkedByAdminId to landlords, or did not return a list of providers"; FAIL=$((FAIL+1))
@@ -1228,7 +1255,9 @@ fi
 # success branch. That is the third time in this repository, and the second in
 # this file. So the list is REQUIRED, the row count is required, and every row
 # is checked rather than only the first — a leak on row two is still a leak.
-if echo "$BODY" | jq -e 'type=="array" and length>0 and (map(select(has("sponsoredUntil"))) | length) == 0' >/dev/null 2>&1; then
+if [[ -z "$DIRECTORY_SUBJECT" ]] && [[ "$(echo "$BODY" | jq -r 'if type=="array" then length else "x" end' 2>/dev/null)" == "0" ]]; then
+  skipped "what the directory withholds about sponsorship — no provider to check against; set ADMIN_TOKEN"
+elif echo "$BODY" | jq -e 'type=="array" and length>0 and (map(select(has("sponsoredUntil"))) | length) == 0' >/dev/null 2>&1; then
   green "  PASS  no sponsorship field reaches a landlord's browser"; PASS=$((PASS+1))
 else
   red "  FAIL  the directory ships sponsoredUntil to landlords, or did not return a list of providers"; FAIL=$((FAIL+1))
@@ -1386,7 +1415,40 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   SMOKE_ASSIST="08215$(( RANDOM % 90000 + 10000 ))"
   SMOKE_ASSIST="${SMOKE_ASSIST:0:10}"
   req POST /api/admin/phone-signups/assisted "{\"phone\":\"$SMOKE_ASSIST\"}" "$ADMIN_TOKEN"
-  check "an admin can start one" 200 "$STATUS" "$BODY"
+  ASSIST_STATUS="$STATUS"
+  ASSIST_BODY="$BODY"
+
+  # ⚠️ TWO states, for the same reason as phone sign-in in §18 — see the
+  # comment there. Assisted sign-up delivers the code over WhatsApp and there
+  # is no other channel, so with WHATSAPP_ENABLED=false (the default now, Meta
+  # bills per message) the API refuses with a 503 naming email. This section
+  # asserted a flat 200 and had never run in CI, because a lint error skipped
+  # the whole job — so it sat red for nobody, claiming a flow the product had
+  # deliberately switched off.
+  #
+  # The off branch is not a skip. Accepting an assisted sign-up and sending
+  # nothing is the exact failure the 503 exists to prevent: an admin would tell
+  # somebody standing in front of them that a code was on its way.
+  if [[ "$ASSIST_STATUS" == "503" ]]; then
+    green "  PASS  assisted sign-up is switched off and says so  (503)"; PASS=$((PASS+1))
+    if echo "$ASSIST_BODY" | jq -r '.message // ""' | grep -qi 'email'; then
+      green "  PASS  …and the refusal names the way in that works"; PASS=$((PASS+1))
+    else
+      red "  FAIL  the 503 does not name email: $(echo "$ASSIST_BODY" | jq -r '.message // ""')"; FAIL=$((FAIL+1))
+    fi
+    # The guards above are what this section can still prove with the channel
+    # off, and they are flag-independent. The read-back route must stay real:
+    # an admin reading an empty list is correct here, a 404 is not.
+    req GET /api/admin/phone-signups/assisted/mine "" "$ADMIN_TOKEN"
+    check "an admin can still read back the (empty) list" 200 "$STATUS" "$BODY"
+    if echo "$BODY" | jq -e 'type=="array"' >/dev/null 2>&1; then
+      green "  PASS  …and it is an array rather than an error shape"; PASS=$((PASS+1))
+    else
+      red "  FAIL  the read-back is not an array: $(echo "$BODY" | head -c 200)"; FAIL=$((FAIL+1))
+    fi
+  else
+  check "an admin can start one" 200 "$ASSIST_STATUS" "$ASSIST_BODY"
+  STATUS="$ASSIST_STATUS"; BODY="$ASSIST_BODY"
 
   # ⚠️ The control. An admin handed the code or a ticket could create an
   # account in somebody else's name and tick the Terms for them.
@@ -1416,6 +1478,7 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   else
     red "  FAIL  a record claims acceptance with no account, or the list is not an array"; FAIL=$((FAIL+1))
     grey "        $(echo "$BODY" | head -c 300)"
+  fi
   fi
 else
   skipped "starting an assisted sign-up — set ADMIN_TOKEN to include it"
@@ -1606,6 +1669,33 @@ if [[ -n "$TEN_ROOM" ]]; then
 
       req POST "/api/tenancies/$TEN_ID/cancel" '{}' "$TTOKEN"
       check "cannot cancel once active" 400 "$STATUS" "$BODY"
+
+      # Either party may give notice (v1.117.0). The route documented "by
+      # either side" from the day it shipped while the service called
+      # assertLandlordOwns, so a tenant got a 403 on their own home. It needed
+      # Tenancy.noticeRecordedById first: noticeGivenById says who notice is
+      # attributed to, not who entered it, so there was no safe rule for who
+      # may withdraw — and a landlord who could clear a tenant's notice could
+      # keep them on the books.
+      # ⚠️ A room somebody is recorded as living in cannot be relisted (v1.122.0).
+      # The status check on the room passes for `let`, so this was accepted —
+      # putting an occupied room back on the PUBLIC BOARD, archiving every open
+      # application and bumping relistCount on the way. That is
+      # ReportReason.already_let, the complaint the report enum exists for.
+      req POST "/api/rooms/$TEN_ROOM/relist" '{}' "$LTOKEN"
+      check "a room with somebody living in it cannot be relisted" 400 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/notice" '{"givenBy":"landlord"}' "$TTOKEN"
+      check "a tenant cannot record that the LANDLORD gave notice" 400 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/notice" '{"givenBy":"tenant"}' "$TTOKEN"
+      check "a tenant CAN give notice on their own home" 200 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/notice/withdraw" '{}' "$LTOKEN"
+      check "the landlord cannot withdraw the tenant's notice" 403 "$STATUS" "$BODY"
+
+      req POST "/api/tenancies/$TEN_ID/notice/withdraw" '{}' "$TTOKEN"
+      check "…but whoever recorded it can" 200 "$STATUS" "$BODY"
 
       req POST "/api/tenancies/$TEN_ID/end" '{"reason":"Moved closer to work"}' "$LTOKEN"
       check "landlord ends the tenancy" 200 "$STATUS" "$BODY"
@@ -3550,6 +3640,24 @@ check "a tenant cannot set a landlord's reminder settings" 403 "$STATUS" "$BODY"
 req GET "/api/properties/rent/00000000-0000-4000-8000-000000000000" "" "$LTOKEN"
 check "rent history for a tenancy that does not exist" 404 "$STATUS" "$BODY"
 
+# ── The archive (v1.121.0) ────────────────────────────────────────────────
+#
+# One list for both roles, because a sub-lessor lets one room and rents
+# another. The permission rules are deliberately NOT uniform and the drive
+# exercises each; these are the route-level ones.
+req GET /api/tenancies/archive "" "$LTOKEN"
+check "a landlord can read their archive" 200 "$STATUS" "$BODY"
+req GET /api/tenancies/archive "" "$TTOKEN"
+check "and so can a tenant — one list, both roles" 200 "$STATUS" "$BODY"
+req GET /api/tenancies/archive
+check "the archive needs a session" 401 "$STATUS"
+# ⚠️ 404 and not 400. The route is declared before every :id route in the
+# controller, so "archive" is never handed to ParseUUIDPipe as an id — a 400
+# here would mean the ordering had been changed and the route now 400s on its
+# own name.
+req GET "/api/tenancies/archive/00000000-0000-4000-8000-000000000000" "" "$LTOKEN"
+check "a letting that does not exist" 404 "$STATUS" "$BODY"
+
 # The tenant's side (v1.71.0). The reminder tells them to "say so on
 # Mastande", so the path that lets them has to keep working.
 req PATCH "/api/properties/rent/period/00000000-0000-4000-8000-000000000000/dispute" '{"note":"Paid on the 3rd."}' "$TTOKEN"
@@ -3567,6 +3675,38 @@ if [[ -n "$TEN_ID" ]]; then
 
   req GET "/api/properties/rent/$TEN_ID" "" "$TTOKEN"
   check "a tenant can read their own rent record" 200 "$STATUS" "$BODY"
+
+  # The ledger carries the tenancy's own state (v1.116.0). It used to answer a
+  # bare array, so a caller holding a rent record could not tell a finished
+  # letting from a running one — and the tenant's rent screen duly rendered
+  # both the same way. A screen cannot describe a record it has not been told
+  # the state of.
+  LEDGER_STATE=$(echo "$BODY" | jq -r '.tenancy.status // empty')
+  if [[ -n "$LEDGER_STATE" ]]; then
+    green "  PASS  the ledger says which state the tenancy is in ($LEDGER_STATE)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  the rent ledger carries no tenancy state — { tenancy, periods }?"; FAIL=$((FAIL+1))
+  fi
+
+  # ── The rent window (v1.116.0) ─────────────────────────────────────────
+  #
+  # A rent period belongs to the months the tenancy actually covered. That is
+  # the invariant, and it is NOT "the tenancy is active": $TEN_ID has already
+  # ended by this point, and a landlord must still be able to record the month
+  # a tenant moved out owing. `mark()` previously refused `cancelled` and
+  # nothing else, so it accepted a month before the move-in, a month after the
+  # move-out, and next March.
+  THIS_MONTH=$(date -u +%Y-%m-01)
+  NEXT_MONTH=$(date -u -d '1 month' +%Y-%m-01 2>/dev/null || date -u -v+1m +%Y-%m-01)
+
+  req PATCH "/api/properties/rent/$TEN_ID/mark" "{\"periodStart\":\"$THIS_MONTH\",\"status\":\"unpaid\"}" "$LTOKEN"
+  check "a month inside a FINISHED letting is still correctable" 200 "$STATUS" "$BODY"
+
+  req PATCH "/api/properties/rent/$TEN_ID/mark" "{\"periodStart\":\"$NEXT_MONTH\",\"status\":\"unpaid\"}" "$LTOKEN"
+  check "a month that has not started is refused" 400 "$STATUS" "$BODY"
+
+  req PATCH "/api/properties/rent/$TEN_ID/mark" '{"periodStart":"2020-01-01","status":"unpaid"}' "$LTOKEN"
+  check "a month before the tenant moved in is refused" 400 "$STATUS" "$BODY"
 else
   skipped "tenant rent record — no tenancy was created earlier"
 fi

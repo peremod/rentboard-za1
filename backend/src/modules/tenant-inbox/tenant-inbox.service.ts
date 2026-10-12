@@ -371,10 +371,37 @@ export class TenantInboxService {
           entityId: t.id,
           roomTitle: t.room.title,
           daysUntil: days,
-          // Browsing is the action for somebody who has to move, not a
-          // paperwork screen. The one thing they need is another room.
-          actionLabel: byThem ? 'Start looking' : 'See the details',
-          actionPath: byThem ? '/' : '/tenant/rent',
+          /**
+           * ⚠️ Three different situations, not two — Phase G.
+           *
+           * While the countdown runs, somebody told to leave needs another
+           * room, and browsing is the action; a paperwork screen is not. That
+           * part was right.
+           *
+           * Once the date has PASSED, neither of those is the thing. The
+           * letting is still recorded as running — this platform does not
+           * infer a move-out from a date, because where somebody lives is a
+           * record of fact — so the rent record keeps going and the room
+           * cannot be relisted until the move-out exists. A tenant who has
+           * actually gone can say so themselves: `end()` takes either party,
+           * and the lifecycle panel on the rent screen is where it lives.
+           *
+           * Sending them to browse at that point would leave a letting open
+           * behind them, and the next thing they hear about it is a rent
+           * reminder for a room they left.
+           */
+          actionLabel:
+            days !== null && days < 0
+              ? 'Say you have moved out'
+              : byThem
+                ? 'Start looking'
+                : 'See the details',
+          actionPath:
+            days !== null && days < 0
+              ? '/tenant/rent#moving-in-out'
+              : byThem
+                ? '/'
+                : '/tenant/rent',
         };
       }
 

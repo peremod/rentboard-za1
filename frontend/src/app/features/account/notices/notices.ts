@@ -3,6 +3,9 @@ import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { NoticesService, Notice } from '../../../core/services/notices';
+import { Loading } from '../../../shared/components/loading/loading';
+import { ErrorState } from '../../../shared/components/error-state/error-state';
+import { EmptyState } from '../../../shared/components/empty-state/empty-state';
 
 /**
  * Your notices — Phase 7g.
@@ -27,7 +30,7 @@ import { NoticesService, Notice } from '../../../core/services/notices';
 @Component({
   selector: 'app-notices',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, Loading, ErrorState, EmptyState],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <section class="dash-section">
@@ -44,19 +47,23 @@ import { NoticesService, Notice } from '../../../core/services/notices';
              page telling somebody nobody applied, which is the one thing this
              screen exists to get right. -->
         @if (failed()) {
-          <p class="notices-empty" role="alert">
+          <app-error-state (retry)="reload()">
             We could not load your notices just now — this is a problem at our
-            end, not an empty list. Pull down to refresh, or
-            <button type="button" class="link-button" (click)="reload()">try again</button>.
-          </p>
+            end, not an empty list.
+          </app-error-state>
         } @else if (loading()) {
-          <p class="notices-empty">Loading…</p>
+          <app-loading/>
         } @else if (notices.notices().length === 0) {
-          <p class="notices-empty">
+          <!-- ⚠️ This used to end "— and on WhatsApp if we can reach you
+               there." WHATSAPP_ENABLED is false, so that was a promise of a
+               message that is never sent, which CLAUDE.md forbids outright.
+               whatsapp-off-drive could not see it: it checked four
+               hardcoded files and this was not one of them. -->
+          <app-empty-state>
             Nothing yet. When somebody applies for one of your rooms, or there is
-            something you need to know, it will appear here — and on WhatsApp if
-            we can reach you there.
-          </p>
+            something you need to know, it will appear here. This screen is the
+            record — nothing is sent anywhere else.
+          </app-empty-state>
         }
 
         <ul class="notices-list">
@@ -115,10 +122,6 @@ import { NoticesService, Notice } from '../../../core/services/notices';
     .notice-actions { display: flex; gap: .5rem; flex-shrink: 0; }
     /* A button that reads as a link, so the retry sits inside the sentence
        rather than below it as a second block. */
-    .link-button {
-      background: none; border: none; padding: 0; font: inherit;
-      color: var(--terra); text-decoration: underline; cursor: pointer;
-    }
   `,
 })
 export class Notices implements OnInit {

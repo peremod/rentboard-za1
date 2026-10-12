@@ -6,6 +6,7 @@ import { AdminService, AdminUserDetail } from '../../../core/services/admin.serv
 import { DeletionPreview } from '../../../core/services/account-lifecycle.service';
 
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * One account, everything about it.
@@ -21,13 +22,13 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 @Component({
   selector: 'app-admin-user-detail',
   standalone: true,
-  imports: [DatePipe, FormsModule, RouterLink, ZarCentsPipe],
+  imports: [DatePipe, FormsModule, RouterLink, ZarCentsPipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <a routerLink="/admin/dashboard" class="muted">← Back to accounts</a>
 
       @if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       } @else if (error()) {
         <p class="field-error" role="alert">{{ error() }}</p>
       } @else if (detail(); as d) {
@@ -314,12 +315,12 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
     .ac-form label { display: flex; flex-direction: column; gap: .25rem; font-size: .85rem; }
     .ac-form input[type="text"] {
       font: inherit; padding: .55rem .6rem; border: 1px solid var(--border);
-      border-radius: 6px; min-height: 44px;
+      border-radius: var(--r4); min-height: 44px;
     }
     .ac-check { flex-direction: row !important; align-items: flex-start; gap: .55rem; line-height: 1.6; }
     .ac-check input { width: 20px; height: 20px; margin-top: .15rem; flex-shrink: 0; }
     .btn-danger {
-      background: #D63B3B; color: #fff; border: none;
+      background: var(--danger); color: var(--white); border: none;
       &:disabled { opacity: .5; cursor: not-allowed; }
     }
     @media (max-width: 480px) {

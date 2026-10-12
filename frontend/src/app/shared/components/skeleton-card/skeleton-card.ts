@@ -16,7 +16,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
     </div>
   `,
   styles: [`
-    .skeleton-card { background: #FDFAF4; border: 1px solid #DDD5C8; border-radius: 12px; overflow: hidden; }
+    .skeleton-card { background: #FDFAF4; border: 1px solid var(--border); border-radius: var(--r12); overflow: hidden; }
     .skeleton-card__image { height: 200px; background: #F2EDE3; }
     .skeleton-card__body { padding: .9rem; }
     .shimmer { background: linear-gradient(90deg, #F2EDE3 25%, #E8DFD0 50%, #F2EDE3 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }

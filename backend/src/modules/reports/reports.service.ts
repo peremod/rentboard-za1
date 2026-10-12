@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { CreateReportDto } from './dto/create-report.dto';
@@ -35,11 +35,38 @@ export class ReportsService {
       if (!room) throw new NotFoundException('That listing no longer exists.');
     }
 
+    /**
+     * ⚠️ A tenancy may only be attached by somebody who was IN it.
+     *
+     * The field is what makes "what went wrong during this letting" answerable,
+     * and it is read by both parties' archive view — so an open field would
+     * let anyone pin their complaint to a stranger's tenancy record, where
+     * both of those people would then read it. Checked here rather than
+     * trusted, because a report is the one thing in this product that is meant
+     * to be taken seriously.
+     *
+     * A signed-out reporter has no tenancy to claim, which is why the check
+     * requires `reporterId` and does not fall back to anything.
+     */
+    if (dto.tenancyId) {
+      const tenancy = await this.prisma.tenancy.findUnique({
+        where: { id: dto.tenancyId },
+        select: { id: true, landlordId: true, tenantId: true },
+      });
+      if (!tenancy) throw new NotFoundException('That tenancy does not exist.');
+      if (!reporterId || (tenancy.landlordId !== reporterId && tenancy.tenantId !== reporterId)) {
+        throw new ForbiddenException('You can only report something about a letting you were part of.');
+      }
+    }
+
     const report = await this.prisma.report.create({
       data: {
         reporterId,
         roomId: dto.roomId,
         reportedUserId: dto.reportedUserId,
+        // Null when the complaint is not about a particular letting, which is
+        // the common case: most reports come from people browsing the board.
+        tenancyId: dto.tenancyId,
         reason: dto.reason,
         details: sanitizeText(dto.details),
         contactEmail: dto.contactEmail?.trim().toLowerCase(),

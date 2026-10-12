@@ -24,7 +24,7 @@
  * Needs the API on :3000, the app on :4200, and a DATABASE_URL.
  */
 import { chromium } from '@playwright/test';
-import { apiCall, registerUser, signIn, PASSWORD } from './lib/drive-session.mjs';
+import { apiCall, registerUser, signIn, PASSWORD, dbQuery } from './lib/drive-session.mjs';
 
 const API = 'http://localhost:3000';
 const WEB = process.env.WEB ?? 'http://localhost:4200';
@@ -67,7 +67,133 @@ await apiCall(API, 'POST', '/api/properties/expenses', {
   note: 'Plumber for the geyser',
 }, landlord.token);
 
+/**
+ * A room in this property with a LIVE tenancy and a marked month — so the rent
+ * panel has something to render.
+ *
+ * ⚠️ This is here because of a defect no compiler could see. The rent endpoint
+ * answers `{ tenancy, periods }`; `PropertiesService.rentHistory` still
+ * declared `RentPeriod[]`, and the generic on `http.get` is an unchecked cast,
+ * so `tsc --noEmit` and `ng build --configuration=production` were both green
+ * while `loadRent` put an object into the `rent` signal and
+ * `currentLabel(periods)` called `.find` on it — a TypeError on the landlord's
+ * own property screen, found by a code review rather than by any check in this
+ * repository.
+ *
+ * The widths loop below opens this screen at four sizes and never touched the
+ * rent panel, because the panel is behind a "Rent this month" button and a
+ * tenancy that none of these fixtures had. A control nothing clicks is a
+ * control nothing tests.
+ */
+const rentRoom = await apiCall(API, 'POST', '/api/rooms', {
+  roomType: 'shared_house', title: 'Rent panel room',
+  description: 'A clean back room on a quiet street, with its own entrance and a shared tap.',
+  rentCents: 250000, province: 'Gauteng', city: 'Pretoria',
+  locationDisplay: 'Arcadia, Pretoria', propertyId,
+  availableFrom: new Date().toISOString().slice(0, 10),
+}, landlord.token);
+const rentRoomId = rentRoom.body?.id;
+if (!rentRoomId) {
+  console.error('Could not create the rent-panel room:', JSON.stringify(rentRoom.body).slice(0, 300));
+  process.exit(2);
+}
+dbQuery(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${rentRoomId}'`);
+
+const rentTenant = await registerUser(API, 'TENANT');
+const rentApp = await apiCall(API, 'POST', '/api/applications',
+  { roomId: rentRoomId, coverNote: 'I can move in on the first of the month.' }, rentTenant.token);
+await apiCall(API, 'POST', `/api/applications/${rentApp.body.id}/accept`, {}, landlord.token);
+
+// Poll: accept() opens the tenancy fire-and-forget and is not awaited.
+let rentTenancyId = '';
+for (let i = 0; i < 40 && !rentTenancyId; i++) {
+  rentTenancyId = dbQuery(`SELECT id FROM tenancies WHERE "applicationId" = '${rentApp.body.id}'`);
+  if (!rentTenancyId) await new Promise((r) => setTimeout(r, 250));
+}
+if (!rentTenancyId) {
+  console.error('No tenancy was opened for the rent-panel room');
+  process.exit(2);
+}
+
+// Through the API, so status and startDate are set together — the rent window
+// reads startDate, and forcing one column in SQL without the other fabricates
+// a tenancy this product cannot otherwise reach.
+await apiCall(API, 'POST', `/api/tenancies/${rentTenancyId}/confirm-start`,
+  { startDate: new Date().toISOString().slice(0, 10) }, landlord.token);
+
+const monthStart = new Date(
+  Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1),
+).toISOString().slice(0, 10);
+const marked = await apiCall(API, 'PATCH', `/api/properties/rent/${rentTenancyId}/mark`,
+  { periodStart: monthStart, status: 'paid' }, landlord.token);
+if (marked.status !== 200) {
+  console.error(`Could not mark the month: ${marked.status} ${JSON.stringify(marked.body).slice(0, 200)}`);
+  process.exit(2);
+}
+
 const browser = await chromium.launch();
+
+// ── The rent panel actually renders ──────────────────────────────────────
+console.log('\n── The rent panel, with a live tenancy ─────────────────');
+{
+  const page = await signIn(browser, WEB, landlord.email, PASSWORD, { width: 390, height: 1000 });
+  const pageErrors = [];
+  page.on('pageerror', (e) => pageErrors.push(String(e.message ?? e)));
+  await page.goto(`${WEB}/landlord/properties/${propertyId}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2000);
+
+  const trigger = page.locator('.link-btn', { hasText: /Rent this month/i }).first();
+  check(await trigger.count() > 0, 'a live tenancy offers "Rent this month" on the property screen');
+  if (await trigger.count()) {
+    await trigger.click();
+    await page.waitForTimeout(1800);
+
+    const state = (await page.locator('.yard-rent__state').first().textContent().catch(() => '')) ?? '';
+    check(
+      state.trim().length > 0,
+      state.trim().length > 0
+        ? `…and opening it renders the month's state ("${state.trim()}")`
+        : 'opening it rendered NO state — the rent panel is blank where the label should be',
+    );
+    // The label is derived from the period, so it also proves the array
+    // arrived rather than the envelope: `currentLabel` on an object throws,
+    // and on an empty array says "not recorded".
+    check(
+      /paid/i.test(state),
+      /paid/i.test(state)
+        ? '…reading the month that was actually marked, so the periods arrived as an array'
+        : `the label reads "${state.trim()}" for a month marked paid — the ledger did not arrive as periods`,
+    );
+    check(
+      (await page.locator('.yard-rent__actions button').count()) >= 2,
+      'and the Paid / Not yet toggle is there beside it',
+    );
+  }
+
+  /**
+   * ⚠️ Kept, but it is NOT what catches the defect above — measured.
+   *
+   * With the envelope stored where the periods belong, this check stays GREEN:
+   * Angular catches a template expression's error and logs it rather than
+   * letting it reach `window.onerror`, so Playwright's `pageerror` never
+   * fires. The `@if (rent()[tenancy.id]; as periods)` guard also passes,
+   * because an object is truthy — which is why the Paid / Not yet toggle
+   * renders too.
+   *
+   * So neither the error hook nor the control count can see it. Only the
+   * CONTENT check can: the label is derived from the periods, and a label that
+   * should read "paid" and reads "" is the only visible trace. Verified by
+   * reintroducing it — 2 failed, 39 passed, and both failures were the content
+   * checks.
+   */
+  check(
+    pageErrors.length === 0,
+    pageErrors.length === 0
+      ? 'no uncaught error on the property screen while the rent panel loaded'
+      : `uncaught error(s): ${pageErrors.slice(0, 2).join(' | ')}`,
+  );
+  await page.context().close();
+}
 
 for (const width of WIDTHS) {
   console.log(`\n── ${width}px ──────────────────────────────────────────`);

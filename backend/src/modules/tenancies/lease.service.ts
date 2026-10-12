@@ -55,6 +55,25 @@ export class LeaseService {
   }
 
   /**
+   * Either party. Notice is a thing both sides of a letting can give, so the
+   * route that records it cannot be landlord-only — see `giveNotice`.
+   */
+  private async assertParty(tenancyId: string, userId: string) {
+    const tenancy = await this.prisma.tenancy.findUnique({
+      where: { id: tenancyId },
+      select: {
+        id: true, landlordId: true, tenantId: true, status: true,
+        noticeGivenAt: true, noticeRecordedById: true,
+      },
+    });
+    if (!tenancy) throw new NotFoundException('No such tenancy');
+    if (tenancy.landlordId !== userId && tenancy.tenantId !== userId) {
+      throw new ForbiddenException('You are not part of this tenancy');
+    }
+    return tenancy;
+  }
+
+  /**
    * Set or change the agreed terms.
    *
    * `leaseEndDate: null` is meaningful — it says month-to-month — so it is
@@ -73,50 +92,146 @@ export class LeaseService {
       data['leaseEndDate'] = dto.leaseEndDate ? new Date(dto.leaseEndDate) : null;
     }
     if (dto.noticePeriodDays !== undefined) data['noticePeriodDays'] = dto.noticePeriodDays;
-    if (dto.startDate !== undefined) data['startDate'] = dto.startDate ? new Date(dto.startDate) : null;
+
+    if (dto.startDate !== undefined) {
+      /**
+       * ⚠️ An ACTIVE tenancy cannot lose its start date.
+       *
+       * This wrote whatever it was given, `null` included, and that became an
+       * unrecoverable lockout the moment the rent window started reading
+       * `startDate`: `mark()` answers "Confirm the move-in first, then the
+       * rent record opens", and `confirmStart()` refuses because the tenancy
+       * is already `active`. Neither route can put the date back, so the
+       * landlord's rent record for that room is shut with no way in.
+       *
+       * It is also simply untrue. `active` means somebody confirmed a move-in,
+       * and `confirmStart` sets status and startDate in one update — a live
+       * tenancy that started on no particular day is a state the product
+       * cannot otherwise reach. Correcting the date is fine; erasing it is not.
+       */
+      if (!dto.startDate && tenancy.status === 'active') {
+        throw new BadRequestException(
+          'A tenancy that has started must keep its move-in date. Correct the date rather than clearing it.',
+        );
+      }
+      const start = dto.startDate ? new Date(dto.startDate) : null;
+      // The same bound `confirmStart` enforces, for the same reason: a move-in
+      // dated in the future on a tenancy somebody is already living in would
+      // put every month of rent before it outside the window.
+      if (start && tenancy.status === 'active' && start.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
+        throw new BadRequestException('A move-in date cannot be in the future.');
+      }
+      data['startDate'] = start;
+    }
 
     return this.prisma.tenancy.update({ where: { id: tenancyId }, data });
   }
 
   /**
-   * Record that notice was given, and by whom.
+   * Record that notice was given, by either side.
    *
-   * Either side may give it, so `givenBy` is stored rather than assumed. A
-   * landlord logging "the tenant told me they are leaving" and a landlord
-   * giving notice themselves are different facts, and a dispute later turns on
-   * which one happened.
+   * ── Two different people, and the difference is the whole design
+   *
+   * `noticeGivenById` is who notice is ATTRIBUTED to. `noticeRecordedById` is
+   * who entered it. A landlord logging "my tenant told me they are leaving"
+   * and a tenant giving notice through the site produce the SAME
+   * `noticeGivenById`, and they are not the same act.
+   *
+   * Until `noticeRecordedById` existed, only the attribution was stored — and
+   * that is why a TENANT COULD NOT GIVE NOTICE AT ALL. Not an oversight: with
+   * one column there is no safe withdrawal rule. Letting a landlord clear a
+   * tenant's notice resets a countdown that frees a room, and letting a tenant
+   * clear a landlord's does the same in reverse. The route's OpenAPI summary
+   * claimed "by either side" for as long as this method existed while
+   * `assertLandlordOwns` returned 403 — a documented capability the code
+   * refused, which is the shape of defect this codebase keeps producing.
+   *
+   * With both columns the rule is simply: whoever recorded it may withdraw it.
+   *
+   * ── What a tenant may and may not claim
+   *
+   * A landlord may record either side, because the record is theirs and
+   * logging what a tenant told them is the common case. A TENANT may only
+   * record their own notice: a tenant setting `givenBy: 'landlord'` would be
+   * fabricating that they had been served notice to leave, which is a
+   * materially different fact and not theirs to assert.
    *
    * Idempotent-ish: giving notice twice keeps the FIRST date, because the
    * countdown runs from when notice was actually given and a second tap must
    * not quietly restart it.
    */
-  async giveNotice(tenancyId: string, dto: GiveNoticeDto, landlordId: string) {
-    const tenancy = await this.assertLandlordOwns(tenancyId, landlordId);
+  async giveNotice(tenancyId: string, dto: GiveNoticeDto, userId: string) {
+    const tenancy = await this.assertParty(tenancyId, userId);
     if (tenancy.status === 'ended' || tenancy.status === 'cancelled') {
       throw new BadRequestException('That tenancy has already ended.');
     }
+    // Nothing to give notice on before anybody has moved in. Cancelling is the
+    // way out of a letting that has not started, and `cancel()` is where it is.
+    if (tenancy.status === 'pending') {
+      throw new BadRequestException(
+        'This tenancy has not started yet. If it has fallen through, mark it as such instead.',
+      );
+    }
 
-    const existing = await this.prisma.tenancy.findUnique({
-      where: { id: tenancyId },
-      select: { noticeGivenAt: true },
-    });
-    if (existing?.noticeGivenAt) {
+    // Already given: keep the first date. The countdown runs from when notice
+    // was actually given, so a second tap must not restart it.
+    if (tenancy.noticeGivenAt) {
       return this.prisma.tenancy.findUnique({ where: { id: tenancyId } });
     }
 
-    const givenById = dto.givenBy === 'tenant' ? tenancy.tenantId : landlordId;
+    const isLandlord = tenancy.landlordId === userId;
+    // ⚠️ A tenant may not claim the landlord served notice on them. That is a
+    // different fact with different consequences, and not theirs to assert.
+    if (!isLandlord && dto.givenBy === 'landlord') {
+      throw new BadRequestException(
+        'Only your landlord can record that they gave you notice. Record your own notice instead.',
+      );
+    }
+
+    const givenById = dto.givenBy === 'tenant' ? tenancy.tenantId : tenancy.landlordId;
     return this.prisma.tenancy.update({
       where: { id: tenancyId },
-      data: { noticeGivenAt: dto.givenOn ? new Date(dto.givenOn) : new Date(), noticeGivenById: givenById },
+      data: {
+        noticeGivenAt: dto.givenOn ? new Date(dto.givenOn) : new Date(),
+        noticeGivenById: givenById,
+        // Who typed it, as against who it is about. This is what makes
+        // withdrawal decidable.
+        noticeRecordedById: userId,
+      },
     });
   }
 
-  /** Notice was given in error, or withdrawn. Clears the countdown. */
-  async withdrawNotice(tenancyId: string, landlordId: string) {
-    await this.assertLandlordOwns(tenancyId, landlordId);
+  /**
+   * Notice was given in error, or withdrawn. Clears the countdown.
+   *
+   * ⚠️ Only whoever RECORDED it may withdraw it, and that is the rule the
+   * whole tenant-notice path waited on. Withdrawing resets a countdown that
+   * frees a room: a landlord who could clear a tenant's notice could keep them
+   * on the books, and a tenant who could clear a landlord's could pretend they
+   * had never been asked to leave. Neither gets to undo the other's act.
+   *
+   * Rows written before `noticeRecordedById` existed have none. Those were all
+   * entered by a landlord — the only caller the route ever had — so a null is
+   * read as the landlord.
+   */
+  async withdrawNotice(tenancyId: string, userId: string) {
+    const tenancy = await this.assertParty(tenancyId, userId);
+    if (!tenancy.noticeGivenAt) {
+      throw new BadRequestException('No notice has been given on this tenancy.');
+    }
+
+    const recordedBy = tenancy.noticeRecordedById ?? tenancy.landlordId;
+    if (recordedBy !== userId) {
+      throw new ForbiddenException(
+        recordedBy === tenancy.landlordId
+          ? 'Your landlord recorded this notice, so only they can withdraw it. Talk to them about it.'
+          : 'Your tenant recorded this notice, so only they can withdraw it.',
+      );
+    }
+
     return this.prisma.tenancy.update({
       where: { id: tenancyId },
-      data: { noticeGivenAt: null, noticeGivenById: null },
+      data: { noticeGivenAt: null, noticeGivenById: null, noticeRecordedById: null },
     });
   }
 

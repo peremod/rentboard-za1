@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, ParseUUIDPipe, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -6,6 +6,7 @@ import { ListerGuard } from '../../common/guards/lister.guard';
 import { AdminGuard } from '../../common/guards/admin.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReviewsService } from './reviews.service';
+import { ReviewsRelease } from './reviews.release';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { RespondToReviewDto } from './dto/respond-to-review.dto';
 
@@ -17,7 +18,10 @@ class ModerateReviewDto {
 @ApiTags('reviews')
 @Controller('reviews')
 export class ReviewsController {
-  constructor(private reviewsService: ReviewsService) {}
+  constructor(
+    private reviewsService: ReviewsService,
+    private reviewsRelease: ReviewsRelease,
+  ) {}
 
   // ── Public ───────────────────────────────────────────────────────────────
 
@@ -92,5 +96,37 @@ export class ReviewsController {
     @CurrentUser() admin: { id: string },
   ) {
     return this.reviewsService.setHidden(id, dto.isHidden, dto.reason, admin.id);
+  }
+
+  /**
+   * Run the nightly pass now.
+   *
+   * ⚠️ Why an operator route for a cron.
+   *
+   * `ReviewsRelease.releaseClosedWindows` runs at 03:00 SAST and does two
+   * things nobody can otherwise observe: it publishes reviews whose window has
+   * closed, and it sets `Tenancy.archivedAt`. A job with no way to trigger it
+   * cannot be driven, cannot be checked after a deploy, and cannot be re-run
+   * when it fails — so the only evidence it works is that nobody has
+   * complained, which is how this codebase ended up with a rent-reminder
+   * control on a screen with no route.
+   *
+   * The precedent is `POST /properties/rent/run-reminders`, which exists for
+   * the same reason and is admin-only for the same reason: it publishes
+   * ratings, and that is not a button for a landlord with an opinion about a
+   * tenant's review.
+   *
+   * Safe to re-run. Both passes are `updateMany` over rows that are not yet
+   * done, so a second call is a no-op.
+   */
+  @Post('release-closed')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Admin: publish reviews whose window has closed and archive those tenancies. Safe to re-run.',
+  })
+  releaseClosed() {
+    return this.reviewsRelease.releaseClosedWindows();
   }
 }

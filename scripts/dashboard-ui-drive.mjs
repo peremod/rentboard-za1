@@ -84,7 +84,9 @@ const tenancyFor = async (roomId, tenant) => {
   const acc = await apiCall(API, 'POST', `/api/applications/${app.body.id}/accept`, {}, L);
   if (acc.status >= 300) throw new Error(`accept: ${acc.status} ${JSON.stringify(acc.body).slice(0, 160)}`);
   const id = q(`SELECT id FROM tenancies WHERE "applicationId" = '${app.body.id}'`);
-  q(`UPDATE tenancies SET status='active' WHERE id = '${id}'`);
+  // startDate too — an 'active' tenancy with none is a row the API cannot
+  // make, and the rent window refuses marks against it.
+  q(`UPDATE tenancies SET status='active', "startDate"=now() WHERE id = '${id}'`);
   return { applicationId: app.body.id, tenancyId: id };
 };
 
@@ -291,7 +293,7 @@ const looseRoom = await mkRoom(`Only room ${S}`, loose.token);
 const looseApp = await apiCall(API, 'POST', '/api/applications', { roomId: looseRoom, coverNote: 'Is it still open?' }, quiet.token);
 await apiCall(API, 'POST', `/api/applications/${looseApp.body.id}/accept`, {}, loose.token);
 const looseTenancy = q(`SELECT id FROM tenancies WHERE "applicationId" = '${looseApp.body.id}'`);
-q(`UPDATE tenancies SET status='active' WHERE id = '${looseTenancy}'`);
+q(`UPDATE tenancies SET status='active', "startDate"=now() WHERE id = '${looseTenancy}'`);
 await apiCall(API, 'PATCH', `/api/properties/rent/${looseTenancy}/mark`, { status: 'unpaid', periodStart: monthStart }, loose.token);
 
 const loosePage = await signIn(browser, WEB, loose.email, PASSWORD);

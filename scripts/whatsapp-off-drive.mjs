@@ -27,7 +27,7 @@
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -201,6 +201,146 @@ for (const [label, file] of [
     /WHATSAPP_ENABLED/.test(src),
     `${label} reads the flag rather than deciding for itself`,
   );
+}
+
+// ── 5b. EVERY screen, not four of them ────────────────────────────────────
+//
+// ⚠️ The four files above are a hardcoded list, and that is the defect this
+// repo keeps shipping: a check structurally incapable of seeing the thing it
+// exists for. CLAUDE.md's rule is absolute — "Nothing on screen may promise a
+// WhatsApp message while it is off" — and it is a claim about EVERY template,
+// not about four of them.
+//
+// Swept on 11 October, while Phase J2 was rewriting two empty states that
+// happened to contain one each. Found: eight more screens promising a message
+// that is never sent, none of them in the list above, none of them visible to
+// any check in this repository. The two inside the elements that phase was
+// already editing were fixed; the rest are copy decisions across onboarding,
+// settings and the message screens, so they are BASELINED here — counted and
+// named on every run — rather than silently rewritten.
+//
+// A promise is a sentence that tells a person a message will arrive. A mention
+// is not: the privacy policy naming Meta as a processor, a `wa.me` link, the
+// close-account page listing "no WhatsApp messages" among what stops, and the
+// deferred code itself all stay. So this matches the PROMISE shapes and
+// excludes a file that reads the flag.
+console.log('\n── 5b. Every screen, swept ───────────────────────────────');
+
+/**
+ * ⚠️ Widened on the second pass, because the first pattern under-reported the
+ * very file it flagged.
+ *
+ * `account-settings.ts` matched once, on "Used for WhatsApp notifications" —
+ * and carried two more claims the pattern could not see: "you can sign in with
+ * a WhatsApp code using this number" and "Verifying lets you sign in with a
+ * WhatsApp code instead of a password". Both false while the channel is off:
+ * `requestPhoneVerification` sends the code over WhatsApp and the API refuses
+ * with a 503, so the sentence described a sign-in route that cannot be taken
+ * and the button under it could only ever fail.
+ *
+ * A promise is not only "we send"; it is any claim that something WILL arrive
+ * or that a WhatsApp-dependent thing CAN be done.
+ */
+const PROMISE = new RegExp(
+  [
+    'we send', "we will send", "we'll send", 'we will tell',
+    'also sent on', 'reach(es)? you on', 'sent to you on',
+    'used for whatsapp notification', 'go out on whatsapp',
+    'forwarded on\\s*\\n?\\s*whatsapp',
+    // A capability that depends on the channel: signing in with a code.
+    'sign in with a whatsapp code', 'code (on|to) whatsapp',
+    'send me a code on whatsapp',
+  ].join('|'),
+  'i',
+);
+
+/**
+ * ⚠️ No baseline, and the tolerance is zero.
+ *
+ * There WAS one, for a few hours on 11 October: eleven promises across six
+ * screens, carried as named debt because rewriting onboarding copy looked like
+ * a product decision. It was — and the decision came back "rewrite them".
+ *
+ * All of them now READ THE FLAG, the way login, register, home and the auth
+ * routes already do, so the honest sentence shows while the channel is off and
+ * the WhatsApp one returns by itself when it comes back. That is why gating
+ * beat deleting: WhatsApp here is paused, not abandoned.
+ *
+ * If this ever needs a baseline again, that is a decision to record in
+ * docs/OUTSTANDING.md § 45, not a file to add quietly.
+ */
+const promiseBaseline = {};
+
+const walkTs = (dir) =>
+  readdirSync(dir).flatMap((e) => {
+    const p = join(dir, e);
+    return statSync(p).isDirectory() ? walkTs(p) : [p];
+  });
+
+/**
+ * The component paths behind `whatsappOnlyGuard`, read from the route table.
+ * A route is guarded when its `canActivate` names the guard, and the component
+ * is the path in its `loadComponent` import.
+ */
+const routesSrc = readFileSync(join(ROOT, 'frontend/src/app/features/auth/auth.routes.ts'), 'utf8');
+const guardedComponents = [];
+for (const m of routesSrc.matchAll(/\{[^{}]*?import\('([^']+)'\)[^{}]*?\}/gs)) {
+  if (/whatsappOnlyGuard/.test(m[0])) guardedComponents.push(m[1].replace(/^\.\//, '') + '.ts');
+}
+
+const promises = {};
+let scanned = 0;
+for (const file of walkTs(join(ROOT, 'frontend/src/app')).filter((f) => f.endsWith('.ts') && !f.endsWith('.spec.ts'))) {
+  const src = readFileSync(file, 'utf8');
+  if (!/WhatsApp/i.test(src)) continue;
+  scanned++;
+  // A file that reads the flag has already decided; it is not guessing.
+  if (/WHATSAPP_ENABLED/.test(src)) continue;
+  /**
+   * A component reachable ONLY behind `whatsappOnlyGuard` is exempt: the route
+   * redirects to /auth/register while the flag is false, so its copy cannot be
+   * on screen while the promise is untrue.
+   *
+   * ⚠️ Read out of auth.routes.ts rather than hardcoded, and NOT baselined.
+   * register-phone's whole page describes a WhatsApp sign-up, so a baseline
+   * entry would be permanent debt for copy that is already correct — while a
+   * hardcoded exemption would go stale the moment the guard is removed. This
+   * way, deleting the guard makes the page's promises fail the sweep, which is
+   * exactly when they become promises again.
+   */
+  if (guardedComponents.some((g) => file.endsWith(g))) continue;
+  const rel = file.slice(join(ROOT, 'frontend/src/app/').length);
+  for (const line of src.split('\n')) {
+    const t = line.trim();
+    // Comments are not on screen.
+    if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) continue;
+    if (!/WhatsApp/i.test(t) || !PROMISE.test(t)) continue;
+    promises[rel] = (promises[rel] ?? 0) + 1;
+  }
+}
+
+/**
+ * ⚠️ The vacuous-pass guard has to be about the SWEEP now, not the findings.
+ * Zero promises is the CORRECT answer, so "found nothing" can no longer mean
+ * "is not looking" — `scanned` counts the files that mention WhatsApp at all,
+ * and if that is zero the walk is broken.
+ */
+if (scanned === 0) {
+  check(false, 'the sweep read no file mentioning WhatsApp at all — it is not reading the app');
+} else {
+  const over = Object.entries(promises).filter(([f, n]) => n > (promiseBaseline[f] ?? 0));
+  check(
+    over.length === 0,
+    over.length === 0
+      ? `no on-screen WhatsApp promise, across ${scanned} file(s) that mention it`
+      : `NEW on-screen WhatsApp promise: ${over.map(([f, n]) => `${f} (${n}, baseline ${promiseBaseline[f] ?? 0})`).join('; ')}`,
+  );
+  if (over.length) {
+    console.log('        Each tells somebody a message will arrive that is never sent.');
+    console.log('        Gate the sentence on WHATSAPP_ENABLED rather than deleting it:');
+    console.log('        the channel is paused, not abandoned, so the copy should come');
+    console.log('        back by itself when the flag does. docs/OUTSTANDING.md § 45.');
+  }
 }
 
 // ── 6. What is deliberately NOT switched off ──────────────────────────────

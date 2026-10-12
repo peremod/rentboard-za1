@@ -138,7 +138,12 @@ const accepted = await apiCall(API, 'POST', `/api/applications/${app.body.id}/ac
 accepted.status < 300 ? ok('a tenant applies and is accepted') : bad(`accept: ${accepted.status}`);
 
 const tenancyId = q(`SELECT id FROM tenancies WHERE "applicationId" = '${app.body.id}'`);
-q(`UPDATE tenancies SET status='active' WHERE id = '${tenancyId}'`);
+// ⚠️ startDate too, not just the status. `confirmStart` sets both in one
+// update, so an 'active' tenancy with a null startDate is a row this product
+// cannot otherwise reach — and the rent window reads startDate, so a mark
+// against it is refused with "Confirm the move-in first". Forcing one column
+// and not the other fabricates an impossible tenancy.
+q(`UPDATE tenancies SET status='active', "startDate"=now() WHERE id = '${tenancyId}'`);
 await apiCall(API, 'PATCH', `/api/properties/rent/${tenancyId}/mark`,
   { status: 'paid', periodStart: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1)).toISOString() },
   leaver.token);

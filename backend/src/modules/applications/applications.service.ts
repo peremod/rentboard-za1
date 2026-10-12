@@ -143,7 +143,22 @@ export class ApplicationsService {
     const room = a.room;
 
     if (a.status === 'accepted') {
-      return 'This tenancy ended and the room has been relisted.';
+      /**
+       * ⚠️ This used to read "This tenancy ended and the room has been
+       * relisted." It described a transition the system does not perform.
+       *
+       * `archivedAt` is set by a RELIST, and nothing else sets it — ending a
+       * tenancy does not relist the room (that is the landlord's decision, and
+       * `TenanciesService.end` prompts them rather than doing it). So this
+       * branch is only ever reached when the landlord has relisted a room they
+       * had let to this person, which may be after a tenancy ended, after one
+       * that fell through, or after a letting that was never recorded at all.
+       * The old sentence asserted the first of those three as fact.
+       *
+       * What is actually true in every case: they had the room, and it is open
+       * to applications again.
+       */
+      return 'You had this room, and the landlord has since put it back on the board.';
     }
     if (room?.status === 'deleted') {
       return 'The landlord removed this listing.';

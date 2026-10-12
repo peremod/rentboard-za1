@@ -44,6 +44,7 @@
  */
 import { readFileSync, readdirSync, statSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { onScreenSource } from './lib/css-values.mjs';
 
 /**
  * ⚠️ A baseline rather than an allowlist, and the difference is the point.
@@ -132,8 +133,20 @@ for (const file of walk(APP).filter((f) => f.endsWith('.ts'))) {
     if (existsSync(p)) ownCss += readFileSync(p, 'utf8');
   }
 
+  /**
+   * ⚠️ `onScreenSource`, not `src`. A class name shown as example markup in a
+   * doc comment is not a class the component uses, and reading the raw source
+   * counted it as one: Phase J2's `error-state` component documents the three
+   * screens it replaced — `<p class="notices-empty" role="alert">` and two
+   * more — and this audit reported `.notices-empty`, `.msg-empty`,
+   * `.ai-empty` and `.link-button` as used-and-unstyled. Four false positives
+   * out of one explanatory comment, in the gate whose job is to be trusted
+   * about missing rules. It blanks JSDoc, `//` comments, and HTML comments
+   * inside the template, preserving offsets.
+   */
+  const scannable = onScreenSource(src);
   const used = new Set();
-  for (const m of src.matchAll(/class="([^"{]+)"/g)) {
+  for (const m of scannable.matchAll(/class="([^"{]+)"/g)) {
     for (const c of m[1].split(/\s+/)) if (c) used.add(c);
   }
   for (const c of used) {

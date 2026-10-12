@@ -21,6 +21,16 @@ export class CreateReportDto {
   @IsOptional() @IsUUID()
   reportedUserId?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'The letting this is about, when it is about one. Only a party to that ' +
+      'tenancy may set it — it is what makes "what went wrong during this ' +
+      'tenancy" answerable, and without it a complaint by one tenant about a ' +
+      'room is indistinguishable from one by the next tenant two lettings later.',
+  })
+  @IsOptional() @IsUUID()
+  tenancyId?: string;
+
   @ApiProperty({ enum: REPORT_REASONS })
   @IsEnum(REPORT_REASONS)
   reason!: (typeof REPORT_REASONS)[number];

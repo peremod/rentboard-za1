@@ -182,7 +182,12 @@ export class PropertiesController {
   }
 
   @Get('rent/:tenancyId')
-  @ApiOperation({ summary: 'Rent history for a tenancy. Either party may read their own.' })
+  @ApiOperation({
+    summary:
+      'Rent history for a tenancy. Either party may read their own. Returns ' +
+      '{ tenancy, periods } — the tenancy state travels with the ledger so a ' +
+      'caller can tell a finished letting from a running one without a second call.',
+  })
   rentHistory(@Param('tenancyId', ParseUUIDPipe) tenancyId: string, @CurrentUser() user: { id: string }) {
     return this.rent.history(tenancyId, user.id);
   }

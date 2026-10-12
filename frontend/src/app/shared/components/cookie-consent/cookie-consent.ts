@@ -50,8 +50,8 @@ interface CookieAcknowledgement {
   styles: [`
     .cookie-notice {
       position: fixed; bottom: 1rem; left: 1rem; right: 1rem; max-width: 420px;
-      background: #1A1410; color: #fff; border-radius: 10px; padding: 1.1rem;
-      z-index: 9999; box-shadow: 0 12px 32px rgba(0,0,0,.3);
+      background: #1A1410; color: var(--white); border-radius: var(--r12); padding: 1.1rem;
+      z-index: 9999; box-shadow: var(--shadow-xl);
     }
     .cookie-notice__title { font-size: .95rem; margin-bottom: .4rem; }
     .cookie-notice__body {
@@ -60,8 +60,8 @@ interface CookieAcknowledgement {
     }
     .cookie-notice__body a { color: #D4A853; }
     .cookie-notice__ok {
-      width: 100%; padding: .5rem; border-radius: 4px; border: none;
-      background: var(--terra); color: #fff; font-weight: 700; cursor: pointer;
+      width: 100%; padding: .5rem; border-radius: var(--r4); border: none;
+      background: var(--terra); color: var(--white); font-weight: 700; cursor: pointer;
       /* 30px before Phase 7q. Every first visit meets this button, and it is
          the only way to get the notice off the screen. Not a .btn, so the
          app-wide 44px rule never reached it. */

@@ -19,6 +19,18 @@
  * feature that passes a one-sided check.
  *
  * Needs the API on :3000, the app on :4200, and a DATABASE_URL.
+ *
+ * ⚠️ **Restart the API before each run.** This file has grown to eleven
+ * sections and registers roughly 35 accounts, against a limit of 60 registers
+ * per hour counted IN MEMORY (`/auth/register`). One run is comfortably inside
+ * it; two back to back are not, and the second fails with
+ *
+ *     Error: register LANDLORD hit the rate limit (429)
+ *
+ * which reads like an auth bug and is not. `pkill -f 'node dist/main\.js'`
+ * then start it again, and the counters are gone. CLAUDE.md records the same
+ * trap for the suite as a whole; this drive is now large enough to hit it on
+ * its own.
  */
 import { chromium } from '@playwright/test';
 import { apiCall, registerUser, signIn, PASSWORD, dbQuery } from './lib/drive-session.mjs';
@@ -71,6 +83,33 @@ async function lettingReadyToStart(stamp) {
   return { landlord, tenant, roomId, applicationId, roomTitle: `Back room ${stamp}` };
 }
 
+/**
+ * The tenancy a given application opened — polled, never read once.
+ *
+ * ⚠️ `ApplicationsService.accept` opens the tenancy FIRE-AND-FORGET:
+ * `this.tenancies.createFromApplication(...).catch(...)`, deliberately not
+ * awaited so a failure there cannot fail the acceptance. The row therefore
+ * does not reliably exist when accept returns.
+ *
+ * Section 1 read it with a bare query and intermittently saw `''` — reported
+ * as "accepting opens a tenancy, and it starts 'pending' (got '')", which
+ * reads exactly like a broken accept flow and is not one. Later sections got
+ * away with it only because a page load and a two-second wait sat in between.
+ * An id read too early also produces URLs like `/api/properties/rent//mark`
+ * and a row of 404s that look nothing like the thing under test.
+ *
+ * A flaky check is worse than a missing one: it teaches whoever runs this to
+ * disbelieve a red line.
+ */
+async function tenancyFor(applicationId) {
+  for (let i = 0; i < 40; i++) {
+    const id = dbQuery(`SELECT id FROM tenancies WHERE "applicationId" = '${applicationId}'`);
+    if (id) return id;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`no tenancy was ever opened for application ${applicationId}`);
+}
+
 const browser = await chromium.launch();
 
 // ── 1. The landlord side ───────────────────────────────────────────────────
@@ -78,6 +117,7 @@ console.log('\n── 1. The landlord confirms the move-in ───────
 
 const a = await lettingReadyToStart(Date.now());
 
+await tenancyFor(a.applicationId);
 let status = dbQuery(`SELECT status FROM tenancies WHERE "applicationId" = '${a.applicationId}'`);
 check(status === 'pending', `accepting opens a tenancy, and it starts 'pending' (got '${status}')`);
 
@@ -336,9 +376,9 @@ console.log('\n── 6. The tenant dashboard reads the tenancy, not the applica
   }
 
   // Now confirm it from the tenant's own side and re-read the screen.
-  const confirmed = await apiCall(API, 'POST', `/api/tenancies/${
-    dbQuery(`SELECT id FROM tenancies WHERE "applicationId" = '${p6.applicationId}'`)
-  }/confirm-start`, { startDate: new Date().toISOString().slice(0, 10) }, p6.tenant.token);
+  const confirmed = await apiCall(API, 'POST',
+    `/api/tenancies/${await tenancyFor(p6.applicationId)}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, p6.tenant.token);
   check(confirmed.status === 200 || confirmed.status === 201,
     `the tenant confirms their own move-in (${confirmed.status})`);
 
@@ -390,6 +430,1513 @@ console.log('\n── 6. The tenant dashboard reads the tenancy, not the applica
 
   await tp.close();
 }
+
+
+// ── 7. The rent ledger and the end of a letting — Phase A ────────────────
+//
+// ⚠️ Why this section exists at all.
+//
+// Everything above this line proves a transition HAPPENS. Section 3 ends a
+// tenancy and asserts the column reads 'ended'. That was the whole of this
+// drive's coverage of moving out, and by the standard this repo sets for
+// itself — "change it, drive it, then reintroduce the bug and confirm the
+// check fails" — it could not fail on any of the following, all of which were
+// true of the shipped product:
+//
+//   · `mark()` refused `cancelled` and NOTHING else, so a landlord could
+//     record rent against a tenancy that finished two years ago, against a
+//     month before the tenant moved in, or against next March. `upsert`
+//     created the row, with `amountCents` snapshotted off a tenancy that was
+//     not running;
+//   · `dispute()` checked the period's own status and never the tenancy's;
+//   · `history()` answered a bare array, so the tenant's rent screen could not
+//     tell a finished letting from a running one and rendered both the same.
+//
+// ── The shape of the fix, because it is not "freeze it when it ends"
+//
+// The invariant is NOT "the tenancy is active". It is that a rent period
+// belongs to the months the tenancy actually covered — which is as true of a
+// finished letting as a live one. Refusing every write on an `ended` tenancy
+// would break the most ordinary thing in this product: a tenant moves out on
+// the 30th owing that month, and the landlord records it on the 5th.
+//
+// So the checks below come in pairs, and the SECOND half of each pair is the
+// one that matters. Anybody can make a guard that refuses everything.
+console.log('\n── 7. What the rent ledger accepts once the letting is over ──');
+
+{
+  /** The first of a month, `offset` months from this one, as the DTO wants it. */
+  const month = (offset) => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + offset, 1))
+      .toISOString().slice(0, 10);
+  };
+  const markAs = (tenancyId, token, periodStart, status = 'unpaid') =>
+    apiCall(API, 'PATCH', `/api/properties/rent/${tenancyId}/mark`, { periodStart, status }, token);
+
+  const r = await lettingReadyToStart(Date.now() + 4000);
+  const tenancyId = await tenancyFor(r.applicationId);
+
+  // ── 7a. A tenancy nobody has confirmed holds no rent record ─────────────
+  //
+  // The tenant's rent screen has said exactly this since it shipped — "Your
+  // move-in is not confirmed yet, so there is no rent record" — while the API
+  // accepted the write. The screen was right and alone.
+  const onPending = await markAs(tenancyId, r.landlord.token, month(0));
+  check(
+    onPending.status === 400,
+    `a pending tenancy refuses a rent mark (${onPending.status}, want 400)`,
+  );
+  /confirm the move-in|has not started/i.test(JSON.stringify(onPending.body))
+    ? ok('…and names the step that opens it, rather than refusing blankly')
+    : bad(`the refusal does not mention the move-in: ${JSON.stringify(onPending.body).slice(0, 180)}`);
+
+  // Start it, then backdate so each edge of the window can be tested on its
+  // own. The API refuses a start date more than a day ahead, so the move-in is
+  // confirmed for today and moved afterwards — the date is what is under test
+  // here, not the endpoint that sets it.
+  await apiCall(API, 'POST', `/api/tenancies/${tenancyId}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, r.landlord.token);
+  dbQuery(`UPDATE tenancies SET "startDate" = now() - interval '5 months' WHERE id = '${tenancyId}'`);
+
+  // ── 7b. While it runs: inside the window yes, outside it no ─────────────
+  const inside = await markAs(tenancyId, r.landlord.token, month(-3));
+  check(inside.status === 200, `a month the tenant lived there is accepted (${inside.status})`);
+
+  const beforeMoveIn = await markAs(tenancyId, r.landlord.token, month(-6));
+  check(
+    beforeMoveIn.status === 400,
+    `a month BEFORE the move-in is refused (${beforeMoveIn.status}, want 400)`,
+  );
+  /before the tenant moved in/i.test(JSON.stringify(beforeMoveIn.body))
+    ? ok('…and says so')
+    : bad(`wrong reason: ${JSON.stringify(beforeMoveIn.body).slice(0, 160)}`);
+
+  const future = await markAs(tenancyId, r.landlord.token, month(+1));
+  check(future.status === 400, `a month that has not started is refused (${future.status}, want 400)`);
+  // Rent is due at the start of a month, so the CURRENT month must stay
+  // writable — a guard that refused it would stop a landlord recording the
+  // rent they are owed right now.
+  const thisMonth = await markAs(tenancyId, r.landlord.token, month(0));
+  check(thisMonth.status === 200, `…but the current month is still writable (${thisMonth.status})`);
+
+  // ── 7c. End it, two months back ─────────────────────────────────────────
+  const ended = await apiCall(API, 'POST', `/api/tenancies/${tenancyId}/end`,
+    { endDate: month(-2) }, r.landlord.token);
+  check(ended.status === 200 || ended.status === 201, `the letting ends (${ended.status})`);
+
+  const afterMoveOut = await markAs(tenancyId, r.landlord.token, month(-1));
+  check(
+    afterMoveOut.status === 400,
+    `a month AFTER the move-out is refused (${afterMoveOut.status}, want 400)`,
+  );
+  /after the tenancy ended/i.test(JSON.stringify(afterMoveOut.body))
+    ? ok('…and says so, rather than blaming the date')
+    : bad(`wrong reason: ${JSON.stringify(afterMoveOut.body).slice(0, 160)}`);
+
+  // ⚠️ THE CHECK THIS SECTION EXISTS FOR.
+  //
+  // The letting is over and a month the tenant genuinely lived there is still
+  // correctable. If this goes red, the guard above has become a freeze, and
+  // the landlord who needs to record an unpaid final month cannot.
+  const stillCorrectable = await markAs(tenancyId, r.landlord.token, month(-3), 'paid');
+  check(
+    stillCorrectable.status === 200,
+    `…while a month inside the finished letting is STILL correctable (${stillCorrectable.status}) ` +
+      `— the guard is a window, not a freeze`,
+  );
+
+  // ── 7d. The ledger says what it is ──────────────────────────────────────
+  const ledger = await apiCall(API, 'GET', `/api/properties/rent/${tenancyId}`, null, r.tenant.token);
+  check(ledger.status === 200, `either party can read the ledger (${ledger.status})`);
+  check(
+    !!ledger.body?.tenancy && Array.isArray(ledger.body?.periods),
+    'it answers { tenancy, periods }, not a bare array',
+  );
+  check(
+    ledger.body?.tenancy?.status === 'ended',
+    `…and the state travels with it (status='${ledger.body?.tenancy?.status}', want 'ended')`,
+  );
+  check(
+    !!ledger.body?.tenancy?.endDate,
+    '…with the date it ended, so a screen can say when rather than guess',
+  );
+
+  // ── 7e. The tenant's answer OUTLIVES the letting, deliberately ──────────
+  //
+  // This is the one place where "it is over, so lock it" would do real harm.
+  // The most consequential mark a tenant ever receives is the final month,
+  // entered after they moved out, and `TenancyFlag.unpaid_rent` can be raised
+  // off it. Taking their answer away at that moment leaves the landlord's
+  // unverified word as the only record.
+  const lastUnpaid = await markAs(tenancyId, r.landlord.token, month(-2), 'unpaid');
+  check(lastUnpaid.status === 200, `the landlord marks the final month unpaid (${lastUnpaid.status})`);
+  /**
+   * ⚠️ The month comes from JS, not from `date_trunc(now())`.
+   *
+   * `periodStart` is a `timestamp` normalised to UTC midnight; `now()` is
+   * `timestamptz`, so `date_trunc('month', now() - interval '2 months')`
+   * truncates in the SESSION's timezone. On a non-UTC session that lands on a
+   * different instant and the equality misses, `periodId` comes back empty,
+   * and the dispute below is sent to `/rent/period//dispute` — a 404 that
+   * reads as a product bug. It passed here only because this container runs
+   * UTC. `month(-2)` is already the right value, computed the same way the
+   * API normalises it.
+   */
+  const periodId = dbQuery(
+    `SELECT id FROM rent_periods WHERE "tenancyId" = '${tenancyId}' ` +
+      `AND "periodStart" = '${month(-2)}T00:00:00.000Z'`,
+  );
+  if (!periodId) {
+    bad(`no rent period found for ${month(-2)} — the dispute check below cannot run`);
+  }
+  const answered = await apiCall(API, 'PATCH', `/api/properties/rent/period/${periodId}/dispute`,
+    { note: 'Paid on the 3rd by EFT.' }, r.tenant.token);
+  check(
+    answered.status === 200,
+    `…and the tenant can still answer it after moving out (${answered.status}) — never locked`,
+  );
+
+  // ── 7f. A letting that fell through holds nothing at all ────────────────
+  const f = await lettingReadyToStart(Date.now() + 5000);
+  const fTenancy = await tenancyFor(f.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${fTenancy}/cancel`, {}, f.landlord.token);
+  const onCancelled = await markAs(fTenancy, f.landlord.token, month(0));
+  check(
+    onCancelled.status === 400,
+    `a cancelled letting refuses a rent mark (${onCancelled.status}, want 400)`,
+  );
+}
+
+console.log('\n── What section 7 does NOT prove ────────────────────────────');
+console.log('  ⚠️  Nothing here reads the rent SCREEN. It proves the API refuses');
+console.log('      what it should and accepts what it must; it does not prove the');
+console.log('      tenant\'s rent page has stopped presenting an ended tenancy as a');
+console.log('      current one. That is Phase D, and it needs its own checks.');
+console.log('  ⚠️  A tenant still cannot give notice. The OpenAPI summary that said');
+console.log('      they could is corrected, not the guard — docs/OUTSTANDING.md §30.');
+
+
+
+// ── 8. The archive, and notice from either side — Phase B ────────────────
+//
+// Three columns landed in this phase, and the thing worth proving about a new
+// column is not that it exists — it is that something WRITES it. This
+// codebase's recurring defect is the other way round: a `MAX_ATTEMPTS` nothing
+// read, a `documentDeletedAt` that deleted nothing, a `Message.readAt` nobody
+// wrote. Each check below is a write.
+console.log('\n── 8. archivedAt, and notice from either side ───────────────');
+
+{
+  const month = (offset) => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + offset, 1))
+      .toISOString().slice(0, 10);
+  };
+
+  // ── 8a. A letting that fell through is archived at once ───────────────
+  //
+  // ⚠️ `cancelled` never gets a reviewsCloseAt (section 4 asserts that), and
+  // the nightly pass waits for one — so if `cancel()` did not archive in the
+  // same update, a cancelled tenancy would sit unarchived forever: finished,
+  // but never reading as finished.
+  const c8 = await lettingReadyToStart(Date.now() + 6000);
+  const cancelledId = await tenancyFor(c8.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${cancelledId}/cancel`, {}, c8.landlord.token);
+  const cancelledArchived = dbQuery(
+    `SELECT "archivedAt" IS NOT NULL FROM tenancies WHERE id = '${cancelledId}'`,
+  );
+  check(
+    cancelledArchived === 't',
+    `a letting that fell through is archived in the same breath (got '${cancelledArchived}')`,
+  );
+
+  // ── 8b. An ended letting is NOT archived while reviews are open ───────
+  const e8 = await lettingReadyToStart(Date.now() + 7000);
+  const endedId = await tenancyFor(e8.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${endedId}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, e8.landlord.token);
+  await apiCall(API, 'POST', `/api/tenancies/${endedId}/end`, {}, e8.landlord.token);
+
+  check(
+    dbQuery(`SELECT "archivedAt" IS NULL FROM tenancies WHERE id = '${endedId}'`) === 't',
+    'an ended letting is NOT archived while its review window is open — the two are different states',
+  );
+  check(
+    dbQuery(`SELECT "reviewsCloseAt" > now() FROM tenancies WHERE id = '${endedId}'`) === 't',
+    '…which is exactly the 30 days both parties still have to act in',
+  );
+
+  // ── 8c. …and IS archived once that window closes ──────────────────────
+  //
+  // The window is moved into the past rather than waited out, and the nightly
+  // pass is then triggered through its own endpoint. Faking `archivedAt`
+  // directly would prove nothing about the job that sets it.
+  dbQuery(`UPDATE tenancies SET "reviewsCloseAt" = now() - interval '1 day' WHERE id = '${endedId}'`);
+
+  /**
+   * An admin, promoted in SQL and signed in again so the token carries the
+   * role — the pattern admin-closure-drive established.
+   *
+   * The pass is admin-only because it PUBLISHES ratings, which is not a button
+   * for a landlord with an opinion about a tenant's review. And it has an
+   * operator route at all because a cron nobody can trigger cannot be driven,
+   * checked after a deploy, or re-run when it fails — the same reason
+   * `POST /properties/rent/run-reminders` exists.
+   */
+  const admin = await registerUser(API, 'TENANT', Date.now() + 7500);
+  dbQuery(`UPDATE users SET role = 'ADMIN' WHERE id = '${admin.id}'`);
+  const adminLogin = await apiCall(API, 'POST', '/api/auth/login',
+    { email: admin.email, password: PASSWORD });
+  const adminToken = adminLogin.body?.accessToken;
+  check(!!adminToken, `an admin can sign in to run the pass (${adminLogin.status})`);
+
+  const swept = await apiCall(API, 'POST', '/api/reviews/release-closed', {}, adminToken);
+  check(swept.status === 200, `the nightly pass can be triggered by an operator (${swept.status})`);
+  check(
+    typeof swept.body?.archived === 'number',
+    `…and reports what it did (${JSON.stringify(swept.body)}) rather than answering nothing`,
+  );
+  check(
+    dbQuery(`SELECT "archivedAt" IS NOT NULL FROM tenancies WHERE id = '${endedId}'`) === 't',
+    'once the review window has closed, the pass archives it',
+  );
+
+  // ⚠️ Not a landlord's button. It publishes ratings.
+  const landlordTriedToSweep = await apiCall(API, 'POST', '/api/reviews/release-closed', {}, e8.landlord.token);
+  check(
+    landlordTriedToSweep.status === 403,
+    `…and a landlord cannot run it (${landlordTriedToSweep.status}, want 403)`,
+  );
+
+  // ── 8d. Notice: the tenant can now give it ────────────────────────────
+  //
+  // ⚠️ This is the check for a capability the API DOCUMENTED and refused. The
+  // route said "by either side" while the service called assertLandlordOwns,
+  // so a tenant got a 403 on their own home. It needed one column first:
+  // noticeGivenById is who notice is attributed to, not who entered it, so
+  // there was no safe rule for who may withdraw.
+  const n8 = await lettingReadyToStart(Date.now() + 8000);
+  const noticeId = await tenancyFor(n8.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${noticeId}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, n8.landlord.token);
+
+  const tenantGave = await apiCall(API, 'POST', `/api/tenancies/${noticeId}/notice`,
+    { givenBy: 'tenant' }, n8.tenant.token);
+  // Exactly 200, not "200 or 201". The loose version is what let this route
+  // answer 201 while its own withdraw answered 200 — every other lifecycle
+  // route here carries @HttpCode(OK), and a tolerant check cannot see a
+  // response code drifting from its siblings.
+  check(
+    tenantGave.status === 200,
+    `a TENANT can give notice on their own home (${tenantGave.status}, want 200)`,
+  );
+  check(
+    dbQuery(`SELECT "noticeRecordedById" = '${n8.tenant.id ?? ''}' FROM tenancies WHERE id = '${noticeId}'`) === 't'
+      || dbQuery(`SELECT "noticeRecordedById" IS NOT NULL FROM tenancies WHERE id = '${noticeId}'`) === 't',
+    '…and who ENTERED it is recorded, not just who it is about',
+  );
+
+  // ⚠️ The landlord must NOT be able to clear it. Withdrawing resets a
+  // countdown that frees a room; a landlord who could undo a tenant's notice
+  // could keep them on the books.
+  const landlordTriedToClear = await apiCall(API, 'POST',
+    `/api/tenancies/${noticeId}/notice/withdraw`, {}, n8.landlord.token);
+  check(
+    landlordTriedToClear.status === 403,
+    `the landlord cannot withdraw the tenant's notice (${landlordTriedToClear.status}, want 403)`,
+  );
+  check(
+    dbQuery(`SELECT "noticeGivenAt" IS NOT NULL FROM tenancies WHERE id = '${noticeId}'`) === 't',
+    '…and the notice is still standing after that attempt',
+  );
+
+  const tenantCleared = await apiCall(API, 'POST',
+    `/api/tenancies/${noticeId}/notice/withdraw`, {}, n8.tenant.token);
+  check(
+    tenantCleared.status === 200,
+    `…while the tenant who gave it can withdraw it (${tenantCleared.status})`,
+  );
+
+  // ── 8e. A tenant cannot claim they were served notice ─────────────────
+  const fake = await apiCall(API, 'POST', `/api/tenancies/${noticeId}/notice`,
+    { givenBy: 'landlord' }, n8.tenant.token);
+  check(
+    fake.status === 400,
+    `a tenant cannot record that the LANDLORD gave notice (${fake.status}, want 400)`,
+  );
+
+  // ── 8f. A report can be tied to the letting it is about ──────────────
+  const reported = await apiCall(API, 'POST', '/api/reports', {
+    roomId: n8.roomId,
+    tenancyId: noticeId,
+    // ⚠️ `misleading_details`, not `room_not_as_described`. The latter is a
+    // TenancyFlagReason, not a ReportReason — two enums covering overlapping
+    // ground with different members, which is its own small trap.
+    reason: 'misleading_details',
+    details: 'The damp in the back wall was never dealt with while I lived there.',
+  }, n8.tenant.token);
+  check(
+    reported.status === 201 || reported.status === 200,
+    `a party to a letting can file a report against it (${reported.status})`,
+  );
+  check(
+    dbQuery(`SELECT "tenancyId" = '${noticeId}' FROM reports WHERE id = '${reported.body?.id ?? ''}'`) === 't',
+    '…and the complaint is stored against that tenancy, not just the room',
+  );
+
+  // ⚠️ A stranger must not be able to pin a complaint to somebody else's
+  // letting — both parties read that record in their archive.
+  const stranger = await registerUser(API, 'TENANT', Date.now() + 9000);
+  const strangerTried = await apiCall(API, 'POST', '/api/reports', {
+    roomId: n8.roomId,
+    tenancyId: noticeId,
+    reason: 'misleading_details',
+    details: 'Nothing to do with me, I was never anywhere near this room at all.',
+  }, stranger.token);
+  check(
+    strangerTried.status === 403,
+    `somebody who was not in a letting cannot attach a report to it (${strangerTried.status}, want 403)`,
+  );
+}
+
+console.log('\n── What section 8 does NOT prove ────────────────────────────');
+console.log('  ⚠️  No screen reads archivedAt yet. The column is written and');
+console.log('      nothing renders it — the archive view is Phase F. Until then');
+console.log('      this is a column with one writer and no readers, which is');
+console.log('      half of the defect this repo keeps producing.');
+console.log('  ⚠️  Report.tenancyId is NOT backfilled and never will be.');
+console.log('      Historical reports stay null; the archive has to say so.');
+
+
+
+// ── 9. What ending a letting actually does — Phase C ─────────────────────
+//
+// ⚠️ Before this phase, `end()` wrote four columns on one row and that was the
+// entire effect of a tenancy ending. Nothing downstream read them:
+//
+//   · the room stayed `let` indefinitely — off the public board, out of the
+//     sitemap, with nothing telling the landlord to relist;
+//   · a letting that FELL THROUGH did the same, for a room nobody ever moved
+//     into;
+//   · 32 Notice.kind values existed and not one was for a letting starting or
+//     ending. The biggest event in the lifecycle logged a console line and
+//     produced nothing a person could read.
+//
+// Each check below reads a row that something now has to write.
+console.log('\n── 9. Ending a letting reaches the room and the people ──────');
+
+{
+  const noticesFor = (userId, kind) =>
+    dbQuery(
+      `SELECT count(*) FROM notices WHERE "userId" = '${userId}'` +
+        (kind ? ` AND kind = '${kind}'` : ''),
+    );
+  const noticeBody = (userId, kind) =>
+    dbQuery(
+      `SELECT title || ' :: ' || coalesce(body,'') FROM notices ` +
+        `WHERE "userId" = '${userId}' AND kind = '${kind}' ORDER BY "createdAt" DESC LIMIT 1`,
+    );
+  const roomStatus = (roomId) => dbQuery(`SELECT status FROM rooms WHERE id = '${roomId}'`);
+
+  // ── 9a. A letting that fell through frees the room at once ────────────
+  //
+  // Not a relist: there is nothing to archive, because autoRejectOthers
+  // rejected the other applicants when this one was accepted and they stay
+  // rejected — which is what actually happened. This is the shape of undoLet.
+  const f9 = await lettingReadyToStart(Date.now() + 10000);
+  check(
+    roomStatus(f9.roomId) === 'let',
+    `accepting marks the room let (got '${roomStatus(f9.roomId)}')`,
+  );
+  const f9Tenancy = await tenancyFor(f9.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${f9Tenancy}/cancel`, {}, f9.landlord.token);
+  check(
+    roomStatus(f9.roomId) === 'active',
+    `…and a letting that fell through puts it straight back on the board (got '${roomStatus(f9.roomId)}')`,
+  );
+
+  // ── 9b. Ending an active letting tells BOTH parties ───────────────────
+  const e9 = await lettingReadyToStart(Date.now() + 11000);
+  const e9Tenancy = await tenancyFor(e9.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${e9Tenancy}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, e9.landlord.token);
+
+  const beforeTenant = Number(noticesFor(e9.tenant.id, 'tenancy_ended') || 0);
+  await apiCall(API, 'POST', `/api/tenancies/${e9Tenancy}/end`, {}, e9.landlord.token);
+  // The announcement is awaited inside end(), but give the row a moment.
+  await new Promise((r) => setTimeout(r, 1200));
+
+  check(
+    Number(noticesFor(e9.tenant.id, 'tenancy_ended') || 0) === beforeTenant + 1,
+    'the TENANT is told their letting is recorded as ended',
+  );
+  check(
+    Number(noticesFor(e9.landlord.id, 'tenancy_ended') || 0) >= 1,
+    '…and so is the landlord',
+  );
+
+  // ⚠️ The words, not just the row. A review window is 30 days and a notice
+  // that does not mention it is a notice that costs somebody their review.
+  const tBody = noticeBody(e9.tenant.id, 'tenancy_ended');
+  check(/30 days/i.test(tBody), `…and the tenant's names the review window ("${tBody.slice(0, 70)}…")`);
+  // It must not tell them they did something they did not do. The landlord
+  // ended this one.
+  //
+  // ⚠️ The `tBody` guard is not decoration. Without it this check passes when
+  // there is NO notice at all — the empty string does not match the phrase —
+  // so disabling the announcement entirely made it go green. Measured: with
+  // the announcement reverted it was one of three checks still passing, for
+  // exactly the wrong reason. A negative assertion has to prove the thing it
+  // is reading exists.
+  check(
+    !!tBody && !/you marked this as ended/i.test(tBody),
+    'the tenant is not told THEY ended it when the landlord did',
+  );
+  const lBody = noticeBody(e9.landlord.id, 'tenancy_ended');
+  check(
+    /you marked this as ended/i.test(lBody),
+    `…while the landlord, who did, is told so ("${lBody.slice(0, 60)}…")`,
+  );
+
+  // ── 9c. The room is NOT auto-relisted, and the landlord is prompted ───
+  //
+  // ⚠️ Both halves matter. Auto-relisting republishes old photos at an old
+  // price the day somebody moves out, and relist() archives every open
+  // application — destructive, and not asked for. But a room going quietly
+  // invisible is not an option either, which is exactly what used to happen.
+  check(
+    roomStatus(e9.roomId) === 'let',
+    `ending a letting does NOT silently republish the room (got '${roomStatus(e9.roomId)}')`,
+  );
+  check(
+    Number(noticesFor(e9.landlord.id, 'room_needs_relisting') || 0) === 1,
+    '…the landlord is prompted instead, once',
+  );
+  const prompt = noticeBody(e9.landlord.id, 'room_needs_relisting');
+  check(
+    /nobody can find it|not listed/i.test(prompt),
+    `…and the prompt says what the consequence is ("${prompt.slice(0, 70)}…")`,
+  );
+  const promptLink = dbQuery(
+    `SELECT link FROM notices WHERE "userId" = '${e9.landlord.id}' ` +
+      `AND kind = 'room_needs_relisting' ORDER BY "createdAt" DESC LIMIT 1`,
+  );
+  check(
+    !!promptLink && promptLink.startsWith('/landlord/'),
+    `…and lands somewhere in the portal ("${promptLink}")`,
+  );
+
+  // ── 9d. The prompt is not sent for a room the landlord has moved on ───
+  //
+  // A landlord who has already relisted, paused or removed the room has said
+  // something more recent than the stale `let`.
+  const p9 = await lettingReadyToStart(Date.now() + 12000);
+  const p9Tenancy = await tenancyFor(p9.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${p9Tenancy}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, p9.landlord.token);
+  dbQuery(`UPDATE rooms SET status='paused' WHERE id = '${p9.roomId}'`);
+  await apiCall(API, 'POST', `/api/tenancies/${p9Tenancy}/end`, {}, p9.landlord.token);
+  await new Promise((r) => setTimeout(r, 1200));
+  check(
+    Number(noticesFor(p9.landlord.id, 'room_needs_relisting') || 0) === 0,
+    'a room the landlord has already paused draws no relisting prompt',
+  );
+  check(
+    roomStatus(p9.roomId) === 'paused',
+    '…and their own choice is left alone',
+  );
+  // The ending itself is still announced — that is about the people, not the room.
+  check(
+    Number(noticesFor(p9.tenant.id, 'tenancy_ended') || 0) === 1,
+    '…while the tenant is still told the letting ended',
+  );
+}
+
+console.log('\n── What section 9 does NOT prove ────────────────────────────');
+console.log('  ⚠️  No EMAIL goes out. deliver() writes an in-app notice and');
+console.log('      nothing else, so anybody who does not sign in within the');
+console.log('      30-day review window misses it. Named in OUTSTANDING §33,');
+console.log('      not implied away.');
+console.log('  ⚠️  Nothing here reads the landlord DASHBOARD. The notice row');
+console.log('      exists; whether the relisting prompt appears as a task is');
+console.log('      Phase E.');
+
+
+
+// ── 10. The tenant's screens, once a letting is over — Phase D ───────────
+//
+// ⚠️ This is the defect the owner actually reported, and the first phase where
+// the fix is visible on a screen. Two separate lies, in opposite directions:
+//
+//   · the RENT screen looped over active, ended and pending tenancies with no
+//     branch on which, so a letting that finished two years ago rendered
+//     identically to the room somebody lives in — same heading, same
+//     present-tense "R3 000/mo", same banner asking them to correct this
+//     month, same paperwork offered as current;
+//   · the DASHBOARD excluded only `active` from "Your applications", so an
+//     ENDED tenancy fell back into that list and the derived note counted an
+//     acceptance as waiting on the tenant: "The landlord has moved on this
+//     one — it is waiting on you", about a room they left six months ago.
+//     Meanwhile it vanished from "Where you live now". Moving out moved the
+//     room BACKWARDS through their own dashboard.
+//
+// Every check below reads rendered text, not a filter. A check on the filter
+// would have passed before Phase D as easily as after it.
+console.log('\n── 10. Current and past, on the tenant screens ──────────────');
+
+{
+  const month = (offset) => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + offset, 1))
+      .toISOString().slice(0, 10);
+  };
+
+  // A tenant with TWO lettings: one they live in, one they have left. Both at
+  // once, because the bug was that the screen could not tell them apart —
+  // checking either alone would miss it.
+  const liveLet = await lettingReadyToStart(Date.now() + 13000);
+  const liveTenancy = await tenancyFor(liveLet.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${liveTenancy}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, liveLet.landlord.token);
+  await apiCall(API, 'PATCH', `/api/properties/rent/${liveTenancy}/mark`,
+    { periodStart: month(0), status: 'unpaid' }, liveLet.landlord.token);
+
+  // The same tenant, a second room, finished. Re-using the tenant is the
+  // point: one person, two lettings, and the screen has to separate them.
+  const pastRoom = await apiCall(API, 'POST', '/api/rooms', {
+    roomType: 'shared_house', title: `Old room ${Date.now()}`,
+    description: 'A clean back room on a quiet street, with its own entrance and a shared tap.',
+    rentCents: 180000, province: 'Gauteng', city: 'Pretoria',
+    locationDisplay: 'Sunnyside, Pretoria',
+    availableFrom: new Date().toISOString().slice(0, 10),
+  }, liveLet.landlord.token);
+  const pastRoomId = pastRoom.body?.id;
+  dbQuery(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${pastRoomId}'`);
+  const pastApp = await apiCall(API, 'POST', '/api/applications',
+    { roomId: pastRoomId, coverNote: 'I can move in on the first of the month.' }, liveLet.tenant.token);
+  await apiCall(API, 'POST', `/api/applications/${pastApp.body.id}/accept`, {}, liveLet.landlord.token);
+  const pastTenancy = await tenancyFor(pastApp.body.id);
+  await apiCall(API, 'POST', `/api/tenancies/${pastTenancy}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, liveLet.landlord.token);
+  // Backdate so the ledger has months inside the letting, then end it.
+  dbQuery(`UPDATE tenancies SET "startDate" = now() - interval '4 months' WHERE id = '${pastTenancy}'`);
+  // ⚠️ `unpaid`, not `paid`. A month already marked paid has nothing to
+  // dispute — `canDispute` says so — and this check exists for the realistic
+  // case: the final month marked unpaid AFTER the tenant has gone, which is
+  // the mark `TenancyFlag.unpaid_rent` can rest on.
+  await apiCall(API, 'PATCH', `/api/properties/rent/${pastTenancy}/mark`,
+    { periodStart: month(-3), status: 'unpaid' }, liveLet.landlord.token);
+  await apiCall(API, 'POST', `/api/tenancies/${pastTenancy}/end`,
+    { endDate: month(-1) }, liveLet.landlord.token);
+
+  const page = await signIn(browser, WEB, liveLet.tenant.email, PASSWORD, { width: 390, height: 1200 });
+  await page.goto(`${WEB}/tenant/rent`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+  if (await page.locator('.cookie-notice__ok').count()) {
+    await page.locator('.cookie-notice__ok').click();
+    await page.waitForTimeout(400);
+  }
+
+  const txt = (sel) => page.locator(sel).first().textContent().then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+
+  // ── 10a. The two are separate sections ────────────────────────────────
+  check(
+    (await page.locator('#past-lettings').count()) === 1,
+    'the rent screen has a section for rooms the tenant has left',
+  );
+  const pastText = await txt('#past-lettings');
+  check(
+    pastText.includes('Old room'),
+    `…and the finished letting is in it ("${pastText.slice(0, 60)}…")`,
+  );
+
+  // ── 10b. The finished letting is in the PAST TENSE ────────────────────
+  //
+  // ⚠️ The specific words, because this is what was reported. A date range and
+  // "rent was" instead of a live "/mo" figure.
+  check(/Past letting/i.test(pastText), '…marked as a past letting, in as many words');
+  check(/Lived there/i.test(pastText), '…and says when they lived there, not that they live there');
+  check(/Rent was/i.test(pastText), '…with "rent was", not a present-tense monthly figure');
+  // The live room still carries the present-tense figure. Both halves matter:
+  // a blanket removal of "/mo" would pass a check on the past section alone.
+  const whole = await txt('app-tenant-rent, main');
+  check(
+    /\/mo/.test(whole),
+    'the room they LIVE in still shows its monthly rent',
+  );
+  // ⚠️ `pastText &&` is the guard, and it is the third time this exact shape
+  // has bitten in this file. A negative assertion over text that does not
+  // exist passes: with the past section removed entirely, `pastText` is '' and
+  // matches no pattern, so this went GREEN with the defect fully
+  // reintroduced. Every negative check here now proves its subject exists
+  // first.
+  check(
+    !!pastText && !/\/mo/.test(pastText),
+    '…and the finished one does not',
+  );
+
+  // ── 10c. The ledger survives, which is the point ──────────────────────
+  //
+  // Losing the record would be the easy wrong fix, and the owner asked for the
+  // opposite in as many words: previous payments must not disappear.
+  check(
+    /paid|unpaid|part paid|not being chased/i.test(pastText),
+    'the rent ledger for the finished letting is still there',
+  );
+  const pastAnswerButtons = await page.locator("#past-lettings button:has-text(\"I've paid this\")").count();
+  check(
+    pastAnswerButtons >= 1,
+    `…and the answer button with it (${pastAnswerButtons}) — a final month marked unpaid after ` +
+      'somebody moves out is the mark that matters most',
+  );
+
+  // ── 10d. The dashboard no longer says it is waiting on them ───────────
+  await page.goto(`${WEB}/tenant/dashboard`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+
+  const apps = await txt('#your-applications');
+  check(
+    !apps.includes('Old room'),
+    `a finished letting is not filed under "Your applications" ("${apps.slice(0, 80)}…")`,
+  );
+  check(
+    !/waiting on you|moved on this one/i.test(apps),
+    '…and nothing there says a room they have left is waiting on them',
+  );
+  check(
+    (await page.locator('#where-you-live').count()) === 1,
+    'the room they live in is still under "Where you live now"',
+  );
+  const liveText = await txt('#where-you-live');
+  check(
+    !!liveText && !liveText.includes('Old room'),
+    '…and the one they left is not',
+  );
+
+  // ── 10e. …but it has not vanished either ──────────────────────────────
+  //
+  // Excluding it from both lists left it in NEITHER, which is how a room
+  // somebody used to live in disappears without trace. One line, with the way
+  // there on it.
+  check(
+    (await page.locator('#past-lettings-pointer').count()) === 1,
+    'the dashboard still says they have a past letting',
+  );
+  const pointer = await txt('#past-lettings-pointer');
+  check(
+    /past letting/i.test(pointer) && /kept/i.test(pointer),
+    `…and that the record is kept ("${pointer.slice(0, 70)}…")`,
+  );
+  const pointerHref = await page.locator('#past-lettings-pointer a').first().getAttribute('href').catch(() => null);
+  check(
+    !!pointerHref && pointerHref.includes('/tenant/rent'),
+    `…with a link to it ("${pointerHref}")`,
+  );
+
+  // ── 10f. At the widths this market actually uses ──────────────────────
+  //
+  // Mandatory per CLAUDE.md for anything touching cards or sections, and the
+  // reason it is mandatory is that every assertion in mobile-drive.mjs is a
+  // bug that reached production and was found by a person on their phone.
+  await page.goto(`${WEB}/tenant/rent`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2500);
+  for (const width of [360, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 1200 });
+    await page.waitForTimeout(500);
+
+    const overflow = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollWidth,
+      client: document.documentElement.clientWidth,
+    }));
+    check(
+      overflow.scroll <= overflow.client + 1,
+      `${width}px: the rent screen does not scroll sideways (${overflow.scroll} in ${overflow.client})`,
+    );
+
+    // Every control in the past section, not a row of them.
+    const small = await page.evaluate(() => {
+      const out = [];
+      for (const el of document.querySelectorAll('#past-lettings button, #past-lettings a, #past-lettings input')) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) continue;
+        if (r.height < 44) out.push(`${(el.textContent || 'control').trim().slice(0, 20)} ${Math.round(r.height)}px`);
+      }
+      return out;
+    });
+    check(
+      small.length === 0,
+      small.length === 0
+        ? `${width}px: every control in the past section clears 44px`
+        : `${width}px: ${small.length} under target — ${small.join(', ')}`,
+    );
+  }
+
+  await page.close();
+}
+
+console.log('\n── What section 10 does NOT prove ───────────────────────────');
+console.log('  ⚠️  The LANDLORD still has no past-tenant view at all. Their');
+console.log('      side loses the tenant, the dates and the ledger the moment');
+console.log('      a letting ends — properties.service filters to pending and');
+console.log('      active. That is Phase E, and it is the opposite failure to');
+console.log('      the one fixed here.');
+console.log('  ⚠️  No archive SCREEN exists. The rent record is on the rent');
+console.log('      screen because that is where it has always been; reviews,');
+console.log('      documents and problems per tenancy are Phase F.');
+
+
+
+// ── 11. The landlord's side of a finished letting — Phase E ──────────────
+//
+// ⚠️ The mirror image of section 10, failing the opposite way. Where the
+// tenant screen said too much about a finished letting, the landlord screen
+// said nothing at all:
+//
+//   · `properties.service` asked for tenancies `['pending','active']` and that
+//     was the ONLY place a landlord could see a tenancy, so the moment a
+//     letting ended they lost the tenant, the dates, the rent paid and the
+//     ledger. A search across both codebases for "past tenant", "former
+//     tenant" or "tenancy history" returned nothing but review copy and the
+//     PAIA manual — which tells the public this platform holds "tenancy
+//     history and rent records";
+//   · the room stayed `let` with nobody in it, and the status chip said "let",
+//     which is the opposite of help. The Phase C notice fires once; a notice
+//     read and not acted on is gone;
+//   · Reserved had a route, an API write, a tailored application refusal, a
+//     board badge and five occupancy counts — and no button anywhere.
+console.log('\n── 11. Past tenants, empty rooms and Reserved ───────────────');
+
+{
+  // A property with a room, a finished letting on it, and the room left `let`.
+  const e11 = await lettingReadyToStart(Date.now() + 14000);
+  const prop = await apiCall(API, 'POST', '/api/properties',
+    { name: `Ext 9 rooms ${Date.now()}`, suburb: 'Arcadia', city: 'Pretoria', province: 'Gauteng' },
+    e11.landlord.token);
+  const propertyId = prop.body?.id;
+  dbQuery(`UPDATE rooms SET "propertyId" = '${propertyId}' WHERE id = '${e11.roomId}'`);
+
+  const t11 = await tenancyFor(e11.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${t11}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, e11.landlord.token);
+  await apiCall(API, 'POST', `/api/tenancies/${t11}/end`, {}, e11.landlord.token);
+  await new Promise((r) => setTimeout(r, 1000));
+
+  // ── 11a. The API carries the past letting and names the empty room ────
+  const dash = await apiCall(API, 'GET', '/api/properties/dashboard', null, e11.landlord.token);
+  const allRooms = [
+    ...(dash.body?.properties ?? []).flatMap((g) => g.rooms ?? []),
+    ...((dash.body?.ungrouped?.rooms) ?? []),
+  ];
+  const room11 = allRooms.find((r) => r.id === e11.roomId);
+  check(!!room11, 'the property dashboard still carries the room after the letting ended');
+  check(
+    (room11?.pastTenancies ?? []).length === 1,
+    `…with the finished letting on it (${(room11?.pastTenancies ?? []).length} past)`,
+  );
+  check(
+    (room11?.tenancies ?? []).length === 0,
+    '…and nobody listed as living there',
+  );
+  check(
+    room11?.pastTenancies?.[0]?.tenant?.fullName === 'Drive Tenant',
+    `…naming who it was ("${room11?.pastTenancies?.[0]?.tenant?.fullName}")`,
+  );
+  check(
+    !!room11?.pastTenancies?.[0]?.endDate,
+    '…and when they left, which is what makes it a record rather than a name',
+  );
+  check(
+    (dash.body?.totals?.vacantButListedAsLet ?? 0) >= 1,
+    `…and the totals count the room as empty-but-listed-as-let (${dash.body?.totals?.vacantButListedAsLet})`,
+  );
+
+  // ── 11b. The inbox keeps asking, because a notice does not ────────────
+  const inbox = await apiCall(API, 'GET', '/api/landlord/inbox', null, e11.landlord.token);
+  const vacantItems = (inbox.body?.items ?? []).filter((i) => i.kind === 'room_vacant');
+  check(
+    vacantItems.length === 1,
+    `the inbox carries one "room is empty" task (${vacantItems.length})`,
+  );
+  check(
+    /empty and not listed/i.test(vacantItems[0]?.title ?? ''),
+    `…saying so plainly ("${vacantItems[0]?.title ?? ''}")`,
+  );
+  check(
+    /nobody can find it/i.test(vacantItems[0]?.detail ?? ''),
+    '…and naming the consequence, not just the state',
+  );
+  check(
+    (vacantItems[0]?.actionPath ?? '').startsWith('/landlord/'),
+    `…with somewhere to go about it ("${vacantItems[0]?.actionPath}")`,
+  );
+  check(
+    (inbox.body?.counts?.room_vacant ?? 0) === 1,
+    'and it is counted per kind, like every other row',
+  );
+
+  // ── 11c. A room the landlord has paused draws no such task ────────────
+  //
+  // `pause()` exists so a landlord can stop enquiries without the destructive
+  // alternative. Nagging them about a room they deliberately took down would
+  // make the list something people stop reading.
+  dbQuery(`UPDATE rooms SET status='paused' WHERE id = '${e11.roomId}'`);
+  const pausedInbox = await apiCall(API, 'GET', '/api/landlord/inbox', null, e11.landlord.token);
+  const afterPause = (pausedInbox.body?.items ?? []).filter((i) => i.kind === 'room_vacant').length;
+  /**
+   * ⚠️ Compared against BEFORE, not asserted as zero on its own.
+   *
+   * "Nothing is in the list" is also true when the feature does not exist, so
+   * the bare version passed with the whole task reverted — the fourth time
+   * this shape has bitten in this file. The claim is that pausing REMOVES it,
+   * and that needs the row to have been there a moment ago.
+   */
+  check(
+    vacantItems.length === 1 && afterPause === 0,
+    `a room the landlord paused draws no "empty room" task ` +
+      `(${vacantItems.length} before pausing, ${afterPause} after)`,
+  );
+  dbQuery(`UPDATE rooms SET status='let' WHERE id = '${e11.roomId}'`);
+
+  // ── 11d. On screen: the past tenant, the marker, and the way back ─────
+  const page = await signIn(browser, WEB, e11.landlord.email, PASSWORD, { width: 390, height: 1200 });
+  await page.goto(`${WEB}/landlord/properties/${propertyId}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(3000);
+  if (await page.locator('.cookie-notice__ok').count()) {
+    await page.locator('.cookie-notice__ok').click();
+    await page.waitForTimeout(400);
+  }
+  const txt = (sel) => page.locator(sel).first().textContent()
+    .then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+
+  const vacantBlock = await txt('.yard-room__vacant');
+  check(
+    !!vacantBlock && /empty and not listed/i.test(vacantBlock),
+    `the room is marked empty on the property screen ("${vacantBlock.slice(0, 60)}…")`,
+  );
+  check(
+    (await page.locator('.yard-room__vacant .link-btn').count()) === 1,
+    '…and carries the action, not just the complaint',
+  );
+
+  // Previous tenants are COLLAPSED until asked for.
+  check(
+    (await page.locator('.yard-past .link-btn').count()) >= 1,
+    'the room offers its previous tenants',
+  );
+  check(
+    (await page.locator('.yard-past__item').count()) === 0,
+    '…collapsed, so a room on its fourth tenant does not open with four closed records',
+  );
+  /**
+   * ⚠️ Guarded. Clicking a control that is not there throws
+   * `locator.click: Timeout 30000ms exceeded` and kills the whole run — so
+   * with the past-tenants feature reverted this section reported nine
+   * failures and then DIED, taking sections 11e and 11f with it and leaving
+   * the summary unprintable.
+   *
+   * A drive that dies mid-run cannot tell you the full picture, which is the
+   * same defect as OUTSTANDING §28. Every click in this file that depends on
+   * the thing under test now checks first and reports rather than throwing.
+   */
+  if (await page.locator('.yard-past .link-btn').count()) {
+    await page.locator('.yard-past .link-btn').first().click();
+    await page.waitForTimeout(800);
+    const pastItem = await txt('.yard-past__item');
+    check(
+      !!pastItem && pastItem.includes('Drive Tenant'),
+      `…and opens to name them ("${pastItem.slice(0, 70)}…")`,
+    );
+    check(
+      !!pastItem && /a month/i.test(pastItem),
+      '…with what they paid, which is the record a landlord came for',
+    );
+    // The review window is the one time-limited thing about a finished letting.
+    check(
+      (await page.locator('.yard-past__review').count()) === 1,
+      '…and flags that they can still be reviewed',
+    );
+  } else {
+    bad('no previous-tenants control to open — the three checks under it could not run');
+  }
+
+  // ── 11e. Reserved, which had no button at all ─────────────────────────
+  const r11 = await lettingReadyToStart(Date.now() + 15000);
+  dbQuery(`UPDATE rooms SET "propertyId" = '${propertyId}', status='active' WHERE id = '${r11.roomId}'`);
+  // The room belongs to a different landlord in that fixture, so move it.
+  dbQuery(`UPDATE rooms SET "landlordId" = (SELECT "landlordId" FROM rooms WHERE id = '${e11.roomId}') WHERE id = '${r11.roomId}'`);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2500);
+
+  const reserveBtn = page.locator('.link-btn', { hasText: /Reserve for someone/i });
+  check(
+    (await reserveBtn.count()) >= 1,
+    `an active room offers "Reserve for someone" (${await reserveBtn.count()}) — it had no button anywhere`,
+  );
+  if (await reserveBtn.count()) {
+    await reserveBtn.first().click();
+    await page.waitForTimeout(600);
+    // The dialog explains what it costs before doing it.
+    const dialogText = await txt('app-dialog, .dialog, [role=dialog]');
+    check(
+      /no new applications/i.test(dialogText),
+      `…and says what it does first ("${dialogText.slice(0, 70)}…")`,
+    );
+    const confirm = page.locator('[role=dialog] button, app-dialog button').filter({ hasText: /Confirm|Hold it|Yes|OK/i });
+    if (await confirm.count()) {
+      await confirm.first().click();
+      await page.waitForTimeout(2200);
+      const status = dbQuery(`SELECT status FROM rooms WHERE id = '${r11.roomId}'`);
+      check(status === 'reserved', `…and reserving it writes the status (got '${status}')`);
+    } else {
+      bad('the reserve dialog had no confirm button');
+    }
+  }
+
+  // ── 11f. At the widths a landlord actually holds ──────────────────────
+  for (const width of [360, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 1200 });
+    await page.waitForTimeout(500);
+    const overflow = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollWidth,
+      client: document.documentElement.clientWidth,
+    }));
+    check(
+      overflow.scroll <= overflow.client + 1,
+      `${width}px: the property screen does not scroll sideways (${overflow.scroll} in ${overflow.client})`,
+    );
+    const small = await page.evaluate(() => {
+      const out = [];
+      const sel = '.yard-room__vacant button, .yard-room__vacant a, .yard-past button, .yard-past a, .yard-room__reserved button';
+      for (const el of document.querySelectorAll(sel)) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) continue;
+        if (r.height < 44) out.push(`${(el.textContent || 'control').trim().slice(0, 22)} ${Math.round(r.height)}px`);
+      }
+      return out;
+    });
+    check(
+      small.length === 0,
+      small.length === 0
+        ? `${width}px: every new control clears 44px`
+        : `${width}px: ${small.length} under target — ${small.join(', ')}`,
+    );
+  }
+
+  await page.close();
+}
+
+console.log('\n── What section 11 does NOT prove ───────────────────────────');
+console.log('  ⚠️  Six past lettings per room is the API cap, and nothing here');
+console.log('      creates a seventh. A room on its tenth tenant shows the six');
+console.log('      most recent and the screen does not say so — the full record');
+console.log('      is the archive view, Phase F.');
+console.log('  ⚠️  Nothing reads reviews, problems or viewings per tenancy. The');
+console.log('      past-tenant row carries dates, rent and paperwork only.');
+
+
+
+// ── 12. The archive — Phase F ────────────────────────────────────────────
+//
+// Everything this screen shows was already in the database and none of it was
+// on a screen. RentPeriod, Review, TenancyFlag and LeaseDocument all key on
+// `tenancyId`, so three lettings for one tenant could never bleed into each
+// other — and the only two places that read a tenancy asked for live ones. So
+// /legal/paia told the public this platform holds "tenancy history and rent
+// records" with nothing behind it.
+//
+// ⚠️ The checks that matter most here are the NEGATIVE ones. This is a screen
+// that assembles six private tables into one payload for two different people,
+// and the way it goes wrong is by showing somebody something that is not
+// theirs. Each permission rule is checked by trying to break it.
+console.log('\n── 12. The archive, and what it refuses to show ─────────────');
+
+{
+  const r12 = await lettingReadyToStart(Date.now() + 16000);
+  const t12 = await tenancyFor(r12.applicationId);
+  await apiCall(API, 'POST', `/api/tenancies/${t12}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, r12.landlord.token);
+  dbQuery(`UPDATE tenancies SET "startDate" = now() - interval '3 months' WHERE id = '${t12}'`);
+
+  const month = (o) => {
+    const d = new Date();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + o, 1)).toISOString().slice(0, 10);
+  };
+  await apiCall(API, 'PATCH', `/api/properties/rent/${t12}/mark`,
+    { periodStart: month(-2), status: 'paid' }, r12.landlord.token);
+  await apiCall(API, 'PATCH', `/api/properties/rent/${t12}/mark`,
+    { periodStart: month(-1), status: 'unpaid' }, r12.landlord.token);
+  await apiCall(API, 'POST', `/api/tenancies/${t12}/end`, { endDate: month(0) }, r12.landlord.token);
+  await new Promise((rs) => setTimeout(rs, 900));
+
+  // ── 12a. Both sides see the letting, and only theirs ──────────────────
+  for (const [who, user] of [['the landlord', r12.landlord], ['the tenant', r12.tenant]]) {
+    const list = await apiCall(API, 'GET', '/api/tenancies/archive', null, user.token);
+    check(list.status === 200, `${who} can read the archive (${list.status})`);
+    const mine = (list.body ?? []).filter((x) => x.id === t12);
+    check(mine.length === 1, `…and the finished letting is in it`);
+    check(
+      mine[0]?.role === (who === 'the landlord' ? 'landlord' : 'tenant'),
+      `…with their own side named ("${mine[0]?.role}")`,
+    );
+    check(
+      !!mine[0]?.otherParty?.fullName,
+      `…and the other party named, so the row reads as a letting and not an id`,
+    );
+    check(
+      mine[0]?.monthsRecorded === 2,
+      `…and the months counted without loading them (${mine[0]?.monthsRecorded})`,
+    );
+  }
+
+  // ⚠️ A stranger sees nothing of it.
+  const stranger12 = await registerUser(API, 'TENANT', Date.now() + 16500);
+  const strangerList = await apiCall(API, 'GET', '/api/tenancies/archive', null, stranger12.token);
+  check(
+    (strangerList.body ?? []).every((x) => x.id !== t12),
+    'somebody who was not in the letting does not see it listed',
+  );
+  const strangerRecord = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, stranger12.token);
+  check(
+    strangerRecord.status === 403,
+    `…and cannot open it by its id (${strangerRecord.status}, want 403)`,
+  );
+
+  // ── 12b. The record carries the whole ledger, chronologically ─────────
+  const rec = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.tenant.token);
+  check(rec.status === 200, `the tenant can open the record (${rec.status})`);
+  check(rec.body?.rent?.periods?.length === 2, `…with both months (${rec.body?.rent?.periods?.length})`);
+  check(
+    rec.body?.rent?.periods?.[0]?.periodStart < rec.body?.rent?.periods?.[1]?.periodStart,
+    '…oldest first, because this is a record being read and not a queue being worked',
+  );
+  check(
+    rec.body?.rent?.monthsPaid === 1 && rec.body?.rent?.monthsUnpaid === 1,
+    `…summed once by the API so no two places can disagree (${rec.body?.rent?.monthsPaid} paid, ${rec.body?.rent?.monthsUnpaid} unpaid)`,
+  );
+  check(
+    rec.body?.tenancy?.endedBy === 'them',
+    `…and who ended it is resolved against the reader ("${rec.body?.tenancy?.endedBy}" to the tenant)`,
+  );
+  const recL = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.landlord.token);
+  check(
+    recL.body?.tenancy?.endedBy === 'you',
+    `…"you" to the landlord who did it ("${recL.body?.tenancy?.endedBy}")`,
+  );
+
+  // ── 12c. ⚠️ THE DOUBLE-BLIND RULE ────────────────────────────────────
+  //
+  // A review is withheld until both sides have written one or the window
+  // closes. This screen is exactly where that gets broken by accident: if the
+  // archive showed an unpublished review, either party could read the other's
+  // before writing their own, which turns a rating into a negotiation and
+  // stops honest criticism.
+  const wrote = await apiCall(API, 'POST', '/api/reviews',
+    { tenancyId: t12, type: 'tenant', rating: 2, comment: 'Left the room in a poor state and paid late twice.' },
+    r12.landlord.token);
+  check(wrote.status === 201 || wrote.status === 200, `the landlord writes a review (${wrote.status})`);
+  check(
+    dbQuery(`SELECT "publishedAt" IS NULL FROM reviews WHERE "tenancyId" = '${t12}'`) === 't',
+    '…and it is held, because the tenant has not written theirs',
+  );
+
+  const tenantSees = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.tenant.token);
+  check(
+    (tenantSees.body?.reviews ?? []).length === 0,
+    `the TENANT cannot read a held review about them through the archive (${(tenantSees.body?.reviews ?? []).length} shown)`,
+  );
+  const payload = JSON.stringify(tenantSees.body);
+  check(
+    !/poor state/i.test(payload),
+    'and not one word of it is anywhere in the payload',
+  );
+  // The author cannot see their own held one either, and that is right: the
+  // archive renders what is published, and a review that is still held is not
+  // part of the record yet.
+  check(
+    (recL2 => (recL2 ?? []).length === 0)((await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.landlord.token)).body?.reviews),
+    'nor does the archive show the author their own held review — it shows what is published',
+  );
+
+  // Release it the way the product does, then it appears for both.
+  dbQuery(`UPDATE tenancies SET "reviewsCloseAt" = now() - interval '1 day' WHERE id = '${t12}'`);
+  const admin12 = await registerUser(API, 'TENANT', Date.now() + 17000);
+  dbQuery(`UPDATE users SET role = 'ADMIN' WHERE id = '${admin12.id}'`);
+  const adminTok = (await apiCall(API, 'POST', '/api/auth/login',
+    { email: admin12.email, password: PASSWORD })).body?.accessToken;
+  await apiCall(API, 'POST', '/api/reviews/release-closed', {}, adminTok);
+
+  const afterRelease = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.tenant.token);
+  check(
+    (afterRelease.body?.reviews ?? []).length === 1,
+    `…and once the window closes it IS in the record (${(afterRelease.body?.reviews ?? []).length})`,
+  );
+  check(
+    /poor state/i.test(JSON.stringify(afterRelease.body)),
+    '…with its words, now that it is published',
+  );
+
+  // ── 12d. ⚠️ A REPORT IS NOT SHOWN TO ITS SUBJECT ─────────────────────
+  //
+  // The schema calls an unreviewed accusation shown to the person it is about
+  // this platform's largest defamation exposure in South Africa. TenancyFlag
+  // and Report are both private to whoever raised them.
+  const flagged = await apiCall(API, 'POST', `/api/tenancies/${t12}/flag`,
+    { reason: 'deposit_withheld', detail: 'My deposit was never returned after I moved out in good order.' },
+    r12.tenant.token);
+  check(flagged.status === 201 || flagged.status === 200, `the tenant reports a problem (${flagged.status})`);
+
+  const tenantOwn = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.tenant.token);
+  check(
+    (tenantOwn.body?.flags ?? []).length === 1,
+    `the person who raised it sees it in their own record (${(tenantOwn.body?.flags ?? []).length})`,
+  );
+  const landlordView = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.landlord.token);
+  check(
+    (landlordView.body?.flags ?? []).length === 0,
+    `…and the person it is ABOUT sees none of it (${(landlordView.body?.flags ?? []).length} shown)`,
+  );
+  check(
+    !/deposit was never returned/i.test(JSON.stringify(landlordView.body)),
+    'and not one word of it reaches them through any other field',
+  );
+
+  // ── 12e. ⚠️ LANDLORD NOTES ARE IN NOBODY'S RECORD ────────────────────
+  //
+  // "The moment a note could be read by anyone but its author it stops being a
+  // memory aid and becomes an unregulated reference that follows a person
+  // around." Not in this payload for EITHER party — including the landlord who
+  // wrote it, because this is a shared screen.
+  const noted = await apiCall(API, 'POST', `/api/landlord/notes/tenant/${r12.tenant.id}`,
+    { body: 'Paid late most months and argued about it every time.' },
+    r12.landlord.token);
+  if (noted.status === 201 || noted.status === 200) {
+    for (const [who, user] of [['the tenant', r12.tenant], ['the landlord who wrote it', r12.landlord]]) {
+      const view = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, user.token);
+      check(
+        !/argued about it/i.test(JSON.stringify(view.body)),
+        `a private note is not in the shared record — not for ${who}`,
+      );
+    }
+  } else {
+    bad(`could not create a landlord note to test against (${noted.status}) — the exclusion is unproven`);
+  }
+
+  // ── 12f. A document's storage path never leaves the API ──────────────
+  //
+  // `path` is an ImageKit file path and the only way to read a document is a
+  // signed URL from openUrlFor, which re-checks the party. A path in the
+  // payload would be a private file one guess away from public.
+  //
+  // ⚠️ The row is inserted directly, and it has to be. The first version of
+  // this check read `documents` on a fixture that had none — an empty array,
+  // so the regex matched nothing and the check went GREEN with the path
+  // deliberately leaked back into the select. That is the FIFTH time a
+  // negative assertion in this file has passed on absence. A negative check
+  // needs its subject to exist.
+  //
+  // Inserted rather than uploaded because the upload path goes to ImageKit and
+  // this check is about a read filter, not about storage.
+  dbQuery(
+    `INSERT INTO lease_documents (id, "tenancyId", "uploadedById", kind, path, label, "createdAt", "updatedAt") ` +
+      `VALUES (gen_random_uuid(), '${t12}', '${r12.landlord.id}', 'lease', ` +
+      `'tenancies/${t12}/secret-lease.pdf', 'Signed lease', now(), now())`,
+  );
+  const withDoc = await apiCall(API, 'GET', `/api/tenancies/archive/${t12}`, null, r12.landlord.token);
+  check(
+    (withDoc.body?.documents ?? []).length === 1,
+    `the record carries the paperwork (${(withDoc.body?.documents ?? []).length})`,
+  );
+  check(
+    !/secret-lease\.pdf/.test(JSON.stringify(withDoc.body)),
+    'no document storage path is in the payload — reads go through a signed URL',
+  );
+  check(
+    withDoc.body?.documents?.[0]?.mine === true,
+    '…and the API says whose it is, so no screen compares ids itself',
+  );
+
+  // ── 12g. On screen, for both roles ───────────────────────────────────
+  for (const [who, user] of [['tenant', r12.tenant], ['landlord', r12.landlord]]) {
+    const page = await signIn(browser, WEB, user.email, PASSWORD, { width: 390, height: 1200 });
+    await page.goto(`${WEB}/account/tenancies`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(3000);
+    if (await page.locator('.cookie-notice__ok').count()) {
+      await page.locator('.cookie-notice__ok').click();
+      await page.waitForTimeout(400);
+    }
+    const txt = (sel) => page.locator(sel).first().textContent()
+      .then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+
+    check(
+      (await page.locator('.arc-row').count()) >= 1,
+      `the ${who} sees the letting on /account/tenancies`,
+    );
+    // Collapsed until asked for: the list carries counts precisely so nine
+    // past lettings do not pull nine full records to render nine rows.
+    check(
+      (await page.locator('.arc-detail').count()) === 0,
+      `…collapsed, so the ${who}'s nine past lettings do not fetch nine records`,
+    );
+    if (await page.locator('.arc-row__head').count()) {
+      await page.locator('.arc-row__head').first().click();
+      await page.waitForTimeout(2000);
+      const detail = await txt('.arc-detail');
+      check(
+        !!detail && /Rent/i.test(detail),
+        `…and opens to the record ("${detail.slice(0, 60)}…")`,
+      );
+      check(
+        /Marked paid/i.test(detail) && /Marked unpaid/i.test(detail),
+        '…with both months and what each was marked',
+      );
+      // The platform's position, on a screen full of money.
+      check(
+        /never held the rent/i.test(detail),
+        '…and it still says Mastande never held the rent or checked any of it',
+      );
+      // Said out loud rather than left as an absence.
+      check(
+        /not part of a shared record|private notes/i.test(detail),
+        '…and names what is deliberately not here, so nothing reads as lost',
+      );
+      // routerLink, not href: an href reloads the whole application in an SPA.
+      // The rendered attribute is the only way to tell them apart.
+      const msgHref = await page.locator('.arc-note__link').first()
+        .getAttribute('href').catch(() => null);
+      check(
+        msgHref === '/account/messages',
+        `…with a real in-app link to the conversation ("${msgHref}")`,
+      );
+    } else {
+      bad(`no archive row to open for the ${who}`);
+    }
+
+    for (const width of [360, 390, 768, 1280]) {
+      await page.setViewportSize({ width, height: 1200 });
+      await page.waitForTimeout(400);
+      const overflow = await page.evaluate(() => ({
+        scroll: document.documentElement.scrollWidth,
+        client: document.documentElement.clientWidth,
+      }));
+      check(
+        overflow.scroll <= overflow.client + 1,
+        `${width}px (${who}): the archive does not scroll sideways (${overflow.scroll} in ${overflow.client})`,
+      );
+      const small = await page.evaluate(() => {
+        const out = [];
+        for (const el of document.querySelectorAll('.arc-row__head, .arc-detail a, .arc-detail button')) {
+          const r = el.getBoundingClientRect();
+          if (r.width === 0 && r.height === 0) continue;
+          if (r.height < 44) out.push(`${(el.textContent || 'control').trim().slice(0, 18)} ${Math.round(r.height)}px`);
+        }
+        return out;
+      });
+      check(
+        small.length === 0,
+        small.length === 0
+          ? `${width}px (${who}): every control clears 44px`
+          : `${width}px (${who}): ${small.length} under target — ${small.join(', ')}`,
+      );
+    }
+    await page.close();
+  }
+}
+
+console.log('\n── What section 12 does NOT prove ───────────────────────────');
+console.log('  ⚠️  Nothing here downloads a lease document. The payload carries');
+console.log('      no storage path, which is checked — but that a signed URL');
+console.log('      re-checks the party is lease-docs-ui-drive\'s job, not this.');
+console.log('  ⚠️  A tenancy with a HIDDEN review (isHidden, set by an admin) is');
+console.log('      filtered in the query and not exercised here. The published');
+console.log('      filter is, and they are the same clause.');
+
+
+
+// ── 13. A notice period that has run out — Phase G ──────────────────────
+//
+// ⚠️ My own audit (C8) said "no job watches it" and that an elapsed notice
+// produced nothing. That was WRONG: both inboxes already carried an item that
+// sorted by a negative day count and said "This date has already passed".
+//
+// The real hole was worse and in the other direction. The landlord's row said
+// "X is leaving — get the room back on the board" and pointed at relisting —
+// and `relist()` checked the ROOM's status and nothing about who was in it. So
+// the product suggested a step that:
+//
+//   · put a room somebody was living in back on the PUBLIC BOARD, which is
+//     `ReportReason.already_let`, the exact complaint its own report enum
+//     exists for;
+//   · archived every open application and bumped `relistCount` on the way, so
+//     it could not be undone by setting the status back;
+//   · became invisible to the Phase E empty-room task, which looks for rooms
+//     still marked `let`.
+//
+// Measured before the fix: relist returned 200, room went `active`, tenancy
+// stayed `active`, and the room was on the public board.
+console.log('\n── 13. An elapsed notice, and relisting an occupied room ────');
+
+{
+  const g13 = await lettingReadyToStart(Date.now() + 18000);
+  const t13 = await tenancyFor(g13.applicationId);
+
+  // ── 13a. A room cannot be relisted out from under a PENDING applicant ──
+  //
+  // Accepted and not yet moved in. Relisting it is the same defect wearing a
+  // different hat: somebody is expecting this room.
+  const onPending = await apiCall(API, 'POST', `/api/rooms/${g13.roomId}/relist`, {}, g13.landlord.token);
+  check(
+    onPending.status === 400,
+    `a room with an accepted applicant refuses to be relisted (${onPending.status}, want 400)`,
+  );
+  /has been accepted|has not moved in/i.test(JSON.stringify(onPending.body))
+    ? ok('…naming the step that was skipped, rather than refusing blankly')
+    : bad(`wrong reason: ${JSON.stringify(onPending.body).slice(0, 160)}`);
+
+  // ── 13b. Nor while somebody is LIVING there ────────────────────────────
+  await apiCall(API, 'POST', `/api/tenancies/${t13}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, g13.landlord.token);
+  check(
+    dbQuery(`SELECT status FROM rooms WHERE id = '${g13.roomId}'`) === 'let',
+    'the room is let while somebody lives in it',
+  );
+
+  const onActive = await apiCall(API, 'POST', `/api/rooms/${g13.roomId}/relist`, {}, g13.landlord.token);
+  check(
+    onActive.status === 400,
+    `…and relisting it is refused (${onActive.status}, want 400)`,
+  );
+  /still recorded as living/i.test(JSON.stringify(onActive.body))
+    ? ok('…saying whose move-out is missing')
+    : bad(`wrong reason: ${JSON.stringify(onActive.body).slice(0, 160)}`);
+  /record the move-out/i.test(JSON.stringify(onActive.body))
+    ? ok('…and naming the step, because this platform never infers a move-out from a date')
+    : bad(`the refusal does not name the step: ${JSON.stringify(onActive.body).slice(0, 160)}`);
+
+  // ⚠️ And nothing moved. A refusal that half-applied would be worse than the
+  // bug: relist archives applications and bumps relistCount before the room
+  // status is written.
+  check(
+    dbQuery(`SELECT status FROM rooms WHERE id = '${g13.roomId}'`) === 'let',
+    '…and the room did not move, so no application was archived on the way',
+  );
+  check(
+    dbQuery(`SELECT "relistCount" FROM rooms WHERE id = '${g13.roomId}'`) === '0',
+    '…nor the relist counter bumped',
+  );
+
+  // ── 13c. The bulk relist reports it rather than failing silently ───────
+  //
+  // `relistAll` calls relist() per room and catches each reason into `skipped`.
+  // Fixing one place fixes both, and the landlord is told which room and why.
+  const prop13 = await apiCall(API, 'POST', '/api/properties',
+    { name: `G yard ${Date.now()}`, suburb: 'Arcadia', city: 'Pretoria', province: 'Gauteng' },
+    g13.landlord.token);
+  dbQuery(`UPDATE rooms SET "propertyId" = '${prop13.body?.id}' WHERE id = '${g13.roomId}'`);
+  const bulk = await apiCall(API, 'POST', `/api/properties/${prop13.body?.id}/relist-all`, {}, g13.landlord.token);
+  check(bulk.status === 200 || bulk.status === 201, `relist-all answers (${bulk.status})`);
+  const skipped = (bulk.body?.skipped ?? []).find((x) => x.id === g13.roomId);
+  check(
+    !!skipped,
+    'the occupied room is reported as skipped rather than quietly relisted',
+  );
+  check(
+    /still recorded as living/i.test(skipped?.reason ?? ''),
+    `…with the reason carried back ("${(skipped?.reason ?? '').slice(0, 70)}…")`,
+  );
+  check(
+    (bulk.body?.relisted ?? []).every((x) => x.id !== g13.roomId),
+    '…and it is not in the relisted list',
+  );
+
+  // ── 13d. Once notice has run out, the action CHANGES ──────────────────
+  //
+  // While the countdown runs, relisting is the right thing to get ready for.
+  // Once it has run out, the step that unblocks everything is recording the
+  // move-out — the room cannot go back on the board until it exists.
+  await apiCall(API, 'POST', `/api/tenancies/${t13}/notice`, { givenBy: 'tenant' }, g13.tenant.token);
+
+  const running = (await apiCall(API, 'GET', '/api/landlord/inbox', null, g13.landlord.token))
+    .body?.items?.find((i) => i.kind === 'notice_given');
+  check(!!running, 'notice given puts a row on the landlord inbox');
+  check(
+    /back on the board/i.test(running?.actionLabel ?? ''),
+    `…and while the countdown runs the action is to get ready to relist ("${running?.actionLabel}")`,
+  );
+
+  // Run the clock out. The countdown is computed on read, never written, so
+  // moving the date IS the whole of "time passed".
+  dbQuery(`UPDATE tenancies SET "noticeGivenAt" = now() - interval '90 days' WHERE id = '${t13}'`);
+
+  const elapsed = (await apiCall(API, 'GET', '/api/landlord/inbox', null, g13.landlord.token))
+    .body?.items?.find((i) => i.kind === 'notice_given');
+  check(
+    /record the move-out/i.test(elapsed?.actionLabel ?? ''),
+    `…and once it has run out the action is to record the move-out ("${elapsed?.actionLabel}")`,
+  );
+  check(
+    (elapsed?.actionPath ?? '').includes('#moving-in-out'),
+    `…pointing at the panel where end() lives ("${elapsed?.actionPath}")`,
+  );
+  check(
+    /already passed/i.test(elapsed?.detail ?? ''),
+    '…and still says the date has passed',
+  );
+
+  // The tenant's side, same change for the same reason: sending them to browse
+  // would leave a letting open behind them, and the next thing they hear is a
+  // rent reminder for a room they left.
+  const tElapsed = (await apiCall(API, 'GET', '/api/tenant-inbox', null, g13.tenant.token))
+    .body?.items?.find((i) => i.kind === 'notice_given');
+  check(!!tElapsed, 'the tenant has the matching row');
+  check(
+    /moved out/i.test(tElapsed?.actionLabel ?? ''),
+    `…and can say so themselves ("${tElapsed?.actionLabel}")`,
+  );
+  check(
+    (tElapsed?.actionPath ?? '').includes('#moving-in-out'),
+    `…at the panel that takes it ("${tElapsed?.actionPath}")`,
+  );
+
+  // ── 13e. ⚠️ The tenancy is STILL ACTIVE, and that is the point ────────
+  //
+  // Where somebody lives is a record of fact. Inferring a move-out from a date
+  // is how this product would start asserting things it does not know — the
+  // same reasoning that keeps the notice countdown computed on read and never
+  // written. So the clock running out escalates; it does not decide.
+  check(
+    dbQuery(`SELECT status FROM tenancies WHERE id = '${t13}'`) === 'active',
+    'an elapsed notice does NOT end the tenancy by itself — nothing infers a move-out from a date',
+  );
+  check(
+    dbQuery(`SELECT "endDate" IS NULL FROM tenancies WHERE id = '${t13}'`) === 't',
+    '…and writes no move-out date it has not been told',
+  );
+
+  // And once a party does record it, the room frees up as Phase C already does.
+  await apiCall(API, 'POST', `/api/tenancies/${t13}/end`, {}, g13.tenant.token);
+  await new Promise((r) => setTimeout(r, 900));
+  const nowRelist = await apiCall(API, 'POST', `/api/rooms/${g13.roomId}/relist`, {}, g13.landlord.token);
+  check(
+    nowRelist.status === 200 || nowRelist.status === 201,
+    `…and with the move-out recorded the room relists (${nowRelist.status})`,
+  );
+  check(
+    dbQuery(`SELECT status FROM rooms WHERE id = '${g13.roomId}'`) === 'active',
+    '…and is back on the board',
+  );
+}
+
+console.log('\n── What section 13 does NOT prove ───────────────────────────');
+console.log('  ⚠️  Rent reminders keep running on a tenancy under elapsed');
+console.log('      notice, and that is deliberate rather than unhandled: if');
+console.log('      nobody has recorded a move-out the person may still be');
+console.log('      there, and rent may still be owed. The escalation asks; it');
+console.log('      does not decide.');
+console.log('  ⚠️  Nothing here reads either INBOX on screen. The rows and');
+console.log('      their actions are checked through the API; that they render');
+console.log('      is inbox-drive and dashboard-ui-drive.');
+
 
 await browser.close();
 

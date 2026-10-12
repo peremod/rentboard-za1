@@ -4,7 +4,7 @@ import { tap } from 'rxjs';
 import { environment } from '@env/environment';
 import {
   Expense, ExpenseCategory, ExpenseSummary, HousemateProfile, Property,
-  RelistAllResult, RentPeriod, RentStatus, UpcomingLease, YardDashboard,
+  RelistAllResult, RentLedger, RentPeriod, RentStatus, UpcomingLease, YardDashboard,
 } from '../models/property.model';
 
 @Injectable({ providedIn: 'root' })
@@ -144,8 +144,21 @@ export class PropertiesService {
 
   // ── Rent ──
 
+  /**
+   * ⚠️ Answers `{ tenancy, periods }`, not a bare array.
+   *
+   * This is the SECOND consumer of that endpoint — `RentService.history` in
+   * core/services/rent.service.ts is the other — and it was missed when the
+   * envelope landed. The generic on `http.get` is an unchecked cast, so
+   * declaring `RentPeriod[]` kept the build and the typecheck green while the
+   * yard stored an object in its `rent` signal and `currentLabel(periods)`
+   * called `.find` on it: a TypeError on the landlord's own property screen,
+   * invisible to `tsc` and to `ng build`.
+   *
+   * Hence the shared type rather than a third declaration of the shape.
+   */
   rentHistory(tenancyId: string) {
-    return this.http.get<RentPeriod[]>(`${this.api}/properties/rent/${tenancyId}`);
+    return this.http.get<RentLedger>(`${this.api}/properties/rent/${tenancyId}`);
   }
 
   markRent(tenancyId: string, periodStart: string, status: RentStatus) {

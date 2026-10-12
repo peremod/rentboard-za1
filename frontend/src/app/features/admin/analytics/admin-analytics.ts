@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 
 import { AdminService, Funnels, ContentSignals, Growth } from '../../../core/services/admin.service';
+import { Loading } from '../../../shared/components/loading/loading';
 
 /**
  * UX measurement, aggregate only.
@@ -13,6 +14,7 @@ import { AdminService, Funnels, ContentSignals, Growth } from '../../../core/ser
 @Component({
   selector: 'app-admin-analytics',
   standalone: true,
+  imports: [Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -180,7 +182,7 @@ import { AdminService, Funnels, ContentSignals, Growth } from '../../../core/ser
           </div>
         </section>
       } @else if (loading()) {
-        <p class="muted">Loading…</p>
+        <app-loading/>
       }
 
       @if (signals(); as sig) {
@@ -218,13 +220,13 @@ import { AdminService, Funnels, ContentSignals, Growth } from '../../../core/ser
   styles: [`
     .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
                 background: var(--border); margin: 0 .4rem; vertical-align: middle; }
-    .live-dot--on { background: var(--sage); box-shadow: 0 0 0 3px rgba(61,112,64,.18); }
+    .live-dot--on { background: var(--sage); box-shadow: var(--ring-sage); }
 
     /* A sparkline rather than a chart library: it answers 'is this going up'
        at a glance, which is the only question at this scale. */
     .spark { display: flex; align-items: flex-end; gap: 2px; height: 60px;
              margin: 1rem 0 .5rem; }
-    .spark__bar { flex: 1; background: var(--terra2); border-radius: 2px 2px 0 0;
+    .spark__bar { flex: 1; background: var(--terra2); border-radius: var(--r4) var(--r4) 0 0;
                   min-height: 2px; transition: height .2s ease; }
     .spark__bar:hover { background: var(--terra); }
 

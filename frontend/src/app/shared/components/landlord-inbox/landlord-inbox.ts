@@ -18,6 +18,9 @@ const ICONS: Record<InboxKind, string> = {
   application_waiting: '👤',
   rent_unmarked: '🧾',
   unread_message: '💬',
+  // A door standing open. Not a warning triangle: nothing is broken, the room
+  // is simply empty and nobody can see it.
+  room_vacant: '🚪',
 };
 
 /**

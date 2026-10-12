@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { AccountLifecycleService, DeletionPreview } from '../../../core/services/account-lifecycle.service';
 import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
+import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 
 /**
  * Pausing an account, or ending it — Phase 7g, item 3 of the UX brief.
@@ -161,8 +162,17 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
                    one). Rather than inventing a weaker confirmation, this says
                    what to do: the API refuses without a fresh code. -->
               <p class="ca-lead">
-                Your account signs in with your phone number, so closing it needs
-                a code on WhatsApp.
+                @if (whatsappOn) {
+                  Your account signs in with your phone number, so closing it needs
+                  a code on WhatsApp.
+                } @else {
+                  <!-- ⚠️ While the channel is off no code can be sent, so the
+                       route this sentence described does not exist. The two
+                       alternatives below are the ones that work. -->
+                  Your account signs in with your phone number, and codes to a
+                  number are switched off at the moment — so closing it here needs
+                  a password.
+                }
                 <a routerLink="/account/settings">Set a password first</a>, or ask
                 us to close it for you from
                 <a routerLink="/account/notices">your notices</a>.
@@ -206,14 +216,14 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
     .ca-caveat { font-size: .85rem; max-width: 38rem; line-height: 1.6; }
     .ca-paused { border-left: 3px solid var(--terra); padding-left: .9rem; }
     .ca-danger {
-      border: 1px solid rgba(214, 59, 59, .35); border-radius: var(--r8, 8px);
+      border: 1px solid rgba(214, 59, 59, .35); border-radius: var(--r8);
       padding: 1.1rem; background: rgba(214, 59, 59, .04);
     }
     .ca-form { margin-top: 1rem; max-width: 26rem; display: flex; flex-direction: column; gap: .9rem; }
     .ca-form label { display: flex; flex-direction: column; gap: .25rem; font-size: .85rem; }
     .ca-form input[type="password"], .ca-form input[type="text"] {
       font: inherit; padding: .55rem .6rem; border: 1px solid var(--border);
-      border-radius: 6px; min-height: 44px;
+      border-radius: var(--r4); min-height: 44px;
     }
     .ca-check { flex-direction: row !important; align-items: flex-start; gap: .55rem; line-height: 1.6; }
     .ca-check input { width: 20px; height: 20px; margin-top: .15rem; flex-shrink: 0; }
@@ -226,12 +236,8 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
        affects every button in the app and is not this phase's to change. */
     .ca-paused .btn, .dash-section > .btn { min-height: 44px; }
     .btn-danger {
-      background: #D63B3B; color: #fff; border: none; min-height: 44px;
+      background: var(--danger); color: var(--white); border: none; min-height: 44px;
       &:disabled { opacity: .5; cursor: not-allowed; }
-    }
-    .link-button {
-      background: none; border: none; padding: 0; font: inherit;
-      color: var(--terra); text-decoration: underline; cursor: pointer;
     }
     @media (max-width: 480px) {
       .ca-form, .ca-lead, .ca-list { max-width: none; }
@@ -240,6 +246,9 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
   `,
 })
 export class CloseAccount implements OnInit {
+  /** Phase 8j — see feature-flags.ts. Nothing may promise a message that is never sent. */
+  protected readonly whatsappOn = WHATSAPP_ENABLED;
+
   private auth = inject(AuthService);
   private lifecycle = inject(AccountLifecycleService);
   private router = inject(Router);
