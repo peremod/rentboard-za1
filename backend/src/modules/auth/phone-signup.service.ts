@@ -509,7 +509,10 @@ export class PhoneSignupService {
     }
 
     await this.assertCodeBudget(phone);
-    const code = await this.issueCode(phone, adminId);
+    // issueCode sends the code itself; the return value is deliberately not
+    // read here, because an assisted sign-up must never show the admin the
+    // tenant's code — they ask the person to read it back.
+    await this.issueCode(phone, adminId);
 
     this.logger.log(`Assisted signup started for ${phone} by admin ${adminId}`);
     return {

@@ -3745,6 +3745,76 @@ which is how an allowlist becomes the place defects go to be forgotten.
 Until it is written, the only thing standing between that pairing and the next
 white-on-white button is somebody reading the comment.
 
+## 54. Three red CI jobs on `develop`, and only one of them was a failure
+
+The merge of Phases A–K (`1098abe`) landed with three red checks. Comparing
+them step-for-step and annotation-for-annotation against the pre-merge
+`develop` head (`7e13122`) separated them into three different things, which
+is the point of writing this down: a job name is not a failure.
+
+**1. `E2E — browser journeys` — mine, and new.** Pre-merge this job failed at
+step 12 (the a11y drive). Post-merge it failed earlier, at step 10, so step 12
+never ran — a *different* failure wearing the same job name.
+`e2e/account-settings.spec.ts:33` asserted `getByText(/verify this number/i)`
+was visible. Commit `a047c18` ("eleven on-screen WhatsApp promises now read the
+flag") had put that button behind `@if (whatsappOn)`, correctly: the control
+cannot work while the channel is off, because `requestPhoneVerification` sends
+over WhatsApp and the API refuses with a 503. So the spec was asserting a
+button the product had deliberately stopped offering.
+
+Fixed by asserting the test's actual intent — that saving a number does not
+verify it — in a form that holds in both flag states: the "Not verified"
+sentence is on screen either way, the `✅ Verified` branch must be absent, and
+the button's count is asserted against `WHATSAPP_ENABLED` imported from the
+frontend's own `feature-flags.ts` rather than hardcoded. Reproduced locally
+first (same error, same line), then fixed, then the bug reintroduced —
+`@if (auth.user()?.phoneVerified || auth.user()?.phone)`, which is exactly
+"saving verified it" — and the spec failed again. 3/3 app journeys pass.
+
+**2. `Backend — Typecheck, Test, Build` — pre-existing, and three of its four
+red steps were not failures at all.** Only step 7, `Lint`, was: two errors,
+`'code' is assigned a value but never used` in `phone-signup.service.ts:512`
+(from `c5cec47`, 5 October) and `The value assigned to 'propertyId' is not used
+in subsequent statements` in `rooms.service.ts:317` (from `f73b8f9`,
+3 October). Both predate this branch; both are two-line fixes and are fixed
+here, because a lint error blocks the whole job including the smoke suite.
+
+The other three red steps are a cascade, and a dishonest one. Steps 8–10
+(Typecheck, Test, **Build**) skip when Lint fails. The two environment-guard
+steps carry `if: ${{ !cancelled() }}` so that a test failure cannot hide a
+broken production config — correct in intent, but they then ran
+`node dist/main.js` against a `dist/` the skipped Build had never produced.
+MODULE_NOT_FOUND exits non-zero, the grep misses, and the step reported
+
+> `the guard failed, but not on the placeholder API_URL`
+
+about a guard that had never been invoked. The other reported *"a correct
+production config did not pass the guard"* on the same basis. That is this
+repository's signature defect — a check reporting a conclusion it has no
+standing to reach — so both steps now assert `dist/main.js` exists first and
+say *"Build was skipped, so the environment guard could not be driven at
+all"* instead. Proven by moving `dist/main.js` aside and watching it fire.
+With a real `dist/`, both guards pass locally.
+
+`API log on failure` (step 16) was the fourth red row: a diagnostics step
+`cat`-ing a `/tmp/api.log` that the never-started API had not written. It now
+falls back to a message, so a diagnostics step cannot add a failure of its own.
+
+**3. `Staging configuration` — pre-existing, and not a code failure.** Same
+step, same annotation, before and after. `STAGING_API_HOST` is set, so the
+check is enforcing, and it fails on either `/health` not answering within
+eight minutes or a `version` other than `1.81.0` — root, backend and frontend
+`package.json` all agree on that number, so the check itself is sound. This
+needs the Render dashboard, which is not reachable from this container, and it
+is **for the operator, not for code**: either the staging deploy has not landed
+or the service is suspended.
+
+**What was not run locally, and is still only asserted by CI:** the backend has
+no unit tests (`npm test` is an honest stub), and of the e2e job only step 10
+(3 app journeys) and step 12 (the a11y drive, 40 pages, green here) were driven
+in this container. The mobile-board project, `phase-drive.mjs` and the
+production-build locale/SEO pass were not.
+
 ## How to check the whole thing still works
 
 ```bash
