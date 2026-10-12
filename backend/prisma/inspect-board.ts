@@ -54,7 +54,14 @@ async function main() {
   const users = await prisma.user.findMany({ select: { email: true, role: true } });
   const domains = new Map<string, number>();
   for (const u of users) {
-    const d = u.email.slice(u.email.lastIndexOf('@'));
+    // `User.email` is nullable on purpose — it is null for the WhatsApp-first
+    // landlord who signed up by phone (see CLAUDE.md). So this is not only a
+    // type complaint: `null.slice()` would have thrown the moment one such
+    // account existed, and a diagnostic that crashes on the account type it is
+    // most useful for is worse than no diagnostic. They get their own bucket
+    // rather than being dropped, because "how many accounts have no email" is
+    // exactly the number this breakdown is read for.
+    const d = u.email ? u.email.slice(u.email.lastIndexOf('@')) : '(no email — phone-only)';
     domains.set(d, (domains.get(d) ?? 0) + 1);
   }
   console.log(`\n${users.length} account(s) by email domain:\n`);

@@ -3815,6 +3815,77 @@ no unit tests (`npm test` is an honest stub), and of the e2e job only step 10
 in this container. The mobile-board project, `phase-drive.mjs` and the
 production-build locale/SEO pass were not.
 
+## 55. Fixing one lint error exposed two more failures that had never run
+
+§54 fixed the Lint error that was failing the backend job. CI then failed at
+**Typecheck**, which had been *skipped* behind that lint error — so the cascade
+was hiding real failures, not just producing fake ones. Three errors:
+
+```
+prisma/inspect-board.ts(57,15): error TS18047: 'u.email' is possibly 'null'.
+prisma/inspect-board.ts(57,29): error TS18047: 'u.email' is possibly 'null'.
+prisma/purge-test-data.ts(104,22): error TS18047: 'u.email' is possibly 'null'.
+```
+
+Both files are **byte-identical to the pre-merge head** (checked with a
+worktree at `7e13122`), so these predate the branch entirely. They are also
+only reachable through `tsconfig.seed.json`, the second project in
+`npm run typecheck` — the one whose own header comment records that it used to
+check zero seed files.
+
+**`inspect-board.ts` was not a type complaint, it was a crash.** `User.email`
+is nullable on purpose, for the WhatsApp-first landlord who signed up by phone,
+and `u.email.slice(u.email.lastIndexOf('@'))` throws on the first such account.
+This database has **39 of them**, so the script was failing outright every time
+it ran: confirmed by executing the old expression against it and getting
+`Cannot read properties of null (reading 'slice')`. They now get their own
+bucket — `(no email — phone-only)` — because "how many accounts have no email"
+is exactly the number that breakdown is read for, and dropping them would have
+answered the question wrongly rather than loudly.
+
+`purge-test-data.ts` selects by `email endsWith TEST_DOMAIN`, so the value
+cannot be null there in practice; it is named rather than asserted, so if it
+ever does print `(no email)` the query has changed.
+
+### And then the smoke suite, 352 assertions that had never run either
+
+With Typecheck green, `Start API` → `API smoke test` ran for the first time and
+failed three assertions in **§17f, assisted sign-up**:
+
+```
+FAIL  an admin can start one  (expected 200, got 503)
+FAIL  nothing in the reply says the acceptance is the person's
+FAIL  a record claims acceptance with no account, or the list is not an array
+```
+
+The 503 is **correct**. Assisted sign-up delivers its code over WhatsApp and
+there is no other channel, so with `WHATSAPP_ENABLED=false` the API refuses and
+names email — which is the behaviour this repository deliberately chose, and
+which CLAUDE.md records as the open consequence. §17f asserted a flat 200, and
+the two follow-on failures were cascades of the ticket that was never created.
+
+This is the same defect as the e2e failure in §54 and the eleven on-screen
+promises in `a047c18`: **a check still asserting a WhatsApp flow succeeds after
+the channel was switched off.** §18 had already been given two states for
+exactly this reason — *"the suite must mean something whichever way the switch
+is set, or it stops being run on the deployment it matters most on"* — and
+§17f was simply never brought in line with it.
+
+So §17f now has the same two branches, and the off branch is **not a skip**: it
+asserts the 503, that the refusal names email, and that the read-back route is
+still real and still an array. Accepting an assisted sign-up and sending
+nothing is the exact failure the 503 exists to prevent — an admin would tell
+somebody standing in front of them that a code was on its way.
+
+Proven able to fail: the refusal message was doctored to say *"Use another way
+in"* instead of naming email, and the suite reported
+`FAIL  the 503 does not name email: …`, then passed again once reverted.
+
+**The lesson worth keeping:** a cascade does not only invent failures (§54), it
+*hides* them. Three steps' worth of real coverage — a typecheck project, 616
+smoke assertions and an 18-check refund drive — had been dark behind two lint
+errors from 3 and 5 October, and nothing in the job output said so.
+
 ## How to check the whole thing still works
 
 ```bash

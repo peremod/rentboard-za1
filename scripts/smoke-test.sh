@@ -1386,7 +1386,40 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   SMOKE_ASSIST="08215$(( RANDOM % 90000 + 10000 ))"
   SMOKE_ASSIST="${SMOKE_ASSIST:0:10}"
   req POST /api/admin/phone-signups/assisted "{\"phone\":\"$SMOKE_ASSIST\"}" "$ADMIN_TOKEN"
-  check "an admin can start one" 200 "$STATUS" "$BODY"
+  ASSIST_STATUS="$STATUS"
+  ASSIST_BODY="$BODY"
+
+  # ⚠️ TWO states, for the same reason as phone sign-in in §18 — see the
+  # comment there. Assisted sign-up delivers the code over WhatsApp and there
+  # is no other channel, so with WHATSAPP_ENABLED=false (the default now, Meta
+  # bills per message) the API refuses with a 503 naming email. This section
+  # asserted a flat 200 and had never run in CI, because a lint error skipped
+  # the whole job — so it sat red for nobody, claiming a flow the product had
+  # deliberately switched off.
+  #
+  # The off branch is not a skip. Accepting an assisted sign-up and sending
+  # nothing is the exact failure the 503 exists to prevent: an admin would tell
+  # somebody standing in front of them that a code was on its way.
+  if [[ "$ASSIST_STATUS" == "503" ]]; then
+    green "  PASS  assisted sign-up is switched off and says so  (503)"; PASS=$((PASS+1))
+    if echo "$ASSIST_BODY" | jq -r '.message // ""' | grep -qi 'email'; then
+      green "  PASS  …and the refusal names the way in that works"; PASS=$((PASS+1))
+    else
+      red "  FAIL  the 503 does not name email: $(echo "$ASSIST_BODY" | jq -r '.message // ""')"; FAIL=$((FAIL+1))
+    fi
+    # The guards above are what this section can still prove with the channel
+    # off, and they are flag-independent. The read-back route must stay real:
+    # an admin reading an empty list is correct here, a 404 is not.
+    req GET /api/admin/phone-signups/assisted/mine "" "$ADMIN_TOKEN"
+    check "an admin can still read back the (empty) list" 200 "$STATUS" "$BODY"
+    if echo "$BODY" | jq -e 'type=="array"' >/dev/null 2>&1; then
+      green "  PASS  …and it is an array rather than an error shape"; PASS=$((PASS+1))
+    else
+      red "  FAIL  the read-back is not an array: $(echo "$BODY" | head -c 200)"; FAIL=$((FAIL+1))
+    fi
+  else
+  check "an admin can start one" 200 "$ASSIST_STATUS" "$ASSIST_BODY"
+  STATUS="$ASSIST_STATUS"; BODY="$ASSIST_BODY"
 
   # ⚠️ The control. An admin handed the code or a ticket could create an
   # account in somebody else's name and tick the Terms for them.
@@ -1416,6 +1449,7 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   else
     red "  FAIL  a record claims acceptance with no account, or the list is not an array"; FAIL=$((FAIL+1))
     grey "        $(echo "$BODY" | head -c 300)"
+  fi
   fi
 else
   skipped "starting an assisted sign-up — set ADMIN_TOKEN to include it"
