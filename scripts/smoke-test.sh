@@ -1201,6 +1201,31 @@ check "the directory needs a session" 401 "$STATUS"
 # own `if type=="array" ... else true` guard then PASSED it. A check that cannot
 # see its subject and reports success is worse than no check, and this file's
 # header warns about exactly this: `req` overwrites $BODY.
+# ⚠️ The two body assertions below both require `length>0`, deliberately: an
+# earlier version reported success on any body that was not a list, which is
+# the vacuous pass this file keeps finding. But nothing in this suite, or in
+# `prisma/seed.ts`, had ever CREATED a live provider — every create it attempts
+# is one it expects to be refused. So on a database with providers left over
+# from an earlier drive the two checks passed, and on a freshly seeded one they
+# failed, which is what CI did the first time it ever reached this step.
+#
+# A check must carry its own subject rather than inherit one. One live provider
+# is created here, by the admin route, with the number already rung so it can be
+# active at all. Without an admin token that is impossible, and the two checks
+# below then SKIP with the reason named rather than failing on an empty
+# directory or — worse — passing on one.
+DIRECTORY_SUBJECT=""
+if [[ -n "${ADMIN_TOKEN:-}" ]]; then
+  req POST /api/services/admin '{"category":"plumber","name":"Smoke Directory Subject","phone":"082 111 4444","areas":["Tembisa"],"phoneConfirmedAt":"2026-09-18T10:00:00.000Z","active":true}' "$ADMIN_TOKEN"
+  if [[ "$STATUS" == "201" || "$STATUS" == "200" ]]; then
+    DIRECTORY_SUBJECT="yes"
+    green "  PASS  a live provider can be added once the number has been rung  ($STATUS)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  could not create a provider to check the directory against  ($STATUS)"; FAIL=$((FAIL+1))
+    grey "        $(echo "$BODY" | head -c 300)"
+  fi
+fi
+
 req GET /api/services "" "$LTOKEN"
 check "a landlord can read the directory" 200 "$STATUS" "$BODY"
 
@@ -1208,7 +1233,9 @@ check "a landlord can read the directory" 200 "$STATUS" "$BODY"
 # Same correction as the sponsorship check below, for the same reason: this one
 # also reported success on any body that was not a list, and also looked only at
 # the first row.
-if echo "$BODY" | jq -e 'type=="array" and length>0 and (map(select(has("checkedByAdminId"))) | length) == 0' >/dev/null 2>&1; then
+if [[ -z "$DIRECTORY_SUBJECT" ]] && [[ "$(echo "$BODY" | jq -r 'if type=="array" then length else "x" end' 2>/dev/null)" == "0" ]]; then
+  skipped "what the directory withholds — no provider exists to check it against; set ADMIN_TOKEN"
+elif echo "$BODY" | jq -e 'type=="array" and length>0 and (map(select(has("checkedByAdminId"))) | length) == 0' >/dev/null 2>&1; then
   green "  PASS  the directory withholds which admin signed a provider off"; PASS=$((PASS+1))
 else
   red "  FAIL  the directory leaks checkedByAdminId to landlords, or did not return a list of providers"; FAIL=$((FAIL+1))
@@ -1228,7 +1255,9 @@ fi
 # success branch. That is the third time in this repository, and the second in
 # this file. So the list is REQUIRED, the row count is required, and every row
 # is checked rather than only the first — a leak on row two is still a leak.
-if echo "$BODY" | jq -e 'type=="array" and length>0 and (map(select(has("sponsoredUntil"))) | length) == 0' >/dev/null 2>&1; then
+if [[ -z "$DIRECTORY_SUBJECT" ]] && [[ "$(echo "$BODY" | jq -r 'if type=="array" then length else "x" end' 2>/dev/null)" == "0" ]]; then
+  skipped "what the directory withholds about sponsorship — no provider to check against; set ADMIN_TOKEN"
+elif echo "$BODY" | jq -e 'type=="array" and length>0 and (map(select(has("sponsoredUntil"))) | length) == 0' >/dev/null 2>&1; then
   green "  PASS  no sponsorship field reaches a landlord's browser"; PASS=$((PASS+1))
 else
   red "  FAIL  the directory ships sponsoredUntil to landlords, or did not return a list of providers"; FAIL=$((FAIL+1))

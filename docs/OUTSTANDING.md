@@ -3886,6 +3886,58 @@ in"* instead of naming email, and the suite reported
 smoke assertions and an 18-check refund drive — had been dark behind two lint
 errors from 3 and 5 October, and nothing in the job output said so.
 
+## 56. Two checks that had been passing on leftover state, not on evidence
+
+§55 got the smoke suite to the point where CI ran it. It then failed twice, on
+assertions that had passed locally minutes earlier:
+
+```
+FAIL  the directory leaks checkedByAdminId to landlords, or did not return a list of providers
+FAIL  the directory ships sponsoredUntil to landlords, or did not return a list of providers
+```
+
+Both guard a real POPIA boundary: a landlord sees outcomes, never which admin
+signed a provider off, and never a sponsorship field they could sort on to turn
+a directory captioned *"names we have looked into"* into a paid placement.
+Their own comments record that each was written the wrong way round first and
+**passed on a 401 body**, so both now require `type=="array" and length>0`.
+
+That requirement is right, and it is why they failed: **nothing in this
+repository had ever created a live provider.** Every create the suite attempts
+is one it expects to be refused — 400 before the number is rung, 400 for a
+sponsorship with no placement — and `prisma/seed.ts` seeds none. So the two
+checks were reading providers left behind by earlier drives. On this
+container's development database, 3977 accounts deep, they passed. On a freshly
+migrated and seeded database they fail, which is what CI did the first time it
+ever reached that step.
+
+Reproduced by building CI's database here: dropped and recreated
+`mastande_test`, `prisma migrate deploy`, then the seed with `SEED_DEMO_ADS`,
+`SEED_DEMO_ROOMS` and `SEED_LAUNCH_CODES` — the same three flags the workflow
+sets. Both failures appeared immediately.
+
+**The fix is that the checks now carry their own subject.** One live provider is
+created through the admin route first, with `phoneConfirmedAt` set so it can be
+active at all (201, and the admin's own response does carry `checkedByAdminId`
+— so there is something real to withhold). Without an `ADMIN_TOKEN` creating
+one is impossible, and the two checks then **skip with the reason named**
+rather than failing on an empty directory or, worse, passing on one.
+
+Proven able to fail: `checkedByAdminId: true, sponsoredUntil: true` added back
+to the explicit `select` in `services.service.ts`, and both checks reported the
+leak; reverted, and 617 pass with 0 failures on the fresh database.
+
+**This is the state-dependence trap, and it is the same family as the rest.** A
+check whose subject comes from whatever happened to be in the database is not
+a check of the code — it is a check of the database, and it reports on the code
+anyway. It had been reporting success for every release in which these two
+columns could have started leaking. The rule this file keeps arriving at now
+has a third form:
+
+1. A check must be able to fail (§54, the guard that reported without running).
+2. A check must be able to see its subject (§55 and the fourteen before it).
+3. **A check must create its subject, not inherit it.**
+
 ## How to check the whole thing still works
 
 ```bash
