@@ -314,7 +314,10 @@ export class RoomsService {
      * nothing, because an owner groups rooms deliberately and must not have a
      * property appear behind their back.
      */
-    let propertyId: string | null = null;
+    // Declared without an initialiser on purpose: both branches below assign
+    // it, so a `= null` here is a value nothing can read, and eslint's
+    // no-useless-assignment says so.
+    let propertyId: string | null;
     if (requestedPropertyId) {
       const own = await this.prisma.property.findFirst({
         where: { id: requestedPropertyId, landlordId: lister.id },

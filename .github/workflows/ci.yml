@@ -298,10 +298,18 @@ jobs:
       #
       # Both directions, because a guard that cannot pass is as useless as one
       # that cannot fail.
+      # ⚠️ `!cancelled()` so a lint or test failure above does not hide a
+      # broken production config — but `dist/main.js` comes from the Build
+      # step, which IS skipped when something above fails. Without the check
+      # below, this step then runs `node dist/main.js` against nothing, exits
+      # non-zero for MODULE_NOT_FOUND, misses the grep and reports "the guard
+      # failed, but not on the placeholder API_URL" — a wrong reason for a
+      # guard that never ran. It did exactly that on 12 October.
       - name: Environment guard refuses a broken production config
         if: ${{ !cancelled() }}
         working-directory: backend
         run: |
+          [ -f dist/main.js ] || { echo "::error::Build was skipped, so the environment guard could not be driven at all — fix the failure above"; exit 1; }
           set +e
           OUT=$(env -i PATH="$PATH" \
             APP_ENV=production NODE_ENV=production \
@@ -326,6 +334,7 @@ jobs:
         if: ${{ !cancelled() }}
         working-directory: backend
         run: |
+          [ -f dist/main.js ] || { echo "::error::Build was skipped, so the environment guard could not be driven at all — fix the failure above"; exit 1; }
           set -e
           env -i PATH="$PATH" \
             APP_ENV=production NODE_ENV=production PORT=3399 \
@@ -415,9 +424,12 @@ jobs:
           ADMIN_EMAIL: ci-admin@mastande.test
           ADMIN_PASSWORD: CiSmokeAdmin123
 
+      # A diagnostics step must never add a failure row of its own: when the
+      # API was never started the log does not exist, `cat` exits 1, and the
+      # job grows a fourth red step that says nothing about the real fault.
       - name: API log on failure
         if: failure()
-        run: cat /tmp/api.log
+        run: cat /tmp/api.log || echo "(no /tmp/api.log — the API was never started)"
 
   # Browser tests. These existed in e2e/ from early on and nothing ever ran
   # them; the first execution found two real bugs (prerendered pages not being

@@ -3745,6 +3745,199 @@ which is how an allowlist becomes the place defects go to be forgotten.
 Until it is written, the only thing standing between that pairing and the next
 white-on-white button is somebody reading the comment.
 
+## 54. Three red CI jobs on `develop`, and only one of them was a failure
+
+The merge of Phases A–K (`1098abe`) landed with three red checks. Comparing
+them step-for-step and annotation-for-annotation against the pre-merge
+`develop` head (`7e13122`) separated them into three different things, which
+is the point of writing this down: a job name is not a failure.
+
+**1. `E2E — browser journeys` — mine, and new.** Pre-merge this job failed at
+step 12 (the a11y drive). Post-merge it failed earlier, at step 10, so step 12
+never ran — a *different* failure wearing the same job name.
+`e2e/account-settings.spec.ts:33` asserted `getByText(/verify this number/i)`
+was visible. Commit `a047c18` ("eleven on-screen WhatsApp promises now read the
+flag") had put that button behind `@if (whatsappOn)`, correctly: the control
+cannot work while the channel is off, because `requestPhoneVerification` sends
+over WhatsApp and the API refuses with a 503. So the spec was asserting a
+button the product had deliberately stopped offering.
+
+Fixed by asserting the test's actual intent — that saving a number does not
+verify it — in a form that holds in both flag states: the "Not verified"
+sentence is on screen either way, the `✅ Verified` branch must be absent, and
+the button's count is asserted against `WHATSAPP_ENABLED` imported from the
+frontend's own `feature-flags.ts` rather than hardcoded. Reproduced locally
+first (same error, same line), then fixed, then the bug reintroduced —
+`@if (auth.user()?.phoneVerified || auth.user()?.phone)`, which is exactly
+"saving verified it" — and the spec failed again. 3/3 app journeys pass.
+
+**2. `Backend — Typecheck, Test, Build` — pre-existing, and three of its four
+red steps were not failures at all.** Only step 7, `Lint`, was: two errors,
+`'code' is assigned a value but never used` in `phone-signup.service.ts:512`
+(from `c5cec47`, 5 October) and `The value assigned to 'propertyId' is not used
+in subsequent statements` in `rooms.service.ts:317` (from `f73b8f9`,
+3 October). Both predate this branch; both are two-line fixes and are fixed
+here, because a lint error blocks the whole job including the smoke suite.
+
+The other three red steps are a cascade, and a dishonest one. Steps 8–10
+(Typecheck, Test, **Build**) skip when Lint fails. The two environment-guard
+steps carry `if: ${{ !cancelled() }}` so that a test failure cannot hide a
+broken production config — correct in intent, but they then ran
+`node dist/main.js` against a `dist/` the skipped Build had never produced.
+MODULE_NOT_FOUND exits non-zero, the grep misses, and the step reported
+
+> `the guard failed, but not on the placeholder API_URL`
+
+about a guard that had never been invoked. The other reported *"a correct
+production config did not pass the guard"* on the same basis. That is this
+repository's signature defect — a check reporting a conclusion it has no
+standing to reach — so both steps now assert `dist/main.js` exists first and
+say *"Build was skipped, so the environment guard could not be driven at
+all"* instead. Proven by moving `dist/main.js` aside and watching it fire.
+With a real `dist/`, both guards pass locally.
+
+`API log on failure` (step 16) was the fourth red row: a diagnostics step
+`cat`-ing a `/tmp/api.log` that the never-started API had not written. It now
+falls back to a message, so a diagnostics step cannot add a failure of its own.
+
+**3. `Staging configuration` — pre-existing, and not a code failure.** Same
+step, same annotation, before and after. `STAGING_API_HOST` is set, so the
+check is enforcing, and it fails on either `/health` not answering within
+eight minutes or a `version` other than `1.81.0` — root, backend and frontend
+`package.json` all agree on that number, so the check itself is sound. This
+needs the Render dashboard, which is not reachable from this container, and it
+is **for the operator, not for code**: either the staging deploy has not landed
+or the service is suspended.
+
+**What was not run locally, and is still only asserted by CI:** the backend has
+no unit tests (`npm test` is an honest stub), and of the e2e job only step 10
+(3 app journeys) and step 12 (the a11y drive, 40 pages, green here) were driven
+in this container. The mobile-board project, `phase-drive.mjs` and the
+production-build locale/SEO pass were not.
+
+## 55. Fixing one lint error exposed two more failures that had never run
+
+§54 fixed the Lint error that was failing the backend job. CI then failed at
+**Typecheck**, which had been *skipped* behind that lint error — so the cascade
+was hiding real failures, not just producing fake ones. Three errors:
+
+```
+prisma/inspect-board.ts(57,15): error TS18047: 'u.email' is possibly 'null'.
+prisma/inspect-board.ts(57,29): error TS18047: 'u.email' is possibly 'null'.
+prisma/purge-test-data.ts(104,22): error TS18047: 'u.email' is possibly 'null'.
+```
+
+Both files are **byte-identical to the pre-merge head** (checked with a
+worktree at `7e13122`), so these predate the branch entirely. They are also
+only reachable through `tsconfig.seed.json`, the second project in
+`npm run typecheck` — the one whose own header comment records that it used to
+check zero seed files.
+
+**`inspect-board.ts` was not a type complaint, it was a crash.** `User.email`
+is nullable on purpose, for the WhatsApp-first landlord who signed up by phone,
+and `u.email.slice(u.email.lastIndexOf('@'))` throws on the first such account.
+This database has **39 of them**, so the script was failing outright every time
+it ran: confirmed by executing the old expression against it and getting
+`Cannot read properties of null (reading 'slice')`. They now get their own
+bucket — `(no email — phone-only)` — because "how many accounts have no email"
+is exactly the number that breakdown is read for, and dropping them would have
+answered the question wrongly rather than loudly.
+
+`purge-test-data.ts` selects by `email endsWith TEST_DOMAIN`, so the value
+cannot be null there in practice; it is named rather than asserted, so if it
+ever does print `(no email)` the query has changed.
+
+### And then the smoke suite, 352 assertions that had never run either
+
+With Typecheck green, `Start API` → `API smoke test` ran for the first time and
+failed three assertions in **§17f, assisted sign-up**:
+
+```
+FAIL  an admin can start one  (expected 200, got 503)
+FAIL  nothing in the reply says the acceptance is the person's
+FAIL  a record claims acceptance with no account, or the list is not an array
+```
+
+The 503 is **correct**. Assisted sign-up delivers its code over WhatsApp and
+there is no other channel, so with `WHATSAPP_ENABLED=false` the API refuses and
+names email — which is the behaviour this repository deliberately chose, and
+which CLAUDE.md records as the open consequence. §17f asserted a flat 200, and
+the two follow-on failures were cascades of the ticket that was never created.
+
+This is the same defect as the e2e failure in §54 and the eleven on-screen
+promises in `a047c18`: **a check still asserting a WhatsApp flow succeeds after
+the channel was switched off.** §18 had already been given two states for
+exactly this reason — *"the suite must mean something whichever way the switch
+is set, or it stops being run on the deployment it matters most on"* — and
+§17f was simply never brought in line with it.
+
+So §17f now has the same two branches, and the off branch is **not a skip**: it
+asserts the 503, that the refusal names email, and that the read-back route is
+still real and still an array. Accepting an assisted sign-up and sending
+nothing is the exact failure the 503 exists to prevent — an admin would tell
+somebody standing in front of them that a code was on its way.
+
+Proven able to fail: the refusal message was doctored to say *"Use another way
+in"* instead of naming email, and the suite reported
+`FAIL  the 503 does not name email: …`, then passed again once reverted.
+
+**The lesson worth keeping:** a cascade does not only invent failures (§54), it
+*hides* them. Three steps' worth of real coverage — a typecheck project, 616
+smoke assertions and an 18-check refund drive — had been dark behind two lint
+errors from 3 and 5 October, and nothing in the job output said so.
+
+## 56. Two checks that had been passing on leftover state, not on evidence
+
+§55 got the smoke suite to the point where CI ran it. It then failed twice, on
+assertions that had passed locally minutes earlier:
+
+```
+FAIL  the directory leaks checkedByAdminId to landlords, or did not return a list of providers
+FAIL  the directory ships sponsoredUntil to landlords, or did not return a list of providers
+```
+
+Both guard a real POPIA boundary: a landlord sees outcomes, never which admin
+signed a provider off, and never a sponsorship field they could sort on to turn
+a directory captioned *"names we have looked into"* into a paid placement.
+Their own comments record that each was written the wrong way round first and
+**passed on a 401 body**, so both now require `type=="array" and length>0`.
+
+That requirement is right, and it is why they failed: **nothing in this
+repository had ever created a live provider.** Every create the suite attempts
+is one it expects to be refused — 400 before the number is rung, 400 for a
+sponsorship with no placement — and `prisma/seed.ts` seeds none. So the two
+checks were reading providers left behind by earlier drives. On this
+container's development database, 3977 accounts deep, they passed. On a freshly
+migrated and seeded database they fail, which is what CI did the first time it
+ever reached that step.
+
+Reproduced by building CI's database here: dropped and recreated
+`mastande_test`, `prisma migrate deploy`, then the seed with `SEED_DEMO_ADS`,
+`SEED_DEMO_ROOMS` and `SEED_LAUNCH_CODES` — the same three flags the workflow
+sets. Both failures appeared immediately.
+
+**The fix is that the checks now carry their own subject.** One live provider is
+created through the admin route first, with `phoneConfirmedAt` set so it can be
+active at all (201, and the admin's own response does carry `checkedByAdminId`
+— so there is something real to withhold). Without an `ADMIN_TOKEN` creating
+one is impossible, and the two checks then **skip with the reason named**
+rather than failing on an empty directory or, worse, passing on one.
+
+Proven able to fail: `checkedByAdminId: true, sponsoredUntil: true` added back
+to the explicit `select` in `services.service.ts`, and both checks reported the
+leak; reverted, and 617 pass with 0 failures on the fresh database.
+
+**This is the state-dependence trap, and it is the same family as the rest.** A
+check whose subject comes from whatever happened to be in the database is not
+a check of the code — it is a check of the database, and it reports on the code
+anyway. It had been reporting success for every release in which these two
+columns could have started leaking. The rule this file keeps arriving at now
+has a third form:
+
+1. A check must be able to fail (§54, the guard that reported without running).
+2. A check must be able to see its subject (§55 and the fourteen before it).
+3. **A check must create its subject, not inherit it.**
+
 ## How to check the whole thing still works
 
 ```bash

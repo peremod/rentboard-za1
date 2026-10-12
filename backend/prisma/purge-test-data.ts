@@ -101,7 +101,12 @@ async function main() {
   console.log(`${users.length} test account(s) owning ${rooms} room(s):\n`);
   for (const u of users) {
     const when = u.createdAt.toISOString().split('T')[0];
-    console.log(`  ${u.email.padEnd(46)} ${u.role.padEnd(9)} ${String(u._count.rooms).padStart(2)} room(s)  ${when}`);
+    // These rows were selected by `email endsWith TEST_DOMAIN`, so the email
+    // cannot be null here — but the column is nullable for phone-only
+    // accounts and tsc is right that nothing in the type says so. Named
+    // rather than asserted: if this ever does print, the query changed.
+    const addr = u.email ?? '(no email)';
+    console.log(`  ${addr.padEnd(46)} ${u.role.padEnd(9)} ${String(u._count.rooms).padStart(2)} room(s)  ${when}`);
   }
 
   if (!includeAdmins) {
