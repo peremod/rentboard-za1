@@ -3938,6 +3938,58 @@ has a third form:
 2. A check must be able to see its subject (§55 and the fourteen before it).
 3. **A check must create its subject, not inherit it.**
 
+## 57. The house-ad fix did not converge, and said it had — again
+
+§51 fixed three chained defects that left every house advert reading *"by
+RentBoard ZA"*. It was reported still wrong on a live board afterwards, and the
+reason is a fourth defect of the same shape in the same file.
+
+`seed-house-ads.ts` keys everything on the fixed uuids in `house-ads.ts` —
+`…0000b0` for the advertiser, `…b1/b2/b3` for the three campaigns. A database
+seeded **before those ids existed** holds its house ads under random uuids, so
+every lookup misses, all four rows report *"not in this database — will be
+created"*, and `--apply` creates a correct SECOND set beside the wrong one.
+
+Both sets are `status: active`. `ads.service.ts` ranks the house ads and serves
+the top one, so a legacy row can win, and the board still reads *"by RentBoard
+ZA"* after a run that announced *"✅ 3 house ads written"*.
+
+Reproduced on a copy: three legacy campaigns under random uuids pointing at a
+`RentBoard ZA` advertiser, then `--apply`, and the table went from three house
+ads to **six — three Mastande, three RentBoard, every one of them active.**
+
+Worse, and verified rather than inferred by running the pre-fix file against
+that state: once the canonical rows exist and match, the dry run and the apply
+both print
+
+> `Nothing to change — the house ads already match the code.`
+
+while a RentBoard advert is live. That is the **third** time this one file has
+produced a report structurally unable to see its subject — §51 defect 2 was the
+advertiser fields, defect 3 was `if (!changes) return` firing before the
+advertiser upsert, and this is the campaigns themselves.
+
+**The fix is to stop treating the fixed ids as the identity.** House ads are
+identified by `isHouseAd`, a flag this script sets itself; the fixed ids are
+only the canonical row. Any `isHouseAd` campaign outside the canonical three is
+now found, reported with its id, status and advertiser, and **counted into
+`changes`** — that last part deliberately, because `if (!changes) return` is
+exactly what hid the previous one and the same shape must not be repeated.
+
+On `--apply` they are set to `status: 'ended'`, not deleted: a campaign carries
+impressions and clicks, and retiring one is a lifecycle change rather than a
+reason to destroy the record. Already-ended rows are excluded, so the script
+stays idempotent — after the fix the same database reports *"Legacy house ads
+under other ids: none"*.
+
+**What this cost, and the lesson.** The advertiser name was reported wrong by a
+person looking at the live site, twice, after two rounds of fixes that each
+reported success. Every round was verified against a database seeded from the
+current code — the one shape of database in which the bug cannot occur. A fix
+for production data has to be rehearsed on a copy of **production's** shape,
+not on a freshly seeded one, and "seeded before this id existed" is the
+commonest way those two differ.
+
 ## How to check the whole thing still works
 
 ```bash
