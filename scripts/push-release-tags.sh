@@ -1510,6 +1510,31 @@ Proved against a stub Cloud API: any request reaching it is one Meta would
 bill. Falsified by removing the gates — a real billable template message lands
 on the stub."
 
+tag_if_missing "v1.134.0" "fff6d9dfa1d806d13dae70f23955b596b64e258a" "2026-10-13T21:22:53+00:00" "v1.134.0 — the tenancy lifecycle as states, and a deployment that says what it is
+
+The lifecycle modelled as states rather than pages: a finished letting stops
+being described as running on fourteen screens, previous rent payments survive
+it, and tenancies are archived per cycle rather than mixed together. Phases A
+to K, with the design system, the state vocabulary and the shared loading,
+empty and error components behind them.
+
+Then the gates. Fourteen of them could not see their own subject, several
+newly written: an environment guard that reported a verdict on a run that never
+happened, an e2e spec and a smoke section still asserting WhatsApp flows after
+the channel was switched off, two POPIA checks passing on providers left over
+from an earlier drive, and a house-ad seed keyed on uuids a real database never
+had. The rule has three forms now - a check must be able to fail, must be able
+to see its subject, and must create that subject rather than inherit it.
+
+And the deployment stopped lying about itself: production was deploying from
+develop, is in the blueprint now with branch master, and staging's SITE_URL
+named a host that has never existed in one file and a different one in another.
+env-parity.mjs compares them to the frontend now.
+
+package.json moves with this tag. It had been frozen at 1.81.0 while the
+documentation's labels ran to v1.134.0 and the tags stopped at v1.113.0, which
+is why sync-tags.sh could no longer see anything to do."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
