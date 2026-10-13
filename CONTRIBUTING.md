@@ -123,7 +123,7 @@ CI (`.github/workflows/ci.yml`) re-runs all of this — fix locally first to avo
 | Git ref | Environment | Frontend | Backend |
 |---|---|---|---|
 | any branch | Preview | Vercel preview URL (auto per-PR) | — |
-| `develop` | Staging | `staging.umastande.co.za` (Vercel) | Render, via `render.yaml` |
+| `develop` | Staging | `rentboard-za1.vercel.app` (Vercel) | Render, via `render.yaml` |
 | `main` | Production | `umastande.co.za` (Vercel) | **none yet** — see below |
 
 Neither half deploys from GitHub Actions. Railway was dropped and Render now

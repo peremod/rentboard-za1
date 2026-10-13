@@ -33,7 +33,7 @@ body:
       description: The three environments differ by build configuration, so this narrows it immediately.
       options:
         - Production (umastande.co.za)
-        - Staging (staging.umastande.co.za)
+        - Staging (rentboard-za1.vercel.app)
         - Local development
     validations:
       required: true

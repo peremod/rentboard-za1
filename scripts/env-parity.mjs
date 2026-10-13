@@ -260,8 +260,47 @@ if (existsSync(renderPath)) {
         fail(`render.yaml: ${name} deploys master but sets APP_ENV=staging — production would refuse every crawler`);
       }
     }
+    /**
+     * ⚠️ SITE_URL must be the SAME STRING the frontend builds for that
+     * environment. Nothing compared them until 13 October, and all three
+     * places disagreed: environment.staging.ts said `mastande.vercel.app`, a
+     * host that has never existed; render.yaml said `staging.umastande.co.za`;
+     * and staging actually serves from `rentboard-za1.vercel.app`.
+     *
+     * It matters beyond tidiness: SITE_URL builds sitemap.xml, robots.txt and
+     * every canonical URL, so a wrong one points the whole SEO surface of an
+     * environment at a domain that does not answer — and it is invisible,
+     * because the API starts perfectly well with it.
+     *
+     * Keyed on APP_ENV rather than service name, so renaming a service cannot
+     * quietly drop the check.
+     */
+    const frontendSiteUrl = (envName) => {
+      const file = join(ROOT, 'frontend/src/environments', `environment.${envName}.ts`);
+      if (!existsSync(file)) return null;
+      const m = readFileSync(file, 'utf8').match(/siteUrl:\s*'([^']+)'/);
+      return m ? m[1] : null;
+    };
+
+    for (const svc of services) {
+      const env = Object.fromEntries(
+        (svc?.envVars ?? []).map((e) => [e.key, 'value' in e ? e.value : undefined]),
+      );
+      const appEnv = env.APP_ENV;
+      if (!appEnv || !env.SITE_URL) continue;
+      const fe = frontendSiteUrl(appEnv === 'production' ? 'prod' : appEnv);
+      if (fe === null) continue;
+      if (fe !== env.SITE_URL) {
+        fail(
+          `render.yaml: ${svc.name} sets SITE_URL=${env.SITE_URL}, but `
+          + `environment.${appEnv === 'production' ? 'prod' : appEnv}.ts builds ${fe} — `
+          + 'sitemap, robots.txt and every canonical would name a different host than the site',
+        );
+      }
+    }
+
     if (!failures) {
-      ok(`render.yaml: ${services.length} service(s) declare APP_ENV and SITE_URL, each matching its own branch`);
+      ok(`render.yaml: ${services.length} service(s) declare APP_ENV and SITE_URL, each matching its own branch and its frontend`);
     }
   }
 }

@@ -89,7 +89,7 @@ Then **Manage** the webhook fields and subscribe to **`messages`**. Without that
 subscription the handshake succeeds and nothing is ever delivered — which looks
 exactly like a working setup.
 
-Staging uses `https://api-staging.umastande.co.za/api/whatsapp/webhook` and its
+Staging uses `https://api-rentboard-za1.vercel.app/api/whatsapp/webhook` and its
 own verify token.
 
 Meta calls the URL immediately to verify it, so **deploy the env vars before you

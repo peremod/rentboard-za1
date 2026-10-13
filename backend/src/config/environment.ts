@@ -37,7 +37,7 @@ export function isProductionDeployment(): boolean {
  * Derived from FRONTEND_URL rather than hard-coded, because the previous
  * hard-coded list keyed off NODE_ENV — which meant Render staging, running
  * with NODE_ENV=production, allowed only umastande.co.za and rejected every
- * request from staging.umastande.co.za. The staging frontend could not talk
+ * request from the staging frontend, which could not talk
  * to the staging API at all.
  */
 export function corsOrigins(): string[] {
@@ -50,7 +50,7 @@ export function corsOrigins(): string[] {
       return origins;
     }
     case 'staging':
-      return frontend ? [frontend] : ['https://staging.umastande.co.za'];
+      return frontend ? [frontend] : ['https://rentboard-za1.vercel.app'];
     default:
       return ['http://localhost:4200'];
   }

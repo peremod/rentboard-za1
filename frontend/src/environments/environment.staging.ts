@@ -1,14 +1,20 @@
 /**
- * Staging — `ng build --configuration staging`, deployed to staging.umastande.co.za
+ * Staging — `ng build --configuration staging`, served at
+ * https://rentboard-za1.vercel.app (the `develop` deployment of the Vercel
+ * project `rentboard-za1`).
  *
- * Both hostnames below moved in the Mastande rebrand and BOTH need the
- * provider changed before staging works again:
- *   · apiUrl  — Render keys services by name, so `mastande-api` is a new
- *               service that must be created (see render.yaml).
- *   · siteUrl — the Vercel project must be renamed, which is what moves the
- *               *.vercel.app alias.
- * Until then staging builds fine and 404s at runtime. Nothing here can detect
- * that; .github/workflows/verify-deployment.yml is what will catch it.
+ * ⚠️ The name is pre-rebrand and that is a fact about the deployment, not a
+ * mistake here. Renaming the Vercel project moves the *.vercel.app alias, so
+ * this value changes the day that happens and not before. Three files have to
+ * agree on it — this one, `SITE_URL` in render.yaml, and `FRONTEND_URL` on the
+ * staging service — and scripts/env-parity.mjs now asserts the first two
+ * match rather than leaving it to whoever remembers.
+ *
+ * It said `mastande.vercel.app` until 13 October, a host that has never
+ * existed: the rebrand renamed the API service and not the Vercel project, and
+ * nothing compared the two. render.yaml meanwhile said
+ * `staging.umastande.co.za`. Three files, three different answers, none of
+ * them what staging actually serves.
  */
 export const environment = {
   production: false,
@@ -20,7 +26,7 @@ export const environment = {
    * deploy, so every new deploy would strand the canonical baked into the
    * previous build.
    */
-  siteUrl: 'https://mastande.vercel.app',
+  siteUrl: 'https://rentboard-za1.vercel.app',
   /**
    * Deliberately false. Staging is a byte-identical copy of production copy;
    * if it were indexable it would fight production for every keyword and

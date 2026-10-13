@@ -4070,6 +4070,78 @@ to match staging and **must be confirmed against the dashboard — declaring
 rather than `generateValue: true` as on staging, deliberately: a regenerated
 secret invalidates every live session and refresh token, because it signs them.
 
+## 60. Three files, three different answers, none of them where staging is
+
+Staging serves from `https://rentboard-za1.vercel.app` — the `develop`
+deployment of the Vercel project, confirmed from the dashboard on 13 October.
+The repository said otherwise in two places, differently:
+
+| | claimed |
+|---|---|
+| `environment.staging.ts` | `https://mastande.vercel.app` — **a host that has never existed** |
+| `render.yaml` → `SITE_URL` | `https://staging.umastande.co.za` |
+| the live Render service | `https://staging.umastande.co.za` |
+| reality | `https://rentboard-za1.vercel.app` |
+
+`mastande.vercel.app` came from the rebrand: the API service was renamed and
+the Vercel project was not, and nothing compared the two. The file's own header
+said the Vercel project "must be renamed, which is what moves the *.vercel.app
+alias" — true, and it never happened, so the value described an intention
+rather than a deployment.
+
+`SITE_URL` builds `sitemap.xml`, `robots.txt` and every canonical URL, so a
+wrong one points an environment's whole SEO surface at a host that does not
+answer. **The API starts perfectly well with it**, which is why it survived.
+
+Fixed in `environment.staging.ts`, `render.yaml`, the `corsOrigins()` staging
+fallback in `backend/src/config/environment.ts`, `backend/.env.example` and
+seven docs.
+
+**And the gate that should have caught it did not exist.** `env-parity.mjs`
+checked that `SITE_URL` was *declared* per service, and that `APP_ENV` matched
+the branch, but never that `SITE_URL` equalled the string the frontend actually
+builds — the one comparison that would have caught all three disagreements at
+once. It does now, keyed on `APP_ENV` rather than service name so renaming a
+service cannot quietly drop it. Driven to failure three ways: render.yaml back
+to `staging.umastande.co.za`, the frontend back to `mastande.vercel.app`, and
+production drifting to the apex domain.
+
+⚠️ **The live service still has to be changed by hand** — `SITE_URL` *and*
+`FRONTEND_URL` on `mastande-api`. See §61: `FRONTEND_URL` is the more urgent of
+the two.
+
+## 61. 🔴 Staging's FRONTEND_URL is the production site
+
+On the live `mastande-api` service, `FRONTEND_URL=https://www.umastande.co.za`.
+That is production. It drives four things, and the first is the serious one:
+
+* **`auth.controller.ts:123`** — `res.redirect(\`${process.env.FRONTEND_URL}/auth/callback#${params}\`)`.
+  A Google sign-in against **staging** redirects the browser to **production**,
+  with the tokens in the URL fragment. Staging-minted JWTs are handed to the
+  live site.
+* **CORS** — `corsOrigins()` returns `[frontend]` for staging, so staging's
+  only permitted origin is production. The real staging frontend cannot call
+  its own API; production can.
+* **`references.service.ts:74`** — reference-verification links sent to **real
+  people over WhatsApp** are `${FRONTEND_URL}/reference/${token}`. A staging
+  token in a link to production, where it does not exist.
+* Message notifications, application emails, PayFast return URLs, ad
+  click-throughs.
+
+`environment.ts`'s own header warns about *"an unset SITE_URL that used to fall
+back to the production origin"*. This is that defect in the variable next door,
+set by hand rather than by a fallback — so the guard written for one did not
+cover the other.
+
+⚠️ **Not fixed here: it is dashboard state, not repository state.** Set
+`FRONTEND_URL` and `SITE_URL` on `mastande-api` to
+`https://rentboard-za1.vercel.app`.
+
+⚠️ **And nothing in this repository can detect it**, because `FRONTEND_URL` is
+`sync: false` by design — it is per-deployment and the blueprint never sees its
+value. A check would have to read the running service. Logged rather than
+built.
+
 ## How to check the whole thing still works
 
 ```bash

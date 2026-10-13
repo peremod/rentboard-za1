@@ -77,7 +77,7 @@ services:
       # refuses to start without it, deliberately, because the old fallback
       # was the production origin.
       - key: SITE_URL
-        value: https://staging.umastande.co.za
+        value: https://rentboard-za1.vercel.app
 
       - key: PORT
         value: 3000

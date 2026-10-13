@@ -200,8 +200,8 @@ REFRESH_TOKEN_TTL_DAYS=30
 # sitemap.xml and robots.txt are built from. It must differ per environment:
 # the old fallback was the production origin, so a misconfigured staging box
 # published production URLs in its own sitemap and looked fine in every log.
-SITE_URL=https://staging.umastande.co.za
-FRONTEND_URL=https://staging.umastande.co.za
+SITE_URL=https://rentboard-za1.vercel.app
+FRONTEND_URL=https://rentboard-za1.vercel.app
 API_URL=https://<your-render-url>
 
 # Google sign-in. The callback must match the URI registered in the Google
@@ -449,7 +449,7 @@ API_URL=https://<your-render-url>
 Angular bakes environment values at build time, so `environment.staging.ts`
 
 **It currently assumes a custom domain you probably do not have yet** —
-`https://api-staging.umastande.co.za/api`. Either point that subdomain at
+`https://api-rentboard-za1.vercel.app/api`. Either point that subdomain at
 API call from staging fails and the site looks completely broken rather than
 partly broken, which at least makes it easy to spot.
 
@@ -542,7 +542,7 @@ silently dropping your own mail.
 
 ```bash
 API=https://<your-render-url> \
-FRONTEND_URL=https://staging-mastande.vercel.app \
+FRONTEND_URL=https://staging-rentboard-za1.vercel.app \
 ./scripts/smoke-test.sh
 ```
 

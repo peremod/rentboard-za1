@@ -58,7 +58,7 @@ Validate at [search.google.com/test/rich-results](https://search.google.com/test
 
 | | Development | Staging | Production |
 |---|---|---|---|
-| `environment.siteUrl` | `http://localhost:4200` | `https://staging.umastande.co.za` | `https://umastande.co.za` |
+| `environment.siteUrl` | `http://localhost:4200` | `https://rentboard-za1.vercel.app` | `https://umastande.co.za` |
 | `environment.indexable` | `false` | `false` | `true` |
 | Meta robots | `noindex, nofollow` | `noindex, nofollow` | `index, follow, max-image-preview:large` |
 | Canonical emitted | no | no | yes |

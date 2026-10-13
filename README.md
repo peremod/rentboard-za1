@@ -137,7 +137,7 @@ Mastande runs identically across three environments via Angular file-replacement
 | Env | Frontend command | Frontend env file | Backend `NODE_ENV` | Deploys to |
 |---|---|---|---|---|
 | Development | `ng serve` | `environment.ts` | `development` | localhost |
-| Staging | `ng build --configuration staging` | `environment.staging.ts` | `staging` | `staging.umastande.co.za` (Vercel preview/staging) + Render (`render.yaml`, branch `develop`) |
+| Staging | `ng build --configuration staging` | `environment.staging.ts` | `staging` | `rentboard-za1.vercel.app` (Vercel preview/staging) + Render (`render.yaml`, branch `develop`) |
 | Production | `ng build --configuration production` | `environment.prod.ts` | `production` | `umastande.co.za` (Vercel) + **no backend deploy target yet** |
 
 ```bash
@@ -418,7 +418,7 @@ ones that are not text.
 | npm packages | `rentboard-za`, `rentboard-frontend`, `rentboard-backend` | `mastande-*` |
 | Domain | `rentboard.co.za` | `mastande.co.za`, changed again to `umastande.co.za` in v1.60.0 once the company was registered as Umastande (Pty) Ltd |
 | Render service | `rentboard-api` | `mastande-api` |
-| Vercel alias | `rentboard-za1.vercel.app` | `mastande.vercel.app` |
+| Vercel alias | `rentboard-za1.vercel.app` | `rentboard-za1.vercel.app` |
 | Test and local identifiers | `rentboard.test`, `rentboard_test` | `mastande.test`, `mastande_test` |
 
 The dist path is the one that bites: `angular.json`, `vercel.json`,
