@@ -122,8 +122,32 @@ const { psqlUrl, schema, dropped } = splitConn(URL);
  * belt and braces; a URL that carries its own `options` parameter wins over it
  * in libpq, so it is left alone there and the qualification carries the weight.
  */
+/**
+ * ⚠️ AND a pooler refuses PGOPTIONS outright, which made this preflight unable
+ * to check the one connection string an operator actually pastes.
+ *
+ * Neon's pooled endpoint is PgBouncer, and PgBouncer rejects the `options`
+ * startup parameter rather than ignoring it:
+ *
+ *   psql: error: ... ERROR:  unsupported startup parameter in options:
+ *   search_path. Please use unpooled connection or remove this parameter
+ *
+ * psql exits non-zero, so the preflight printed "❌ Cannot reach that
+ * database" about a database that was reachable, healthy and fully migrated —
+ * a FALSE NEGATIVE on the one check whose whole job is to say whether the
+ * target is sound. Reported from a real run against both Neon branches on
+ * 13 October; `prisma migrate status` reached the same host seconds later and
+ * answered "Database schema is up to date!".
+ *
+ * The qualification above already carries the weight — every table reference
+ * is schema-qualified precisely so that this does not depend on search_path.
+ * PGOPTIONS was belt and braces, so on a pooler it is simply dropped rather
+ * than allowed to fail the connection.
+ */
+const isPooler = (host) => /-pooler\./.test(host || '');
+
 function qOn(conn, sql) {
-  const env = conn.hasOwnOptions
+  const env = conn.hasOwnOptions || isPooler(conn.host)
     ? process.env
     : { ...process.env, PGOPTIONS: `-c search_path=${conn.sch}` };
   try {
