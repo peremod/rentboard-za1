@@ -24,19 +24,17 @@
 # any of the limits described here.
 
 services:
+  # ── STAGING ───────────────────────────────────────────────────────────────
+  #
+  # The rename LANDED on 13 October: `mastande-api` exists and serves staging,
+  # `rentboard-api` kept the production role, and both are live. The note that
+  # used to sit here described the cutover as still pending and is gone.
+  #
+  # ⚠️ Render keys a Blueprint service on its NAME, which is why that cutover
+  # created a second service rather than renaming the first. The same is true
+  # in reverse now: change `name:` below and you do not rename this service,
+  # you create another one and leave this one running.
   - type: web
-    # RENAMED IN THE MASTANDE REBRAND, and this needs a hand at Render.
-    #
-    # Render keys a Blueprint service on its NAME. Syncing this file does not
-    # rename `rentboard-api`; it creates `mastande-api` alongside it, on a new
-    # onrender.com hostname, while the old service keeps running and keeps
-    # serving the old URL. So staging is pointed at a host that does not exist
-    # yet: frontend/src/environments/environment.staging.ts already expects
-    # https://mastande-api.onrender.com.
-    #
-    # To land it: create/sync the new service, copy every sync:false value
-    # across (they are not carried over), confirm /health, then delete the old
-    # one. Until that is done, staging's frontend cannot reach its API.
     name: mastande-api
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
@@ -154,3 +152,133 @@ services:
         sync: false
       - key: PAYFAST_SANDBOX
         value: "true"
+
+  # ── PRODUCTION ────────────────────────────────────────────────────────────
+  #
+  # Added 13 October, after the dashboard and this file were found to disagree
+  # about something neither recorded: `rentboard-api` carries APP_ENV=production
+  # and the production Neon branch, and it was deploying from `develop`. So a
+  # push to `master` deployed nothing, every push to `develop` went straight to
+  # production, and staging and production received the same commit at the same
+  # moment — staging gated nothing. The branch is `master` now; this block is
+  # what stops the repository being silent about it again.
+  #
+  # ⚠️⚠️ READ BEFORE THE FIRST SYNC OF THIS BLOCK. This service ALREADY EXISTS.
+  # A Blueprint matches on `name`, so every field below must match what the
+  # dashboard already has, or the sync changes live production:
+  #
+  #   · `name` must be exactly `rentboard-api`. Anything else creates a SECOND
+  #     production service on a new hostname — the identical mistake the
+  #     staging block above records, and api.umastande.co.za would keep
+  #     pointing at the old one.
+  #   · `plan` must match the instance it is actually on. Declaring `free` on a
+  #     paid instance DOWNGRADES it. It is written as `free` because that is
+  #     what the staging block uses and this repository has no record of the
+  #     production plan — CONFIRM IT IN THE DASHBOARD AND CORRECT THIS LINE
+  #     BEFORE SYNCING.
+  #   · `branch` must be `master`. That is the fix this block exists to record.
+  #
+  # Every `sync: false` value stays as the dashboard has it: Render does not
+  # overwrite those, which is the point of the flag.
+  - type: web
+    name: rentboard-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free                 # ⚠️ CONFIRM against the dashboard — see above
+    region: frankfurt
+    branch: master             # production. Was `develop`, which is the bug.
+    healthCheckPath: /health
+
+    # No preDeployCommand here either, for the same reason as staging: the free
+    # tier rejects it. Production migrations are run by hand BEFORE the push,
+    # with scripts/migrate-remote.sh, never `npx prisma migrate deploy` — see
+    # docs/OUTSTANDING.md §5a for the hour production spent down over exactly
+    # that distinction.
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # The one line that separates this service from staging in behaviour:
+      # indexability, CORS origins and PayFast live mode all read APP_ENV.
+      - key: APP_ENV
+        value: production
+
+      - key: SITE_URL
+        value: https://www.umastande.co.za
+
+      - key: PORT
+        value: 3000
+
+      # ⚠️ sync: false, NOT generateValue. The staging block generates this
+      # because a fresh secret there costs nothing. Here a regenerated secret
+      # invalidates every live session and every refresh token in circulation —
+      # it signs them all. It is set in the dashboard and the Blueprint must
+      # never touch it.
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 15m
+
+      - key: FRONTEND_URL
+        sync: false
+      - key: API_URL
+        sync: false
+
+      # ⚠️ BOTH are required. `prisma migrate` connects through directUrl, not
+      # url, so a DIRECT_URL missing here is how a migration silently lands
+      # somewhere else. The pooled host is the one with `-pooler` in it; the
+      # direct host is the one without.
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+
+      - key: IMAGEKIT_PUBLIC_KEY
+        sync: false
+      - key: IMAGEKIT_PRIVATE_KEY
+        sync: false
+      - key: IMAGEKIT_URL_ENDPOINT
+        sync: false
+
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM
+        sync: false
+      - key: RESEND_WEBHOOK_SECRET
+        sync: false
+      - key: ADMIN_ALERT_EMAIL
+        sync: false
+
+      - key: WHATSAPP_API_VERSION
+        value: v19.0
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_APP_SECRET
+        sync: false
+
+      - key: PAYFAST_MERCHANT_ID
+        sync: false
+      - key: PAYFAST_MERCHANT_KEY
+        sync: false
+      - key: PAYFAST_PASSPHRASE
+        sync: false
+
+      # ⚠️ "false" here, unlike staging. PAYFAST_SANDBOX=true in production
+      # sends real payments to the sandbox; the environment guard refuses to
+      # start on that combination, which is the check that makes this line
+      # safe to get wrong once.
+      - key: PAYFAST_SANDBOX
+        value: "false"
