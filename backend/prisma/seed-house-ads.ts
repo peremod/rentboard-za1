@@ -136,6 +136,56 @@ async function main() {
     else console.log('  unchanged');
   }
 
+  /**
+   * ⚠️ LEGACY HOUSE ADS UNDER OTHER IDS — the second way this script could
+   * report success and change nothing a visitor sees.
+   *
+   * Everything above is keyed on the fixed ids in house-ads.ts. A database
+   * seeded BEFORE those ids existed has its house ads under random uuids, so
+   * every lookup above misses, all four rows are reported as "not in this
+   * database — will be created", and the apply creates a correct SECOND set
+   * beside the wrong one. Both are status=active, ads.service.ts ranks the
+   * house ads and serves the top one, and a legacy row can win — so the board
+   * still reads "by RentBoard ZA" after a run that said it wrote 3 house ads.
+   *
+   * Reproduced on a copy before fixing: 3 legacy campaigns under random ids,
+   * --apply, and the table went to SIX active house ads, three of them still
+   * carrying the old brand.
+   *
+   * House ads are identified by `isHouseAd`, which this script sets itself, so
+   * that flag is the identity and the fixed ids are only the canonical row.
+   * They are ENDED rather than deleted: a campaign carries impressions and
+   * clicks, and retiring one is a lifecycle change, not a reason to destroy
+   * the record.
+   */
+  const canonicalIds = HOUSE_ADS.map((ad) => ad.id);
+  const legacy = await prisma.adCampaign.findMany({
+    where: {
+      isHouseAd: true,
+      id: { notIn: canonicalIds },
+      status: { not: 'ended' },
+    },
+    select: {
+      id: true, name: true, headline: true, status: true,
+      advertiser: { select: { id: true, companyName: true } },
+    },
+  });
+  console.log('');
+  if (legacy.length) {
+    console.log(`Legacy house ads under other ids: ${legacy.length}`);
+    for (const row of legacy) {
+      console.log(`  - ${row.id}  ${row.status}  by ${row.advertiser.companyName}`);
+      console.log(`      ${row.headline}`);
+      console.log(`    → will be ended (kept, with its impressions and clicks)`);
+    }
+    // ⚠️ Counted, so the `if (!changes) return` below cannot hide this the way
+    // it hid the advertiser name. That was defect 3 above; this is the same
+    // shape and must not be repeated.
+    changes += legacy.length;
+  } else {
+    console.log('Legacy house ads under other ids: none');
+  }
+
   if (!changes) {
     console.log('\nNothing to change — the house ads already match the code.');
     return;
@@ -162,7 +212,14 @@ async function main() {
     await prisma.adCampaign.upsert({ where: { id: data.id }, update: data, create: data });
   }
 
-  console.log(`\n✅ ${HOUSE_ADS.length} house ads written. Redeploy is not needed — they are read from the database.`);
+  if (legacy.length) {
+    await prisma.adCampaign.updateMany({
+      where: { id: { in: legacy.map((row) => row.id) } },
+      data: { status: 'ended' },
+    });
+  }
+
+  console.log(`\n✅ ${HOUSE_ADS.length} house ads written${legacy.length ? `, ${legacy.length} legacy house ad(s) ended` : ''}. Redeploy is not needed — they are read from the database.`);
 }
 
 main()
