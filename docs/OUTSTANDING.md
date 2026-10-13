@@ -3990,6 +3990,42 @@ for production data has to be rehearsed on a copy of **production's** shape,
 not on a freshly seeded one, and "seeded before this id existed" is the
 commonest way those two differ.
 
+## 58. The preflight could not check a pooled URL, and said the database was unreachable
+
+Run against both Neon branches on 13 October, `migration-preflight.mjs`
+answered:
+
+```
+❌ Cannot reach that database:
+   psql: ... ERROR:  unsupported startup parameter in options: search_path.
+   Please use unpooled connection or remove this parameter
+```
+
+about databases that were reachable, healthy and — for production — fully
+migrated. `prisma migrate status` reached the same host seconds later and
+answered *"Database schema is up to date!"*.
+
+Neon's pooled endpoint is PgBouncer, and PgBouncer **rejects** the `options`
+startup parameter rather than ignoring it. The preflight sets
+`PGOPTIONS=-c search_path=<schema>`, so psql exits non-zero and the check
+reports the target unreachable.
+
+That is a false negative on the one check whose whole job is to say whether the
+target is sound — and it fires on the pooled string, which is the one an
+operator actually pastes. §79's third defect was the same shape (`?schema=public`
+made the script unrunnable against two of three environments); this is the
+fourth environment-shaped way the same script could not see its subject.
+
+The fix is small because the design already anticipated it: **every table
+reference in this script is schema-qualified**, precisely so nothing depends on
+`search_path`. PGOPTIONS was belt and braces, so on a pooler host it is dropped
+rather than allowed to fail the connection.
+
+⚠️ **Verified only on the direct path.** The regression run is against a local
+database; the pooler branch is reasoned from Neon's error and unit-tested on
+six hostnames, not executed against Neon, because this container's network
+policy does not resolve `neon.tech`.
+
 ## How to check the whole thing still works
 
 ```bash
