@@ -4026,6 +4026,50 @@ database; the pooler branch is reasoned from Neon's error and unit-tested on
 six hostnames, not executed against Neon, because this container's network
 policy does not resolve `neon.tech`.
 
+## 59. Production was not in the blueprint, and the gate that would have caught it couldn't see it
+
+`render.yaml` described one service. Production — `rentboard-api`, carrying
+`APP_ENV=production` and the production Neon branch — was created by hand and
+existed nowhere in the repository, so nothing recorded which branch it tracked.
+It tracked `develop`. A push to `master` deployed nothing; every push to
+`develop` went straight to production; staging and production took the same
+commit at the same moment, so staging gated nothing.
+
+Production is now a second service in the blueprint, with `branch: master`.
+
+**And adding it broke `env-parity.mjs`, which is the more interesting half.**
+That check read the whole file as text:
+
+```js
+if (/key: APP_ENV\s*\n\s*value: production/.test(render) && /branch: develop/.test(render))
+```
+
+With one service, testing the file was the same as testing the pair. With two
+it is not: `APP_ENV=production` matched the production block, `branch: develop`
+matched the **staging** block, and the gate failed a file in which every
+service was correctly configured. A cross-service false positive is the mirror
+of the vacuous pass this repository keeps finding, with the same cause — a
+check that cannot tell which subject it is looking at.
+
+It parses the YAML and checks each service against its own branch now, and
+names the offending service. Driven to failure three ways, each naming the
+right one: staging claiming production, production left on `develop`, and
+production mislabelled `staging` (which would make it refuse every crawler —
+the reverse fault, which the old single-direction check never covered).
+
+⚠️ **The second case is the one worth noting: the gate now catches the exact
+misconfiguration that was live in the dashboard**, and could not have before,
+because the service it concerned was not in the file. A check cannot see a
+subject the repository does not describe.
+
+⚠️ **Not yet synced, and the first sync is the dangerous one.** The service
+already exists, Render matches a Blueprint service on its `name`, and two
+fields are guesses this repository has no record of: `plan` is written `free`
+to match staging and **must be confirmed against the dashboard — declaring
+`free` on a paid instance downgrades it**. `JWT_SECRET` is `sync: false` here
+rather than `generateValue: true` as on staging, deliberately: a regenerated
+secret invalidates every live session and refresh token, because it signs them.
+
 ## How to check the whole thing still works
 
 ```bash

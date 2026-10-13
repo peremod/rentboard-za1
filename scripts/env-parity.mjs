@@ -27,6 +27,7 @@
 
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join, dirname, resolve } from 'path';
+import yaml from 'js-yaml';
 
 const ROOT = resolve(dirname(new URL(import.meta.url).pathname), '..');
 const ENV_DIR = join(ROOT, 'frontend/src/environments');
@@ -210,15 +211,59 @@ if (!gatingProblems) ok('no deployment behaviour is gated on NODE_ENV');
 const renderPath = join(ROOT, 'render.yaml');
 if (existsSync(renderPath)) {
   const render = readFileSync(renderPath, 'utf8');
-  for (const key of ['APP_ENV', 'SITE_URL']) {
-    if (!render.includes(`key: ${key}`)) {
-      fail(`render.yaml does not declare ${key} — the API refuses to start without it`);
+
+  /**
+   * ⚠️ PARSED, not grepped, and checked PER SERVICE.
+   *
+   * This read the whole file as one string: `/key: APP_ENV\n value: production/`
+   * against the text, and `/branch: develop/` against the text. With one
+   * service in the blueprint that was the same thing as checking the pair. The
+   * day production was added as a second service it stopped being:
+   * APP_ENV=production matched the production block, branch: develop matched
+   * the STAGING block, and the check failed a file in which every service was
+   * correctly configured.
+   *
+   * A cross-service false positive is the mirror of the vacuous pass this
+   * repository keeps finding — same cause, which is a check that cannot tell
+   * which subject it is looking at.
+   */
+  let services;
+  try {
+    services = yaml.load(render)?.services;
+  } catch (err) {
+    fail(`render.yaml does not parse as YAML: ${err.message}`);
+    services = null;
+  }
+
+  if (!Array.isArray(services) || !services.length) {
+    if (services !== null) fail('render.yaml declares no services — nothing to check');
+  } else {
+    for (const svc of services) {
+      const name = svc?.name ?? '(unnamed service)';
+      const env = Object.fromEntries(
+        (svc?.envVars ?? []).map((e) => [e.key, 'value' in e ? e.value : undefined]),
+      );
+
+      for (const key of ['APP_ENV', 'SITE_URL']) {
+        if (!(key in env)) {
+          fail(`render.yaml: ${name} does not declare ${key} — the API refuses to start without it`);
+        }
+      }
+
+      // The pair, on ONE service. `develop` is staging's branch; a service on
+      // it claiming production would be a crawlable copy of production.
+      if (env.APP_ENV === 'production' && svc.branch === 'develop') {
+        fail(`render.yaml: ${name} deploys the develop branch but sets APP_ENV=production — staging would be indexable`);
+      }
+      // And the reverse, which is how production stops being indexed at all.
+      if (env.APP_ENV === 'staging' && svc.branch === 'master') {
+        fail(`render.yaml: ${name} deploys master but sets APP_ENV=staging — production would refuse every crawler`);
+      }
+    }
+    if (!failures) {
+      ok(`render.yaml: ${services.length} service(s) declare APP_ENV and SITE_URL, each matching its own branch`);
     }
   }
-  if (/key: APP_ENV\s*\n\s*value: production/.test(render) && /branch: develop/.test(render)) {
-    fail('render.yaml deploys the develop branch but sets APP_ENV=production — staging would be indexable');
-  }
-  if (!failures) ok('render.yaml declares APP_ENV and SITE_URL, and APP_ENV matches its branch');
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────
