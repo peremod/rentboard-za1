@@ -1548,6 +1548,22 @@ white on white at 1.00:1 under the zero-specificity :where(button). The gate for
 that was described in OUTSTANDING §41, asserted in a comment to already exist,
 and never written. It is written now."
 
+tag_if_missing "v1.136.0" "879508c3d05fb51701d4ba5a4a8df18f5b73ffc6" "2026-10-14T11:36:59+00:00" "v1.136.0 — text that fits its box, and a repository that finally measures width
+
+One global white-space: nowrap, meant for short labels, inherited by two buttons
+whose content is prose: an action label spilling past its own borders, and an
+archive card header clipped at both edges on a phone.
+
+The larger finding is that nothing here measured width at all. CLAUDE.md has
+always required checking horizontal scroll at four widths; mobile-drive.mjs is a
+regression suite for five named bugs and never did. a11y-drive.mjs now measures
+it per element across 40 pages - per element because neither reported defect
+produced a page-level scrollbar - and found three more on its first run, now
+ratcheted rather than allowlisted.
+
+It does not cover the two cards that were reported, which is proven rather than
+assumed."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
