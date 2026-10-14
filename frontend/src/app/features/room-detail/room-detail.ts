@@ -388,6 +388,16 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
        screens, where four small images are unreadable anyway. */
     .gallery { display: grid; grid-template-columns: 2fr 1fr; gap: .5rem; margin-bottom: 1rem; }
     .gallery--solo { grid-template-columns: 1fr; }
+    /* ⚠️ min-width: 0 on the grid children, or the gallery is wider than the
+       phone. A grid item defaults to min-width: auto, which refuses to shrink
+       below its content's intrinsic size - so the hero image's natural width
+       won, the column stayed 563px inside a 412px viewport, and the whole room
+       page scrolled sideways by 151px. The img's own width:100% cannot help:
+       100% of a column that is already too wide is still too wide.
+       Found on 14 October by the overflow check, on the first run after the
+       drive was given a room with a long title and a hero image - and it is
+       the public room page, the screen most tenants see first. */
+    .gallery > *, .gallery button { min-width: 0; }
     .gallery button { padding: 0; border: none; background: none; cursor: pointer; display: block; }
     .gallery__main img { width: 100%; height: 100%; aspect-ratio: 3/2;
                          object-fit: cover; border-radius: var(--r12); display: block; }

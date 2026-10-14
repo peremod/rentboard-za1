@@ -4413,6 +4413,58 @@ Proven able to fail: with the room check disabled the drive reports
 `application_shortlisted` present and the badge count `1`. 238 checks pass with
 it in place.
 
+## 67. Giving the drive the two subjects it was missing — and what that found
+
+§64 ended with the overflow check unable to see either defect it was written
+for, proven by reverting a fix and watching the drive pass. `a11y-drive.mjs`'s
+fixture had no shortlisted applicant and no finished letting, so neither card
+rendered.
+
+Both now exist: a room with a **long title** and a shortlisted applicant, and a
+second long-titled room whose tenancy is written to `ended`. Long titles on
+purpose — the defect was a global `white-space: nowrap`, and a label that fits
+its box measures nothing.
+
+**The archive card is now covered, and that is proven.** With the fix reverted
+the drive reports `/account/tenancies: 1 element(s) wider than their box at
+412px (arc-row__head)`. Before the fixture it passed.
+
+### It found a third overflow immediately, on the page most tenants see first
+
+`/rooms/:id` scrolled sideways **171px** at 412px. `.gallery__main` measured
+**563px inside a 412px viewport**.
+
+`.gallery` is `grid-template-columns: 2fr 1fr`, and a grid item defaults to
+`min-width: auto` — it refuses to shrink below its content's intrinsic size, so
+the hero image's natural width won the column. The image's own `width: 100%`
+cannot help: 100% of a column that is already too wide is still too wide.
+`min-width: 0` on the grid children fixes it; the hero now measures 372px and
+the page is exactly 412.
+
+This had nothing to do with the long title. It needed a room with a **hero
+image** on a phone-width viewport, which the fixture happened to produce — the
+public room page has presumably been scrolling sideways for anyone whose room
+has photos.
+
+### What is still NOT covered, and why
+
+⚠️ **The applicant action row.** Reverting its fix does **not** fail the drive.
+The applicant cards render **collapsed**, so `.applicant-card__actions` is not
+in the DOM at all when the page loads; the drive would have to expand a card
+first. The screenshot that reported it was of an expanded card.
+
+So of the two cards §64 named, one is now covered and one is not, and the
+uncovered one is uncovered for a different reason than before — not a missing
+record, a missing interaction. Expanding a card before measuring is the work
+that would close it, and it is not done.
+
+⚠️ **The seed guard earned its keep.** The first version of the fixture wrote
+`endedAt`, a column that does not exist — the schema keeps `endDate` and
+`endedById`. The UPDATE failed, and the drive refused to audit the portal
+screens rather than reporting them clean: *"the portal screens were audited
+EMPTY — the seed failed"*. A fixture that fails silently is a check that passes
+for free.
+
 ## How to check the whole thing still works
 
 ```bash

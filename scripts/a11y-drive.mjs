@@ -932,6 +932,67 @@ if (!apiReachable) {
      */
     LANDLORD_PAGES.push(`/landlord/rooms/${room2.body.id}/applicants`);
 
+    /**
+     * ⚠️ A SHORTLISTED APPLICANT, and a PAST LETTING WITH A LONG TITLE.
+     *
+     * Added 14 October, because the overflow check two sections up could not
+     * see either of the two defects it was written for. Proven at the time
+     * rather than assumed: the fix was reverted, the drive re-run, and it
+     * passed. The fixture had no shortlisted applicant and no archived
+     * letting, so neither card ever rendered — §56's rule, a check cannot see
+     * a subject the fixture never creates.
+     *
+     * Both titles are deliberately long. A short one fits its box at 412px and
+     * measures nothing: the defect was a global `white-space: nowrap`, and a
+     * label that fits cannot show it. The archive title is the length of the
+     * one that was reported.
+     */
+    // ── a shortlisted applicant, so the two-up action row renders
+    const room3 = await apiCall(API, 'POST', '/api/rooms', {
+      roomType: 'shared_house',
+      title: 'Neat private room near the main road, with the mall five minutes away',
+      description: 'A clean room in a shared house, close to transport and the shops. Available now.',
+      rentCents: 200000, province: 'Gauteng', city: 'Pretoria',
+      locationDisplay: 'Sunnyside, Pretoria',
+      availableFrom: new Date().toISOString().slice(0, 10),
+    }, accounts.LANDLORD.token);
+    q(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${room3.body.id}'`);
+
+    const toShortlist = await apiCall(API, 'POST', '/api/applications',
+      { roomId: room3.body.id, coverNote: 'I would like to come and see the room this week.' },
+      accounts.TENANT2.token);
+    await apiCall(API, 'POST', `/api/applications/${toShortlist.body.id}/shortlist`, {}, accounts.LANDLORD.token);
+    LANDLORD_PAGES.push(`/landlord/rooms/${room3.body.id}/applicants`);
+
+    // ── a finished letting with a long title, for /account/tenancies
+    //
+    // The move-in and move-out are written directly. The API route for each is
+    // driven by tenancy-lifecycle-drive, which is where that behaviour belongs;
+    // here the only thing being measured is that the finished card RENDERS and
+    // fits its box, so the shortest honest path to a finished tenancy is the
+    // right one. The same shortcut this file already takes to publish a room.
+    const room4 = await apiCall(API, 'POST', '/api/rooms', {
+      roomType: 'shared_house',
+      title: 'Big private room near the main road and the mall is five minutes away',
+      description: 'A clean room in a shared house, close to transport and the shops. Available now.',
+      rentCents: 200000, province: 'Gauteng', city: 'Pretoria',
+      locationDisplay: 'Sunnyside, Pretoria',
+      availableFrom: new Date().toISOString().slice(0, 10),
+    }, accounts.LANDLORD.token);
+    q(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${room4.body.id}'`);
+
+    const past = await apiCall(API, 'POST', '/api/applications',
+      { roomId: room4.body.id, coverNote: 'I can move in on the first of the month.' },
+      accounts.TENANT.token);
+    await apiCall(API, 'POST', `/api/applications/${past.body.id}/accept`, {}, accounts.LANDLORD.token);
+    // ⚠️ There is no `endedAt`. The schema keeps `endDate` (the actual move-out)
+    // and `endedById` (who recorded it); a first attempt wrote `endedAt`, the
+    // UPDATE failed, and the drive's own seed guard caught it and refused to
+    // audit the portal screens empty rather than reporting them clean.
+    q(`UPDATE tenancies SET status='ended', "startDate"=now() - interval '90 days', `
+      + `"endDate"=now() - interval '3 days' `
+      + `WHERE "applicationId" = '${past.body.id}'`);
+
     seeded = true;
   } catch (err) {
     failures.push(`the portal screens were audited EMPTY — the seed failed (${err.message}), so rows, badges and pills were never measured`);
