@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NoticeRouter } from '../notifications/notice-router.service';
+import type { ViewingOutcome } from '@prisma/client';
 
 /**
  * Inviting an applicant to come and see the room — Phase 7l.
@@ -112,8 +113,22 @@ export class ViewingsService {
      * invitations for the same person is two times to turn up at, and the
      * tenant has no way to tell which one is meant.
      */
+    /**
+     * ⚠️ Only a viewing that has NOT happened yet blocks a new one.
+     *
+     * The guard is about two times to turn up at. A viewing whose agreed time
+     * has passed gives nobody anywhere to be, so it is not an arrangement any
+     * more — and the elapsed-viewing notice offers "offer another time" as its
+     * way out, which this clause is what makes work. The question of what
+     * became of the old one stays open and stays asked until somebody answers
+     * it; a new invitation does not answer it.
+     */
     const open = await this.prisma.roomViewing.findFirst({
-      where: { applicationId, status: { in: ['proposed', 'accepted'] } },
+      where: {
+        applicationId,
+        status: { in: ['proposed', 'accepted'] },
+        startsAt: { gte: new Date() },
+      },
     });
     if (open) {
       throw new BadRequestException(
@@ -275,6 +290,136 @@ export class ViewingsService {
     return updated;
   }
 
+  /**
+   * What happened about a viewing whose agreed time has passed — Phase 8n.
+   *
+   * ── Why this exists
+   *
+   * A viewing was proposed, accepted, and then the day came and went. Until
+   * now the row simply stayed `accepted` for ever: the tenant dashboard kept
+   * saying "They are coming" about a Saturday three weeks ago, and neither
+   * side was ever asked what had become of it. The most common real answers
+   * are not "it happened" and "it did not" — they are "we met at a different
+   * time we agreed between ourselves" and "I took another room", and a system
+   * that cannot record those learns nothing and keeps asking.
+   *
+   * ── Who may record one
+   *
+   * Either side. They see different halves of the same event, and which of
+   * them spoke is kept: "they did not come" from a landlord and "I could not
+   * go" from a tenant are the same outcome told from two sides.
+   *
+   * ── What recording one does
+   *
+   * ⚠️ `fell_through_other_room` and `fell_through_other_tenant` CLOSE the
+   * application, because the person deciding has said the letting is over for
+   * this pair. The other three leave it exactly where it was.
+   *
+   * ⚠️ `fell_through_other_tenant` DOES NOT ACCEPT ANYBODY. The landlord has
+   * decided somewhere else; this records who did not get the room and never
+   * who did. Accepting is its own deliberate action with its own thirty-minute
+   * undo, and inferring it from a dropdown would bypass that for a decision
+   * about where a person lives. The reply points at the two honest next steps
+   * instead — accept the person they chose, or pause the listing.
+   */
+  async recordOutcome(
+    viewingId: string,
+    userId: string,
+    input: { outcome: ViewingOutcome; note?: string },
+  ) {
+    const viewing = await this.prisma.roomViewing.findUnique({
+      where: { id: viewingId },
+      select: {
+        id: true, status: true, startsAt: true, meetingPlace: true,
+        applicationId: true, outcome: true,
+      },
+    });
+    if (!viewing) throw new NotFoundException('No such viewing');
+
+    const application = await this.loadApplication(viewing.applicationId);
+    const isLandlord = application.room.landlordId === userId;
+    const isTenant = application.tenantId === userId;
+    if (!isLandlord && !isTenant) {
+      throw new ForbiddenException('That viewing is not yours.');
+    }
+
+    // ⚠️ Only a viewing that was actually ON can have an outcome. A cancelled
+    // or declined one already says what happened, and a proposed one the
+    // tenant never answered is not a missed appointment — nobody agreed to it.
+    if (viewing.status !== 'accepted') {
+      throw new BadRequestException(
+        'Only a viewing both of you agreed to can have an outcome recorded.',
+      );
+    }
+    if (viewing.startsAt > new Date()) {
+      throw new BadRequestException(
+        'That viewing has not happened yet. You can call it off if it is not going ahead.',
+      );
+    }
+    if (viewing.outcome) {
+      throw new BadRequestException('Somebody has already said what happened.');
+    }
+
+    const closes =
+      input.outcome === 'fell_through_other_room' ||
+      input.outcome === 'fell_through_other_tenant';
+
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.roomViewing.update({
+        where: { id: viewingId },
+        data: {
+          outcome: input.outcome,
+          outcomeNote: input.note?.trim() || null,
+          outcomeAt: new Date(),
+          outcomeById: userId,
+        },
+      }),
+      // Closing the application is the whole difference between the two
+      // groups. `withdrawn` when the tenant walked, `rejected` when the
+      // landlord did: the existing vocabulary already distinguishes who ended
+      // it, and a third status meaning "ended at a viewing" would be a fourth
+      // name for a thing two names already cover.
+      ...(closes
+        ? [this.prisma.application.update({
+            where: { id: viewing.applicationId },
+            data: {
+              status: input.outcome === 'fell_through_other_room' ? 'withdrawn' : 'rejected',
+              decidedAt: new Date(),
+            },
+          })]
+        : []),
+    ]);
+
+    /** Whoever did NOT record it is the one who needs telling. */
+    const tell = isLandlord ? application.tenant : application.room.landlord;
+    const when = this.describe(viewing.startsAt);
+    const said: Record<ViewingOutcome, string> = {
+      happened: `The viewing on ${when} is marked as having happened.`,
+      rearranged_privately: `They have recorded that you met at a different time, not the one on ${when}.`,
+      no_answer: `The viewing on ${when} did not happen. The application is still open.`,
+      fell_through_other_room: 'The applicant has taken a different room, so this application is closed.',
+      fell_through_other_tenant: 'The room has gone to somebody else, so this application is closed.',
+    };
+    await this.notices.deliver(tell, {
+      kind: 'viewing_outcome',
+      title: `About the viewing for ${application.room.title}`,
+      body: said[input.outcome] + (input.note?.trim() ? ` They said: "${input.note.trim()}"` : ''),
+      link: isLandlord ? '/tenant/dashboard' : `/landlord/rooms/${application.room.id}/applicants`,
+    });
+
+    return {
+      ...updated,
+      applicationClosed: closes,
+      // ⚠️ Said in the payload, not only on screen, so an integration reading
+      // this API is told the same thing a person is: nobody was accepted here.
+      nextStep:
+        input.outcome === 'fell_through_other_tenant'
+          ? 'Nobody has been accepted by recording this. Accept the person you chose, '
+            + 'or pause the listing if the room is not available.'
+          : null,
+    };
+  }
+
   /** Viewings on one application, soonest first. Either party may read them. */
   async forApplication(applicationId: string, userId: string) {
     const application = await this.loadApplication(applicationId);
@@ -290,19 +435,31 @@ export class ViewingsService {
   /**
    * What a tenant has been invited to, across every application.
    *
-   * Only ones that have not happened yet and are still live: a list that kept
-   * last month's declined invitations would bury the one on Saturday.
+   * Ones still to come, and — Phase 8n — ones whose agreed time has passed
+   * with nobody having said what became of them. A list that kept last
+   * month's declined invitations would bury the one on Saturday, so declined
+   * and cancelled ones still never appear and an answered one drops out.
+   *
+   * ⚠️ The second clause is the whole reason the panel can show the notice at
+   * all. Before it, `startsAt >= now` hid exactly the rows the notice is
+   * about: the screen would have had a branch for a state the API could never
+   * hand it — this codebase's own recurring defect, a check that cannot see
+   * its subject.
    */
   async forTenant(tenantId: string) {
+    const now = new Date();
     return this.prisma.roomViewing.findMany({
       where: {
         application: { tenantId },
-        status: { in: ['proposed', 'accepted'] },
-        startsAt: { gte: new Date() },
+        OR: [
+          { status: { in: ['proposed', 'accepted'] }, startsAt: { gte: now } },
+          { status: 'accepted', startsAt: { lt: now }, outcome: null },
+        ],
       },
       orderBy: { startsAt: 'asc' },
       select: {
         id: true, startsAt: true, meetingPlace: true, note: true, status: true,
+        outcome: true,
         application: {
           select: {
             id: true,

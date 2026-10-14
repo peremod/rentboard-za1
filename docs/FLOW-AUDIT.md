@@ -2185,10 +2185,12 @@ creates a viewing, and the panel passes.
 | Gap | Severity |
 |---|---|
 | Nothing reminds either side the day before. The data supports it (`startsAt`, `status`) and there is no scheduled job — the rent-reminder pass is the nearest precedent | Medium — the most likely next piece |
-| Nothing records whether the viewing actually happened. There is deliberately no `completed` status, because nothing would write it and a status nothing writes is this codebase's recurring defect | Low, by choice |
+| ~~Nothing records whether the viewing actually happened~~ — **closed in v1.140.0 (§68).** Not a `completed` status, which nothing would have written: `ViewingOutcome` is five answers a PERSON gives, recordable once by either side and only once the agreed time has passed, and two of them close the application. The notice that asks is derived from `startsAt` and a null `outcome`, so nothing has to keep a flag true | ✅ closed |
 | A landlord cannot invite several applicants to one slot in one action. Group viewings are normal, and this is one invitation at a time | Medium — a real convenience, not a correctness gap |
 | No calendar view. The landlord sees a viewing on each applicant card and nowhere as a day's schedule | Low — the notes calendar is the precedent if it is wanted |
 | A landlord who proposes a time cannot change it; they cancel and offer another. That is two notices to the tenant where one would do | Low |
+| Nothing chases an elapsed viewing on a schedule. The `viewing_elapsed` row is in both inboxes and on both dashboards and is seen when somebody looks; a scheduled chase is a new job and, with `WHATSAPP_ENABLED` false, a promise of a message nobody can be sent | Medium — the same shape as the reminder above |
+| A landlord whose applicant never answered the invitation is asked nothing. `recordOutcome` refuses anything but an `accepted` viewing, because a `proposed` one nobody replied to is not a missed appointment — nobody agreed to it. It simply expires, unremarked | Low, by choice |
 
 
 ### 5.31 `sponsoredUntil`: a write with no reader — ✅ closed in v1.98.0 (Phase 7m)

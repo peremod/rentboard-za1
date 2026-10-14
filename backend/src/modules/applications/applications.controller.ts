@@ -8,7 +8,7 @@ import { CreateApplicationDto } from './dto/create-application.dto';
 import { RejectApplicationDto } from './dto/reject-application.dto';
 import { ApplicantInboxDto } from './dto/inbox.dto';
 import { ViewingsService } from './viewings.service';
-import { InviteToViewingDto, RespondToViewingDto } from './dto/viewing.dto';
+import { InviteToViewingDto, RespondToViewingDto, RecordViewingOutcomeDto } from './dto/viewing.dto';
 
 @ApiTags('applications')
 @Controller('applications')
@@ -170,6 +170,26 @@ export class ApplicationsController {
     @CurrentUser() user: { id: string },
   ) {
     return this.viewings.cancel(viewingId, user.id);
+  }
+
+  /**
+   * What happened, once the agreed time has passed — Phase 8n.
+   *
+   * Either side may say. See the service for why two of the five outcomes
+   * close the application and why none of them accepts anybody.
+   */
+  @Post('viewings/:viewingId/outcome')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Say what happened about a viewing whose time has passed' })
+  recordViewingOutcome(
+    @Param('viewingId', ParseUUIDPipe) viewingId: string,
+    @Body() dto: RecordViewingOutcomeDto,
+    @CurrentUser() user: { id: string },
+  ) {
+    return this.viewings.recordOutcome(viewingId, user.id, {
+      outcome: dto.outcome,
+      note: dto.note,
+    });
   }
 
   /** What this tenant has coming up, across every application they have made. */

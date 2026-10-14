@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsISO8601, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsISO8601, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 /**
  * Inviting an applicant to see the room — Phase 7l.
@@ -54,4 +54,47 @@ export class RespondToViewingDto {
   @ApiPropertyOptional({ example: 'I am working that afternoon — could we do Sunday?' })
   @IsOptional() @IsString() @MaxLength(300)
   declineReason?: string;
+}
+
+/**
+ * What happened about a viewing whose agreed time has passed — Phase 8n.
+ *
+ * ⚠️ The five values are not "it happened / it did not". The two that matter
+ * most in practice are the ones a yes/no cannot hold: they met at a different
+ * time they agreed between themselves, and one of them went elsewhere. A list
+ * that cannot record those keeps asking a question it has already been
+ * answered.
+ *
+ * The note is optional for the same reason a decline reason is: somebody who
+ * did not go owes nobody an explanation, and demanding one means they record
+ * nothing at all.
+ */
+export class RecordViewingOutcomeDto {
+  @ApiProperty({
+    enum: [
+      'happened',
+      'rearranged_privately',
+      'no_answer',
+      'fell_through_other_room',
+      'fell_through_other_tenant',
+    ],
+    example: 'rearranged_privately',
+    description:
+      'fell_through_other_room and fell_through_other_tenant close the application. '
+      + 'Neither accepts anybody: recording that the room went elsewhere says who did '
+      + 'NOT get it, never who did.',
+  })
+  @IsIn([
+    'happened',
+    'rearranged_privately',
+    'no_answer',
+    'fell_through_other_room',
+    'fell_through_other_tenant',
+  ])
+  outcome!: 'happened' | 'rearranged_privately' | 'no_answer'
+    | 'fell_through_other_room' | 'fell_through_other_tenant';
+
+  @ApiPropertyOptional({ example: 'We met on the Sunday instead and he has taken it.' })
+  @IsOptional() @IsString() @MaxLength(300)
+  note?: string;
 }
