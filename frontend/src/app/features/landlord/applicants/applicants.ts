@@ -315,9 +315,16 @@ import { Loading } from '../../../shared/components/loading/loading';
        target of WCAG 2.5.8, and a mis-tap decides somebody's housing. (It is
        reversible for 30 minutes, which is why this is a size fix rather than a
        redesign of the row.) */
+    /* color is NOT optional here. :where(button) sets color:var(--white) with a
+       terracotta background; this rule overrides the background and, without a
+       colour, leaves white text on a white button at 1.00:1 - Shortlist and
+       Invite to view were blank boxes on a live phone, the emoji visible and
+       the words not. The warning 40 lines above says exactly this and was not
+       applied to the next button rule in the same file. */
     .applicant-card__actions button {
       padding: .4rem .9rem; min-height: 44px; border-radius: var(--r4);
       border: 1px solid var(--border); background: var(--white); cursor: pointer;
+      color: var(--ink);
       font-size: .78rem; font-weight: 600;
     }
     .viewing {

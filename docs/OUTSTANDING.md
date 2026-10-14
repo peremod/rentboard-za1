@@ -3724,7 +3724,10 @@ rgba(0,0,0,.1)`); and a new off-scale font size.
 
 ## 41. A contrast gate that is claimed in a comment and does not exist
 
-**Not written. Logged so it stops being asserted in prose.**
+**✅ WRITTEN on 14 October as `scripts/control-contrast-audit.mjs`, after the
+defect it describes reached a phone a second time — see §63. The rest of this
+entry is kept as it stood, because the three years between describing a gate
+and writing one is the finding.**
 
 `screen-hint.ts` carried the sentence *"scripts/control-contrast-audit.mjs now
 fails on any rule that sets one of the pair without the other."* That file has
@@ -4184,6 +4187,66 @@ letters still carrying `--logo-ma`. Driven in a browser at 360/390/768/1280 in
 header and footer — 76 checks, including that MA is still `#C4522C`, still
 differs from the stem, and still cannot be recoloured by a parent. Then the
 misspelling was reintroduced and the drive failed all eight text checks.
+
+## 63. Two controls were blank boxes on a phone, and §41 was the reason
+
+Reported from a live landlord screen on 14 October: on a shortlisted
+applicant's card, **Shortlist** / **Remove from shortlist** and **Invite to
+view** rendered as empty white rectangles. The calendar emoji showed and the
+words did not, because emoji carry their own colour.
+
+`applicants.ts` has:
+
+```css
+.applicant-card__actions button {
+  border: 1px solid var(--border); background: var(--white); cursor: pointer;
+}
+```
+
+`styles.scss` declares `:where(button)` with `color: var(--white)` on
+terracotta. `:where()` has zero specificity, so this rule wins the background
+and leaves the white foreground: **white on white, 1.00:1**. `.accept` and
+`.reject` both set `color`, which is why those two rendered correctly in the
+same row — the failure looked like two missing labels rather than a stylesheet
+fault.
+
+**The lesson was already written in this file, forty lines above the bug.**
+The comment on `.applicant-card__header` reads: *"⚠️ A button needs its
+inherited text put back BY NAME... which is how Phase 7c shipped inbox rows
+rendering white-on-cream at 1.06:1, present and invisible."* That rule sets
+`color: var(--ink)`. The next button rule in the same component does not.
+
+So the gate finally exists. §41 described it in 2026 as wanted-and-not-written,
+and `screen-hint.ts` had asserted in a comment that it already did — meaning
+for several releases the only thing between that pairing and the next invisible
+control was somebody reading a sentence.
+
+`scripts/control-contrast-audit.mjs` asserts one thing: in a component's
+`styles:` block, a rule whose selector names a button or `.btn` and which sets
+`background`/`background-color` must also set `color`. Transparent, `none` and
+`inherit` are exempt — they repaint nothing, so the inherited colour is still
+right.
+
+It is deliberately narrower than §41's ambition of "any interactive selector".
+That was the hard part — naming those without a false-positive rate that drives
+people to add exemptions, which is how an allowlist becomes the place defects
+go to be forgotten. Buttons are the surface this has actually failed on, twice.
+
+Proven able to fail by reverting the one-line fix: it named
+`applicants.ts:312`, the selector, and the reason. 8 rules checked, and it
+refuses to pass vacuously — if no rule anywhere repaints a control it exits 1
+saying nothing was checked, rather than printing a tick.
+
+Wired into `npm run audit` and `.husky/pre-commit`.
+
+⚠️ **What I could not drive.** I measured the fix by injecting the markup into
+a running page and got 5.87:1 — which was **vacuous**: Angular's emulated
+encapsulation scopes that rule to the component's own attribute, so the
+injected DOM never matched it and I had measured the global `:where(button)`
+default instead. The real proof is the static gate plus the token arithmetic:
+`--ink` `#1C160E` on `--white` is **17.94:1**, against **1.00:1** before.
+Driving the actual card needs a landlord account with a shortlisted applicant,
+which this container has no path to.
 
 ## How to check the whole thing still works
 

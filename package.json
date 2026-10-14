@@ -1,6 +1,6 @@
 {
   "name": "mastande-za",
-  "version": "1.134.0",
+  "version": "1.135.0",
   "private": true,
   "description": "Mastande ZA — South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
   "scripts": {
@@ -9,7 +9,8 @@
     "backend": "npm --prefix backend run start:dev",
     "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install",
     "verify": "bash scripts/verify-build.sh",
-    "audit": "npm run audit:routes && npm run audit:i18n && npm run audit:env && npm run audit:tokens && npm run audit:states && npm run audit:feedback && npm run audit:scale && npm run audit:fonts && npm run lint:templates",
+    "audit:controls": "node scripts/control-contrast-audit.mjs",
+    "audit": "npm run audit:routes && npm run audit:i18n && npm run audit:env && npm run audit:tokens && npm run audit:states && npm run audit:feedback && npm run audit:scale && npm run audit:fonts && npm run audit:controls && npm run lint:templates",
     "audit:css": "node scripts/css-coverage-audit.mjs",
     "audit:routes": "node scripts/route-audit.mjs",
     "audit:i18n": "node scripts/i18n-audit.mjs",

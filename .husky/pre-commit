@@ -20,3 +20,4 @@ node scripts/state-lint.mjs
 node scripts/feedback-lint.mjs
 node scripts/scale-lint.mjs
 node scripts/font-lint.mjs
+node scripts/control-contrast-audit.mjs
