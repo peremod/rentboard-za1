@@ -875,14 +875,25 @@ input[type='file']:not([hidden]) {
   &__role-title { font-size: .85rem; font-weight: 700; line-height: 1.3; }
   &__role-sub   { font-size: .72rem; font-weight: 400; color: $color-slate; }
 
+  // The wordmark's BOX, and nothing about its type.
+  //
+  // ⚠️ This has to be a real element. `app-logo` sets `:host { display:
+  // contents }`, so the host generates no box at all — putting this class on
+  // the component dropped `text-align`, `margin-bottom` and the size, and the
+  // wordmark fell to the left edge of the card with the title tight under it.
+  // A class on a display:contents element styles nothing.
+  //
+  // Type, weight and both colours now come from the component, which is the
+  // point of Phase I. `color` stays because the logo's stem reads
+  // `currentColor`; MA has its own token and cannot be moved from here.
+  // The old `span { color: terracotta }` is gone with the markup it was for:
+  // it would have repainted BOTH halves of the component's wordmark and was
+  // inert only by specificity, which is exactly the kind of rule that looks
+  // like a control and is not one.
   &__brand {
-    font-family: $font-display;
-    font-size: 1.6rem;
-    font-weight: 900;
     text-align: center;
     color: $color-ink;
     margin-bottom: .4rem;
-    span { color: $color-terracotta; }
   }
 
   &__field { margin-bottom: $sp-4; }

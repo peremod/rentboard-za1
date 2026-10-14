@@ -13,6 +13,20 @@ import {
  * There was no such thing before: `ApplicationStatus`'s `viewed` means the
  * LANDLORD opened the application, not that anybody saw the room.
  */
+/**
+ * What became of a viewing whose agreed time has passed — Phase 8n.
+ *
+ * The two `fell_through_*` values CLOSE the application; the other three leave
+ * it where it was. `fell_through_other_tenant` accepts nobody — see
+ * `ViewingsService.recordOutcome`.
+ */
+export type ViewingOutcome =
+  | 'happened'
+  | 'rearranged_privately'
+  | 'no_answer'
+  | 'fell_through_other_room'
+  | 'fell_through_other_tenant';
+
 export interface RoomViewing {
   id: string;
   startsAt: string;
@@ -24,6 +38,17 @@ export interface RoomViewing {
   declineReason?: string | null;
   cancelledAt?: string | null;
   cancelledById?: string | null;
+  /** Null until somebody says what happened. Only ever set once. */
+  outcome?: ViewingOutcome | null;
+  outcomeNote?: string | null;
+  outcomeAt?: string | null;
+}
+
+/** What the server says back when an outcome is recorded. */
+export interface ViewingOutcomeResult extends RoomViewing {
+  applicationClosed: boolean;
+  /** Set for `fell_through_other_tenant`: nobody was accepted by recording it. */
+  nextStep: string | null;
 }
 
 /** The tenant's upcoming list, which names the room so three applications stay apart. */
@@ -33,6 +58,12 @@ export interface UpcomingViewing {
   meetingPlace: string;
   note?: string | null;
   status: 'proposed' | 'accepted';
+  /**
+   * Null until somebody says what happened. The list carries elapsed accepted
+   * viewings precisely while this is null — that is what the "has been and
+   * gone" notice on the dashboard is rendered from.
+   */
+  outcome?: ViewingOutcome | null;
   application: { id: string; room: { id: string; title: string; locationDisplay: string } };
 }
 
@@ -120,6 +151,18 @@ export class ApplicationsService {
   /** Either side calls it off. */
   cancelViewing(viewingId: string) {
     return this.http.post<RoomViewing>(`${this.api}/applications/viewings/${viewingId}/cancel`, {});
+  }
+
+  /**
+   * Either side says what became of a viewing whose time has passed — 8n.
+   *
+   * Either side, because they see different halves of the same event: "they
+   * did not come" and "I could not go" are one outcome told from two ends.
+   */
+  recordViewingOutcome(viewingId: string, outcome: ViewingOutcome, note?: string) {
+    return this.http.post<ViewingOutcomeResult>(
+      `${this.api}/applications/viewings/${viewingId}/outcome`, { outcome, note },
+    );
   }
 
   /** What this tenant has coming up, across every application. */

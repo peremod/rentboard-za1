@@ -2,7 +2,9 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { ApplicationsService, UpcomingViewing } from '../../../core/services/applications.service';
+import {
+  ApplicationsService, UpcomingViewing, ViewingOutcome,
+} from '../../../core/services/applications.service';
 
 /**
  * Viewings a tenant has been invited to — Phase 7l, brief item 26.
@@ -74,6 +76,57 @@ import { ApplicationsService, UpcomingViewing } from '../../../core/services/app
                   <button type="button" class="link-btn" [disabled]="busy() === v.id"
                           (click)="decliningId.set(v.id)">I cannot make it</button>
                 }
+              } @else if (elapsed(v)) {
+                <!-- ── The day came and went — Phase 8n ──────────────────
+                     This branch is why forTenant() carries elapsed accepted
+                     viewings at all. Before it the panel said "✅ You said you
+                     are coming" about a Saturday three weeks gone, and neither
+                     side was ever asked what became of it. -->
+                <div class="vi__gone">
+                  <strong class="vi__gone-title">⏰ That time has been and gone</strong>
+                  <span class="muted">
+                    It was set for {{ v.startsAt | date: 'EEEE d MMMM, HH:mm' }}. What happened?
+                  </span>
+
+                  @if (chosen(v); as o) {
+                    <label class="vi__reason">
+                      <span class="muted">Anything to add? (optional)</span>
+                      <input type="text" [(ngModel)]="outcomeNote" name="outcomeNote"
+                             placeholder="We met on the Sunday instead"/>
+                    </label>
+                    <!-- ⚠️ Said before it is saved, not after. Two of the five
+                         answers end the application, and somebody tapping
+                         through a list of plain-looking choices is owed the
+                         consequence at the moment they choose. -->
+                    @if (o.closes) {
+                      <p class="vi__closing" role="status">
+                        This closes your application for this room, and the landlord is told.
+                      </p>
+                    }
+                    <div class="vi__answer">
+                      <button type="button" class="btn btn-sm btn-primary"
+                              [disabled]="busy() === v.id" (click)="saveOutcome(v)">
+                        {{ busy() === v.id ? 'Saving…' : (o.closes ? 'Save and close it' : 'Save') }}
+                      </button>
+                      <button type="button" class="link-btn" (click)="pick(v, null)">Back</button>
+                    </div>
+                  } @else {
+                    <div class="vi__outcomes">
+                      @for (o of outcomes; track o.value) {
+                        <button type="button" class="vi__outcome" (click)="pick(v, o.value)">
+                          {{ o.label }}
+                        </button>
+                      }
+                    </div>
+                    <!-- The reschedule option. A tenant cannot invite
+                         themselves — only a landlord can set a time — so the
+                         honest affordance is the thread where they can ask,
+                         not a form that would have nowhere to post. -->
+                    <a class="link-btn" [routerLink]="['/account/messages']">
+                      Ask the landlord for another time
+                    </a>
+                  }
+                </div>
               } @else {
                 <span class="vi__going">✅ You said you are coming</span>
                 <button type="button" class="link-btn" [disabled]="busy() === v.id"
@@ -120,6 +173,28 @@ import { ApplicationsService, UpcomingViewing } from '../../../core/services/app
       font: inherit; padding: .55rem .6rem; min-height: 44px;
       border: 1.5px solid var(--border); border-radius: var(--r4);
     }
+    .vi__gone { display: grid; gap: .5rem; }
+    .vi__gone-title { font-size: .9rem; color: var(--terra); }
+    .vi__outcomes { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .vi__outcome {
+      font: inherit; font-size: .8rem; text-align: left;
+      /* 44px, WCAG 2.5.8. These are the only controls on the dashboard a
+         person taps while standing outside somebody's gate. */
+      min-height: 44px; padding: .5rem .75rem;
+      /* min-width:0 because a flex item defaults to its content width and
+         these labels are sentences — without it they push the card wider
+         than a 360px screen. */
+      min-width: 0; max-width: 100%; white-space: normal; line-height: 1.3;
+      background: var(--card); color: var(--ink);
+      border: 1.5px solid var(--border); border-radius: var(--r4);
+      cursor: pointer;
+    }
+    .vi__outcome:hover { border-color: var(--terra); }
+    .vi__closing {
+      font-size: .8rem; line-height: 1.6; margin: 0;
+      padding: .5rem .75rem; border-radius: var(--r4);
+      background: rgba(214, 59, 59, .07); font-weight: 600;
+    }
     .vi__safety {
       font-size: .8rem; line-height: 1.7; max-width: 42rem;
       margin: .9rem 0 0; padding: .6rem .8rem;
@@ -141,6 +216,75 @@ export class ViewingInvitations implements OnInit {
   readonly decliningId = signal<string | null>(null);
   readonly error = signal<string | null>(null);
   declineReason = '';
+
+  // ── A viewing whose time has passed — Phase 8n ───────────────────
+  /** viewingId → the answer being given, before it is saved. */
+  readonly outcomeChoice = signal<Record<string, ViewingOutcome>>({});
+  outcomeNote = '';
+
+  /**
+   * The five answers, in the tenant's words.
+   *
+   * ⚠️ Worded from THIS side. The same five values read differently from the
+   * landlord's screen ("they did not come" / "I could not go" is one outcome
+   * told from two ends), which is why the labels live per panel and only the
+   * values are shared.
+   */
+  readonly outcomes: ReadonlyArray<{ value: ViewingOutcome; label: string; closes: boolean }> = [
+    { value: 'happened', label: '✅ I went and saw it', closes: false },
+    { value: 'rearranged_privately', label: '🕓 We met at a different time', closes: false },
+    { value: 'no_answer', label: '✕ It did not happen', closes: false },
+    { value: 'fell_through_other_room', label: '🚪 I have taken another room', closes: true },
+    { value: 'fell_through_other_tenant', label: '🔒 The room went to somebody else', closes: true },
+  ];
+
+  /**
+   * The agreed time is in the past and nobody has said what happened.
+   *
+   * ⚠️ Derived, never stored: "has passed" is a fact about the clock, and a
+   * column holding it would need a job to keep it true — the same reason
+   * Phase G derives an elapsed notice period rather than writing a flag.
+   */
+  elapsed(v: UpcomingViewing): boolean {
+    return v.status === 'accepted' && !v.outcome && new Date(v.startsAt).getTime() < Date.now();
+  }
+
+  chosen(v: UpcomingViewing) {
+    const value = this.outcomeChoice()[v.id];
+    return this.outcomes.find((o) => o.value === value) ?? null;
+  }
+
+  pick(v: UpcomingViewing, value: ViewingOutcome | null) {
+    this.outcomeNote = '';
+    this.error.set(null);
+    this.outcomeChoice.update((m) => {
+      const next = { ...m };
+      if (value) next[v.id] = value; else delete next[v.id];
+      return next;
+    });
+  }
+
+  saveOutcome(v: UpcomingViewing) {
+    const choice = this.chosen(v);
+    if (!choice) return;
+    this.busy.set(v.id);
+    this.error.set(null);
+    this.applications.recordViewingOutcome(v.id, choice.value, this.outcomeNote.trim() || undefined)
+      .subscribe({
+        next: () => {
+          this.busy.set(null);
+          this.pick(v, null);
+          // Reload rather than patch: an answered viewing drops out of the
+          // list server-side, and a closing answer changes the application
+          // underneath it too.
+          this.load();
+        },
+        error: (err) => {
+          this.busy.set(null);
+          this.error.set(err?.error?.message ?? 'That did not save. Try again.');
+        },
+      });
+  }
 
   ngOnInit() {
     this.load();

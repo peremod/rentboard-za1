@@ -2059,6 +2059,304 @@ console.log('\n── 14. A shortlist does not outlive its letting ────�
   );
 }
 
+// ══ 15. A viewing whose time has passed ═════════════════════════════════
+//
+// Phase 8n. A viewing was proposed, accepted, and then the day came and went:
+// the row stayed `accepted` for ever, the tenant dashboard kept saying "They
+// are coming" about a Saturday weeks gone, and neither side was ever asked
+// what became of it.
+console.log('\n── 15. A viewing that has been and gone ──────────────────────');
+
+{
+  const stamp = Date.now() + 21000;
+  const landlord = await registerUser(API, 'LANDLORD', stamp);
+  const tenant = await registerUser(API, 'TENANT', stamp + 1);
+  for (const u of [landlord, tenant]) {
+    await apiCall(API, 'POST', '/api/users/me/walkthrough-seen', {}, u.token);
+  }
+  const room = await apiCall(API, 'POST', '/api/rooms', {
+    roomType: 'shared_house', title: `Viewing room ${stamp}`,
+    description: 'A clean back room on a quiet street, with its own entrance and a shared tap.',
+    rentCents: 200000, province: 'Gauteng', city: 'Pretoria',
+    locationDisplay: 'Sunnyside, Pretoria',
+    availableFrom: new Date().toISOString().slice(0, 10),
+  }, landlord.token);
+  dbQuery(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${room.body.id}'`);
+
+  const app = await apiCall(API, 'POST', '/api/applications',
+    { roomId: room.body.id, coverNote: 'I would like to come and see it this week.' }, tenant.token);
+
+  const soon = new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString();
+  const inv = await apiCall(API, 'POST', `/api/applications/${app.body.id}/viewings`,
+    { startsAt: soon, meetingPlace: 'At the blue gate on Mears Street', note: 'Ask for Sipho.' },
+    landlord.token);
+  check(inv.status < 300, `the landlord invites them to view (${inv.status})`);
+  await apiCall(API, 'POST', `/api/applications/viewings/${inv.body.id}/respond`, { accept: true }, tenant.token);
+
+  // ⚠️ An outcome cannot be recorded before the time. Asserted first, so the
+  // success below cannot be a route that accepts anything at any time.
+  const tooEarly = await apiCall(API, 'POST', `/api/applications/viewings/${inv.body.id}/outcome`,
+    { outcome: 'happened' }, tenant.token);
+  check(tooEarly.status === 400, `a viewing still to come has no outcome to record (${tooEarly.status})`);
+
+  // Neither inbox should be asking yet.
+  const earlyT = await apiCall(API, 'GET', '/api/tenant-inbox', null, tenant.token);
+  check(
+    !(earlyT.body?.items ?? []).some((i) => i.kind === 'viewing_elapsed'),
+    'before the date, neither side is asked what happened',
+  );
+
+  // The day passes.
+  dbQuery(`UPDATE room_viewings SET "startsAt" = now() - interval '3 days' WHERE id = '${inv.body.id}'`);
+
+  const lateT = await apiCall(API, 'GET', '/api/tenant-inbox', null, tenant.token);
+  const lateL = await apiCall(API, 'GET', '/api/landlord/inbox', null, landlord.token);
+  check(
+    (lateT.body?.items ?? []).some((i) => i.kind === 'viewing_elapsed'),
+    'once it has passed, the TENANT is asked what happened',
+  );
+  check(
+    (lateL.body?.items ?? []).some((i) => i.kind === 'viewing_elapsed'),
+    '…and so is the LANDLORD — both sides, because both know different halves',
+  );
+
+  /**
+   * ⚠️ THE DATA THE SCREEN IS DRAWN FROM.
+   *
+   * The tenant panel's notice is rendered from GET /viewings/mine, and that
+   * endpoint filtered `startsAt >= now` — so the state the branch is for was
+   * one the API could never hand it. A branch over a row that cannot arrive is
+   * this codebase's own recurring defect: a check that cannot see its subject.
+   */
+  const mine = await apiCall(API, 'GET', '/api/applications/viewings/mine', null, tenant.token);
+  const mineRow = (mine.body ?? []).find((x) => x.id === inv.body.id);
+  check(!!mineRow, 'the tenant\'s own viewings list still carries the one that has passed');
+  check(
+    mineRow?.outcome === null || mineRow?.outcome === undefined,
+    `…and carries no outcome, which is what the panel branches on (got ${JSON.stringify(mineRow?.outcome)})`,
+  );
+
+  // ── the reschedule option, which only works if a past viewing stops
+  //    counting as "already arranged"
+  const again = await apiCall(API, 'POST', `/api/applications/${app.body.id}/viewings`,
+    { startsAt: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
+      meetingPlace: 'At the blue gate on Mears Street' }, landlord.token);
+  check(again.status < 300, `the landlord can offer another time once the first has passed (${again.status})`);
+  const third = await apiCall(API, 'POST', `/api/applications/${app.body.id}/viewings`,
+    { startsAt: new Date(Date.now() + 6 * 24 * 3600 * 1000).toISOString(),
+      meetingPlace: 'At the blue gate on Mears Street' }, landlord.token);
+  check(
+    third.status === 400,
+    `…but two times still to come is still refused — nobody gets two gates to stand at (${third.status})`,
+  );
+  await apiCall(API, 'POST', `/api/applications/viewings/${again.body.id}/cancel`, {}, landlord.token);
+
+  // ── the outcome that does NOT close anything
+  const moved = await apiCall(API, 'POST', `/api/applications/viewings/${inv.body.id}/outcome`,
+    { outcome: 'rearranged_privately', note: 'We met on the Sunday instead.' }, tenant.token);
+  check(moved.status < 300, `an outcome can be recorded once the time has passed (${moved.status})`);
+  check(moved.body?.applicationClosed === false, 'meeting at another time does NOT close the application');
+
+  const appAfter = dbQuery(`SELECT status FROM applications WHERE id = '${app.body.id}'`);
+  check(appAfter.trim() === 'pending', `…and the application is untouched (got '${appAfter.trim()}')`);
+
+  const asked = await apiCall(API, 'GET', '/api/tenant-inbox', null, tenant.token);
+  check(
+    !(asked.body?.items ?? []).some((i) => i.kind === 'viewing_elapsed'),
+    'and the asking stops once somebody has answered',
+  );
+
+  const mineAfter = await apiCall(API, 'GET', '/api/applications/viewings/mine', null, tenant.token);
+  check(
+    !(mineAfter.body ?? []).some((x) => x.id === inv.body.id),
+    '…and the answered one leaves the panel, so the screen cannot keep asking',
+  );
+
+  const twice = await apiCall(API, 'POST', `/api/applications/viewings/${inv.body.id}/outcome`,
+    { outcome: 'happened' }, landlord.token);
+  check(twice.status === 400, `nobody can overwrite what the other side recorded (${twice.status})`);
+}
+
+// ── 15b. "It went to somebody else" closes it, and accepts nobody ─────────
+{
+  const stamp = Date.now() + 22000;
+  const landlord = await registerUser(API, 'LANDLORD', stamp);
+  const missed = await registerUser(API, 'TENANT', stamp + 1);
+  const other = await registerUser(API, 'TENANT', stamp + 2);
+  for (const u of [landlord, missed, other]) {
+    await apiCall(API, 'POST', '/api/users/me/walkthrough-seen', {}, u.token);
+  }
+  const room = await apiCall(API, 'POST', '/api/rooms', {
+    roomType: 'shared_house', title: `Taken room ${stamp}`,
+    description: 'A clean back room on a quiet street, with its own entrance and a shared tap.',
+    rentCents: 200000, province: 'Gauteng', city: 'Pretoria',
+    locationDisplay: 'Sunnyside, Pretoria',
+    availableFrom: new Date().toISOString().slice(0, 10),
+  }, landlord.token);
+  dbQuery(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${room.body.id}'`);
+
+  const a1 = await apiCall(API, 'POST', '/api/applications',
+    { roomId: room.body.id, coverNote: 'I can come on Saturday.' }, missed.token);
+  const a2 = await apiCall(API, 'POST', '/api/applications',
+    { roomId: room.body.id, coverNote: 'I can move in on the first.' }, other.token);
+
+  const inv = await apiCall(API, 'POST', `/api/applications/${a1.body.id}/viewings`,
+    { startsAt: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
+      meetingPlace: 'At the blue gate' }, landlord.token);
+  await apiCall(API, 'POST', `/api/applications/viewings/${inv.body.id}/respond`, { accept: true }, missed.token);
+  dbQuery(`UPDATE room_viewings SET "startsAt" = now() - interval '2 days' WHERE id = '${inv.body.id}'`);
+
+  const gone = await apiCall(API, 'POST', `/api/applications/viewings/${inv.body.id}/outcome`,
+    { outcome: 'fell_through_other_tenant' }, landlord.token);
+  check(gone.status < 300, `the landlord records that it went elsewhere (${gone.status})`);
+  check(gone.body?.applicationClosed === true, '…which CLOSES that application');
+
+  const closed = dbQuery(`SELECT status FROM applications WHERE id = '${a1.body.id}'`);
+  check(closed.trim() === 'rejected', `…as rejected, the landlord ending it (got '${closed.trim()}')`);
+
+  /**
+   * ⚠️ THE CONTROL. "Found another tenant" is an acceptance by another route
+   * in the landlord's head; it must not be one in the database. Accepting is a
+   * deliberate action with a thirty-minute undo, and it decides where somebody
+   * lives — inferring it from a dropdown would bypass that entirely.
+   */
+  const otherApp = dbQuery(`SELECT status FROM applications WHERE id = '${a2.body.id}'`);
+  check(
+    otherApp.trim() === 'pending',
+    `…and NOBODY is accepted by it — the other applicant is untouched (got '${otherApp.trim()}')`,
+  );
+  const tenancies = dbQuery(`SELECT count(*) FROM tenancies t JOIN applications a ON a.id = t."applicationId" WHERE a."roomId" = '${room.body.id}'`);
+  check(tenancies.trim() === '0', `…and no tenancy is opened (got ${tenancies.trim()})`);
+
+  const roomStatus = dbQuery(`SELECT status FROM rooms WHERE id = '${room.body.id}'`);
+  check(roomStatus.trim() === 'active', `…and the room is not silently taken off the board (got '${roomStatus.trim()}')`);
+
+  check(
+    /accept the person you chose|pause the listing/i.test(gone.body?.nextStep ?? ''),
+    'the reply says in the payload what to do next, not only on screen',
+  );
+}
+
+// ── 15c. The notice, on both screens, at 360px ───────────────────────────
+//
+// ⚠️ Sections 15 and 15b are API-only, and an endpoint nobody can reach is
+// this codebase's signature defect — nineteen @Throttle decorators with no
+// guard, a rent-reminder control on a screen with no route. So this reads the
+// rendered text on both dashboards, at the width of the phone the product is
+// built for.
+console.log('\n── 15c. The notice on both screens ──────────────────────────');
+
+{
+  const stamp = Date.now() + 23000;
+  const landlord = await registerUser(API, 'LANDLORD', stamp);
+  const tenant = await registerUser(API, 'TENANT', stamp + 1);
+  for (const u of [landlord, tenant]) {
+    await apiCall(API, 'POST', '/api/users/me/walkthrough-seen', {}, u.token);
+  }
+  const room = await apiCall(API, 'POST', '/api/rooms', {
+    roomType: 'shared_house', title: `Gone-by room ${stamp}`,
+    description: 'A clean back room on a quiet street, with its own entrance and a shared tap.',
+    rentCents: 210000, province: 'Gauteng', city: 'Pretoria',
+    locationDisplay: 'Sunnyside, Pretoria',
+    availableFrom: new Date().toISOString().slice(0, 10),
+  }, landlord.token);
+  dbQuery(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${room.body.id}'`);
+  const app = await apiCall(API, 'POST', '/api/applications',
+    { roomId: room.body.id, coverNote: 'I can come after work on Thursday.' }, tenant.token);
+  const inv = await apiCall(API, 'POST', `/api/applications/${app.body.id}/viewings`,
+    { startsAt: new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(),
+      meetingPlace: 'At the blue gate on Mears Street' }, landlord.token);
+  await apiCall(API, 'POST', `/api/applications/viewings/${inv.body.id}/respond`, { accept: true }, tenant.token);
+  dbQuery(`UPDATE room_viewings SET "startsAt" = now() - interval '4 days' WHERE id = '${inv.body.id}'`);
+
+  // ── the tenant's dashboard ────────────────────────────────────────────
+  const tPage = await signIn(browser, WEB, tenant.email, PASSWORD, { width: 360, height: 900 });
+  await tPage.goto(`${WEB}/tenant/dashboard`, { waitUntil: 'domcontentloaded' });
+  await tPage.waitForTimeout(1600);
+  const panel = tPage.locator('app-viewing-invitations');
+  const tText = await panel.first().textContent().then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+  // The subject first: every negative check below is worthless without it.
+  check(!!tText, `the viewings panel renders on the tenant dashboard (${tText.length} chars)`);
+  check(/been and gone/i.test(tText), '…and says the agreed time has been and gone');
+  check(/what happened/i.test(tText), '…and asks what happened');
+  check(
+    !!tText && !/you said you are coming/i.test(tText),
+    '…and no longer says "You said you are coming" about a day that has passed',
+  );
+  check(
+    /ask the landlord for another time/i.test(tText),
+    '…with a way to ask for another time, which is the reschedule the owner asked for',
+  );
+
+  const tOpts = tPage.locator('app-viewing-invitations .vi__outcome');
+  const tCount = await tOpts.count();
+  check(tCount === 5, `the tenant is offered all five answers (${tCount})`);
+  // WCAG 2.5.8. These are tapped standing outside somebody's gate.
+  const tBoxes = await tOpts.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+  check(
+    tBoxes.length > 0 && tBoxes.every((h) => h >= 44),
+    `…each at least 44px tall (${tBoxes.map((h) => Math.round(h)).join(', ')})`,
+  );
+  const tOverflow = await tPage.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  check(tOverflow <= 1, `…and the sentences do not push the page sideways at 360px (${tOverflow}px)`);
+
+  // ⚠️ The consequence has to be on screen BEFORE the save, because two of the
+  // five answers end the application.
+  // ⚠️ Guarded, not clicked blind. With the branch removed there is nothing to
+  // click, and an unguarded click throws — which ends the drive before the
+  // LANDLORD half runs, reporting a crash instead of the checks that failed.
+  // A drive that stops at the first missing control cannot tell you what else
+  // is missing.
+  const tClose = tPage.locator('app-viewing-invitations .vi__outcome', { hasText: 'taken another room' });
+  if (await tClose.count()) {
+    await tClose.first().click();
+    await tPage.waitForTimeout(400);
+  }
+  const warned = await panel.first().textContent().then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+  check(
+    /closes your application/i.test(warned),
+    '…and choosing one that ends it says so before anything is saved',
+  );
+  await tPage.close();
+
+  // ── the landlord's applicant screen ──────────────────────────────────
+  const lPage = await signIn(browser, WEB, landlord.email, PASSWORD, { width: 360, height: 900 });
+  await lPage.goto(`${WEB}/landlord/rooms/${room.body.id}/applicants?open=${app.body.id}`,
+    { waitUntil: 'domcontentloaded' });
+  await lPage.waitForTimeout(1800);
+  const lText = await lPage.locator('.viewing').first()
+    .textContent().then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+  check(!!lText, `the viewing block renders on the applicant card (${lText.length} chars)`);
+  check(/been and gone/i.test(lText), '…and the landlord is asked the same question');
+  check(
+    !!lText && !/they are coming/i.test(lText),
+    '…and the card no longer says "They are coming" about a Saturday weeks gone',
+  );
+  check(/offer another time/i.test(lText), '…with the reschedule offer, which the API now allows');
+  const lOpts = lPage.locator('.viewing__outcome');
+  const lCount = await lOpts.count();
+  check(lCount === 5, `the landlord is offered all five answers (${lCount})`);
+  const lBoxes = await lOpts.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+  check(
+    lBoxes.length > 0 && lBoxes.every((h) => h >= 44),
+    `…each at least 44px tall (${lBoxes.map((h) => Math.round(h)).join(', ')})`,
+  );
+  const lClose = lPage.locator('.viewing__outcome', { hasText: 'let it to somebody else' });
+  if (await lClose.count()) {
+    await lClose.first().click();
+    await lPage.waitForTimeout(400);
+  }
+  const lWarn = await lPage.locator('.viewing').first()
+    .textContent().then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+  check(
+    /does not accept anybody else/i.test(lWarn),
+    '…and "I have let it to somebody else" says on screen that it accepts nobody',
+  );
+  await lPage.close();
+}
+
 console.log('\n── What section 13 does NOT prove ───────────────────────────');
 console.log('  ⚠️  Rent reminders keep running on a tenancy under elapsed');
 console.log('      notice, and that is deliberate rather than unhandled: if');

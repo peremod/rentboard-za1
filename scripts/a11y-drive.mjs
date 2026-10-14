@@ -208,6 +208,57 @@ function contrastRatio(fg, bg) {
 const locate = (c) => (c.cls ? '.' + c.cls : c.href ? `[href="${c.href}"]` : '(no class)');
 
 /**
+ * Screens that render their subject COLLAPSED — opened before measuring.
+ *
+ * ⚠️ §67 ended with the applicant action row still uncovered: reverting its
+ * fix did not fail this drive, because `.applicant-card__actions` is not in
+ * the DOM at all until a card is expanded, and the screenshot that reported
+ * the bug was of an expanded card. A fixture can supply a missing RECORD; it
+ * cannot supply a missing INTERACTION.
+ *
+ * ⚠️ A reveal that silently does nothing is the §67 seed failure again — a
+ * check that passes for free. So each one reports why it could not open, and
+ * that is a FAILURE, not a skip: everything inside the card would otherwise
+ * be audited as absent and reported clean.
+ */
+/**
+ * ⚠️ Counted, not asserted per route.
+ *
+ * The action row is correctly ABSENT on an accepted, rejected or withdrawn
+ * application — one of the two fixture rooms has an accepted applicant,
+ * because it exists to produce a finished tenancy. So requiring the row on
+ * every applicants route failed a correct screen. What has to hold is that
+ * the row was on screen SOMEWHERE while the measurements ran; that is
+ * asserted once, at the end, where it can still fail.
+ */
+let applicantsRoutes = 0;
+let actionRowsSeen = 0;
+let shortlistControlsSeen = 0;
+
+const REVEAL = [
+  {
+    match: /^\/landlord\/rooms\/[^/]+\/applicants$/,
+    what: 'the first applicant card',
+    async open(page) {
+      applicantsRoutes++;
+      const header = page.locator('.applicant-card__header').first();
+      if (!(await header.count())) return 'no applicant card rendered';
+      await header.click();
+      await page.waitForTimeout(700);
+      if (!(await page.locator('.applicant-card__body').count())) {
+        return 'the card did not open';
+      }
+      if (await page.locator('.applicant-card__actions').count()) actionRowsSeen++;
+      // The control the defect was reported on, by its words.
+      if (await page.locator('.applicant-card__actions button', { hasText: /shortlist/i }).count()) {
+        shortlistControlsSeen++;
+      }
+      return null;
+    },
+  },
+];
+
+/**
  * Audit one URL on a page that may already carry a session.
  *
  * `close` is false for the portal passes: they reuse one signed-in page across
@@ -245,6 +296,22 @@ async function auditPage(page, path, { close = true } = {}) {
   // exist — or a guard that redirects the wrong way — reads as green.
   if (status !== 200) {
     failures.push(`${path}: answered ${status}, not 200 — the page under audit did not render`);
+  }
+
+  const reveal = REVEAL.find((r) => r.match.test(path));
+  if (reveal) {
+    const why = await reveal.open(page).catch((err) => err.message);
+    if (why) {
+      failures.push(
+        `${path}: could not open ${reveal.what} — ${why}. Everything inside it was `
+        + 'audited as absent, which reads as clean',
+      );
+    } else {
+      console.log(`  \u21b3 opened ${reveal.what} before measuring`);
+    }
+    // The click leaves the pointer on the header, and :hover changes colours.
+    await page.mouse.move(0, 0);
+    await page.waitForTimeout(400);
   }
 
   // Only headings a sighted visitor can see. checkVisibility with
@@ -1081,6 +1148,34 @@ if (!apiReachable) {
 }
 
 await browser.close();
+
+/**
+ * ⚠️ §64's uncovered defect, asserted rather than assumed.
+ *
+ * `.applicant-card__actions` is only in the DOM once a card is expanded, so
+ * for two releases reverting its fix did not fail this drive. The reveal above
+ * expands one — and this is what stops that quietly stopping working: if no
+ * audited route ever had the action row on screen, the overflow and contrast
+ * checks measured nothing there and reported clean.
+ */
+if (applicantsRoutes) {
+  if (!actionRowsSeen) {
+    failures.push(
+      `the applicant ACTION ROW was never on screen across ${applicantsRoutes} applicants route(s) — `
+      + 'the width and contrast checks measured nothing there, which reads as clean',
+    );
+  } else if (!shortlistControlsSeen) {
+    failures.push(
+      'no shortlist control was on screen on any applicants route — that is the control two '
+      + 'reported defects were in, and the fixture is supposed to supply a shortlisted applicant',
+    );
+  } else {
+    console.log(
+      `\n  \u2705 the applicant action row was measured on ${actionRowsSeen} of ${applicantsRoutes} `
+      + `applicants route(s), shortlist control included (${shortlistControlsSeen})`,
+    );
+  }
+}
 
 console.log('');
 if (failures.length) {

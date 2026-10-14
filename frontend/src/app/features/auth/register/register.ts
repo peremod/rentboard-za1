@@ -23,7 +23,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
              the logo appears, and these two placements were missed -
              logo-drive.mjs only looked at the header and the footer, so it
              certified "one wordmark component" while two pages had their own. -->
-        <app-logo size="lg" [link]="false" class="auth__brand"/>
+        <div class="auth__brand"><app-logo size="lg" [link]="false"/></div>
         <h1 class="auth__title">Create your free account</h1>
         <p class="auth__sub">Free to list. Free to apply. Always.</p>
 

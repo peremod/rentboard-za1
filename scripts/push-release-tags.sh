@@ -1564,6 +1564,85 @@ ratcheted rather than allowlisted.
 It does not cover the two cards that were reported, which is proven rather than
 assumed."
 
+tag_if_missing "v1.137.0" "4d7b256afc5c26d5bdf5070143df95324e225a23" "2026-10-14T12:53:38+00:00" "v1.137.0 - the auth pages use the one logo component
+
+Login and Get started built the wordmark from raw spans of their own, so the
+rename reached every other screen and not the two a new person sees first.
+logo-drive.mjs said the wordmark was consistent and had never visited either
+route - a check scoped more narrowly than its own headline claim. It now
+visits both and refuses a wordmark assembled outside the component."
+
+tag_if_missing "v1.138.0" "9e5cdbb7500f1f2001d773497a18d7ea2eb7f48b" "2026-10-14T13:25:26+00:00" "v1.138.0 - a shortlist does not outlive its letting, on either side
+
+The tenant dashboard said a landlord wanted to meet them about a room the same
+page listed as a past letting, above a line saying none of their applications
+were open. The inbox's shortlisted branch had no state check of any kind while
+the accepted branch beside it had checked the tenancy since Phase D: one state,
+two readers, disagreeing. The landlord side mirrored it - pending applicants on
+a let or paused room still read as waiting to hear from you. Both now ask what
+state the ROOM is in, and the first version of the drive passed without the fix."
+
+tag_if_missing "v1.139.0" "7cca3bb52d0050fee706c978d38b3b8e93bb94fb" "2026-10-14T13:51:40+00:00" "v1.139.0 - the width check is given the two subjects it was missing
+
+The overflow measurement added in v1.136.0 could not see either defect it was
+written for: the fixture had no shortlisted applicant and no finished letting,
+so neither card rendered. Both now exist, with long titles on purpose, and the
+archive card's coverage is proven by reverting its fix.
+
+On its first run it found a third: the public room page scrolled sideways 171px
+at 412px, because a grid item defaults to min-width auto and the hero image's
+intrinsic width won the column. The applicant action row is still not covered -
+the cards render collapsed - and that is recorded rather than implied."
+
+tag_if_missing "v1.140.0" "d963a12a262266fafbe458f9ef45b6adfe2fac7a" "2026-10-14T16:34:24+00:00" "v1.140.0 - what became of a viewing that has been and gone
+
+A viewing was proposed, accepted, and then the day came and went. The row
+stayed accepted for ever, both dashboards kept saying the person was coming
+about a Saturday weeks gone, and neither side was ever asked what happened -
+so the two commonest real answers, we met at another time and I took another
+room, were unrecordable.
+
+Five outcomes now, recorded once, by either side, only on a viewing both
+agreed to and only once its time has passed. Two of them close the
+application. Found another tenant accepts NOBODY: it is an acceptance by
+another route in the landlord's head and must not be one in the database.
+
+Two defects of the usual kind were caught before shipping - the tenant panel
+branched on a state the API filtered out, and offer another time would have
+been a button that always failed - and the drive itself was wrong: an
+unguarded click threw on a missing control and ended the run before half the
+checks had run."
+
+tag_if_missing "v1.141.0" "f94eebcf8f424f156210ffb6c253056788daa436" "2026-10-14T17:01:01+00:00" "v1.141.0 - the measurement opens the card, and a label nobody could speak
+
+a11y-drive.mjs measured six collapsed applicant cards and reported clean. A
+fixture can supply a missing record; it cannot supply a missing interaction.
+A REVEAL table now expands the first card before measuring, and reverting the
+nowrap fix reports Remove from shortlist spilling 32px - the same revert passed
+before.
+
+The first version of the check required the action row on every applicants
+route and failed a correct screen, because the row is rightly absent on an
+accepted application. The claim is made once at the end now, and proven by
+pointing the counter at a class that does not exist.
+
+Opening the card also brought tenant-notes under the audit for the first time,
+failing WCAG 2.5.3: aria-label read Show your private notes about Thandi over a
+button reading Add a private note. Reachable since Phase 5e."
+
+tag_if_missing "v1.142.0" "e20cfae3ff3affa51e3d1bcd2407f40eb046957a" "2026-10-14T19:07:46+00:00" "v1.142.0 - display: contents ate the class, and the checks read the navbar
+
+The auth wordmark moved to the left edge of its card and shrank, because the
+old .auth__brand class was put on app-logo, whose host is display: contents and
+generates no box. text-align and margin-bottom styled nothing. The class is
+back on a real div, and the 480px shrink is now scoped to the linked logo - it
+was always a nav row constraint, not a property of the large size.
+
+The finding underneath: every auth check added in v1.137.0 was measuring the
+HEADER. The navbar renders on those routes, so app-logo resolves to three hosts
+and index 0 is the header's. MA is #C4522C on /auth/login was true of a
+wordmark in the navbar. The route was in the loop; the subject never was."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could

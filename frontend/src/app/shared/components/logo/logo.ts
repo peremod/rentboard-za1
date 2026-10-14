@@ -134,9 +134,18 @@ const FLOOR_PX = 18.66;
        _responsive.scss, where the component could not see it; the logo's own
        responsive behaviour belongs with the logo. Breakpoints here are
        900/768/480 and this one was, and stays, 480. 1.25rem is 20px, still
-       above the 18.66px bold floor. */
+       above the 18.66px bold floor.
+
+       ⚠️ 'a.logo--lg', not '.logo--lg'. The shrink is a NAV ROW constraint, not
+       a property of the large size: it exists because three controls share one
+       line. The auth pages use size="lg" with link=false and are the only
+       thing in their card, so shrinking there just made the wordmark small for
+       no reason — reported from a phone. The linked form is the header (the
+       footer is 'md'), so the selector says what the rule is actually about.
+       Asserted both ways by scripts/logo-drive.mjs: the header is 1.25rem at
+       390px and the auth wordmark is 1.6rem at the same width. */
     @media (max-width: 480px) {
-      .logo--lg { font-size: 1.25rem; }
+      a.logo--lg { font-size: 1.25rem; }
     }
   `],
 })

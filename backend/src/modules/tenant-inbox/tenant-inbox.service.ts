@@ -10,7 +10,8 @@ export type TenantInboxKind =
   | 'lease_ending'
   | 'notice_given'
   | 'passport_expired'
-  | 'passport_expiring';
+  | 'passport_expiring'
+  | 'viewing_elapsed';
 
 /**
  * One thing to do, with everything the row needs to be acted on in place.
@@ -90,15 +91,16 @@ export class TenantInboxService {
    * unrelated shapes. Run concurrently, so the list costs one round trip.
    */
   async inbox(tenantId: string): Promise<{ items: TenantInboxItem[]; counts: Record<TenantInboxKind, number> }> {
-    const [applications, messages, rent, lease, passport] = await Promise.all([
+    const [applications, viewings, messages, rent, lease, passport] = await Promise.all([
       this.applicationItems(tenantId),
+      this.elapsedViewingItems(tenantId),
       this.messageItems(tenantId),
       this.rentItems(tenantId),
       this.leaseItems(tenantId),
       this.passportItems(tenantId),
     ]);
 
-    const items = [...applications, ...messages, ...rent, ...lease, ...passport]
+    const items = [...applications, ...viewings, ...messages, ...rent, ...lease, ...passport]
       .sort((a, b) => a.urgency - b.urgency);
 
     const counts = {
@@ -269,6 +271,67 @@ export class TenantInboxService {
    * real — before that it was a column nothing wrote, so this item could not
    * have existed without counting every message ever sent as unread.
    */
+  /**
+   * A viewing whose agreed time has passed, that nobody has said anything
+   * about — Phase 8n.
+   *
+   * ⚠️ Derived, not stored. `accepted` + `startsAt` in the past + no outcome.
+   * There is no "elapsed" flag on the row and there must not be: the clock
+   * already answers that question, and a stored copy of it needs a job to keep
+   * it true and goes wrong the first time the job does not run. The same
+   * reasoning as an elapsed notice period in Phase G.
+   *
+   * Before this, a viewing simply stayed `accepted` for ever. The tenant
+   * dashboard kept saying "They are coming" about a Saturday three weeks gone,
+   * and neither side was ever asked what became of it — so the commonest real
+   * answers, "we met another time we agreed ourselves" and "I took another
+   * room", were unrecordable and the asking never stopped.
+   */
+  private async elapsedViewingItems(tenantId: string): Promise<TenantInboxItem[]> {
+    const rows = await this.prisma.roomViewing.findMany({
+      where: {
+        status: 'accepted',
+        startsAt: { lt: new Date() },
+        outcome: null,
+        application: {
+          tenantId,
+          archivedAt: null,
+          // A letting that is over, or an application already closed, is not
+          // waiting on anybody. Learned from the shortlist that outlived its
+          // letting - see tenant-inbox's applicationItems and §66.
+          status: { notIn: ['withdrawn', 'rejected'] },
+        },
+      },
+      select: {
+        id: true, startsAt: true, meetingPlace: true,
+        application: { select: { id: true, room: { select: { title: true } } } },
+      },
+      orderBy: { startsAt: 'desc' },
+      take: 10,
+    });
+
+    return rows.map((v) => {
+      const since = -daysUntil(v.startsAt);
+      return {
+        kind: 'viewing_elapsed' as const,
+        // Between an acceptance (-2000) and a shortlist (-500): it is not a
+        // decision about somewhere to live, but it is a thing with a date on
+        // it that has already gone by.
+        urgency: -900,
+        title: 'That viewing has been and gone — what happened?',
+        detail:
+          `You agreed to see ${v.application.room.title} `
+          + `${since <= 0 ? 'earlier today' : `${since} day${since === 1 ? '' : 's'} ago`}, `
+          + `at ${v.meetingPlace}. Say what happened, or arrange another time.`,
+        entityId: v.id,
+        roomTitle: v.application.room.title,
+        daysUntil: -since,
+        actionLabel: 'Say what happened',
+        actionPath: '/tenant/dashboard#viewings',
+      };
+    });
+  }
+
   private async messageItems(tenantId: string): Promise<TenantInboxItem[]> {
     const rows = await this.prisma.application.findMany({
       where: {

@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { VerificationService } from '../../../core/services/verification.service';
 import { BadgeBasis } from '../../../core/models/verification.model';
-import { RoomViewing } from '../../../core/services/applications.service';
+import { RoomViewing, ViewingOutcome } from '../../../core/services/applications.service';
 import { ApplicationsService } from '../../../core/services/applications.service';
 import { Application } from '../../../core/models/application.model';
 import { TenantNotes } from '../../../shared/components/tenant-notes/tenant-notes';
@@ -185,12 +185,57 @@ import { Loading } from '../../../shared/components/loading/loading';
                        at four" lived in the message thread, with no date either
                        side could look up and nothing the tenant could answer. -->
                   @if (viewingFor(app.id); as v) {
-                    <div class="viewing" [class.viewing--off]="v.status === 'cancelled' || v.status === 'declined'">
+                    <div class="viewing" [class.viewing--off]="v.status === 'cancelled' || v.status === 'declined'"
+                         [class.viewing--gone]="elapsed(v)">
                       <strong>{{ viewingLabel(v) }}</strong>
                       <span>{{ v.startsAt | date: 'EEEE d MMM, HH:mm' }} — {{ v.meetingPlace }}</span>
                       @if (v.note) { <span class="muted">{{ v.note }}</span> }
                       @if (v.declineReason) { <span class="muted">They said: {{ v.declineReason }}</span> }
-                      @if (v.status === 'proposed' || v.status === 'accepted') {
+                      @if (elapsed(v)) {
+                        <!-- ── The day came and went — Phase 8n ──────────────
+                             The row stayed "accepted" for ever and said "They
+                             are coming" about a Saturday weeks gone. Both
+                             sides are asked, because each knows a different
+                             half: "they did not come" and "I could not go"
+                             are one outcome told from two ends. -->
+                        <strong class="viewing__gone">⏰ That time has been and gone — what happened?</strong>
+                        @if (chosenOutcome(app.id); as o) {
+                          <label class="viewing__note">
+                            <span>Anything to add? (optional)</span>
+                            <input type="text" [(ngModel)]="outcomeNote" name="outcomeNote"
+                                   placeholder="They came but wanted it from December"/>
+                          </label>
+                          <!-- ⚠️ The consequence before the tap, not after. -->
+                          @if (o.closes) {
+                            <p class="viewing__closing" role="status">
+                              This closes {{ app.tenant?.fullName }}'s application and tells
+                              them. It does NOT accept anybody else — accepting is its own
+                              step, with its own 30 minutes to undo it.
+                            </p>
+                          }
+                          <div class="viewing-form__actions">
+                            <button type="button" class="btn btn-sm btn-primary"
+                                    [disabled]="busyViewing() === app.id" (click)="saveOutcome(app, v)">
+                              {{ busyViewing() === app.id ? 'Saving…' : (o.closes ? 'Save and close it' : 'Save') }}
+                            </button>
+                            <button type="button" class="link-btn"
+                                    (click)="pickOutcome(app.id, null)">Back</button>
+                          </div>
+                        } @else {
+                          <div class="viewing__outcomes">
+                            @for (o of outcomes; track o.value) {
+                              <button type="button" class="viewing__outcome"
+                                      (click)="pickOutcome(app.id, o.value)">{{ o.label }}</button>
+                            }
+                          </div>
+                          <!-- The reschedule option. It works because invite()
+                               only treats a viewing still to come as one
+                               already arranged — a past time gives nobody
+                               anywhere to be. -->
+                          <button type="button" class="link-btn"
+                                  (click)="startInvite(app)">📅 Offer another time</button>
+                        }
+                      } @else if (v.status === 'proposed' || v.status === 'accepted') {
                         <button type="button" class="link-btn" [disabled]="busyViewing() === app.id"
                                 (click)="callOff(app, v)">Call it off</button>
                       }
@@ -341,11 +386,33 @@ import { Loading } from '../../../shared/components/loading/loading';
       border-radius: var(--r4);
     }
     .viewing--off { border-left-color: var(--slate); background: var(--cream2); }
+    .viewing--gone { border-left-color: var(--terra); background: rgba(193,102,61,.07); }
+    .viewing__gone { color: var(--terra); }
+    .viewing__outcomes { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .25rem; }
+    .viewing__outcome {
+      font: inherit; font-size: .8rem; text-align: left;
+      /* 44px, WCAG 2.5.8 — and min-width:0, because a flex item defaults to
+         its content width and these labels are sentences. */
+      min-height: 44px; padding: .5rem .75rem; min-width: 0; max-width: 100%;
+      white-space: normal; line-height: 1.3;
+      background: var(--card); color: var(--ink);
+      border: 1.5px solid var(--border); border-radius: var(--r4); cursor: pointer;
+    }
+    .viewing__outcome:hover { border-color: var(--terra); }
+    .viewing__note { display: grid; gap: .25rem; margin-top: .5rem; font-weight: 600; }
+    .viewing__note input {
+      font: inherit; font-weight: 400; padding: .5rem .75rem; min-height: 44px;
+      border: 1.5px solid var(--border); border-radius: var(--r4); max-width: 24rem;
+    }
+    .viewing__closing {
+      margin: .5rem 0 0; padding: .5rem .75rem; border-radius: var(--r4);
+      background: rgba(214,59,59,.07); font-weight: 600; line-height: 1.6;
+    }
     .viewing-form { display: grid; gap: .7rem; margin: .6rem 0; max-width: 28rem; }
     .viewing-form__title { font-size: .9rem; margin: 0; }
     .viewing-form label { display: grid; gap: .25rem; font-size: .82rem; font-weight: 600; }
     .viewing-form input {
-      font: inherit; font-weight: 400; padding: .55rem .6rem; min-height: 44px;
+      font: inherit; font-weight: 400; padding: .5rem .75rem; min-height: 44px;
       border: 1.5px solid var(--border); border-radius: var(--r4);
     }
     .viewing-form .field-hint { font-weight: 400; line-height: 1.6; }
@@ -516,12 +583,93 @@ export class Applicants implements OnInit {
   }
 
   viewingLabel(v: RoomViewing): string {
+    // ⚠️ An elapsed viewing is NOT "they are coming". That sentence was on
+    // this screen about Saturdays weeks gone, which is the bug Phase 8n fixes.
+    if (this.elapsed(v)) return '⏰ The agreed time has passed';
+    if (v.outcome) return this.outcomeLabel(v.outcome);
     return {
       proposed: '📅 Invited, waiting for an answer',
       accepted: '✅ They are coming',
       declined: '✕ They cannot make it',
       cancelled: '✕ Called off',
     }[v.status];
+  }
+
+  // ── A viewing whose time has passed — Phase 8n ───────────────────
+  /** applicationId → the answer being given, before it is saved. */
+  readonly outcomeChoice = signal<Record<string, ViewingOutcome>>({});
+  outcomeNote = '';
+
+  /**
+   * The five answers, in the LANDLORD's words.
+   *
+   * ⚠️ The same five values read differently on the tenant's dashboard —
+   * only the values are shared, never the wording, because "they did not come"
+   * and "I could not go" are one outcome told from two ends.
+   */
+  readonly outcomes: ReadonlyArray<{ value: ViewingOutcome; label: string; closes: boolean }> = [
+    { value: 'happened', label: '✅ They came and saw it', closes: false },
+    { value: 'rearranged_privately', label: '🕓 We met at a different time', closes: false },
+    { value: 'no_answer', label: '✕ They did not turn up', closes: false },
+    { value: 'fell_through_other_room', label: '🚪 They have taken another room', closes: true },
+    { value: 'fell_through_other_tenant', label: '🔒 I have let it to somebody else', closes: true },
+  ];
+
+  private outcomeLabel(o: ViewingOutcome): string {
+    return this.outcomes.find((x) => x.value === o)?.label ?? o;
+  }
+
+  /**
+   * The agreed time is in the past and nobody has said what happened.
+   *
+   * ⚠️ Derived from the clock, never stored. A column saying "this has
+   * passed" would need a job to keep it true — the reason Phase G derives an
+   * elapsed notice period the same way.
+   */
+  elapsed(v: RoomViewing): boolean {
+    return v.status === 'accepted' && !v.outcome && new Date(v.startsAt).getTime() < Date.now();
+  }
+
+  chosenOutcome(applicationId: string) {
+    const value = this.outcomeChoice()[applicationId];
+    return this.outcomes.find((o) => o.value === value) ?? null;
+  }
+
+  pickOutcome(applicationId: string, value: ViewingOutcome | null) {
+    this.outcomeNote = '';
+    this.outcomeChoice.update((m) => {
+      const next = { ...m };
+      if (value) next[applicationId] = value; else delete next[applicationId];
+      return next;
+    });
+  }
+
+  saveOutcome(app: Application, v: RoomViewing) {
+    const choice = this.chosenOutcome(app.id);
+    if (!choice) return;
+    this.busyViewing.set(app.id);
+    this.applicationsService.recordViewingOutcome(v.id, choice.value, this.outcomeNote.trim() || undefined)
+      .subscribe({
+        next: (res) => {
+          this.busyViewing.set(null);
+          this.pickOutcome(app.id, null);
+          this.viewings.update((m) => ({ ...m, [app.id]: res }));
+          /**
+           * ⚠️ Said out loud, because "I have let it to somebody else" IS an
+           * acceptance in the landlord's head and must not be one in the
+           * database. Nothing here accepts anybody, and the dialog carries
+           * the server's own words about the two honest next steps.
+           */
+          if (res.nextStep) {
+            this.dialogs.alert('Nobody has been accepted', res.nextStep);
+          }
+          if (res.applicationClosed) this.reloadApplications();
+        },
+        error: (err) => {
+          this.busyViewing.set(null);
+          this.dialogs.error(err?.error?.message ?? 'That did not save. Try again.');
+        },
+      });
   }
 
   /**
@@ -614,6 +762,18 @@ export class Applicants implements OnInit {
   }
 
   ngOnInit() {
+    this.reloadApplications();
+  }
+
+  /**
+   * Re-read the list.
+   *
+   * Called again after an outcome that CLOSES an application: the row's status
+   * changed server-side, and a screen still offering Accept and Reject on an
+   * application the server now calls closed is the oldest defect in this
+   * codebase — one state, two readers, disagreeing.
+   */
+  private reloadApplications() {
     this.applicationsService.getRoomApplications(this.roomId()).subscribe({
       next: (apps) => {
         this.applications.set(apps);

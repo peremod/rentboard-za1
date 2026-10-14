@@ -258,8 +258,26 @@ for (const route of ['/auth/login', '/auth/register']) {
     `${route}: no wordmark built from raw spans outside the component (${handRolled.join(', ') || 'none'})`,
   );
 
-  if (hosts >= 1) {
-    const L = await readLogo(page, 0);
+  /**
+   * ⚠️ WHICH host. The index matters and this read the wrong one.
+   *
+   * The navbar renders on the auth routes too, so `app-logo` resolves to THREE
+   * hosts and index 0 is the header's. Every auth check added in v1.137.0 was
+   * therefore measuring the header: "MA is #C4522C on /auth/login" was true of
+   * a wordmark in the navbar, and would have stayed green with the card's
+   * wordmark any colour at all. Found when the placement checks below reported
+   * the card's centre 141px away and a cream stem — the header's, on cream
+   * `--ink`. The same family as every other defect in this file: a check that
+   * cannot see its subject.
+   */
+  const authIndex = await page.evaluate(() => {
+    const all = [...document.querySelectorAll('app-logo')];
+    return all.findIndex((h) => h.closest('.auth__card'));
+  });
+  check(authIndex >= 0, `${route}: the card has a wordmark of its own (index ${authIndex} of ${hosts})`);
+
+  if (hosts >= 1 && authIndex >= 0) {
+    const L = await readLogo(page, authIndex);
     if (L && !L.incomplete) {
       check(L.text === 'Mastande', `${route}: reads "Mastande" (got "${L.text}")`);
       check(L.maColour === MA, `${route}: MA is ${MA} (got ${L.maColour})`);
@@ -270,6 +288,84 @@ for (const route of ['/auth/login', '/auth/register']) {
     } else {
       bad(`${route}: the wordmark is incomplete or unreadable`);
     }
+
+    /**
+     * ⚠️ WHERE it sits and HOW BIG, because converting these pages to the
+     * component lost both and nothing here noticed.
+     *
+     * `app-logo` sets `:host { display: contents }`, so the class that had
+     * carried `text-align: center`, `margin-bottom` and the size was moved
+     * onto an element that generates no box. The wordmark went to the left
+     * edge of the card, smaller than before, and every check above stayed
+     * green — they read colour and text, and a wordmark in the wrong place is
+     * the right colour.
+     */
+    const placed = await page.evaluate(() => {
+      const card = document.querySelector('.auth__card');
+      const root = card?.querySelector('app-logo .logo');
+      if (!root || !card) return null;
+      const r = root.getBoundingClientRect();
+      const c = card.getBoundingClientRect();
+      const title = document.querySelector('.auth__title');
+      return {
+        offCentre: Math.abs((r.left + r.width / 2) - (c.left + c.width / 2)),
+        fontSize: parseFloat(getComputedStyle(root).fontSize),
+        // The box is back only if there is a box: a display:contents host
+        // reports the card's own width for the wrapper and no gap below.
+        gapToTitle: title ? Math.round(title.getBoundingClientRect().top - r.bottom) : null,
+      };
+    });
+    if (!placed) {
+      bad(`${route}: could not measure the wordmark against the card`);
+    } else {
+      check(
+        placed.offCentre <= 2,
+        `${route}: the wordmark is centred in the card at 390px (off by ${placed.offCentre.toFixed(1)}px)`,
+      );
+      // 1.6rem = 25.6px. The phone shrink belongs to the header's nav row, not
+      // to the size, and this placement is alone in its card.
+      check(
+        Math.abs(placed.fontSize - 25.6) < 0.5,
+        `${route}: …and still 1.6rem on a phone, not the header's shrunk size (${placed.fontSize}px)`,
+      );
+      /**
+       * ⚠️ 9px, not 4. With the class back on the display:contents host the
+       * gap measured 5px — the title's own margin — and a `>= 4` threshold
+       * passed with the defect fully reintroduced. The box adds .4rem (6.4px)
+       * on top, so the two states are 5px and 12px and the line between them
+       * has to sit above the broken one.
+       */
+      check(
+        placed.gapToTitle !== null && placed.gapToTitle >= 9,
+        `${route}: …with the .4rem gap above the title back (${placed.gapToTitle}px)`,
+      );
+    }
+  }
+}
+
+// ── The header still shrinks, which is what that media query is for ───────
+//
+// ⚠️ The other half of the same fix. Scoping the 480px rule to the LINKED
+// logo could have been done by deleting the rule, and the auth pages would
+// have looked right while the landing page's nav row stopped fitting Log in
+// and Get started — the defect mobile-drive.mjs exists for.
+{
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto(`${WEB}/`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(300);
+  const header = await page.evaluate(() => {
+    const root = document.querySelector('app-navbar app-logo .logo, header app-logo .logo');
+    if (!root) return null;
+    return { fontSize: parseFloat(getComputedStyle(root).fontSize), tag: root.tagName.toLowerCase() };
+  });
+  if (!header) {
+    bad('the header wordmark could not be found at 390px');
+  } else {
+    check(header.tag === 'a', `the header wordmark is still a link home (<${header.tag}>)`);
+    check(
+      Math.abs(header.fontSize - 20) < 0.5,
+      `and the header still shrinks to 1.25rem on a phone so the nav row fits (${header.fontSize}px)`,
+    );
   }
 }
 

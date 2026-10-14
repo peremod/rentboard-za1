@@ -4453,6 +4453,10 @@ The applicant cards render **collapsed**, so `.applicant-card__actions` is not
 in the DOM at all when the page loads; the drive would have to expand a card
 first. The screenshot that reported it was of an expanded card.
 
+> **Closed in v1.141.0 — see §69.** The drive now expands a card before
+> measuring, and reverting the fix reports `Remove from shortlist` spilling
+> 32px.
+
 So of the two cards §64 named, one is now covered and one is not, and the
 uncovered one is uncovered for a different reason than before — not a missing
 record, a missing interaction. Expanding a card before measuring is the work
@@ -4464,6 +4468,224 @@ that would close it, and it is not done.
 screens rather than reporting them clean: *"the portal screens were audited
 EMPTY — the seed failed"*. A fixture that fails silently is a check that passes
 for free.
+
+## 68. A viewing that had been and gone, and a panel that kept saying "they are coming"
+
+A viewing was proposed, accepted, and then the day came and went. Nothing
+happened. `RoomViewing` had no vocabulary for an agreed time that had passed:
+the row stayed `accepted` for ever, the tenant's dashboard kept saying "✅ You
+said you are coming" about a Saturday three weeks gone, the landlord's
+applicant card said "✅ They are coming", and **neither side was ever asked what
+became of it** — so the two commonest real answers, *we met at a different time
+we arranged between ourselves* and *I took another room*, were unrecordable and
+the product learned nothing from either.
+
+### What was added
+
+`ViewingOutcome` — five values, recorded once, by **either side**, and only on
+a viewing that both agreed to and whose time has passed:
+
+| value | closes the application | why |
+| --- | --- | --- |
+| `happened` | no | it went ahead; the application carries on |
+| `rearranged_privately` | no | they met at another time, which is the single most common answer |
+| `no_answer` | no | it did not happen, and nobody is deciding why |
+| `fell_through_other_room` | **yes — `withdrawn`** | the tenant walked |
+| `fell_through_other_tenant` | **yes — `rejected`** | the landlord ended it |
+
+The two closing values reuse `withdrawn` / `rejected` rather than inventing a
+sixth status: the existing vocabulary already records *who* ended it, and
+"ended at a viewing" would be a third name for a thing two names cover.
+
+### ⚠️ "Found another tenant" is an acceptance by another route — and must not be one in the database
+
+The owner's own framing. It is true of what the landlord has decided and must
+not be true of what the system does: `fell_through_other_tenant` **accepts
+nobody**. Accepting a person decides where they live, and it is a deliberate
+action with a thirty-minute undo; inferring it from a dropdown would bypass
+that entirely. The reply names the two honest next steps instead — accept the
+person you chose, or pause the listing — in the API payload as well as on
+screen, so an integration is told the same thing a person is. The drive asserts
+the other applicant is still `pending`, no tenancy exists, and the room is
+still on the board.
+
+### The notice is derived, never stored
+
+"The agreed time has passed" is a fact about the clock. A column holding it
+needs a job to keep it true, which is how `documentDeletedAt` deleted nothing.
+Both inboxes derive the `viewing_elapsed` row from `startsAt` and a null
+`outcome`, exactly as Phase G derives an elapsed notice period.
+
+### The defect this nearly shipped with: a branch over a row that could not arrive
+
+`GET /applications/viewings/mine` filtered `startsAt >= now`. The tenant panel
+is drawn from that endpoint — so the notice had a branch for a state **the API
+could never hand it**, this codebase's own recurring failure in its second
+form: a check that cannot see its subject. The endpoint now also carries
+accepted viewings whose time has passed with no outcome, and the drive asserts
+the row is in the payload and leaves it once answered.
+
+A second one of the same kind: `invite()` refused a new viewing while any
+`proposed`/`accepted` one existed, so **"offer another time" would have been a
+button that always failed**. A past viewing gives nobody anywhere to be, so it
+no longer counts as an arrangement; two times still to come is still refused,
+and both halves are asserted.
+
+### Proven by reintroduction, three times
+
+* Backend reverted (both clauses): `the tenant's own viewings list still
+  carries the one that has passed` and `the landlord can offer another time`
+  fail, and the tenant panel renders nothing at all.
+* The tenant branch removed: the four tenant text checks fail — including the
+  negative one, because every negative check in §15c proves its subject
+  exists first.
+* The landlord branch removed: `6 failed, 270 passed`.
+
+The first two negative runs also exposed a flaw in the drive itself: an
+unguarded `click()` on a control that no longer exists **threw**, ending the
+run before the landlord half, so a crash was reported where a list of failures
+belonged. Both clicks are now guarded by a count. A drive that stops at the
+first missing control cannot tell you what else is missing.
+
+### What this does NOT do
+
+⚠️ Nothing emails or notifies on a schedule when a viewing elapses. The notice
+is on both dashboards and in both inboxes, and it appears when somebody looks.
+A scheduled chase would be a new job, and — while `WHATSAPP_ENABLED` is false —
+a promise of a message that nobody can be sent.
+
+## 69. The measurement now opens the card — and found a label nobody could speak
+
+§67 left one of the two reported width defects uncovered, and was explicit
+about why: `.applicant-card__actions` is not in the DOM until a card is
+expanded, so a fixture could supply the missing *record* but not the missing
+*interaction*. `a11y-drive.mjs` loaded the page, measured six collapsed cards,
+and reported clean.
+
+### What was added
+
+A `REVEAL` table — route pattern → an async step run after the load and before
+any measurement. One entry so far: expand the first applicant card on
+`/landlord/rooms/:id/applicants`.
+
+**It is proven both ways.** With `white-space: normal` removed from
+`.applicant-card__actions button` the drive now reports:
+
+```
+⚠️  clipped: <button> spills 32px — "Remove from shortlist"
+⚠️  clipped: <button> spills 11px — "📅 Invite to view"
+```
+
+Before the reveal, the same revert passed. That is §64's second card, covered.
+
+### ⚠️ The per-route version of the check was wrong, and failed a correct screen
+
+The first version required the action row on **every** applicants route. One of
+the two fixture rooms exists to produce a *finished tenancy*, so its applicant
+is `accepted` — and the action row is correctly absent on an accepted,
+rejected or withdrawn application. The drive failed a screen that was right.
+
+What has to hold is weaker and is asserted **once, at the end**: across every
+applicants route audited, the action row was on screen at least once, and a
+shortlist control with it. Driven to failure by pointing the counter at a class
+that does not exist: *"the applicant ACTION ROW was never on screen across 2
+applicants route(s) — the width and contrast checks measured nothing there,
+which reads as clean"*. A reveal that quietly stops working now fails the run
+instead of shrinking it.
+
+### It found a WCAG 2.5.3 defect on its first run
+
+Expanding the card brought `tenant-notes` under the audit for the first time,
+and its toggle failed **Label in Name**: `aria-label` read *"Show your private
+notes about Thandi"* over a button whose visible text is *"Add a private
+note"*. Somebody using voice control says what they can read, and nothing
+matched. The name now starts with the visible label and adds the person —
+*"Add a private note about Thandi"* — which keeps the disambiguation six open
+cards needed it for.
+
+⚠️ That defect was reachable from the moment the component shipped in Phase 5e.
+It was not found by reading the code; it was found by opening something.
+
+### What is still NOT covered
+
+⚠️ Only the FIRST card is expanded, and only on this one route. A defect that
+needs two cards open, or that lives behind another collapsed region (the
+references block, the invite form, the outcome form added in §68), is still
+unmeasured. The pattern for closing each is now one entry in `REVEAL`.
+
+⚠️ The three overflow defects in `scripts/overflow-baseline.json` are still
+ratcheted, not fixed: `/admin/advertising` 63px, `/admin/analytics` 18px, and
+`app-ad-slot` 4px on the landing page.
+
+## 70. `display: contents` ate the class, and the auth checks were reading the navbar
+
+Reported from a phone: the wordmark on **Log in** and **Get started** had moved
+to the left edge of the card and come out smaller than before. Both are mine,
+from v1.137.0.
+
+### Why a class did nothing at all
+
+The conversion put the old class on the component — `<app-logo size="lg"
+[link]="false" class="auth__brand">`. `app-logo` declares `:host { display:
+contents }`, deliberately, so that dropping it into a flex row behaves exactly
+as the bare `<a>` it replaced. **An element with `display: contents` generates
+no box**, so `.auth__brand`'s `text-align: center` and `margin-bottom: .4rem`
+styled nothing: the inline wordmark fell to the left of `.auth__card`, which is
+the only box left, and the title closed up under it.
+
+The class is back on a real `<div>` wrapper. The rule is now layout only —
+`text-align`, `margin-bottom`, and `color` because the stem reads
+`currentColor`. Its `font-family`, `font-size` and `font-weight` are gone,
+because the component owns those; so is its `span { color: $color-terracotta }`,
+which would have repainted **both** halves of the component's wordmark and was
+inert only by specificity. A rule that looks like a control and is not one is
+this repository's oldest habit.
+
+⚠️ And my v1.137.0 commit message said that wordmark was "unstyled by any rule
+in the repository". It was wrong: `styles.scss` has always carried
+`.auth &__brand` with the size, the centring and the gap. I grepped for
+`auth__brand` and SCSS nesting writes it `&__brand`.
+
+### The shrink belonged to the nav row, not to the size
+
+`@media (max-width: 480px) { .logo--lg { font-size: 1.25rem } }` exists because
+the header has to fit **Log in** and **Get started** on one line beside the
+wordmark. The auth placement is alone in its card and was being shrunk for no
+reason. The selector is now `a.logo--lg`: the linked form is the header, the
+footer is `md`, and the auth pages pass `link=false`. Both halves are asserted
+— the auth wordmark is 25.6px at 390px, the header is 20px and still an `<a>` —
+because deleting the media query would have fixed the auth pages and broken the
+nav row, which is a defect `mobile-drive.mjs` exists for.
+
+### 🔴 The real finding: every auth check was measuring the HEADER
+
+`logo-drive.mjs` read `readLogo(page, 0)`. The navbar renders on the auth routes
+too, so `app-logo` resolves to **three** hosts and index 0 is the header's. So
+the checks v1.137.0 added — *"/auth/login: MA is #C4522C"*, *"MA differs from
+the stem"* — were true of a wordmark **in the navbar**, and would have stayed
+green with the card's wordmark any colour at all. The route was in the loop; the
+subject never was.
+
+It surfaced only because the new placement checks disagreed with it: the card's
+"centre" was 141px out and the stem came back cream (`--cream` on the header's
+dark bar) on a page whose card is light. The checks now resolve the host inside
+`.auth__card` and assert that index exists first.
+
+That is the fifth form of this codebase's recurring defect in two weeks: a check
+that cannot fail, one that cannot see its subject, one whose subject came from
+leftover data, one derived from the implementation, one scoped more narrowly
+than its claim — and now one pointed at the right PAGE and the wrong ELEMENT.
+
+### Proven by reintroduction, three ways
+
+* Class back on the `display: contents` host → *centred … off by 102.0px*, and
+  the gap check *(5px)*.
+* `@media` scoped back to `.logo--lg` → both auth size checks fail at 20px.
+* `@media` deleted → the header check fails at 25.6px.
+
+⚠️ The gap threshold was wrong on its first pass: `>= 4` passed at the 5px the
+title's own margin gives, with the defect fully reintroduced. The two states are
+5px and 12px, so the line sits at 9px.
 
 ## How to check the whole thing still works
 
