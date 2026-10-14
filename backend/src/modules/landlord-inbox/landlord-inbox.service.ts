@@ -254,9 +254,29 @@ export class LandlordInboxService {
   private async waitingApplications(landlordId: string): Promise<InboxItem[]> {
     const rows = await this.prisma.application.findMany({
       where: {
-        room: { landlordId },
         status: { in: ['pending', 'viewed'] },
         archivedAt: null,
+        /**
+         * ⚠️ THE ROOM MUST STILL BE TAKING APPLICANTS.
+         *
+         * This asked only about the application, so a room that had been let,
+         * paused or deleted kept generating "<name> is waiting to hear from
+         * you" for every pending applicant on it — a landlord chased to answer
+         * people about a room nobody can have, with the only action being
+         * "Open the application" on a letting that is closed.
+         *
+         * The mirror of the tenant-side fault found the same day: a shortlist
+         * card survived the letting it belonged to. One row, two readers, and
+         * on both sides the reader that was wrong was the one that never asked
+         * what state the ROOM was in. See tenant-inbox.service.ts.
+         *
+         * `active` is the only status on the board — `let` and `reserved` mean
+         * somebody else has it, `draft`, `paused` and `deleted` mean it is not
+         * published. Those applicants are still in the room's own applicant
+         * list, where the room's state is on screen beside them; they are just
+         * not a thing the landlord is late on.
+         */
+        room: { landlordId, status: 'active' },
       },
       select: {
         id: true,

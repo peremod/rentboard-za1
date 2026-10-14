@@ -1352,9 +1352,21 @@ console.log('\n── 11. Past tenants, empty rooms and Reserved ─────
       '…with what they paid, which is the record a landlord came for',
     );
     // The review window is the one time-limited thing about a finished letting.
+    //
+    // ⚠️ This asked for `.yard-past__review`, a class Phase J1 deleted when the
+    // five-name state vocabulary replaced the per-screen ones — so it has been
+    // failing since 81d7a23 and nothing acted on it. A check pinned to a class
+    // name is pinned to an implementation detail; this asks for the state
+    // vocabulary and the words a landlord actually reads, both of which are the
+    // thing being promised.
+    const reviewFlag = page.locator('.yard-past__item .state--waiting');
     check(
-      (await page.locator('.yard-past__review').count()) === 1,
-      '…and flags that they can still be reviewed',
+      (await reviewFlag.count()) === 1,
+      `…and flags that they can still be reviewed (${await reviewFlag.count()} flag(s))`,
+    );
+    check(
+      /still review/i.test((await reviewFlag.first().textContent().catch(() => '')) ?? ''),
+      '…in words, not only a colour',
     );
   } else {
     bad('no previous-tenants control to open — the three checks under it could not run');
@@ -1924,6 +1936,126 @@ console.log('\n── 13. An elapsed notice, and relisting an occupied room ─�
   check(
     dbQuery(`SELECT status FROM rooms WHERE id = '${g13.roomId}'`) === 'active',
     '…and is back on the board',
+  );
+}
+
+// ══ 14. A shortlist that outlived its letting ════════════════════════════
+//
+// Reported from a live dashboard on 14 October: "A landlord wants to meet you
+// — message them to set up a viewing" sat above "None of your applications are
+// still open", naming a room the same page listed lower down as a PAST letting.
+//
+// One Application row, three readers. `activeApplications()` on the dashboard
+// had been taught every finished state by Phase D. The tenant inbox had not,
+// and its shortlisted branch had no state check of ANY kind — not the tenancy,
+// not the room — while the accepted branch beside it had checked the tenancy
+// all along.
+//
+// The landlord side carried the mirror of it: pending applicants on a room
+// already `let` still produced "<name> is waiting to hear from you", chasing a
+// landlord about people who cannot have the room.
+console.log('\n── 14. A shortlist does not outlive its letting ──────────────');
+
+{
+  const stamp = Date.now() + 19000;
+  const landlord = await registerUser(API, 'LANDLORD', stamp);
+  const shortlisted = await registerUser(API, 'TENANT', stamp + 1);
+  const winner = await registerUser(API, 'TENANT', stamp + 2);
+  for (const u of [landlord, shortlisted, winner]) {
+    await apiCall(API, 'POST', '/api/users/me/walkthrough-seen', {}, u.token);
+  }
+
+  const room = await apiCall(API, 'POST', '/api/rooms', {
+    roomType: 'shared_house', title: `Room with a long enough title to matter ${stamp}`,
+    description: 'A clean back room on a quiet street, with its own entrance and a shared tap.',
+    rentCents: 200000, province: 'Gauteng', city: 'Pretoria',
+    locationDisplay: 'Sunnyside, Pretoria',
+    availableFrom: new Date().toISOString().slice(0, 10),
+  }, landlord.token);
+  const roomId = room.body?.id;
+  dbQuery(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${roomId}'`);
+
+  const a1 = await apiCall(API, 'POST', '/api/applications',
+    { roomId, coverNote: 'I would like to see the room please.' }, shortlisted.token);
+  // A second applicant, left pending: the landlord-side half of this check.
+  await apiCall(API, 'POST', '/api/applications',
+    { roomId, coverNote: 'I can move in on the first.' }, winner.token);
+
+  await apiCall(API, 'POST', `/api/applications/${a1.body.id}/shortlist`, {}, landlord.token);
+
+  // While the room is still on the board, the shortlist IS news. Asserting the
+  // positive first, so the negative below cannot pass by the row never existing
+  // — the vacuous pass this repository keeps finding.
+  /**
+   * ⚠️ Read `items`, never the whole body.
+   *
+   * The first version of these four checks did
+   * `JSON.stringify(body).includes('application_shortlisted')`, and every
+   * negative one failed against a WORKING fix: the payload carries a `counts`
+   * map whose KEYS are every kind the inbox can emit, so that string is
+   * present in every response this endpoint has ever returned, including an
+   * empty one. The assertion was matching a key name, not a row.
+   *
+   * The positive checks passed for the same bad reason, which is the part
+   * worth keeping: a string match over a payload that names its own vocabulary
+   * cannot tell presence from absence in either direction.
+   */
+  const kinds = (res) => (res.body?.items ?? []).map((i) => i.kind);
+
+  const openInbox = await apiCall(API, 'GET', '/api/tenant-inbox', null, shortlisted.token);
+  check(
+    kinds(openInbox).includes('application_shortlisted'),
+    `while the room is on the board, the shortlist is in the tenant inbox (${kinds(openInbox).join(', ') || 'empty'})`,
+  );
+
+  const lordOpen = await apiCall(API, 'GET', '/api/landlord/inbox', null, landlord.token);
+  check(
+    kinds(lordOpen).includes('application_waiting'),
+    `while the room is on the board, the waiting applicant is in the landlord inbox (${kinds(lordOpen).join(', ') || 'empty'})`,
+  );
+
+  // ⚠️ The room comes OFF the board without touching the applications.
+  //
+  // The first version of this scenario accepted the other applicant, and that
+  // proved nothing: accepting auto-rejects the competing rows, so the inbox
+  // already excluded the shortlist on `status` alone and the check passed
+  // without the fix. Verified rather than assumed — the row read
+  // `rejected|t|let`.
+  //
+  // Pausing is the case that actually strands a shortlist: the landlord takes
+  // the room down, every application keeps its status, and the tenant is still
+  // told a landlord wants to meet them about a room nobody can see. `deleted`
+  // and `draft` behave the same way; `paused` is the one a landlord reaches
+  // for most.
+  dbQuery(`UPDATE rooms SET status='paused' WHERE id = '${roomId}'`);
+  const roomNow = dbQuery(`SELECT status FROM rooms WHERE id = '${roomId}'`);
+  check(/paused/.test(roomNow), `the room leaves the board (status now ${roomNow.trim()})`);
+
+  // ⚠️ The row is untouched: still `shortlisted`, still un-archived. The fix is
+  // not that something rewrote it — nothing did, and nothing should. It is that
+  // the reader now asks what state the ROOM is in.
+  const stillShortlisted = dbQuery(
+    `SELECT status FROM applications WHERE id = '${a1.body.id}'`,
+  );
+  check(
+    stillShortlisted.trim() === 'shortlisted',
+    `the shortlisted row is untouched — a read fix, not a write (got '${stillShortlisted.trim()}')`,
+  );
+
+  const closedInbox = await apiCall(API, 'GET', '/api/tenant-inbox', null, shortlisted.token);
+  check(
+    !kinds(closedInbox).includes('application_shortlisted'),
+    `once the room is gone, the tenant is NOT told a landlord wants to meet them (${kinds(closedInbox).join(', ') || 'empty'})`,
+  );
+  check(
+    (closedInbox.body?.counts?.application_shortlisted ?? -1) === 0,
+    `and the badge count agrees (${closedInbox.body?.counts?.application_shortlisted})`,
+  );
+
+  const lordClosed = await apiCall(API, 'GET', '/api/landlord/inbox', null, landlord.token);
+  check(
+    !kinds(lordClosed).includes('application_waiting'),
+    `and the landlord is NOT chased about applicants to a room that has gone (${kinds(lordClosed).join(', ') || 'empty'})`,
   );
 }
 

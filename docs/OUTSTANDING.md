@@ -4353,6 +4353,66 @@ terminates it — 20 build errors, the trap CLAUDE.md names by number. The
 production build caught it before `template-literal-lint.mjs` did, because that
 lint runs on commit and I had not committed yet.
 
+## 66. A shortlist that outlived its letting, on both sides
+
+Reported from a live dashboard on 14 October, and the contradiction was in one
+screenshot: **"A landlord wants to meet you — message them to set up a
+viewing"** above **"None of your applications are still open"**, naming a room
+the same page listed lower down as a *past letting*.
+
+One `Application` row, three readers, two of them right.
+
+`activeApplications()` on the tenant dashboard was taught every finished state
+by Phase D. `tenant-inbox.service.ts` was not — and its `shortlisted` branch
+had **no state check of any kind**: not the tenancy, not the room. The
+`accepted` branch directly above it has checked the tenancy since Phase D:
+
+```ts
+if (tenancy && tenancy.status !== 'pending') continue;   // accepted
+…
+out.push({ kind: 'application_shortlisted', … });        // shortlisted, unguarded
+```
+
+So Phase D fixed the frontend's definition of "open" and left the backend's
+alone — the same fault the whole tenancy audit was about, one layer down.
+
+**And the landlord side carried the mirror of it.** `waitingApplications()`
+asked only about the application, so a room already `let`, `paused` or
+`deleted` kept producing *"&lt;name&gt; is waiting to hear from you"* for every
+pending applicant — chasing a landlord about people who cannot have the room,
+with the only offered action being "Open the application" on a closed letting.
+
+Both now ask what state the **room** is in, which is the question neither side
+was asking: `active` is the only status on the board. The tenant side also
+skips when a tenancy exists at all — shortlisting is behind them whatever
+happened next.
+
+### Three things the drive taught me while proving it
+
+⚠️ **The first scenario proved nothing.** It accepted a competing applicant to
+take the room off the board — but accepting **auto-rejects** the others, so the
+shortlist was excluded on `status` alone and the check passed *without the
+fix*. Confirmed by reading the row: `rejected|t|let`. The scenario now pauses
+the room instead, which strands a live `shortlisted` row, and the row is
+asserted untouched afterwards: this is a read fix, not a write.
+
+⚠️ **The first assertions were vacuous in both directions.** They did
+`JSON.stringify(body).includes('application_shortlisted')`, and the payload
+carries a `counts` map whose **keys are every kind the inbox can emit** — so
+that string is in every response this endpoint has ever returned, including an
+empty one. The negatives failed against a working fix and the positives passed
+for the wrong reason. They read `items` now, and the badge count beside it.
+
+⚠️ **A third check had been failing since Phase J1 and nothing acted on it.**
+`…and flags that they can still be reviewed` asked for `.yard-past__review`, a
+class `81d7a23` deleted when the five-name state vocabulary replaced the
+per-screen ones. A check pinned to a class name is pinned to an implementation
+detail; it now asks for the state vocabulary **and the words a landlord reads**.
+
+Proven able to fail: with the room check disabled the drive reports
+`application_shortlisted` present and the badge count `1`. 238 checks pass with
+it in place.
+
 ## How to check the whole thing still works
 
 ```bash

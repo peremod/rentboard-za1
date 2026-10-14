@@ -154,7 +154,9 @@ export class TenantInboxService {
       where: { tenantId, status: { in: ['accepted', 'shortlisted'] }, archivedAt: null },
       select: {
         id: true, status: true, decidedAt: true, createdAt: true,
-        room: { select: { id: true, title: true, locationDisplay: true } },
+        // ⚠️ `status` on the room, because a shortlist is only news while the
+        // room is still taking applicants. See the shortlisted branch below.
+        room: { select: { id: true, title: true, locationDisplay: true, status: true } },
         tenancy: { select: { id: true, status: true } },
       },
       orderBy: { decidedAt: 'desc' },
@@ -202,6 +204,48 @@ export class TenantInboxService {
         });
         continue;
       }
+      /**
+       * ⚠️ A SHORTLIST IS ONLY NEWS WHILE THE LETTING IS STILL OPEN.
+       *
+       * The `accepted` branch above has checked the tenancy since Phase D —
+       * `if (tenancy && tenancy.status !== 'pending') continue`. This branch
+       * had no state check of any kind: not the tenancy, not the room. So a
+       * shortlisted row kept generating "A landlord wants to meet you" after
+       * the letting it belonged to was over.
+       *
+       * Reported from a live dashboard on 14 October, and the contradiction
+       * was visible in one screenshot: the card named a room, and lower down
+       * the same page listed that room as a PAST letting, while the summary
+       * underneath read "None of your applications are still open." Three
+       * readers of one row, two of them right.
+       *
+       * That is the same fault as Phase D itself — `activeApplications()` on
+       * the dashboard was taught every finished state and this list was not,
+       * so the frontend and the backend disagreed about the word "open".
+       *
+       * Three reasons a shortlist is no longer news, and the room's own state
+       * is the one neither side was reading:
+       */
+      // 1. They have a tenancy for it. Shortlisting is behind them whatever
+      //    happened next — they moved in, or they moved out again.
+      if (r.tenancy) continue;
+
+      // 2. The room is not taking applicants. `let` and `reserved` mean
+      //    somebody else got it; `deleted`, `paused` and `draft` mean it is
+      //    not on the board. Telling somebody a landlord wants to meet them
+      //    about a room nobody can have is worse than silence.
+      const roomIsOpen = r.room.status === 'active';
+
+      if (!roomIsOpen) {
+        // ⚠️ Suppressed, not reworded into a new kind. The honest message —
+        // that this room has gone — belongs in the applications list where
+        // the row and its state already live, not in a list called "needs
+        // you" whose every entry is meant to have an action. A kind with no
+        // action is how that list stops being read, which is the fault this
+        // file's own header warns about.
+        continue;
+      }
+
       out.push({
         kind: 'application_shortlisted' as const,
         urgency: -500,
