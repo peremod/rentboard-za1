@@ -1630,6 +1630,19 @@ Opening the card also brought tenant-notes under the audit for the first time,
 failing WCAG 2.5.3: aria-label read Show your private notes about Thandi over a
 button reading Add a private note. Reachable since Phase 5e."
 
+tag_if_missing "v1.142.0" "e20cfae3ff3affa51e3d1bcd2407f40eb046957a" "2026-10-14T19:07:46+00:00" "v1.142.0 - display: contents ate the class, and the checks read the navbar
+
+The auth wordmark moved to the left edge of its card and shrank, because the
+old .auth__brand class was put on app-logo, whose host is display: contents and
+generates no box. text-align and margin-bottom styled nothing. The class is
+back on a real div, and the 480px shrink is now scoped to the linked logo - it
+was always a nav row constraint, not a property of the large size.
+
+The finding underneath: every auth check added in v1.137.0 was measuring the
+HEADER. The navbar renders on those routes, so app-logo resolves to three hosts
+and index 0 is the header's. MA is #C4522C on /auth/login was true of a
+wordmark in the navbar. The route was in the loop; the subject never was."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
