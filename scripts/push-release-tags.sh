@@ -1564,6 +1564,55 @@ ratcheted rather than allowlisted.
 It does not cover the two cards that were reported, which is proven rather than
 assumed."
 
+tag_if_missing "v1.137.0" "4d7b256afc5c26d5bdf5070143df95324e225a23" "2026-10-14T12:53:38+00:00" "v1.137.0 - the auth pages use the one logo component
+
+Login and Get started built the wordmark from raw spans of their own, so the
+rename reached every other screen and not the two a new person sees first.
+logo-drive.mjs said the wordmark was consistent and had never visited either
+route - a check scoped more narrowly than its own headline claim. It now
+visits both and refuses a wordmark assembled outside the component."
+
+tag_if_missing "v1.138.0" "9e5cdbb7500f1f2001d773497a18d7ea2eb7f48b" "2026-10-14T13:25:26+00:00" "v1.138.0 - a shortlist does not outlive its letting, on either side
+
+The tenant dashboard said a landlord wanted to meet them about a room the same
+page listed as a past letting, above a line saying none of their applications
+were open. The inbox's shortlisted branch had no state check of any kind while
+the accepted branch beside it had checked the tenancy since Phase D: one state,
+two readers, disagreeing. The landlord side mirrored it - pending applicants on
+a let or paused room still read as waiting to hear from you. Both now ask what
+state the ROOM is in, and the first version of the drive passed without the fix."
+
+tag_if_missing "v1.139.0" "7cca3bb52d0050fee706c978d38b3b8e93bb94fb" "2026-10-14T13:51:40+00:00" "v1.139.0 - the width check is given the two subjects it was missing
+
+The overflow measurement added in v1.136.0 could not see either defect it was
+written for: the fixture had no shortlisted applicant and no finished letting,
+so neither card rendered. Both now exist, with long titles on purpose, and the
+archive card's coverage is proven by reverting its fix.
+
+On its first run it found a third: the public room page scrolled sideways 171px
+at 412px, because a grid item defaults to min-width auto and the hero image's
+intrinsic width won the column. The applicant action row is still not covered -
+the cards render collapsed - and that is recorded rather than implied."
+
+tag_if_missing "v1.140.0" "d963a12a262266fafbe458f9ef45b6adfe2fac7a" "2026-10-14T16:34:24+00:00" "v1.140.0 - what became of a viewing that has been and gone
+
+A viewing was proposed, accepted, and then the day came and went. The row
+stayed accepted for ever, both dashboards kept saying the person was coming
+about a Saturday weeks gone, and neither side was ever asked what happened -
+so the two commonest real answers, we met at another time and I took another
+room, were unrecordable.
+
+Five outcomes now, recorded once, by either side, only on a viewing both
+agreed to and only once its time has passed. Two of them close the
+application. Found another tenant accepts NOBODY: it is an acceptance by
+another route in the landlord's head and must not be one in the database.
+
+Two defects of the usual kind were caught before shipping - the tenant panel
+branched on a state the API filtered out, and offer another time would have
+been a button that always failed - and the drive itself was wrong: an
+unguarded click threw on a missing control and ended the run before half the
+checks had run."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
