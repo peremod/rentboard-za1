@@ -1613,6 +1613,23 @@ been a button that always failed - and the drive itself was wrong: an
 unguarded click threw on a missing control and ended the run before half the
 checks had run."
 
+tag_if_missing "v1.141.0" "f94eebcf8f424f156210ffb6c253056788daa436" "2026-10-14T17:01:01+00:00" "v1.141.0 - the measurement opens the card, and a label nobody could speak
+
+a11y-drive.mjs measured six collapsed applicant cards and reported clean. A
+fixture can supply a missing record; it cannot supply a missing interaction.
+A REVEAL table now expands the first card before measuring, and reverting the
+nowrap fix reports Remove from shortlist spilling 32px - the same revert passed
+before.
+
+The first version of the check required the action row on every applicants
+route and failed a correct screen, because the row is rightly absent on an
+accepted application. The claim is made once at the end now, and proven by
+pointing the counter at a class that does not exist.
+
+Opening the card also brought tenant-notes under the audit for the first time,
+failing WCAG 2.5.3: aria-label read Show your private notes about Thandi over a
+button reading Add a private note. Reachable since Phase 5e."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
