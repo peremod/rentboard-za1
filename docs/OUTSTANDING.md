@@ -4453,6 +4453,10 @@ The applicant cards render **collapsed**, so `.applicant-card__actions` is not
 in the DOM at all when the page loads; the drive would have to expand a card
 first. The screenshot that reported it was of an expanded card.
 
+> **Closed in v1.141.0 — see §69.** The drive now expands a card before
+> measuring, and reverting the fix reports `Remove from shortlist` spilling
+> 32px.
+
 So of the two cards §64 named, one is now covered and one is not, and the
 uncovered one is uncovered for a different reason than before — not a missing
 record, a missing interaction. Expanding a card before measuring is the work
@@ -4549,6 +4553,69 @@ first missing control cannot tell you what else is missing.
 is on both dashboards and in both inboxes, and it appears when somebody looks.
 A scheduled chase would be a new job, and — while `WHATSAPP_ENABLED` is false —
 a promise of a message that nobody can be sent.
+
+## 69. The measurement now opens the card — and found a label nobody could speak
+
+§67 left one of the two reported width defects uncovered, and was explicit
+about why: `.applicant-card__actions` is not in the DOM until a card is
+expanded, so a fixture could supply the missing *record* but not the missing
+*interaction*. `a11y-drive.mjs` loaded the page, measured six collapsed cards,
+and reported clean.
+
+### What was added
+
+A `REVEAL` table — route pattern → an async step run after the load and before
+any measurement. One entry so far: expand the first applicant card on
+`/landlord/rooms/:id/applicants`.
+
+**It is proven both ways.** With `white-space: normal` removed from
+`.applicant-card__actions button` the drive now reports:
+
+```
+⚠️  clipped: <button> spills 32px — "Remove from shortlist"
+⚠️  clipped: <button> spills 11px — "📅 Invite to view"
+```
+
+Before the reveal, the same revert passed. That is §64's second card, covered.
+
+### ⚠️ The per-route version of the check was wrong, and failed a correct screen
+
+The first version required the action row on **every** applicants route. One of
+the two fixture rooms exists to produce a *finished tenancy*, so its applicant
+is `accepted` — and the action row is correctly absent on an accepted,
+rejected or withdrawn application. The drive failed a screen that was right.
+
+What has to hold is weaker and is asserted **once, at the end**: across every
+applicants route audited, the action row was on screen at least once, and a
+shortlist control with it. Driven to failure by pointing the counter at a class
+that does not exist: *"the applicant ACTION ROW was never on screen across 2
+applicants route(s) — the width and contrast checks measured nothing there,
+which reads as clean"*. A reveal that quietly stops working now fails the run
+instead of shrinking it.
+
+### It found a WCAG 2.5.3 defect on its first run
+
+Expanding the card brought `tenant-notes` under the audit for the first time,
+and its toggle failed **Label in Name**: `aria-label` read *"Show your private
+notes about Thandi"* over a button whose visible text is *"Add a private
+note"*. Somebody using voice control says what they can read, and nothing
+matched. The name now starts with the visible label and adds the person —
+*"Add a private note about Thandi"* — which keeps the disambiguation six open
+cards needed it for.
+
+⚠️ That defect was reachable from the moment the component shipped in Phase 5e.
+It was not found by reading the code; it was found by opening something.
+
+### What is still NOT covered
+
+⚠️ Only the FIRST card is expanded, and only on this one route. A defect that
+needs two cards open, or that lives behind another collapsed region (the
+references block, the invite form, the outcome form added in §68), is still
+unmeasured. The pattern for closing each is now one entry in `REVEAL`.
+
+⚠️ The three overflow defects in `scripts/overflow-baseline.json` are still
+ratcheted, not fixed: `/admin/advertising` 63px, `/admin/analytics` 18px, and
+`app-ad-slot` 4px on the landing page.
 
 ## How to check the whole thing still works
 

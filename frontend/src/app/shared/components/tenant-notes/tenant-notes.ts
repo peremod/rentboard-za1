@@ -36,9 +36,15 @@ import { Loading } from '../loading/loading';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="notes-block">
+      <!-- WCAG 2.5.3, Label in Name: the accessible name has to CONTAIN the
+           visible text, so somebody using voice control can say what they can
+           read. "Show your private notes about Thandi" over a button reading
+           "Add a private note" meant the spoken words matched nothing. The name
+           now starts with the visible label and adds the person, which is what
+           six open cards needed disambiguating for in the first place. -->
       <button type="button" class="link-btn"
               [attr.aria-expanded]="open()"
-              [attr.aria-label]="(open() ? 'Hide' : 'Show') + ' your private notes about ' + tenantName()"
+              [attr.aria-label]="(open() ? 'Hide my notes' : notesLabel()) + ' about ' + tenantName()"
               (click)="toggle()">
         {{ open() ? 'Hide my notes' : notesLabel() }}
       </button>
