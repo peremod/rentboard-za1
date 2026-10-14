@@ -4,18 +4,26 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
+import { Logo } from '../../../shared/components/logo/logo';
 import { ReferralsService } from '../../../core/services/referrals.service';
 import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, TranslatePipe],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, TranslatePipe, Logo],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="auth">
       <div class="auth__card">
-        <div class="auth__brand">Mas<span>tande</span></div>
+        <!-- ⚠️ Was a hand-rolled Mas + span wordmark, unstyled by any rule in
+             the repository, so it inherited its colours from whatever was
+             nearby: these two pages rendered the OLD split with the terracotta
+             on the wrong half. Phase I's whole point was one component wherever
+             the logo appears, and these two placements were missed -
+             logo-drive.mjs only looked at the header and the footer, so it
+             certified "one wordmark component" while two pages had their own. -->
+        <app-logo size="lg" [link]="false" class="auth__brand"/>
         <h1 class="auth__title">Create your free account</h1>
         <p class="auth__sub">Free to list. Free to apply. Always.</p>
 

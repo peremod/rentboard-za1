@@ -218,6 +218,61 @@ check(
   `…and the stem DOES follow it, so the test is testing something (${forced.after.stem})`,
 );
 
+// ── 6 — EVERY placement, not just the two on the landing page ────────────
+//
+// ⚠️ This drive measured `/` and nothing else, so it certified "one wordmark
+// component" for five releases while /auth/login and /auth/register carried a
+// hand-rolled `Mas<span>tande</span>` — unstyled by any rule in the repository,
+// inheriting its colours from whatever was nearby, and rendering the OLD split
+// with the terracotta on the wrong half. Reported from a live phone on
+// 14 October.
+//
+// A check scoped to one route cannot speak for the others, and this one's own
+// headline claim was about everywhere.
+for (const route of ['/auth/login', '/auth/register']) {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.goto(`${WEB}${route}`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(300);
+
+  const hosts = await page.locator('app-logo').count();
+  check(hosts >= 1, `${route}: uses <app-logo> rather than its own markup (found ${hosts})`);
+
+  // The hand-rolled one is still detectable even if an <app-logo> is added
+  // beside it: the brand name split across elements that are NOT the component.
+  const handRolled = await page.evaluate(() => {
+    const out = [];
+    for (const el of document.querySelectorAll('body *')) {
+      // Inside the component, or a wrapper AROUND it: both are the component
+      // doing its job. `.footer-brand` is a div holding one <app-logo> and was
+      // this check's first false positive — skipping descendants was not enough,
+      // ancestors read as a one-child element whose text is the brand name.
+      if (el.closest('app-logo') || el.querySelector('app-logo')) continue;
+      if (el.children.length !== 1) continue;
+      const t = el.textContent.replace(/\s+/g, '');
+      if (/^Mastande$/i.test(t)) out.push(el.tagName.toLowerCase() + '.' + (el.className || '?'));
+    }
+    return out;
+  });
+  check(
+    handRolled.length === 0,
+    `${route}: no wordmark built from raw spans outside the component (${handRolled.join(', ') || 'none'})`,
+  );
+
+  if (hosts >= 1) {
+    const L = await readLogo(page, 0);
+    if (L && !L.incomplete) {
+      check(L.text === 'Mastande', `${route}: reads "Mastande" (got "${L.text}")`);
+      check(L.maColour === MA, `${route}: MA is ${MA} (got ${L.maColour})`);
+      check(
+        L.maColour !== L.stemColour,
+        `${route}: MA differs from the stem (MA ${L.maColour}, stem ${L.stemColour})`,
+      );
+    } else {
+      bad(`${route}: the wordmark is incomplete or unreadable`);
+    }
+  }
+}
+
 await browser.close();
 
 console.log(`\n── ${pass} passed, ${failures.length} failed`);

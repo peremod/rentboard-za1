@@ -4310,6 +4310,49 @@ findings prove it can fail) and its coverage of these two specific cards is
 **nil**. Giving the drive a long-titled archived letting and a shortlisted
 applicant is the work that would close it, and it is not done.
 
+## 65. Two pages had their own wordmark, and the drive that said otherwise only read one route
+
+Reported from a live phone on 14 October: the logo on **/auth/login** and
+**/auth/register** was not the one everything else uses. Both carried
+
+```html
+<div class="auth__brand">Mas<span>tande</span></div>
+```
+
+— the pre-Phase-I markup, split `Mas` / `tande` rather than `Ma` / `stande`,
+and **styled by no rule anywhere in the repository**, so it inherited its
+colours from whatever was nearby and rendered with the terracotta on the wrong
+half.
+
+Phase I's stated requirement was *"the MA portion is the same colour and
+styling **wherever the logo appears**"*, and I shipped it having converted the
+header and the footer.
+
+**`logo-drive.mjs` only ever loaded `/`.** Eighty-odd checks at four widths in
+two placements, and its closing line claims *"one wordmark component"* — a
+claim about everywhere, measured on one route. A check scoped more narrowly
+than its own headline is the §62 shape again: not blind, not unable to fail,
+just never pointed at the rest of its subject.
+
+Both pages use `<app-logo size="lg" [link]="false">` now, and the drive visits
+both routes, asserting four things each: the component is present, the text
+reads `Mastande`, MA is `#C4522C` and differs from the stem — and that **no
+wordmark is built from raw spans outside the component**, which is the check
+that actually catches a regression. Proven by putting the old markup back: the
+first check still passed, because the header and footer supply two `<app-logo>`
+hosts, and only the raw-span check failed. That is why both exist.
+
+⚠️ **Its first run had a false positive**: `.footer-brand` is a `<div>`
+wrapping one `<app-logo>`, which reads as a one-child element whose text is the
+brand name. Skipping descendants of the component was not enough; ancestors had
+to be skipped too.
+
+⚠️ **And I hit the backtick trap writing this.** The explanatory comment quoted
+the old markup inside backticks, inside an inline `template:` literal, which
+terminates it — 20 build errors, the trap CLAUDE.md names by number. The
+production build caught it before `template-literal-lint.mjs` did, because that
+lint runs on commit and I had not committed yet.
+
 ## How to check the whole thing still works
 
 ```bash
