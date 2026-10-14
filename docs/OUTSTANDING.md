@@ -4617,6 +4617,76 @@ unmeasured. The pattern for closing each is now one entry in `REVEAL`.
 ratcheted, not fixed: `/admin/advertising` 63px, `/admin/analytics` 18px, and
 `app-ad-slot` 4px on the landing page.
 
+## 70. `display: contents` ate the class, and the auth checks were reading the navbar
+
+Reported from a phone: the wordmark on **Log in** and **Get started** had moved
+to the left edge of the card and come out smaller than before. Both are mine,
+from v1.137.0.
+
+### Why a class did nothing at all
+
+The conversion put the old class on the component — `<app-logo size="lg"
+[link]="false" class="auth__brand">`. `app-logo` declares `:host { display:
+contents }`, deliberately, so that dropping it into a flex row behaves exactly
+as the bare `<a>` it replaced. **An element with `display: contents` generates
+no box**, so `.auth__brand`'s `text-align: center` and `margin-bottom: .4rem`
+styled nothing: the inline wordmark fell to the left of `.auth__card`, which is
+the only box left, and the title closed up under it.
+
+The class is back on a real `<div>` wrapper. The rule is now layout only —
+`text-align`, `margin-bottom`, and `color` because the stem reads
+`currentColor`. Its `font-family`, `font-size` and `font-weight` are gone,
+because the component owns those; so is its `span { color: $color-terracotta }`,
+which would have repainted **both** halves of the component's wordmark and was
+inert only by specificity. A rule that looks like a control and is not one is
+this repository's oldest habit.
+
+⚠️ And my v1.137.0 commit message said that wordmark was "unstyled by any rule
+in the repository". It was wrong: `styles.scss` has always carried
+`.auth &__brand` with the size, the centring and the gap. I grepped for
+`auth__brand` and SCSS nesting writes it `&__brand`.
+
+### The shrink belonged to the nav row, not to the size
+
+`@media (max-width: 480px) { .logo--lg { font-size: 1.25rem } }` exists because
+the header has to fit **Log in** and **Get started** on one line beside the
+wordmark. The auth placement is alone in its card and was being shrunk for no
+reason. The selector is now `a.logo--lg`: the linked form is the header, the
+footer is `md`, and the auth pages pass `link=false`. Both halves are asserted
+— the auth wordmark is 25.6px at 390px, the header is 20px and still an `<a>` —
+because deleting the media query would have fixed the auth pages and broken the
+nav row, which is a defect `mobile-drive.mjs` exists for.
+
+### 🔴 The real finding: every auth check was measuring the HEADER
+
+`logo-drive.mjs` read `readLogo(page, 0)`. The navbar renders on the auth routes
+too, so `app-logo` resolves to **three** hosts and index 0 is the header's. So
+the checks v1.137.0 added — *"/auth/login: MA is #C4522C"*, *"MA differs from
+the stem"* — were true of a wordmark **in the navbar**, and would have stayed
+green with the card's wordmark any colour at all. The route was in the loop; the
+subject never was.
+
+It surfaced only because the new placement checks disagreed with it: the card's
+"centre" was 141px out and the stem came back cream (`--cream` on the header's
+dark bar) on a page whose card is light. The checks now resolve the host inside
+`.auth__card` and assert that index exists first.
+
+That is the fifth form of this codebase's recurring defect in two weeks: a check
+that cannot fail, one that cannot see its subject, one whose subject came from
+leftover data, one derived from the implementation, one scoped more narrowly
+than its claim — and now one pointed at the right PAGE and the wrong ELEMENT.
+
+### Proven by reintroduction, three ways
+
+* Class back on the `display: contents` host → *centred … off by 102.0px*, and
+  the gap check *(5px)*.
+* `@media` scoped back to `.logo--lg` → both auth size checks fail at 20px.
+* `@media` deleted → the header check fails at 25.6px.
+
+⚠️ The gap threshold was wrong on its first pass: `>= 4` passed at the 5px the
+title's own margin gives, with the defect fully reintroduced. The two states are
+5px and 12px, so the line sits at 9px.
+
 ## How to check the whole thing still works
 
 ```bash
