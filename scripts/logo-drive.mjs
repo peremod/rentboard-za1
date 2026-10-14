@@ -143,7 +143,11 @@ for (const width of WIDTHS) {
     }
 
     check(L.visible, `@${width}: ${where} wordmark is rendered with a box`);
-    check(L.text === 'MAstande', `@${width}: ${where} reads "MAstande" (got "${L.text}")`);
+    // ⚠️ This asserted 'MAstande' until 14 October — the misspelling the
+    // component introduced — so the gate did not merely miss the bug, it
+    // REQUIRED it: a correct wordmark would have failed the drive. A check
+    // written from the code it checks inherits that code's mistakes.
+    check(L.text === 'Mastande', `@${width}: ${where} reads "Mastande" (got "${L.text}")`);
 
     // 1 + 2 — MA is the one value, and it is not the stem's.
     check(L.maColour === MA, `@${width}: ${where} MA is ${MA} (got ${L.maColour})`);

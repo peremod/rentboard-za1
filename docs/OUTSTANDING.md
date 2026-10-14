@@ -4142,6 +4142,49 @@ cover the other.
 value. A check would have to read the running service. Logged rather than
 built.
 
+## 62. The wordmark renamed the company, and the gate required the new name
+
+The logo read **MAstande** on every screen for three days. Reported from a live
+page on 14 October.
+
+Phase I's requirement was that *"the MA portion of the logo must remain the
+same colour and styling wherever the logo appears"*. That is a statement about
+colour. Giving the first two letters their own element to pin `--logo-ma` to
+was the right implementation — and while doing it this file wrote their
+contents as `MA`, in capitals, changing the brand name on screen. The element
+is what pins the token; its contents were never part of the requirement.
+
+**The gate did not merely miss it. It required it.**
+
+```js
+check(L.text === 'MAstande', `@${width}: ${where} reads "MAstande" ...`);
+```
+
+`logo-drive.mjs` was written alongside the component, from the component, so it
+inherited the component's mistake and then enforced it: a correct wordmark
+would have failed the drive. Seventy-six checks passed at four widths in two
+placements, every run, while the name was wrong in all eight.
+
+This is a new shape. The others in this file are checks that could not see
+their subject, could not fail, or inherited a subject from the database. This
+one saw its subject perfectly, could fail, and was simply **pointed at the
+wrong answer** — because it was derived from the thing it was meant to judge.
+A check written from the implementation can only ever confirm the
+implementation.
+
+⚠️ **The accessible name was right the whole time.** `aria-label` has always
+been `Mastande` / `Mastande, home`, so a screen reader said the brand correctly
+while the eye read `MAstande` — and no contrast, heading or accessible-name
+check compares the two. WCAG 2.5.3 Label in Name wants the visible text inside
+the accessible name; here the accessible name was correct and the visible text
+was not, which that rule does not catch.
+
+Fixed: `Ma` / `stande`, so the wordmark reads Mastande with the first two
+letters still carrying `--logo-ma`. Driven in a browser at 360/390/768/1280 in
+header and footer — 76 checks, including that MA is still `#C4522C`, still
+differs from the stem, and still cannot be recoloured by a parent. Then the
+misspelling was reintroduced and the drive failed all eight text checks.
+
 ## How to check the whole thing still works
 
 ```bash

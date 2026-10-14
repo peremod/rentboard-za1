@@ -75,11 +75,11 @@ const FLOOR_PX = 18.66;
   template: `
     @if (link()) {
       <a class="logo logo--{{ size() }}" routerLink="/" [attr.aria-label]="label()">
-        <span class="logo__ma">MA</span><span class="logo__stem">stande</span>
+        <span class="logo__ma">Ma</span><span class="logo__stem">stande</span>
       </a>
     } @else {
       <span class="logo logo--{{ size() }}" role="img" [attr.aria-label]="label()">
-        <span class="logo__ma">MA</span><span class="logo__stem">stande</span>
+        <span class="logo__ma">Ma</span><span class="logo__stem">stande</span>
       </span>
     }
   `,
