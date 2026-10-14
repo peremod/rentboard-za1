@@ -1183,6 +1183,26 @@ check "a tenant can read their upcoming viewings" 200 "$STATUS" "$BODY"
 req POST /api/applications/viewings/00000000-0000-0000-0000-000000000000/respond '{"accept":true}' "$TTOKEN"
 check "answering an unknown viewing returns 404" 404 "$STATUS" "$BODY"
 
+# -- 17d2. What became of a viewing whose time has passed (Phase 8n) ------
+# ⚠️ Two of the five outcomes CLOSE the application, so the guards are the
+# thing to check here: an unauthenticated caller, a value outside the enum, and
+# a viewing that does not exist. That the right outcome closes the right
+# application is tenancy-lifecycle-drive §15 — it needs a time that has passed,
+# which the smoke suite has no way to arrange.
+head_ "17d2. What became of a viewing that has passed"
+
+req POST /api/applications/viewings/00000000-0000-0000-0000-000000000000/outcome '{"outcome":"happened"}'
+check "recording what happened needs a session" 401 "$STATUS"
+
+req POST /api/applications/viewings/00000000-0000-0000-0000-000000000000/outcome '{"outcome":"happened"}' "$TTOKEN"
+check "recording against an unknown viewing returns 404" 404 "$STATUS" "$BODY"
+
+req POST /api/applications/viewings/00000000-0000-0000-0000-000000000000/outcome '{"outcome":"sold_it"}' "$TTOKEN"
+check "an outcome outside the five is refused" 400 "$STATUS" "$BODY"
+
+req POST /api/applications/viewings/00000000-0000-0000-0000-000000000000/outcome '{}' "$TTOKEN"
+check "and an outcome is required — nothing defaults to \"it happened\"" 400 "$STATUS" "$BODY"
+
 # -- 17c. Who to call, and what we checked (Phase 7j) ----------------------
 # ⚠️ The directory had NO smoke coverage at all before this — not one check on
 # the endpoints behind a screen that tells landlords these names were looked

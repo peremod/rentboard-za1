@@ -220,6 +220,8 @@ model User {
   contractorLeads ContractorLead[] @relation("ContractorLeads")
   /// Phase 7l. Viewings this person called off — either side may.
   viewingsCancelled RoomViewing[] @relation("ViewingsCancelled")
+  /// Phase 8n. Viewings this person said what happened about — either side may.
+  viewingsRecorded  RoomViewing[] @relation("ViewingsOutcome")
 
   /// Lost-number recoveries — Phase 7q. The first is this account's own
   /// (cascades with it); the other two are ones this admin handled, SET NULL on
@@ -2774,12 +2776,65 @@ model RoomViewing {
   cancelledById String?
   cancelledBy   User?   @relation("ViewingsCancelled", fields: [cancelledById], references: [id], onDelete: SetNull)
 
+  /// What actually happened — Phase 8n. Null until somebody says.
+  ///
+  /// ⚠️ "The agreed time has passed" is NOT stored. It is `startsAt < now()`
+  /// with `status = accepted` and `outcome IS NULL`, derived wherever it is
+  /// needed, exactly as an elapsed notice period is (Phase G). A stored flag
+  /// meaning "has passed" is a second source of truth for a fact the clock
+  /// already answers, and it would need a job to keep it true.
+  ///
+  /// The OUTCOME is stored, because it is not derivable from anything: it is
+  /// a thing a person knows and the system cannot see. Nobody is required to
+  /// record one — a viewing with no outcome is a viewing nobody told us
+  /// about, which is different from one that did not happen.
+  outcome     ViewingOutcome?
+  /// Their own words. Optional; the outcome is the structured part.
+  outcomeNote String?
+  outcomeAt   DateTime?
+  /// Either side may record it, and which of them did is the point: "they did
+  /// not come" from a landlord and "I could not go" from a tenant are the same
+  /// outcome told from two sides, and a dispute later reads differently
+  /// depending on who said it.
+  outcomeById String?
+  outcomeBy   User?   @relation("ViewingsOutcome", fields: [outcomeById], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([applicationId, startsAt])
   @@index([startsAt, status])
+  /// The elapsed-viewing query: accepted, in the past, nothing recorded.
+  @@index([status, startsAt, outcome])
   @@map("room_viewings")
+}
+
+/// What happened about a viewing whose agreed time has passed — Phase 8n.
+///
+/// ⚠️ `fell_through_other_room` and `fell_through_other_tenant` CLOSE the
+/// application. The other three do not: a viewing that happened, or that the
+/// two of them moved between themselves, leaves the application exactly where
+/// it was.
+///
+/// ⚠️ `fell_through_other_tenant` does NOT accept anybody. It is an acceptance
+/// by another route only in the sense that the landlord has decided outside
+/// this screen; recording it here says who did not get the room, never who
+/// did. Accepting is its own deliberate action with its own thirty-minute
+/// undo, and inferring it from a dropdown would bypass that — this decides
+/// where a person lives. The landlord is pointed at the two honest next steps
+/// instead: accept the person they chose, or pause the listing.
+enum ViewingOutcome {
+  /// They met. The application carries on.
+  happened
+  /// They agreed a different time between themselves and met then. Common,
+  /// and the reason this list is not just happened/did-not.
+  rearranged_privately
+  /// Nobody has said what happened; recorded so the asking can stop.
+  no_answer
+  /// The tenant took a different room.
+  fell_through_other_room
+  /// The landlord let it to somebody else.
+  fell_through_other_tenant
 }
 
 enum ViewingStatus {

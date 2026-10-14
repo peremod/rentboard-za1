@@ -4465,6 +4465,91 @@ screens rather than reporting them clean: *"the portal screens were audited
 EMPTY — the seed failed"*. A fixture that fails silently is a check that passes
 for free.
 
+## 68. A viewing that had been and gone, and a panel that kept saying "they are coming"
+
+A viewing was proposed, accepted, and then the day came and went. Nothing
+happened. `RoomViewing` had no vocabulary for an agreed time that had passed:
+the row stayed `accepted` for ever, the tenant's dashboard kept saying "✅ You
+said you are coming" about a Saturday three weeks gone, the landlord's
+applicant card said "✅ They are coming", and **neither side was ever asked what
+became of it** — so the two commonest real answers, *we met at a different time
+we arranged between ourselves* and *I took another room*, were unrecordable and
+the product learned nothing from either.
+
+### What was added
+
+`ViewingOutcome` — five values, recorded once, by **either side**, and only on
+a viewing that both agreed to and whose time has passed:
+
+| value | closes the application | why |
+| --- | --- | --- |
+| `happened` | no | it went ahead; the application carries on |
+| `rearranged_privately` | no | they met at another time, which is the single most common answer |
+| `no_answer` | no | it did not happen, and nobody is deciding why |
+| `fell_through_other_room` | **yes — `withdrawn`** | the tenant walked |
+| `fell_through_other_tenant` | **yes — `rejected`** | the landlord ended it |
+
+The two closing values reuse `withdrawn` / `rejected` rather than inventing a
+sixth status: the existing vocabulary already records *who* ended it, and
+"ended at a viewing" would be a third name for a thing two names cover.
+
+### ⚠️ "Found another tenant" is an acceptance by another route — and must not be one in the database
+
+The owner's own framing. It is true of what the landlord has decided and must
+not be true of what the system does: `fell_through_other_tenant` **accepts
+nobody**. Accepting a person decides where they live, and it is a deliberate
+action with a thirty-minute undo; inferring it from a dropdown would bypass
+that entirely. The reply names the two honest next steps instead — accept the
+person you chose, or pause the listing — in the API payload as well as on
+screen, so an integration is told the same thing a person is. The drive asserts
+the other applicant is still `pending`, no tenancy exists, and the room is
+still on the board.
+
+### The notice is derived, never stored
+
+"The agreed time has passed" is a fact about the clock. A column holding it
+needs a job to keep it true, which is how `documentDeletedAt` deleted nothing.
+Both inboxes derive the `viewing_elapsed` row from `startsAt` and a null
+`outcome`, exactly as Phase G derives an elapsed notice period.
+
+### The defect this nearly shipped with: a branch over a row that could not arrive
+
+`GET /applications/viewings/mine` filtered `startsAt >= now`. The tenant panel
+is drawn from that endpoint — so the notice had a branch for a state **the API
+could never hand it**, this codebase's own recurring failure in its second
+form: a check that cannot see its subject. The endpoint now also carries
+accepted viewings whose time has passed with no outcome, and the drive asserts
+the row is in the payload and leaves it once answered.
+
+A second one of the same kind: `invite()` refused a new viewing while any
+`proposed`/`accepted` one existed, so **"offer another time" would have been a
+button that always failed**. A past viewing gives nobody anywhere to be, so it
+no longer counts as an arrangement; two times still to come is still refused,
+and both halves are asserted.
+
+### Proven by reintroduction, three times
+
+* Backend reverted (both clauses): `the tenant's own viewings list still
+  carries the one that has passed` and `the landlord can offer another time`
+  fail, and the tenant panel renders nothing at all.
+* The tenant branch removed: the four tenant text checks fail — including the
+  negative one, because every negative check in §15c proves its subject
+  exists first.
+* The landlord branch removed: `6 failed, 270 passed`.
+
+The first two negative runs also exposed a flaw in the drive itself: an
+unguarded `click()` on a control that no longer exists **threw**, ending the
+run before the landlord half, so a crash was reported where a list of failures
+belonged. Both clicks are now guarded by a count. A drive that stops at the
+first missing control cannot tell you what else is missing.
+
+### What this does NOT do
+
+⚠️ Nothing emails or notifies on a schedule when a viewing elapses. The notice
+is on both dashboards and in both inboxes, and it appears when somebody looks.
+A scheduled chase would be a new job, and — while `WHATSAPP_ENABLED` is false —
+a promise of a message that nobody can be sent.
+
 ## How to check the whole thing still works
 
 ```bash

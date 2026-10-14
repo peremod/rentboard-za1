@@ -25,7 +25,8 @@ export type InboxKind =
    * state changes, which is exactly what "this room is empty and nobody can
    * find it" needs.
    */
-  | 'room_vacant';
+  | 'room_vacant'
+  | 'viewing_elapsed';
 
 /**
  * One thing to do, with everything the row needs to be acted on in place.
@@ -148,15 +149,16 @@ export class LandlordInboxService {
    * anyway. Run concurrently, so the inbox costs one round trip's latency.
    */
   async inbox(landlordId: string): Promise<{ items: InboxItem[]; counts: Record<InboxKind, number> }> {
-    const [applications, upcoming, rentGaps, unread, vacant] = await Promise.all([
+    const [applications, viewings, upcoming, rentGaps, unread, vacant] = await Promise.all([
       this.waitingApplications(landlordId),
+      this.elapsedViewings(landlordId),
       this.leaseItems(landlordId),
       this.rentItems(landlordId),
       this.unreadMessages(landlordId),
       this.vacantRooms(landlordId),
     ]);
 
-    const items = [...applications, ...upcoming, ...rentGaps, ...unread, ...vacant]
+    const items = [...applications, ...viewings, ...upcoming, ...rentGaps, ...unread, ...vacant]
       .sort((a, b) => a.urgency - b.urgency);
 
     // Counted per kind so the screen can say "3 applicants waiting" in a header
@@ -248,6 +250,58 @@ export class LandlordInboxService {
         actionLabel: 'Read and reply',
         actionPath: '/account/messages',
       }];
+    });
+  }
+
+  /**
+   * A viewing this landlord arranged whose time has passed, with nothing
+   * recorded — Phase 8n. The mirror of the tenant's row.
+   *
+   * ⚠️ Derived, never stored: `accepted` + `startsAt` in the past + no
+   * outcome. See tenant-inbox.service.ts for why there is no "elapsed" flag.
+   *
+   * Both sides are asked because both sides know different halves of it, and
+   * because the two likeliest answers belong to different people: "we met
+   * another time" is usually the tenant's to tell, and "it has gone to
+   * somebody else" is always the landlord's.
+   */
+  private async elapsedViewings(landlordId: string): Promise<InboxItem[]> {
+    const rows = await this.prisma.roomViewing.findMany({
+      where: {
+        status: 'accepted',
+        startsAt: { lt: new Date() },
+        outcome: null,
+        application: {
+          archivedAt: null,
+          status: { notIn: ['withdrawn', 'rejected'] },
+          room: { landlordId },
+        },
+      },
+      select: {
+        id: true, startsAt: true,
+        application: {
+          select: { room: { select: { id: true, title: true } }, tenant: { select: { fullName: true } } },
+        },
+      },
+      orderBy: { startsAt: 'desc' },
+      take: 10,
+    });
+
+    return rows.map((v) => {
+      const since = -daysUntil(v.startsAt);
+      return {
+        kind: 'viewing_elapsed' as const,
+        urgency: -900,
+        title: `Did ${v.application.tenant.fullName} come and see it?`,
+        detail:
+          `The viewing was ${since <= 0 ? 'earlier today' : `${since} day${since === 1 ? '' : 's'} ago`}. `
+          + 'Say what happened, or offer another time — they are still waiting on you either way.',
+        entityId: v.id,
+        roomTitle: v.application.room.title,
+        daysUntil: -since,
+        actionLabel: 'Say what happened',
+        actionPath: `/landlord/rooms/${v.application.room.id}/applicants`,
+      };
     });
   }
 
