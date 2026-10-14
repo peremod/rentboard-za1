@@ -1535,6 +1535,19 @@ package.json moves with this tag. It had been frozen at 1.81.0 while the
 documentation's labels ran to v1.134.0 and the tags stopped at v1.113.0, which
 is why sync-tags.sh could no longer see anything to do."
 
+tag_if_missing "v1.135.0" "1c2baee6b0d76b05329d8019b16adad231772d88" "2026-10-14T10:51:32+00:00" "v1.135.0 — the wordmark says Mastande, and two controls stop being invisible
+
+The logo read MAstande for three days. The requirement was that the MA portion
+keep one colour, which says nothing about capitalisation, and logo-drive.mjs
+asserted the misspelling - so a correct wordmark would have failed the drive.
+A check written from the implementation can only confirm the implementation.
+
+And Shortlist and Invite to view were blank white boxes on a landlord's phone:
+a rule that repainted the background without repainting the foreground, leaving
+white on white at 1.00:1 under the zero-specificity :where(button). The gate for
+that was described in OUTSTANDING §41, asserted in a comment to already exist,
+and never written. It is written now."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
