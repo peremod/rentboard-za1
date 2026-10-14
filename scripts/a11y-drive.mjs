@@ -57,6 +57,22 @@ try {
 
 const BASE = (process.env.BASE_URL ?? 'http://localhost:4200').replace(/\/$/, '');
 const API = (process.env.API_URL ?? 'http://localhost:3000').replace(/\/$/, '');
+/**
+ * ⚠️ Known horizontal overflow, listed by route in scripts/overflow-baseline.json.
+ *
+ * The check below was added on 14 October and found three pre-existing
+ * defects on top of the two it was written for. They are real and they are
+ * named rather than silenced: a route not in this file fails, and a route in
+ * it prints a reminder every run. The list may only shrink.
+ *
+ * This is a ratchet, not an allowlist — the distinction this repository keeps
+ * arriving at is that an allowlist absorbs new defects quietly, and a ratchet
+ * refuses them while admitting the ones already shipped.
+ */
+const OVERFLOW_BASELINE = JSON.parse(
+  readFileSync(new URL('./overflow-baseline.json', import.meta.url), 'utf8'),
+);
+
 const WIDTH = Number(process.env.VIEWPORT_WIDTH ?? 412);
 
 const PUBLIC_PAGES = [
@@ -251,6 +267,80 @@ async function auditPage(page, path, { close = true } = {}) {
     if (prev && lvl > prev + 1) skips.push(`${h.tag} after H${prev} ("${h.text}")`);
     prev = lvl;
   }
+  /**
+   * ⚠️ HORIZONTAL OVERFLOW. CLAUDE.md requires checking for "horizontal page
+   * scroll ... and text that becomes a single line hundreds of characters
+   * wide" at every width, and nothing in this repository did. mobile-drive.mjs
+   * is a regression suite for five specific reported bugs; it never measures
+   * width.
+   *
+   * Two defects reached a phone on 14 October, both from the same cause -
+   * `:where(button)` sets `white-space: nowrap`, which is right for a short
+   * label and wrong for a button wrapping prose. "Remove from shortlist" spilled
+   * past its own borders, and the archive card's header clipped at both edges:
+   * the state pill read "TING", the title lost its first word.
+   *
+   * Measured per element, not just on the document, because neither of those
+   * produced a page-level scrollbar - the overflow was clipped inside a card.
+   * A document-level check would have passed on both.
+   */
+  const overflow = await page.evaluate(() => {
+    const docScroll = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+    const clipped = [];
+    for (const el of document.querySelectorAll('body *')) {
+      if (!el.getClientRects().length) continue;
+      const cs = getComputedStyle(el);
+      if (cs.display === 'contents') continue;
+      // Deliberately scrollable regions opt out by saying so.
+      if (/auto|scroll/.test(cs.overflowX)) continue;
+      // ⚠️ The visually-hidden pattern is a 1px box that deliberately clips its
+      // own text so a screen reader still reads it. Reporting it was this
+      // check's first false positive: surveys.ts's <caption class="sr-only">
+      // "spilled" 604px, which is the pattern working. Detected by shape
+      // rather than class name, so a differently-named utility is covered too.
+      const r = el.getBoundingClientRect();
+      if (r.width <= 1 || r.height <= 1) continue;
+      const spill = el.scrollWidth - el.clientWidth;
+      if (spill <= 1) continue;
+      // Only leaf-ish text: a wrapper inherits its child's spill and would
+      // report the same defect several times up the tree.
+      if (!el.textContent.trim()) continue;
+      if ([...el.children].some((c) => c.scrollWidth - c.clientWidth > 1)) continue;
+      clipped.push({
+        tag: el.tagName.toLowerCase(),
+        cls: (el.getAttribute('class') || '').split(/\s+/).filter(Boolean).slice(0, 2).join('.'),
+        spill,
+        text: el.textContent.trim().slice(0, 48),
+      });
+    }
+    return { docScroll, clipped: clipped.slice(0, 6) };
+  });
+  const known = OVERFLOW_BASELINE[path];
+  if (overflow.docScroll > 1) {
+    if (known?.docScroll >= overflow.docScroll) {
+      console.log(`  ⏳ known: scrolls sideways by ${overflow.docScroll}px — ${known.why}`);
+    } else {
+      console.log(`  ⚠️  the page scrolls sideways by ${overflow.docScroll}px`);
+      failures.push(`${path}: horizontal page scroll of ${overflow.docScroll}px at ${WIDTH}px`);
+    }
+  }
+  if (overflow.clipped.length) {
+    const allowed = new Set(known?.elements ?? []);
+    const fresh = overflow.clipped.filter((c) => !allowed.has(c.cls || c.tag));
+    for (const c of overflow.clipped) {
+      const tag = fresh.includes(c) ? '⚠️  clipped' : '⏳ known';
+      console.log(`  ${tag}: <${c.tag}${c.cls ? '.' + c.cls : ''}> spills ${c.spill}px — "${c.text}"`);
+    }
+    if (fresh.length) {
+      failures.push(
+        `${path}: ${fresh.length} element(s) wider than their box at ${WIDTH}px `
+        + `(${fresh.map((c) => c.cls || c.tag).join(', ')})`,
+      );
+    }
+  } else if (overflow.docScroll <= 1) {
+    console.log('  ✅ nothing overflows its box, and the page does not scroll sideways');
+  }
+
   console.log('  headings:', heads.map((h) => h.tag).join(' → ') || '(none)');
   if (!heads.length || heads[0].tag !== 'H1') failures.push(`${path}: first visible heading is ${heads[0]?.tag ?? 'none'}, not H1`);
   if (skips.length) {

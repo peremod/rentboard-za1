@@ -1,0 +1,17 @@
+{
+  "//": "Horizontal overflow found by a11y-drive.mjs and NOT yet fixed. Each entry is a real defect at 412px, named so it cannot be forgotten. The list may only shrink: a11y-drive fails on anything not listed here, and prints a reminder for every entry that is still present. Delete an entry when you fix it.",
+  "/": {
+    "elements": ["app-ad-slot"],
+    "why": "The advert slot is 4px wider than its column on the landing page. Small, public, and the only one of these three on a page a tenant sees."
+  },
+  "/admin/advertising": {
+    "docScroll": 63,
+    "elements": ["main", "portal-main", "dash-section"],
+    "why": "The rate-card table forces the whole page 63px wide, so the admin page scrolls sideways on a phone. The widest of the three."
+  },
+  "/admin/analytics": {
+    "docScroll": 2,
+    "elements": ["main", "portal-main", "dash-section"],
+    "why": "A stat row overflows by 18px, pushing the page 2px."
+  }
+}

@@ -326,6 +326,13 @@ import { Loading } from '../../../shared/components/loading/loading';
       border: 1px solid var(--border); background: var(--white); cursor: pointer;
       color: var(--ink);
       font-size: .78rem; font-weight: 600;
+      /* ⚠️ :where(button) sets white-space:nowrap. With flex:1 and min-width:90px
+         below, two buttons share the row at phone width and "Remove from
+         shortlist" cannot wrap - so it rendered wider than its own box, the
+         text spilling past both borders. Same root cause as the archive card
+         header: a global nowrap meant for short labels, inherited by a control
+         whose label is a sentence. */
+      white-space: normal; line-height: 1.25; text-align: center;
     }
     .viewing {
       display: grid; gap: .2rem; margin: .5rem 0;

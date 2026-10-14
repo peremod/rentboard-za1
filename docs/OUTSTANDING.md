@@ -4248,6 +4248,68 @@ default instead. The real proof is the static gate plus the token arithmetic:
 Driving the actual card needs a landlord account with a shortlisted applicant,
 which this container has no path to.
 
+## 64. One global `nowrap`, two squashed controls, and no check for width at all
+
+Reported from a live phone on 14 October: **"Remove from shortlist"** rendered
+wider than its own button, the text spilling past both borders; and the past
+letting card's header was clipped at both edges — the state pill read `TING`,
+the room title lost its first word, `Reviews still open` read `ill open`.
+
+**One cause.** `styles.scss` declares `:where(button) { white-space: nowrap }`.
+Right for a short label. Both of these are buttons whose content is prose:
+
+* `.applicant-card__actions button` — at ≤480px the mobile rule gives it
+  `flex: 1; min-width: 90px`, two to a row, and a label that cannot wrap
+  overflows its box.
+* `.arc-row__head` — the whole archive card header is a `<button>`, so `nowrap`
+  cascaded into a room title and five facts.
+
+Fixed with `white-space: normal` on both, plus `overflow-wrap: anywhere` on the
+title, because a single long unbroken word cannot be wrapped by `white-space`
+alone.
+
+### And nothing in this repository measured width
+
+CLAUDE.md requires checking for *"horizontal page scroll … and text that
+becomes a single line hundreds of characters wide"* at 360/390/768/1280.
+`mobile-drive.mjs` is a regression suite for five specific reported bugs and
+never measures width; no other drive did either. Both defects were therefore
+invisible to every check while being obvious to anyone holding the phone.
+
+`a11y-drive.mjs` now measures it on all 40 pages it already signs in and
+visits. **Per element, not just per document** — neither of these produced a
+page-level scrollbar, because the overflow was clipped inside a card, so a
+document-level check would have passed on both.
+
+It found **three more real defects** immediately, none of which anything had
+ever reported:
+
+| route | |
+|---|---|
+| `/` | the advert slot is 4px wider than its column — public, a tenant sees it |
+| `/admin/advertising` | the rate card forces the page **63px** wide; it scrolls sideways on a phone |
+| `/admin/analytics` | a stat row overflows 18px, pushing the page 2px |
+
+Those are admitted in `scripts/overflow-baseline.json`, by route, with a
+sentence each on what is wrong — a **ratchet, not an allowlist**: a route not
+listed fails, a listed one prints `⏳ known` every run, and the list may only
+shrink.
+
+⚠️ **Its first finding was a false positive**, and worth recording: the
+visually-hidden pattern is a 1px box that deliberately clips its own text, so
+`surveys.ts`'s `<caption class="sr-only">` "spilled" 604px. Exempted by shape
+— a box 1px or smaller — rather than by class name, so a differently-named
+utility is covered too.
+
+⚠️ **AND IT DOES NOT COVER THE TWO CARDS THAT WERE REPORTED.** Proven, not
+assumed: the archive fix was reverted, the drive re-run, and it passed. The
+drive's account has no past letting with a long room title and no shortlisted
+applicant, so neither card renders — a check cannot see a subject the fixture
+never creates, which is §56's rule a third time. The gate is real (three
+findings prove it can fail) and its coverage of these two specific cards is
+**nil**. Giving the drive a long-titled archived letting and a shortlisted
+applicant is the work that would close it, and it is not done.
+
 ## How to check the whole thing still works
 
 ```bash

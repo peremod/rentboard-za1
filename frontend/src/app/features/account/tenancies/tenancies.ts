@@ -368,7 +368,20 @@ import { Loading } from '../../../shared/components/loading/loading';
       background: none; border: none; cursor: pointer;
     }
     .arc-row__head:hover { background: var(--cream2); color: var(--ink); }
-    .arc-row__title { font-weight: 700; font-size: .95rem; }
+    /* ⚠️ white-space, because this header is a BUTTON. :where(button) sets
+       white-space:nowrap - right for a short label, wrong for a control that
+       wraps a room title and five facts. A title like "A private room near
+       main road and mall is 5 minutes away" then rendered as one unbreakable
+       line wider than the card, clipped at both edges on a phone: the state
+       pill read "TING", the title lost its first word, and "Reviews still
+       open" read "ill open". Reported from a live screen on 14 October.
+       overflow-wrap handles the other half - a single long unbroken word
+       cannot be wrapped by white-space alone. */
+    .arc-row__head, .arc-row__head * { white-space: normal; }
+    .arc-row__title {
+      font-weight: 700; font-size: .95rem;
+      overflow-wrap: anywhere; line-height: 1.35;
+    }
     .arc-row__meta {
       display: flex; flex-wrap: wrap; align-items: center; gap: .45rem;
       font-size: .78rem; color: var(--slate); line-height: 1.5;
