@@ -1643,6 +1643,23 @@ HEADER. The navbar renders on those routes, so app-logo resolves to three hosts
 and index 0 is the header's. MA is #C4522C on /auth/login was true of a
 wordmark in the navbar. The route was in the loop; the subject never was."
 
+tag_if_missing "v1.143.0" "bf22c516e07aad52f254696e126dc88328e65331" "2026-10-15T04:35:58+00:00" "v1.143.0 - a letting that falls through closes its application
+
+Cancelling archived the tenancy and put the room back on the board, and left
+the application accepted with the letting cycle unmoved. Applications are
+unique per room, tenant and cycle, so the room was live and refused everyone
+who had ever applied to it - the accepted tenant with You have already applied
+for this room, and everyone the acceptance had auto-rejected along with them.
+
+And NoticeRouter returned as soon as an email had been handed off, so no notice
+row was written for anybody with an email address, under a screen that says it
+is the record. Email does not throw when unconfigured, so those people were
+told nothing anywhere. That fix then exposed an invisible button: Mark all as
+read had never rendered, and measures 1.00:1.
+
+A letting that never started is no longer counted as a past letting, and
+notices open one at a time instead of spilling past the edge of a phone."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
