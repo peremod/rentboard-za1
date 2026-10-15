@@ -2357,6 +2357,281 @@ console.log('\n── 15c. The notice on both screens ────────�
   await lPage.close();
 }
 
+// ══ 16. A letting that fell through reopens the ROOM and the APPLICATIONS ══
+//
+// Reported 15 October: an active listing with a shortlisted applicant, and a
+// tenant who had been told nothing. Two separate faults underneath, both of
+// this codebase's usual kind.
+console.log('\n── 16. When a letting falls through ─────────────────────────');
+
+{
+  const stamp = Date.now() + 24000;
+  const landlord = await registerUser(API, 'LANDLORD', stamp);
+  const tenant = await registerUser(API, 'TENANT', stamp + 1);
+  const other = await registerUser(API, 'TENANT', stamp + 2);
+  for (const u of [landlord, tenant, other]) {
+    await apiCall(API, 'POST', '/api/users/me/walkthrough-seen', {}, u.token);
+  }
+  const room = await apiCall(API, 'POST', '/api/rooms', {
+    roomType: 'shared_house', title: `Fell-through room ${stamp}`,
+    description: 'A clean back room on a quiet street, with its own entrance and a shared tap.',
+    rentCents: 200000, province: 'Gauteng', city: 'Pretoria',
+    locationDisplay: 'Sunnyside, Pretoria',
+    availableFrom: new Date().toISOString().slice(0, 10),
+  }, landlord.token);
+  const roomId = room.body.id;
+  dbQuery(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${roomId}'`);
+
+  const a1 = await apiCall(API, 'POST', '/api/applications',
+    { roomId, coverNote: 'I can move in on the first.' }, tenant.token);
+  const a2 = await apiCall(API, 'POST', '/api/applications',
+    { roomId, coverNote: 'I am also interested.' }, other.token);
+
+  await apiCall(API, 'POST', `/api/applications/${a1.body.id}/accept`, {}, landlord.token);
+  const tenancyId = await tenancyFor(a1.body.id);
+
+  // The letting falls through before anybody moves in.
+  const cancelled = await apiCall(API, 'POST', `/api/tenancies/${tenancyId}/cancel`,
+    { reason: 'fell_through' }, landlord.token);
+  check(cancelled.status < 300, `the landlord calls off a letting that never started (${cancelled.status})`);
+
+  const roomNow = dbQuery(`SELECT status FROM rooms WHERE id = '${roomId}'`).trim();
+  check(roomNow === 'active', `the room goes back on the board (got '${roomNow}')`);
+
+  /**
+   * ⚠️ THE APPLICATION HAS TO END WITH THE LETTING.
+   *
+   * It stayed `accepted` and un-archived: the tenant's list showed an
+   * acceptance for a letting that had fallen through, the landlord's card
+   * offered no action because the action row is hidden on an accepted
+   * application, and the row held the cycle slot.
+   */
+  const closed = dbQuery(
+    `SELECT status, "archivedAt" IS NOT NULL FROM applications WHERE id = '${a1.body.id}'`,
+  ).trim();
+  check(
+    closed === 'rejected|t',
+    `…and the application ends with it, as rejected since the landlord called it off (got '${closed}')`,
+  );
+
+  /**
+   * ⚠️ THE CONSEQUENCE NOBODY SAW: a room on the board that refuses everyone.
+   *
+   * Applications are unique per (roomId, tenantId, cycle) and cancelling never
+   * moved the cycle, so the accepted tenant got "You have already applied for
+   * this room" and every applicant autoRejectOthers had rejected was locked
+   * out of a room that was live again.
+   */
+  const reapply = await apiCall(API, 'POST', '/api/applications',
+    { roomId, coverNote: 'Still keen, if it is free again.' }, tenant.token);
+  check(reapply.status < 300, `the same tenant can apply again to the reopened room (${reapply.status})`);
+
+  const otherReapply = await apiCall(API, 'POST', '/api/applications',
+    { roomId, coverNote: 'Me too.' }, other.token);
+  check(
+    otherReapply.status < 300,
+    `…and so can the applicant the acceptance had auto-rejected (${otherReapply.status})`,
+  );
+  // Not silently reinstated — they APPLIED again. undoAccept is the 30-minute
+  // path for reinstating, and its own comment says why doing it days later is
+  // worse than making somebody choose.
+  const oldOther = dbQuery(`SELECT status FROM applications WHERE id = '${a2.body.id}'`).trim();
+  check(
+    oldOther === 'rejected',
+    `…while their old row stays rejected rather than being silently reinstated (got '${oldOther}')`,
+  );
+
+  // ── the shortlist the owner reported, end to end
+  const sl = await apiCall(API, 'POST', `/api/applications/${reapply.body.id}/shortlist`, {}, landlord.token);
+  check(sl.status < 300, `the landlord shortlists the new application (${sl.status})`);
+
+  const inbox = await apiCall(API, 'GET', '/api/tenant-inbox', null, tenant.token);
+  check(
+    (inbox.body?.items ?? []).some((i) => i.kind === 'application_shortlisted'),
+    'the TENANT is told a landlord wants to meet them',
+  );
+
+  /**
+   * ⚠️ AND IT IS IN THE RECORD, not only derived on a dashboard.
+   *
+   * `NoticeRouter.deliver` returned as soon as an email had been handed off,
+   * so a person with an email address got NO notice row — and
+   * `/account/notices`, which says on screen "This screen is the record —
+   * nothing is sent anywhere else", was empty for almost every account.
+   *
+   * Worse, `NotificationsService.send` does not throw when email is
+   * unconfigured: it logs "[email skipped — no API key]" and resolves. So the
+   * hand-off "succeeded", no row was written, and the person was told nothing
+   * anywhere. This tenant HAS an email — that is the case that was broken.
+   */
+  const notices = await apiCall(API, 'GET', '/api/notices', null, tenant.token);
+  const kinds = (notices.body ?? []).map((n) => n.kind);
+  check(
+    kinds.includes('shortlisted'),
+    `…and it is written into their notices, which the screen calls the record (${kinds.join(', ') || 'empty'})`,
+  );
+
+  // ── the other half of the same split: when the TENANT calls it off
+  const b1 = await apiCall(API, 'POST', '/api/applications',
+    { roomId: (await (async () => {
+      const r2 = await apiCall(API, 'POST', '/api/rooms', {
+        roomType: 'shared_house', title: `Second fell-through ${stamp}`,
+        description: 'A clean back room on a quiet street, with its own entrance and a shared tap.',
+        rentCents: 190000, province: 'Gauteng', city: 'Pretoria',
+        locationDisplay: 'Sunnyside, Pretoria',
+        availableFrom: new Date().toISOString().slice(0, 10),
+      }, landlord.token);
+      dbQuery(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${r2.body.id}'`);
+      return r2.body.id;
+    })()), coverNote: 'I would like this one.' }, tenant.token);
+  await apiCall(API, 'POST', `/api/applications/${b1.body.id}/accept`, {}, landlord.token);
+  const t2 = await tenancyFor(b1.body.id);
+  const byTenant = await apiCall(API, 'POST', `/api/tenancies/${t2}/cancel`,
+    { reason: 'changed_mind' }, tenant.token);
+  check(byTenant.status < 300, `the TENANT can call one off too (${byTenant.status})`);
+  const withdrawn = dbQuery(`SELECT status FROM applications WHERE id = '${b1.body.id}'`).trim();
+  check(
+    withdrawn === 'withdrawn',
+    `…and then it reads as withdrawn, not rejected — the vocabulary records who ended it (got '${withdrawn}')`,
+  );
+}
+
+// ── 16b. The two screens that were reported, at 390px ────────────────────
+console.log('\n── 16b. The archive and the notices, on screen ──────────────');
+
+{
+  const stamp = Date.now() + 25000;
+  const landlord = await registerUser(API, 'LANDLORD', stamp);
+  const tenant = await registerUser(API, 'TENANT', stamp + 1);
+  for (const u of [landlord, tenant]) {
+    await apiCall(API, 'POST', '/api/users/me/walkthrough-seen', {}, u.token);
+  }
+
+  /** A room, an application from this tenant, accepted. Returns the tenancy. */
+  const acceptedLetting = async (title) => {
+    const room = await apiCall(API, 'POST', '/api/rooms', {
+      roomType: 'shared_house', title,
+      description: 'A clean back room on a quiet street, with its own entrance and a shared tap.',
+      rentCents: 200000, province: 'Gauteng', city: 'Pretoria',
+      locationDisplay: 'Sunnyside, Pretoria',
+      availableFrom: new Date().toISOString().slice(0, 10),
+    }, landlord.token);
+    dbQuery(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${room.body.id}'`);
+    const app = await apiCall(API, 'POST', '/api/applications',
+      { roomId: room.body.id, coverNote: 'I can move in on the first.' }, tenant.token);
+    await apiCall(API, 'POST', `/api/applications/${app.body.id}/accept`, {}, landlord.token);
+    return { roomId: room.body.id, tenancyId: await tenancyFor(app.body.id) };
+  };
+
+  // One letting that ran and ended, one that never started. The same tenant,
+  // because the bug was a count that added the two together.
+  const lived = await acceptedLetting(`Lived-in room ${stamp}`);
+  await apiCall(API, 'POST', `/api/tenancies/${lived.tenancyId}/confirm-start`,
+    { startDate: new Date().toISOString().slice(0, 10) }, landlord.token);
+  await apiCall(API, 'POST', `/api/tenancies/${lived.tenancyId}/end`,
+    { endDate: new Date().toISOString().slice(0, 10), reason: 'moved_out' }, landlord.token);
+
+  const fell = await acceptedLetting(`Called-off room ${stamp}`);
+  await apiCall(API, 'POST', `/api/tenancies/${fell.tenancyId}/cancel`,
+    { reason: 'fell_through' }, landlord.token);
+
+  /**
+   * ⚠️ A stale bundle makes every UI check below meaningless.
+   *
+   * `ng serve` keeps serving the PREVIOUS build when a rebuild fails, and this
+   * drive passed 297 checks against a screen whose source no longer compiled —
+   * a false green produced while deliberately reintroducing a bug to prove
+   * these very checks could fail. signIn() looks for the overlay on the login
+   * page; a route that fails to compile lazily shows it later, so it is
+   * checked again here, where the screens under test actually load.
+   */
+  const freshBundle = async (p, where) => {
+    if (await p.locator('vite-error-overlay').count()) {
+      bad(`${where}: the dev server is showing a build error — every check on this screen would be measuring the PREVIOUS bundle`);
+      return false;
+    }
+    return true;
+  };
+
+  const page = await signIn(browser, WEB, tenant.email, PASSWORD, { width: 390, height: 1200 });
+  await page.goto(`${WEB}/account/tenancies`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2500);
+  await freshBundle(page, '/account/tenancies');
+  if (await page.locator('.cookie-notice__ok').count()) {
+    await page.locator('.cookie-notice__ok').click();
+    await page.waitForTimeout(400);
+  }
+  const archive = await page.locator('main, body').first()
+    .textContent().then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+
+  // Both records are still there — the fix is a heading, not a deletion.
+  check((await page.locator('.arc-row').count()) === 2, 'both records are kept on the archive screen');
+  check(
+    /Past lettings 1/.test(archive),
+    `…but only ONE of them is a past letting ("${(archive.match(/Past lettings \d+/) ?? ['none'])[0]}")`,
+  );
+  check(
+    /Lettings that never started/i.test(archive),
+    '…and the one that was called off has its own section, saying what it is',
+  );
+  check(
+    /no rent was ever owed/i.test(archive),
+    '…which says in as many words that no rent was owed on it',
+  );
+
+  // ── the notices screen
+  await page.goto(`${WEB}/account/notices`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2000);
+  await freshBundle(page, '/account/notices');
+  const heads = await page.locator('.notice-head').count();
+  check(heads >= 1, `the tenant has notices to read (${heads})`);
+  check(
+    (await page.locator('.notice-detail').count()) === 0,
+    '…collapsed, not a screen of open panels',
+  );
+  // 44px, WCAG 2.5.8 — the whole headline is the control.
+  const headBoxes = await page.locator('.notice-head')
+    .evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+  check(
+    headBoxes.length > 0 && headBoxes.every((h) => h >= 44),
+    `…each tappable at 44px (${headBoxes.map((h) => Math.round(h)).join(', ')})`,
+  );
+
+  if (heads) {
+    await page.locator('.notice-head').first().click();
+    await page.waitForTimeout(500);
+    check(
+      (await page.locator('.notice-detail').count()) === 1,
+      '…and one opens on a tap, one at a time',
+    );
+  }
+
+  /**
+   * ⚠️ Measured per element, not just on the document. The reported overflow
+   * was text running past the edge INSIDE a row, which does not necessarily
+   * produce a page-level scrollbar — the same reason a11y-drive measures
+   * every box rather than the window.
+   */
+  const spill = await page.evaluate(() => {
+    const out = [];
+    for (const el of document.querySelectorAll('.notice, .notice *')) {
+      if (!el.getClientRects().length) continue;
+      const cs = getComputedStyle(el);
+      if (/auto|scroll/.test(cs.overflowX) || cs.display === 'contents') continue;
+      const over = el.scrollWidth - el.clientWidth;
+      if (over > 1) out.push(`${el.className || el.tagName} +${over}px`);
+    }
+    return {
+      inside: out.slice(0, 4),
+      doc: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+  check(spill.inside.length === 0, `nothing in a notice is wider than its box at 390px (${spill.inside.join(', ') || 'clean'})`);
+  check(spill.doc <= 1, `…and the notices screen does not scroll sideways (${spill.doc}px)`);
+
+  await page.close();
+}
+
 console.log('\n── What section 13 does NOT prove ───────────────────────────');
 console.log('  ⚠️  Rent reminders keep running on a tenancy under elapsed');
 console.log('      notice, and that is deliberate rather than unhandled: if');

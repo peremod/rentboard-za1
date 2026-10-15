@@ -4687,6 +4687,100 @@ than its claim — and now one pointed at the right PAGE and the wrong ELEMENT.
 title's own margin gives, with the defect fully reintroduced. The two states are
 5px and 12px, so the line sits at 9px.
 
+## 71. A room on the board that refused everyone, and a record nobody wrote
+
+Three things reported from a live portal on 15 October. Two of them turned out
+to be the same shape as every other defect in this file.
+
+### 🔴 A letting that fell through reopened the room and nothing else
+
+`cancel()` did one half of its job: it archived the tenancy and put the room
+back to `active`, with a long comment explaining why that is right. The
+application it belonged to stayed **`accepted` and un-archived**, and the
+letting cycle never moved.
+
+So, reproduced exactly:
+
+* the tenant's own list showed an acceptance for a letting that had fallen
+  through, while the inbox row for it was suppressed — one state, two readers,
+  disagreeing;
+* the landlord's applicant card offered no action at all, because the action
+  row is hidden on an accepted application;
+* and **nobody could apply.** Applications are unique per
+  `(roomId, tenantId, cycle)`. The accepted tenant got *"You have already
+  applied for this room"*, and every applicant `autoRejectOthers` had rejected
+  when the acceptance happened was locked out too. A listing on the board,
+  taking no applications from anybody who had ever wanted it, with nothing on
+  either screen saying so.
+
+The cycle now ends with the letting, exactly as `relist()` ends one: the
+application closes as `withdrawn` or `rejected` depending on **who** called it
+off (the same split `recordOutcome` uses for a viewing), what is left of the
+cycle is archived, and the counter moves. Nobody is silently reinstated —
+`undoAccept` is the 30-minute path for that — but everyone can apply again,
+which is the honest state of a room that is genuinely free.
+
+### 🔴 The notices screen was empty for almost every account
+
+The screen says, on itself: *"This screen is the record — nothing is sent
+anywhere else."* `NoticeRouter.deliver` **returned as soon as an email had
+been handed off**, so no notice row was written for anybody with an email
+address.
+
+⚠️ And `NotificationsService.send` does **not throw** when email is
+unconfigured: with no `RESEND_API_KEY` it logs `[email skipped — no API key]`,
+records a failed `EmailLog` and resolves. So the hand-off "succeeded", the row
+was skipped, and the person was told **nothing at all, anywhere**. That is the
+owner's report — a shortlisted tenant who was never notified — and it
+reproduced with one shortlist and an empty `GET /api/notices`.
+
+The row is now always written; email is an extra channel, never a replacement
+for the record.
+
+### ⚠️ What that fix then exposed: an invisible button
+
+The "Mark all as read" control only renders when something is unread — and
+nothing was ever unread, because nothing was written. The moment notices
+started existing, `a11y-drive` measured it at **1.00:1**: it carries
+`.btn-ghost`, which is the navbar's (cream at 75% on transparent, right on the
+dark header, invisible on a cream page). `.btn-ghost-light` has existed all
+along. `lease-documents.ts` had the same latent mistake and is fixed with it.
+
+A control nobody could see, behind a row nobody wrote, under a screen that
+promised to be the record.
+
+### A letting that never started is not a past letting
+
+The archive counted both kinds together, so a tenant who had rented one room
+read "Past lettings 2". Both records are kept — losing one would be the easy
+wrong fix — but the called-off one now sits under **"Lettings that never
+started"**, with its own count and a line saying no rent was ever owed on it.
+One row template serves both sections; two copies of two hundred lines is how
+the portal nav came to be defined six times.
+
+### Notices open one at a time
+
+Every notice rendered fully expanded, with body text running past the edge of a
+phone. The head is now a real `<button>` with `aria-expanded` and
+`aria-controls` (44px tall), the body opens on a tap, opening marks it read —
+and `min-width: 0` on the growing flex child is what actually stops the spill,
+the same property that was pushing the room page sideways by 171px.
+
+### Proven by reintroduction, both ways
+
+* Backend reverted → 7 checks fail, among them *"the same tenant can apply
+  again to the reopened room (409)"* and *"…and it is written into their
+  notices (empty)"*.
+* Frontend reverted → 5 fail, among them *"only ONE of them is a past letting
+  ('Past lettings 2')"* and *"collapsed, not a screen of open panels"*.
+
+⚠️ **The first frontend negative was a false green**, and it is worth recording
+why: my reverted code did not compile, `ng serve` kept serving the previous
+bundle, and the drive reported 297 passed against a screen whose source was
+broken — while deliberately proving those checks could fail. The drive now
+looks for the build-error overlay on each screen it measures, not only at
+sign-in, because a stale bundle makes every UI check in the file meaningless.
+
 ## How to check the whole thing still works
 
 ```bash

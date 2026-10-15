@@ -83,20 +83,31 @@ export class NoticeRouter {
     notice: NoticeInput,
     sendEmail?: (email: string) => Promise<unknown>,
   ): Promise<void> {
-    if (to.email && sendEmail) {
-      try {
-        await sendEmail(to.email);
-        return;
-      } catch (e) {
-        // Email was possible and failed. Fall through to a notice rather than
-        // losing it — a bounced address is exactly when the in-app copy matters.
-        this.log.warn(`email failed for user ${to.id} (${notice.kind}), falling back: ${String(e)}`);
-      }
-    }
-
-    // Written before the WhatsApp attempt, so the message exists even if that
-    // attempt throws. This is the channel that cannot fail for reasons outside
-    // our control.
+    /**
+     * ⚠️ THE ROW IS ALWAYS WRITTEN. Email is an EXTRA channel, never a
+     * replacement for the record.
+     *
+     * This used to `return` as soon as an email had been handed off, so a
+     * person with an email address got no notice row at all — and
+     * `/account/notices`, whose own screen says "This screen is the record —
+     * nothing is sent anywhere else", was empty for almost every account on
+     * the platform.
+     *
+     * ⚠️ Worse than a missing copy, because `NotificationsService.send` does
+     * NOT throw when email is unconfigured: with no `RESEND_API_KEY` it logs
+     * "[email skipped — no API key]", records a failed EmailLog and resolves.
+     * So the hand-off "succeeded", the row was skipped, and the person was
+     * told nothing at all, anywhere. Reported 15 October as a shortlisted
+     * tenant who was never notified; reproduced with one shortlist and an
+     * empty `GET /api/notices`.
+     *
+     * This is the same defect this codebase keeps producing in a new place: a
+     * record nobody writes, behind a screen that promises to be the record.
+     *
+     * Written BEFORE either send, so the message exists even if an attempt
+     * throws. This is the channel that cannot fail for reasons outside our
+     * control.
+     */
     const row = await this.prisma.notice.create({
       data: {
         userId: to.id,
@@ -106,6 +117,16 @@ export class NoticeRouter {
         link: notice.link ?? null,
       },
     });
+
+    // Email, when there is an address and this notice has a template. The
+    // outcome does not change what is on screen: the notice is already there.
+    if (to.email && sendEmail) {
+      try {
+        await sendEmail(to.email);
+      } catch (e) {
+        this.log.warn(`email failed for user ${to.id} (${notice.kind}): ${String(e)}`);
+      }
+    }
 
     // Only to a number the person confirmed is theirs. Messaging an unverified
     // number is messaging whoever actually holds it.
