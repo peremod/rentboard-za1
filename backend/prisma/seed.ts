@@ -19,7 +19,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { appEnv } from '../src/config/environment';
 import { HOUSE_ADS, HOUSE_ADVERTISER, HOUSE_ADVERTISER_ID, houseAdRow } from './house-ads';
-import { LANDLORD_PAIN_SURVEY, microQuestion } from './surveys';
+import { ALL_SURVEYS, microQuestion } from './surveys';
 
 const prisma = new PrismaClient();
 const SALT_ROUNDS = 12;
@@ -160,30 +160,31 @@ async function seedHouseAds() {
  * belongs on the script that gets pointed at production.
  */
 async function seedSurveys() {
-  // Throws if the micro question is missing or ambiguous, here rather than at
-  // the moment a landlord marks a room let and the prompt has nothing to ask.
-  microQuestion();
+  // Both surveys, in one loop. Two copies of this block is how the tenant one
+  // would be the one that goes unseeded after a change — the same reason the
+  // content lives in prisma/surveys.ts rather than inline.
+  for (const survey of ALL_SURVEYS) {
+    // Throws if the contextual question is missing or ambiguous, here rather
+    // than at the moment somebody is shown a prompt with nothing to ask.
+    microQuestion(survey.questions);
 
-  await prisma.survey.upsert({
-    where: { slug: LANDLORD_PAIN_SURVEY.slug },
-    update: {
-      title: LANDLORD_PAIN_SURVEY.title,
-      intro: LANDLORD_PAIN_SURVEY.intro,
-      questions: LANDLORD_PAIN_SURVEY.questions as unknown as Prisma.InputJsonValue,
-      audience: LANDLORD_PAIN_SURVEY.audience as unknown as Prisma.InputJsonValue,
-      active: LANDLORD_PAIN_SURVEY.active,
-    },
-    create: {
-      slug: LANDLORD_PAIN_SURVEY.slug,
-      title: LANDLORD_PAIN_SURVEY.title,
-      intro: LANDLORD_PAIN_SURVEY.intro,
-      questions: LANDLORD_PAIN_SURVEY.questions as unknown as Prisma.InputJsonValue,
-      audience: LANDLORD_PAIN_SURVEY.audience as unknown as Prisma.InputJsonValue,
-      active: LANDLORD_PAIN_SURVEY.active,
-    },
-  });
-
-  console.log(`Seeded 1 survey (${LANDLORD_PAIN_SURVEY.questions.length} questions).`);
+    const data = {
+      title: survey.title,
+      intro: survey.intro,
+      questions: survey.questions as unknown as Prisma.InputJsonValue,
+      audience: survey.audience as unknown as Prisma.InputJsonValue,
+      active: survey.active,
+    };
+    await prisma.survey.upsert({
+      where: { slug_version: { slug: survey.slug, version: survey.version } },
+      update: data,
+      create: { slug: survey.slug, version: survey.version, ...data },
+    });
+  }
+  console.log(
+    `Seeded ${ALL_SURVEYS.length} survey(s): `
+    + ALL_SURVEYS.map((x) => `${x.slug} v${x.version} (${x.questions.length}q, ${x.audience.role})`).join(', '),
+  );
 }
 
 /**

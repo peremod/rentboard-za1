@@ -15,8 +15,6 @@ import { LandlordCalendar } from '../../../shared/components/landlord-calendar/l
 import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
 import { DisputePanel } from '../../../shared/components/dispute-panel/dispute-panel';
 import { ReferralPanel } from '../../../shared/components/referral-panel/referral-panel';
-import { SurveyPrompt } from '../../../shared/components/survey-prompt/survey-prompt';
-import { SurveyService } from '../../../core/services/survey';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/tenancy-lifecycle';
 import { Loading } from '../../../shared/components/loading/loading';
@@ -31,7 +29,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-landlord-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel, ReferralPanel, SurveyPrompt, LandlordInboxPanel, LandlordCalendar, ScreenHint, TenancyLifecycle, Loading],
+  imports: [RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel, ReferralPanel, LandlordInboxPanel, LandlordCalendar, ScreenHint, TenancyLifecycle, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-dashboard" heading="This is your whole letting, on one screen">
@@ -124,24 +122,17 @@ import { Loading } from '../../../shared/components/loading/loading';
 
       <app-review-prompt/>
 
-      <!-- The survey. Two shapes, never both at once.
+      <!-- ⚠️ THE SURVEY CARD IS GONE FROM HERE — Phase 9a.
+           Both shapes used to render on this screen: the micro question after
+           marking a room let, and the full seven-question card otherwise. The
+           owner reported the obvious consequence — a prompt on the dashboard
+           every time, for a thing they had already been asked.
 
-           After marking a room let, one question — the moment a landlord has
-           just dealt with a tenant is when "what is the most stressful part"
-           is a memory rather than a guess, and someone who has just finished a
-           task will answer one question and close anything longer.
-
-           Otherwise the full set, as a card they can skip. "Not now" is
-           honoured for 30 days by the server; nothing is remembered in this
-           browser, so skipping on a phone does not mean being asked again on a
-           laptop an hour later. -->
-      @if (justLetARoom()) {
-        <app-survey-prompt mode="micro" [headingLevel]="2" (closed)="justLetARoom.set(false)"/>
-      } @else {
-        <!-- headingLevel 2: this card sits directly under the page h1, not
-             inside a section. -->
-        <app-survey-prompt mode="full" [headingLevel]="2"/>
-      }
+           The questions are asked once now, at /welcome, straight after the
+           account is made. Somebody who skipped or stopped halfway gets ONE
+           row in the task inbox above, which goes away when they finish it or
+           say not now. A dashboard is where you come to do your work; it is
+           not a place to be asked the same question weekly. -->
 
       <!-- Beside the reviews, because they are the same moment in a
            person's life — the letting is over — and two different things to
@@ -338,19 +329,8 @@ export class LandlordDashboard implements OnInit {
   private roomsService = inject(RoomsService);
   private router = inject(Router);
   private dialogs = inject(DialogService);
-  private surveys = inject(SurveyService);
   private badges = inject(PortalBadgesService);
   private applications = inject(ApplicationsService);
-
-  /**
-   * True for the one render after a room is marked let, which swaps the survey
-   * card from the full set to the single contextual question.
-   *
-   * Not persisted anywhere: it is about this moment on this screen, and a flag
-   * that survived a reload would ask the contextual question to someone who
-   * came back an hour later for an unrelated reason.
-   */
-  readonly justLetARoom = signal(false);
 
   billingEnabled = BILLING_ENABLED;
 
@@ -385,11 +365,6 @@ export class LandlordDashboard implements OnInit {
   discardError = signal<string | null>(null);
 
   ngOnInit() {
-    // Asks the server what, if anything, to show. It answers null for most
-    // people — already answered, dismissed inside the window, not in the
-    // audience — and the card renders nothing for null.
-    this.surveys.load().subscribe({ error: () => {} });
-
     this.whatsappDrafts.load().subscribe({ error: () => {} });
     this.roomsService.getLandlordRooms().subscribe({
       next: (rooms) => { this.rooms.set(rooms); this.loading.set(false); },
@@ -475,10 +450,6 @@ export class LandlordDashboard implements OnInit {
       next: () => {
         this.marking.set(null);
         this.ngOnInit();   // reload both lists, as relist does
-        // Ask the contextual question — but only if there is still something
-        // to ask. ngOnInit refreshes that, and the card stays hidden when the
-        // server says this landlord has already answered.
-        this.justLetARoom.set(true);
       },
       error: () => this.marking.set(null),
     });

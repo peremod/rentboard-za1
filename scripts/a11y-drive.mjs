@@ -142,6 +142,8 @@ const LANDLORD_PAGES = [
   // list, a month ledger, star ratings — which is where contrast and heading
   // order go wrong quietly.
   '/account/tenancies',
+  // Phase 9a — the same screen, the landlord's questions. See TENANT_PAGES.
+  '/welcome',
 ];
 const TENANT_PAGES = [
   '/tenant/dashboard', '/tenant/rent', '/tenant/passport',
@@ -155,6 +157,11 @@ const TENANT_PAGES = [
   // the sidebar differs, so it is not the same page — and this screen is one
   // list for both roles precisely because a sub-lessor is both at once.
   '/account/tenancies',
+  // Phase 9a. The welcome questions, which EVERY new account meets before
+  // anything else — and which asks different questions per role, so it is
+  // audited from both sides. A screen nothing audits is how this repository
+  // keeps shipping a control nobody can see.
+  '/welcome',
 ];
 const ADMIN_PAGES = [
   '/admin/dashboard',

@@ -492,28 +492,51 @@ a stranger.
 
 ---
 
-### 5.5 Landlord research survey — ✅ built in v1.80.0
+### 5.5 Research surveys, both roles — ✅ built v1.80.0, reshaped v1.144.0 (Phase 9a)
 
 Phase 0. Nothing in the product had ever asked a landlord what is hard about
 the job, so the yard-management tiers rested on an assumption. The survey is
 what turns that into data before the engineering is spent.
 
-Two surfaces, never both at once: one question straight after a landlord marks
-a room let, and the full seven as a skippable card on the dashboard. A skip is
-recorded server-side and honoured for 30 days — not in `localStorage`, because
-a dismissal that lives in one browser means being asked again on the next
-device, which teaches people to clear the prompt without reading it.
+⚠️ **It could only ever ask a landlord.** `SurveyResponse` was keyed on
+`landlordProfileId`, so a tenant's answer had nowhere to go — the tenant half
+was unstorable rather than unbuilt. Phase 9a keys both responses and
+dismissals on the USER, records the role answered as, and adds a second survey
+written for tenants: what they are looking for and what goes wrong while they
+look, sharing no question with the landlord set.
+
+**Where they are asked:** `/welcome`, immediately after the account is created
+— never inside the registration form, so a refresh or a skip cannot cost
+anybody their sign-up. One question per step with a progress bar, each step
+saved on the server so an interrupted sign-up resumes on any device, and every
+question optional with that said before the first one.
+
+**Where they are not:** the dashboard. Both survey cards were removed in 9a;
+an unfinished set is one row at the bottom of the task inbox instead, which
+disappears when it is finished or skipped. A skip is recorded server-side and
+honoured for 30 days — not in `localStorage`, because a dismissal that lives
+in one browser means being asked again on the next device, which teaches
+people to clear the prompt without reading it.
 
 Eligibility is decided on the server and never by the client. `audience`
 supports `minRooms`, which counts rooms the landlord actually has; the point of
 targeting "2+ rooms" is to reach people whose situation the product does not
 know, and a client that decides its own eligibility can be asked to lie.
 
-Results are at `/admin/surveys`, segmented by the room-count question, counts
-rather than percentages, and with the number who answered beside each question.
-Nobody is named: the landlord link exists so the same person is not asked twice
-and so answers can be segmented, not so opinions can be read back against an
-individual.
+Results are at `/admin/surveys`: a picker per survey, a date range, counts
+rather than percentages, the number who answered beside each question, and a
+completion rate (finished over started, null when nobody has started). Landlord
+and tenant answers are counted apart and never added together — they were asked
+different questions. The CSV export carries the same counts and open text and
+**never a row per person**. Nobody is named: the user link exists so the same
+person is not asked twice and so a half-finished set can be resumed, not so
+opinions can be read back against an individual.
+
+Editions: `Survey` is unique on `(slug, version)`. Rewording a question in
+place would change what every existing answer means, because answers are keyed
+by question id — so new wording is a new row, and `seed-survey.ts` refuses to
+rewrite an edition that already has responses and says to bump the version
+instead.
 
 ❌ **Not built: WhatsApp delivery.** Deferred to Phase 7g, and not for
 scheduling reasons — see checklist row 40. Every outbound message in this

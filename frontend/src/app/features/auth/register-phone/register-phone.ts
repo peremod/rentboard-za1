@@ -267,7 +267,10 @@ export class RegisterPhone {
         referralCode: this.referralCode.trim() || undefined,
       })
       .subscribe({
-        next: (res) => this.router.navigate([this.auth.homeRouteFor(res.user.role)]),
+        // ⚠️ The welcome questions, not the dashboard. The account is already
+      // created and the session is already set by the time this runs, so
+      // skipping, refreshing or closing the tab on that screen costs nothing.
+      next: () => this.router.navigate(['/welcome']),
         error: (err) => {
           this.busy.set(false);
           const message = err?.error?.message;

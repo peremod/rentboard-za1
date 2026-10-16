@@ -20,7 +20,7 @@
  * allowed.
  */
 import { PrismaClient, Prisma } from '@prisma/client';
-import { LANDLORD_PAIN_SURVEY, microQuestion, SurveyQuestion } from './surveys';
+import { ALL_SURVEYS, microQuestion, SeedSurvey, SurveyQuestion } from './surveys';
 
 const prisma = new PrismaClient();
 
@@ -64,96 +64,127 @@ async function main() {
   console.log(`Database: ${describeTarget()}`);
   console.log(`Mode:     ${apply ? 'WRITE' : 'dry run'}\n`);
 
-  // Fails loudly here rather than shipping a survey whose micro-prompt has
+  let wrote = 0;
+  for (const survey of ALL_SURVEYS) {
+    const done = await seedOne(survey, apply);
+    if (done === 'refused') {
+      process.exitCode = 1;
+      return;
+    }
+    if (done === 'written') wrote += 1;
+  }
+
+  /**
+   * ⚠️ The count, because this script now writes TWO surveys and the old one
+   * wrote one. A run that silently did half the job would look identical to a
+   * run that did all of it — the exact failure mode seed-house-ads.ts was
+   * rewritten for, where "✅ 3 house ads written" was printed over a wrong
+   * advert still live.
+   */
+  console.log(`\n${ALL_SURVEYS.length} survey(s) checked, ${wrote} written.`);
+  if (!apply) console.log('Dry run — nothing written. Re-run with --apply.');
+}
+
+/** One survey. Returns what happened, so main() can count and stop. */
+async function seedOne(
+  survey: SeedSurvey,
+  apply: boolean,
+): Promise<'written' | 'unchanged' | 'refused'> {
+  // Fails loudly rather than shipping a survey whose contextual prompt has
   // nothing to ask, or two things to ask and no way to choose.
-  const micro = microQuestion();
+  const micro = microQuestion(survey.questions);
+
+  console.log(`\n── ${survey.slug} v${survey.version} (${survey.audience.role}) ──`);
 
   const existing = await prisma.survey.findUnique({
-    where: { slug: LANDLORD_PAIN_SURVEY.slug },
+    where: { slug_version: { slug: survey.slug, version: survey.version } },
     include: { _count: { select: { responses: true } } },
   });
 
   if (!existing) {
-    console.log(`No survey with slug "${LANDLORD_PAIN_SURVEY.slug}" — it would be created.`);
-    console.log(`  title:     ${LANDLORD_PAIN_SURVEY.title}`);
-    console.log(`  questions: ${LANDLORD_PAIN_SURVEY.questions.length}`);
+    console.log(`  not present — it would be created.`);
+    console.log(`  title:     ${survey.title}`);
+    console.log(`  questions: ${survey.questions.length}`);
     console.log(`  micro:     ${micro.id} — "${micro.prompt}"`);
-    console.log(`  active:    ${LANDLORD_PAIN_SURVEY.active}`);
-    if (apply) {
-      await prisma.survey.create({
-        data: {
-          slug: LANDLORD_PAIN_SURVEY.slug,
-          title: LANDLORD_PAIN_SURVEY.title,
-          intro: LANDLORD_PAIN_SURVEY.intro,
-          questions: LANDLORD_PAIN_SURVEY.questions as unknown as Prisma.InputJsonValue,
-          audience: LANDLORD_PAIN_SURVEY.audience as unknown as Prisma.InputJsonValue,
-          active: LANDLORD_PAIN_SURVEY.active,
-        },
-      });
-      console.log('\n✅ created.');
-    } else {
-      console.log('\nDry run — nothing written. Re-run with --apply.');
-    }
-    return;
+    console.log(`  active:    ${survey.active}`);
+    if (!apply) return 'unchanged';
+    await prisma.survey.create({
+      data: {
+        slug: survey.slug,
+        version: survey.version,
+        title: survey.title,
+        intro: survey.intro,
+        questions: survey.questions as unknown as Prisma.InputJsonValue,
+        audience: survey.audience as unknown as Prisma.InputJsonValue,
+        active: survey.active,
+      },
+    });
+    console.log('  ✅ created.');
+    return 'written';
   }
 
   const currentQuestions = existing.questions as unknown as SurveyQuestion[];
   const currentIds = new Set(currentQuestions.map((q) => q.id));
-  const nextIds = new Set(LANDLORD_PAIN_SURVEY.questions.map((q) => q.id));
+  const nextIds = new Set(survey.questions.map((q) => q.id));
   const disappearing = [...currentIds].filter((id) => !nextIds.has(id));
 
+  /**
+   * ⚠️ Still refuses, and now has a better answer to offer.
+   *
+   * Answers are keyed by question id, so a disappearing id leaves answers
+   * that resolve to no question. Before versions existed the only options
+   * were "add a question" or "delete the answers". Now the right move is a
+   * NEW VERSION: bump `version` in prisma/surveys.ts and the old edition keeps
+   * its answers while the new one collects its own.
+   */
   if (disappearing.length && existing._count.responses > 0) {
     console.error(
-      `❌ Refusing to write. ${existing._count.responses} response(s) already exist, and these ` +
-        `question ids would disappear: ${disappearing.join(', ')}.\n` +
-        '   Answers are keyed by id, so those answers would stop resolving to a question and\n' +
-        '   the admin view would quietly count fewer people than answered. Add a question\n' +
-        '   rather than renaming one, or clear the responses deliberately first.',
+      `  ❌ Refusing to write. ${existing._count.responses} response(s) exist on this edition, and ` +
+        `these question ids would disappear: ${disappearing.join(', ')}.\n` +
+        '     Answers are keyed by id, so those answers would stop resolving to a question.\n' +
+        '     Bump `version` in prisma/surveys.ts to ask the new wording as a new edition.',
     );
-    process.exitCode = 1;
-    return;
+    return 'refused';
   }
 
   const changes: string[] = [];
-  if (existing.title !== LANDLORD_PAIN_SURVEY.title) {
-    changes.push(`  title\n    now:  ${existing.title}\n    next: ${LANDLORD_PAIN_SURVEY.title}`);
+  if (existing.title !== survey.title) {
+    changes.push(`    title\n      now:  ${existing.title}\n      next: ${survey.title}`);
   }
-  if (existing.intro !== LANDLORD_PAIN_SURVEY.intro) {
-    changes.push(`  intro\n    now:  ${existing.intro ?? '(none)'}\n    next: ${LANDLORD_PAIN_SURVEY.intro}`);
+  if (existing.intro !== survey.intro) {
+    changes.push(`    intro\n      now:  ${existing.intro ?? '(none)'}\n      next: ${survey.intro}`);
   }
-  if (existing.active !== LANDLORD_PAIN_SURVEY.active) {
-    changes.push(`  active\n    now:  ${existing.active}\n    next: ${LANDLORD_PAIN_SURVEY.active}`);
+  if (existing.active !== survey.active) {
+    changes.push(`    active\n      now:  ${existing.active}\n      next: ${survey.active}`);
   }
-  if (canonical(currentQuestions) !== canonical(LANDLORD_PAIN_SURVEY.questions)) {
+  if (canonical(currentQuestions) !== canonical(survey.questions)) {
     changes.push(
-      `  questions\n    now:  ${currentQuestions.length} (${[...currentIds].join(', ')})` +
-        `\n    next: ${LANDLORD_PAIN_SURVEY.questions.length} (${[...nextIds].join(', ')})`,
+      `    questions\n      now:  ${currentQuestions.length} (${[...currentIds].join(', ')})` +
+        `\n      next: ${survey.questions.length} (${[...nextIds].join(', ')})`,
     );
   }
 
-  console.log(`Survey "${existing.slug}" exists, with ${existing._count.responses} response(s).`);
+  console.log(`  exists, with ${existing._count.responses} response(s).`);
   if (!changes.length) {
-    console.log('\n✅ Nothing to change — the stored survey already matches.');
-    return;
+    console.log('  ✅ nothing to change — the stored survey already matches.');
+    return 'unchanged';
   }
 
-  console.log('\nWould change:\n' + changes.join('\n'));
-  if (!apply) {
-    console.log('\nDry run — nothing written. Re-run with --apply.');
-    return;
-  }
+  console.log('  would change:\n' + changes.join('\n'));
+  if (!apply) return 'unchanged';
 
   await prisma.survey.update({
-    where: { slug: LANDLORD_PAIN_SURVEY.slug },
+    where: { slug_version: { slug: survey.slug, version: survey.version } },
     data: {
-      title: LANDLORD_PAIN_SURVEY.title,
-      intro: LANDLORD_PAIN_SURVEY.intro,
-      questions: LANDLORD_PAIN_SURVEY.questions as unknown as Prisma.InputJsonValue,
-      audience: LANDLORD_PAIN_SURVEY.audience as unknown as Prisma.InputJsonValue,
-      active: LANDLORD_PAIN_SURVEY.active,
+      title: survey.title,
+      intro: survey.intro,
+      questions: survey.questions as unknown as Prisma.InputJsonValue,
+      audience: survey.audience as unknown as Prisma.InputJsonValue,
+      active: survey.active,
     },
   });
-  console.log('\n✅ updated.');
+  console.log('  ✅ updated.');
+  return 'written';
 }
 
 main()

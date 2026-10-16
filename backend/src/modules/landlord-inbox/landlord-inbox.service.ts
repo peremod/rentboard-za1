@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SurveysService } from '../surveys/surveys.service';
 import { LeaseService } from '../tenancies/lease.service';
 
 /** What kind of thing needs doing. The screen renders per kind; it never guesses. */
@@ -26,7 +27,8 @@ export type InboxKind =
    * find it" needs.
    */
   | 'room_vacant'
-  | 'viewing_elapsed';
+  | 'viewing_elapsed'
+  | 'survey_open';
 
 /**
  * One thing to do, with everything the row needs to be acted on in place.
@@ -139,6 +141,7 @@ export class LandlordInboxService {
   constructor(
     private prisma: PrismaService,
     private lease: LeaseService,
+    private surveys: SurveysService,
   ) {}
 
   /**
@@ -149,16 +152,17 @@ export class LandlordInboxService {
    * anyway. Run concurrently, so the inbox costs one round trip's latency.
    */
   async inbox(landlordId: string): Promise<{ items: InboxItem[]; counts: Record<InboxKind, number> }> {
-    const [applications, viewings, upcoming, rentGaps, unread, vacant] = await Promise.all([
+    const [applications, viewings, upcoming, rentGaps, unread, vacant, survey] = await Promise.all([
       this.waitingApplications(landlordId),
       this.elapsedViewings(landlordId),
       this.leaseItems(landlordId),
       this.rentItems(landlordId),
       this.unreadMessages(landlordId),
       this.vacantRooms(landlordId),
+      this.surveyItems(landlordId),
     ]);
 
-    const items = [...applications, ...viewings, ...upcoming, ...rentGaps, ...unread, ...vacant]
+    const items = [...applications, ...viewings, ...upcoming, ...rentGaps, ...unread, ...vacant, ...survey]
       .sort((a, b) => a.urgency - b.urgency);
 
     // Counted per kind so the screen can say "3 applicants waiting" in a header
@@ -166,6 +170,7 @@ export class LandlordInboxService {
     const counts = {
       application_waiting: 0, lease_ending: 0, notice_given: 0,
       rent_unmarked: 0, rent_disputed: 0, unread_message: 0, room_vacant: 0,
+      survey_open: 0,
     } as Record<InboxKind, number>;
     for (const i of items) counts[i.kind]++;
 
@@ -465,6 +470,30 @@ export class LandlordInboxService {
    * said something more recent than this, and `pause()` exists precisely so
    * they can stop enquiries without the destructive alternative.
    */
+  /**
+   * The welcome questions, if they are still open — Phase 9a.
+   *
+   * ⚠️ LAST, always, and the only row here that is about US rather than about
+   * this landlord's rooms. Everything else in this list is somebody waiting
+   * on them. The dashboard card this replaces had no such discipline: it sat
+   * at the top of the screen every visit, which is what the owner reported.
+   */
+  private async surveyItems(landlordId: string): Promise<InboxItem[]> {
+    const row = await this.surveys.inboxItem(landlordId);
+    if (!row) return [];
+    return [{
+      kind: 'survey_open' as const,
+      urgency: 9000,
+      title: row.title,
+      detail: row.detail,
+      entityId: row.slug,
+      roomTitle: null,
+      daysUntil: null,
+      actionLabel: row.actionLabel,
+      actionPath: row.actionPath,
+    }];
+  }
+
   private async vacantRooms(landlordId: string): Promise<InboxItem[]> {
     const rooms = await this.prisma.room.findMany({
       where: {

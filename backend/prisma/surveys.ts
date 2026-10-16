@@ -116,8 +116,26 @@ export function microQuestion(questions: SurveyQuestion[] = LANDLORD_PAIN_QUESTI
   return found[0];
 }
 
-export const LANDLORD_PAIN_SURVEY = {
+/**
+ * Every survey the product ships, in the shape the seed writes.
+ *
+ * `version` is part of the identity: a question reworded in place changes what
+ * an answer MEANS without changing the answer, so new wording is a new row
+ * and old responses stay attached to the questions actually asked.
+ */
+export type SeedSurvey = {
+  slug: string;
+  version: number;
+  title: string;
+  intro: string;
+  questions: SurveyQuestion[];
+  audience: { role: 'LANDLORD' | 'TENANT'; minRooms?: number };
+  active: boolean;
+};
+
+export const LANDLORD_PAIN_SURVEY: SeedSurvey = {
   slug: LANDLORD_PAIN_SURVEY_SLUG,
+  version: 1,
   title: 'What is hardest about renting out your rooms?',
   intro:
     'Seven short questions. Your answers decide what we build next, and nothing here is shown to tenants or to anyone else.',
@@ -127,3 +145,109 @@ export const LANDLORD_PAIN_SURVEY = {
   audience: { role: 'LANDLORD' as const },
   active: true,
 };
+
+// ── The tenant survey ─────────────────────────────────────────────────────
+//
+// ⚠️ NOT the landlord questions with the nouns swapped. The two surveys exist
+// for different reasons, and writing one from the other is how you end up
+// asking a person looking for a room what is hard about collecting rent.
+//
+// The landlord survey asks what is HARD about a job they already do, because
+// that decides what to build for them. This one asks what somebody is looking
+// for and what goes wrong while they look, because that decides what the board
+// has to show and what a listing has to carry before it is worth anybody's
+// taxi fare.
+//
+// Every question is answerable by a person who has never used this product.
+// Nothing here asks them to rate a feature they have not met: a survey at
+// sign-up is talking to somebody who has seen one screen.
+//
+// ⚠️ No budget FIGURE, by choice. A band is enough to know whether the board
+// is showing the right rooms, and an exact number on a person looking for a
+// place to live is a sensitive thing to keep for no gain — POPIA s.10, the
+// same reasoning that keeps room_view_days a count with no viewer in it.
+export const TENANT_SEARCH_SURVEY_SLUG = 'tenant-search-2026';
+
+export const TENANT_SEARCH_QUESTIONS: SurveyQuestion[] = [
+  {
+    id: 't1_looking_for',
+    prompt: 'What kind of place are you looking for?',
+    kind: 'choice',
+    options: [
+      'A room in a shared house',
+      'A backroom or outside room',
+      'A cottage or granny flat',
+      'A whole flat or house',
+      'I am not sure yet',
+    ],
+  },
+  {
+    id: 't2_when',
+    prompt: 'When do you need to move?',
+    kind: 'choice',
+    options: ['This month', 'Next month', 'In two or three months', 'I am just looking'],
+    // The one question the product can act on immediately: somebody moving
+    // this month and somebody browsing need different boards.
+    micro: true,
+  },
+  {
+    id: 't3_budget_band',
+    prompt: 'What can you pay a month, including water and lights?',
+    kind: 'choice',
+    options: ['Under R1 500', 'R1 500 – R2 500', 'R2 500 – R4 000', 'R4 000 – R6 000', 'Over R6 000'],
+  },
+  {
+    id: 't4_where_searching',
+    prompt: 'Where do you look for rooms now?',
+    kind: 'choice',
+    options: ['Facebook', 'WhatsApp groups', 'Gumtree', 'Signs in the street', 'Friends and family'],
+    optionalText: true,
+    textLabel: 'Somewhere else? Tell us where',
+  },
+  {
+    id: 't5_hardest',
+    prompt: 'What is the hardest part of finding a room?',
+    kind: 'choice',
+    options: [
+      'Not knowing if the place is real',
+      'Rooms are gone by the time I call',
+      'Nobody answers the phone',
+      'Getting to viewings costs money',
+      'Finding anything I can afford',
+    ],
+  },
+  {
+    id: 't6_went_wrong',
+    prompt: 'Has anything gone wrong for you while looking for a room?',
+    kind: 'choice',
+    options: [
+      'I was asked for money before seeing it',
+      'The room was nothing like the pictures',
+      'The landlord never turned up',
+      'I lost a deposit',
+      'No, nothing like that',
+    ],
+    optionalText: true,
+    textLabel: 'What happened?',
+  },
+  {
+    id: 't7_listing_needs',
+    prompt: 'What would you want on a listing before you travel to see a room?',
+    kind: 'text',
+  },
+];
+
+export const TENANT_SEARCH_SURVEY: SeedSurvey = {
+  slug: TENANT_SEARCH_SURVEY_SLUG,
+  version: 1,
+  title: 'What are you looking for?',
+  intro:
+    'Six quick questions and one open one. Your answers help us show you the right rooms, '
+    + 'and no landlord ever sees them.',
+  questions: TENANT_SEARCH_QUESTIONS,
+  audience: { role: 'TENANT' as const },
+  active: true,
+};
+
+/** Both, for the seed and for anything that has to walk every survey. */
+export const ALL_SURVEYS: SeedSurvey[] = [LANDLORD_PAIN_SURVEY, TENANT_SEARCH_SURVEY];

@@ -88,6 +88,28 @@ const CONTENT_ROUTES: Routes = [
     loadChildren: () => import('./features/auth/auth.routes').then((m) => m.AUTH_ROUTES),
   },
   {
+    /**
+     * The welcome questions, straight after an account is made — Phase 9a.
+     *
+     * ⚠️ Its own route, outside both portals and outside the registration
+     * form. Outside the FORM because the account must already exist: a
+     * questionnaire that can cost somebody their sign-up is a questionnaire
+     * that costs us the sign-up. Outside the PORTAL LAYOUT because a sidebar
+     * full of screens is the opposite of one question at a time, and because
+     * this is the one screen where there is nowhere else to be.
+     *
+     * Guarded, because there is nothing to ask somebody who is not signed in,
+     * and `noIndex` because it is a private screen with a person's answers on
+     * it.
+     */
+    path: 'welcome',
+    data: { seo: { noIndex: true } },
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/onboarding/welcome-survey/welcome-survey').then((m) => m.WelcomeSurvey),
+    title: 'Welcome — Mastande',
+  },
+  {
     path: '',
     loadChildren: () => import('./features/pages/pages.routes').then((m) => m.PAGES_ROUTES),
   },

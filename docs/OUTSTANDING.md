@@ -4781,6 +4781,109 @@ broken — while deliberately proving those checks could fail. The drive now
 looks for the build-error overlay on each screen it measures, not only at
 sign-in, because a stale bundle makes every UI check in the file meaningless.
 
+## 72. The survey could not have asked a tenant anything — Phase 9a
+
+The owner asked for surveys to move into onboarding for BOTH roles and off the
+dashboard. The audit found the first half was not a missing screen: it was
+unstorable.
+
+### 🔴 `SurveyResponse` was keyed on a landlord profile
+
+`submit()` opened by looking up a `landlordProfile` and threw *"Only a landlord
+account can answer this survey"* for anybody without one; `promptFor()` did the
+same and returned null. So a tenant survey was not unbuilt — there was nowhere
+to put a tenant's answer, and no way to ask.
+
+Responses and dismissals are keyed on the **user** now, carry the **role they
+answered as** (copied at answer time, so an account that changes role later
+does not move its old answers into the other group's counts), and the
+migration backfills the old column rather than dropping it. It fails loudly on
+a row it cannot map instead of deleting it.
+
+### The three things the old model could not express
+
+| Missing | What it cost |
+| --- | --- |
+| `completedAt` | A row existed or it did not, so "answered two and left" and "finished" were the same state. Nothing could offer to resume, and no completion rate could be computed |
+| `version` | Questions are JSON and answers are keyed by question id, so rewording a question in place changed what every existing answer MEANT. New wording is a new row now, and old answers stay attached to the questions actually asked |
+| a tenant survey | See above |
+
+### Where the questions are asked, and why not in the form
+
+A dedicated route, `/welcome`, **after** the account exists. The account is
+created by one POST and this is simply the next screen, so a refresh, a lost
+signal, a closed tab or a skip cannot cost anybody their sign-up — the brief's
+"do not disrupt account creation", enforced by sequence rather than by care.
+
+One question per step with a progress bar, **every step saved on the server**,
+so an interrupted sign-up resumes where it stopped, on a different device if
+need be. Every question is optional and the screen says so before the first
+one. "I will do this later" records a dismissal, honoured for 30 days, and
+keeps what was already answered — a skip is not a withdrawal.
+
+### The tenant questions are not the landlord ones with the nouns swapped
+
+The landlord survey asks what is HARD about a job somebody already does. The
+tenant survey asks what they are looking for and what goes wrong while they
+look: what kind of place, when they must move, what they can pay **as a band**,
+where they search now, the hardest part, what has gone wrong, and what a
+listing must carry before they will spend taxi fare on a viewing. The drive
+asserts the two sets share **no question id at all**.
+
+⚠️ No exact budget figure, deliberately. A band answers the product question;
+an exact number on somebody looking for a place to live is sensitive and buys
+nothing — POPIA s.10, the same reasoning that keeps `room_view_days` a count
+with no viewer in it.
+
+### What came off the dashboard
+
+Both `app-survey-prompt` mounts. In their place, ONE row at the bottom of the
+task inbox — below everything where somebody is actually waiting on this
+person — that reads "Finish the questions you started — 3 of 7" and disappears
+when they finish or say not now. The dashboard is where you come to do your
+work; it is not a place to be asked the same question weekly.
+
+### The admin screen's own comment came true
+
+It hardcoded one slug behind *"a second survey would need a picker; the brief
+is explicit that v1 does not build one."* A second survey now exists, so
+without the picker every tenant answer would have been collected and shown to
+nobody. There is a picker, a date range, a landlord/tenant split that is never
+added together, a completion rate (finished over started, null when nobody has
+started — 0% and "nobody asked yet" are different), and a CSV export.
+
+⚠️ The export is **counts and open text, not a row per person**. A per-
+respondent file would hand away the one promise this feature makes, through a
+download button.
+
+### Three things found by running it
+
+⚠️ **`dbQuery` returns only the first line.** A check that said "two answers
+are on the server" printed one — the query was right and the reader truncated
+it. Every multi-row check in every drive has been reading row one. `dbRows` now
+exists beside it, and the one check that needed it uses it.
+
+⚠️ **A negative check passed on a 401.** "The export carries no person in it"
+was true of an error body. It proves the CSV is there before asserting what is
+not — the same rule §67 had to learn.
+
+⚠️ **The first negative run died on a click.** Reverting the role resolution
+left nothing to click on `/welcome`, and the unguarded click threw, ending the
+run before the checks below it. Guarded, as the tenancy drive already is.
+
+### What this deliberately does NOT do
+
+⚠️ Answers change nothing. No tenancy, application, rent record or room state
+is touched by a survey answer, and nothing reads them to decide what somebody
+may do — the brief's section G, left uncrossed. They are research, and the one
+feature that reads them is the admin aggregate.
+
+⚠️ The post-letting micro question is gone from the dashboard with the card.
+`microQuestion` still exists per survey and the API still names it, so the
+contextual prompt can come back as its own deliberate workflow — which is
+what the brief asks for periodic updates, rather than re-showing the
+onboarding set.
+
 ## How to check the whole thing still works
 
 ```bash

@@ -424,9 +424,29 @@ const nobody = await registerUser(API, 'TENANT');
 const nPage = await signIn(browser, WEB, nobody.email, PASSWORD);
 await nPage.goto(`${WEB}/tenant/dashboard`, { waitUntil: 'domcontentloaded' });
 await nPage.waitForSelector('.dash-week', { timeout: 20000 });
-(await nPage.locator('#needs-you').count()) === 0
-  ? ok('a tenant with nothing to do is shown no empty queue at all')
-  : bad('the "Needs you" heading renders with nothing under it');
+/**
+ * ⚠️ The question is "is there a heading with nothing under it", not "is the
+ * section absent" — Phase 9a.
+ *
+ * A brand-new tenant now has exactly one row: the welcome questions they have
+ * not finished. The section is therefore legitimately there, and the defect
+ * this check exists for — an empty queue under a heading promising tasks — is
+ * still exactly what it fails on. Counting rows is what keeps it able to
+ * fail; asserting absence would simply have been deleted by this change.
+ */
+{
+  const section = await nPage.locator('#needs-you').count();
+  const rows = await nPage.locator('#needs-you li, #needs-you .inbox-item').count();
+  const text = await nPage.locator('#needs-you').first()
+    .textContent().then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+  if (!section) {
+    ok('a tenant with nothing to do is shown no empty queue at all');
+  } else if (rows > 0 || /question/i.test(text)) {
+    ok(`a tenant with nothing else to do sees only the welcome questions ("${text.slice(0, 48)}…")`);
+  } else {
+    bad('the "Needs you" heading renders with nothing under it');
+  }
+}
 
 console.log('\n── 9. On a phone, at 390px ─────────────────────────────────');
 

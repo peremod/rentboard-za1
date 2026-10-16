@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { SurveysService } from '../surveys/surveys.service';
 
 /** What kind of thing needs doing. The screen renders per kind; it never guesses. */
 export type TenantInboxKind =
@@ -11,7 +12,8 @@ export type TenantInboxKind =
   | 'notice_given'
   | 'passport_expired'
   | 'passport_expiring'
-  | 'viewing_elapsed';
+  | 'viewing_elapsed'
+  | 'survey_open';
 
 /**
  * One thing to do, with everything the row needs to be acted on in place.
@@ -82,7 +84,10 @@ function monthStart(): Date {
  */
 @Injectable()
 export class TenantInboxService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private surveys: SurveysService,
+  ) {}
 
   /**
    * Everything waiting on this tenant, most pressing first.
@@ -91,20 +96,21 @@ export class TenantInboxService {
    * unrelated shapes. Run concurrently, so the list costs one round trip.
    */
   async inbox(tenantId: string): Promise<{ items: TenantInboxItem[]; counts: Record<TenantInboxKind, number> }> {
-    const [applications, viewings, messages, rent, lease, passport] = await Promise.all([
+    const [applications, viewings, messages, rent, lease, passport, survey] = await Promise.all([
       this.applicationItems(tenantId),
       this.elapsedViewingItems(tenantId),
       this.messageItems(tenantId),
       this.rentItems(tenantId),
       this.leaseItems(tenantId),
       this.passportItems(tenantId),
+      this.surveyItems(tenantId),
     ]);
 
-    const items = [...applications, ...viewings, ...messages, ...rent, ...lease, ...passport]
+    const items = [...applications, ...viewings, ...messages, ...rent, ...lease, ...passport, ...survey]
       .sort((a, b) => a.urgency - b.urgency);
 
     const counts = {
-      message_unread: 0, application_accepted: 0, application_shortlisted: 0,
+      message_unread: 0, application_accepted: 0, application_shortlisted: 0, survey_open: 0,
       rent_unrecorded: 0, lease_ending: 0, notice_given: 0,
       passport_expired: 0, passport_expiring: 0,
     } as Record<TenantInboxKind, number>;
@@ -261,6 +267,32 @@ export class TenantInboxService {
       });
     }
     return out;
+  }
+
+  /**
+   * The welcome questions, if they are still open — Phase 9a.
+   *
+   * ⚠️ LAST in the list, always. Everything else here is somebody waiting on
+   * this person: a landlord who wants an answer, a month of rent nobody
+   * recorded. A questionnaire is not that, and putting it anywhere but the
+   * bottom would teach people that this list is where they get asked for
+   * favours. It is also the only row here that is about us rather than them,
+   * which is exactly why it has to be the quietest thing on the screen.
+   */
+  private async surveyItems(tenantId: string): Promise<TenantInboxItem[]> {
+    const row = await this.surveys.inboxItem(tenantId);
+    if (!row) return [];
+    return [{
+      kind: 'survey_open' as const,
+      urgency: 9000,
+      title: row.title,
+      detail: row.detail,
+      entityId: row.slug,
+      roomTitle: null,
+      daysUntil: null,
+      actionLabel: row.actionLabel,
+      actionPath: row.actionPath,
+    }];
   }
 
   /**
