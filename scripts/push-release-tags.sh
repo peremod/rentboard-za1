@@ -1678,6 +1678,22 @@ bottom of the task inbox.
 Found by running it: dbQuery returns only the first line, so every multi-row
 check in every drive has been reading row one."
 
+tag_if_missing "v1.145.0" "f6154804306c6ceee38f7cfc8bb7efa48c21faa5" "2026-10-16T11:33:44+00:00" "v1.145.0 - one question, at the one moment it is worth asking
+
+The contextual question returns as its own workflow, not as the card that was
+removed: a landlord who has just marked a room let is asked what is most
+stressful about tenants, a tenant who has just applied is asked when they need
+to move. It asks only a question that is unanswered, answering it is what
+stops it, and not-now on one question does not silence the other six.
+
+It would have shipped recording a seven-question survey as finished with six
+never asked: submit() marks a response complete and the card used it. And two
+checks could not see their subject - the API check passed with the component
+reverted, because the component is the caller, and removing the
+already-answered guard stayed green because only the card decides to render
+nothing. The drive answers the card in a browser now, and applies for a second
+room to prove the question is not asked twice."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
