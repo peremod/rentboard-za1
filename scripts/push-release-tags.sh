@@ -1660,6 +1660,24 @@ read had never rendered, and measures 1.00:1.
 A letting that never started is no longer counted as a past letting, and
 notices open one at a time instead of spilling past the edge of a phone."
 
+tag_if_missing "v1.144.0" "5061bc34cba779e4188a39fa88ba127e855b69d8" "2026-10-16T10:42:24+00:00" "v1.144.0 - surveys for both roles, asked at sign-up
+
+The tenant half of this feature was not missing, it was unstorable:
+SurveyResponse was keyed on landlordProfileId and submit refused anybody
+without one. Responses and dismissals are keyed on the user now, carry the
+role answered as, and gained the two things the old model could not express -
+a completion state, so a part-answered set can be resumed and a completion
+rate computed, and a version, so rewording a question does not rewrite the
+meaning of answers already given.
+
+The questions are asked at /welcome, after the account exists and never inside
+the registration form, one at a time, saved per step on the server, every one
+optional. Both dashboard cards are gone; an unfinished set is one row at the
+bottom of the task inbox.
+
+Found by running it: dbQuery returns only the first line, so every multi-row
+check in every drive has been reading row one."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
