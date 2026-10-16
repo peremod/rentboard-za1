@@ -16,10 +16,18 @@ interface AggregateQuestion {
 
 interface SurveyAggregate {
   slug: string;
+  version: number;
   title: string;
   active: boolean;
+  /** Whose survey this is. Named so two populations cannot be read as one. */
+  audienceRole: 'LANDLORD' | 'TENANT' | null;
+  role: 'LANDLORD' | 'TENANT' | null;
   responses: number;
-  anonymous: number;
+  started: number;
+  finished: number;
+  dismissed: number;
+  /** Null when nobody has started: 0% and "nobody asked yet" differ. */
+  completionRate: number | null;
   /**
    * Partial on purpose. A survey nobody answered over WhatsApp has no
    * `whatsapp` key at all, so indexing it yields undefined — and typing it as
@@ -69,6 +77,46 @@ interface SurveyAggregate {
         <p class="field-error" role="alert">{{ error() }}</p>
       } @else if (data(); as d) {
 
+        <!-- ⚠️ A picker, because there are two surveys now.
+             This screen hardcoded one slug behind a comment saying "a second
+             survey would need a picker; the brief is explicit that v1 does not
+             build one". The second survey exists, so the condition that
+             comment set has come true — and without this the tenant answers
+             would have been collected and shown to nobody. -->
+        <div class="survey-controls">
+          <label>
+            <span>Survey</span>
+            <select [value]="slug()" (change)="pick($any($event.target).value)">
+              <option value="landlord-pain-2026">Landlords — what is hardest</option>
+              <option value="tenant-search-2026">Tenants — what they are looking for</option>
+            </select>
+          </label>
+          <label>
+            <span>From</span>
+            <input type="date" [value]="from()" (change)="setFrom($any($event.target).value)"/>
+          </label>
+          <label>
+            <span>To</span>
+            <input type="date" [value]="to()" (change)="setTo($any($event.target).value)"/>
+          </label>
+          <label class="survey-controls__check">
+            <input type="checkbox" [checked]="includePartial()"
+                   (change)="setPartial($any($event.target).checked)"/>
+            <span>Include unfinished sets</span>
+          </label>
+          <!-- Aggregate only. A per-person export would hand away the one
+               promise this feature makes. -->
+          <button type="button" class="btn btn-sm btn-outline" (click)="download()">
+            Download CSV
+          </button>
+        </div>
+
+        <p class="muted survey-who">
+          Showing <strong>{{ d.audienceRole === 'TENANT' ? 'tenant' : 'landlord' }}</strong> answers,
+          edition {{ d.version }}. Landlord and tenant answers are counted separately and are never
+          added together — they were asked different questions.
+        </p>
+
         <div class="insight-banner">
           💡
           <span>
@@ -80,26 +128,24 @@ interface SurveyAggregate {
         </div>
 
         <div class="stat-row">
-          <div class="stat-box"><div class="val">{{ d.responses }}</div><div class="lbl">Responses</div></div>
-          <div class="stat-box"><div class="val">{{ d.bySource['dashboard'] ?? 0 }}</div><div class="lbl">From the dashboard</div></div>
-          <div class="stat-box"><div class="val">{{ d.bySource['micro'] ?? 0 }}</div><div class="lbl">After a letting</div></div>
-          <div class="stat-box"><div class="val">{{ d.bySource['whatsapp'] ?? 0 }}</div><div class="lbl">Over WhatsApp</div></div>
+          <div class="stat-box"><div class="val">{{ d.finished }}</div><div class="lbl">Finished</div></div>
+          <div class="stat-box"><div class="val">{{ d.started }}</div><div class="lbl">Started</div></div>
+          <div class="stat-box">
+            <div class="val">{{ d.completionRate === null ? '—' : d.completionRate + '%' }}</div>
+            <div class="lbl">Finished of started</div>
+          </div>
+          <div class="stat-box"><div class="val">{{ d.dismissed }}</div><div class="lbl">Said not now</div></div>
+          <div class="stat-box"><div class="val">{{ d.bySource['onboarding'] ?? 0 }}</div><div class="lbl">At sign-up</div></div>
+          <div class="stat-box"><div class="val">{{ d.bySource['dashboard'] ?? 0 }}</div><div class="lbl">From a dashboard</div></div>
         </div>
 
         @if (d.responses === 0) {
           <div class="empty-state">
             <h2>Nothing answered yet</h2>
-            <p>Responses appear here as landlords answer. The survey is {{ d.active ? 'live' : 'not live' }}.</p>
+            <p>Answers appear here as people finish them. This survey is {{ d.active ? 'live' : 'not live' }}.</p>
           </div>
         } @else {
 
-          @if (d.anonymous > 0) {
-            <p class="muted">
-              {{ d.anonymous }} response{{ d.anonymous === 1 ? '' : 's' }} came in without a landlord account, so
-              {{ d.anonymous === 1 ? 'it cannot' : 'they cannot' }} be segmented by room count. The segment columns
-              below will not add up to the totals because of this.
-            </p>
-          }
           @if (!d.segmentQuestionId) {
             <p class="muted">
               This survey has no room-count question, so the results are not segmented — the single column below is
@@ -217,9 +263,23 @@ export class AdminSurveys implements OnInit {
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
 
-  /** Matches the seeded survey. A second survey would need a picker; the brief
-   *  is explicit that v1 does not build one. */
-  private slug = 'landlord-pain-2026';
+  /**
+   * Which survey is on screen. A signal, not a constant, because there are two
+   * of them now — landlords and tenants are asked different questions and
+   * their answers are never added together.
+   */
+  readonly slug = signal('landlord-pain-2026');
+  readonly from = signal('');
+  readonly to = signal('');
+  /**
+   * ⚠️ Off by default, and labelled.
+   *
+   * A part-answered set is real data, but counting it beside finished ones
+   * weights the early questions: everybody who started answered question one,
+   * and only some reached question seven. Making it a visible switch is the
+   * difference between a deliberate choice and a silent bias.
+   */
+  readonly includePartial = signal(false);
 
   /**
    * Only the segments anyone actually fell into.
@@ -241,8 +301,35 @@ export class AdminSurveys implements OnInit {
   });
 
   ngOnInit() {
+    this.load();
+  }
+
+  pick(slug: string) { this.slug.set(slug); this.load(); }
+  setFrom(value: string) { this.from.set(value); this.load(); }
+  setTo(value: string) { this.to.set(value); this.load(); }
+  setPartial(value: boolean) { this.includePartial.set(value); this.load(); }
+
+  /**
+   * The filters, built once and used by BOTH the screen and the download.
+   *
+   * ⚠️ Two copies of this is how a table and the CSV beside it come to
+   * disagree about what "this month, tenants only" means — and the CSV is the
+   * one nobody checks.
+   */
+  private query(): string {
+    const params = new URLSearchParams();
+    if (this.from()) params.set('from', this.from());
+    if (this.to()) params.set('to', `${this.to()}T23:59:59`);
+    if (this.includePartial()) params.set('includePartial', 'true');
+    const q = params.toString();
+    return q ? `?${q}` : '';
+  }
+
+  private load() {
+    this.loading.set(true);
+    this.error.set(null);
     this.http
-      .get<SurveyAggregate>(`${environment.apiUrl}/surveys/admin/${this.slug}/results`)
+      .get<SurveyAggregate>(`${environment.apiUrl}/surveys/admin/${this.slug()}/results${this.query()}`)
       .subscribe({
         next: (d) => {
           this.data.set(d);
@@ -252,10 +339,34 @@ export class AdminSurveys implements OnInit {
           this.loading.set(false);
           this.error.set(
             e?.status === 404
-              ? 'No survey has been seeded yet. Run prisma/seed-survey.ts --apply.'
+              ? 'That survey has not been seeded yet. Run prisma/seed-survey.ts --apply.'
               : 'Could not load the results. Try again.',
           );
         },
+      });
+  }
+
+  /**
+   * Download the same counts as a CSV.
+   *
+   * Fetched as a blob rather than linked, because the API needs the bearer
+   * token and an <a href> carries no headers — a plain link would answer 401
+   * and look like a broken button.
+   */
+  download() {
+    this.http
+      .get(`${environment.apiUrl}/surveys/admin/${this.slug()}/results.csv${this.query()}`,
+        { responseType: 'blob' })
+      .subscribe({
+        next: (blob) => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${this.slug()}-results.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        },
+        error: () => this.error.set('The download failed. Try again.'),
       });
   }
 

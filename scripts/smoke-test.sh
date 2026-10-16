@@ -4191,12 +4191,12 @@ fi
 req POST /api/users/me/walkthrough-seen "" ""
 check "a stranger cannot mark somebody as shown round" 401 "$STATUS" "$BODY"
 
-# ── Landlord survey (Phase 0) ──────────────────────────────────────────────
+# ── Surveys, both roles (Phase 0, reshaped in 9a) ─────────────────────────
 #
-# The survey is seeded by prisma/seed.ts, so a database seeded without it
-# SKIPS rather than fails — a smoke run against an older database should not
-# report a bug that is really a missing seed.
-head_ "Landlord survey"
+# Seeded by prisma/seed.ts, so a database seeded without them SKIPS rather
+# than fails — a smoke run against an older database should not report a bug
+# that is really a missing seed.
+head_ "Surveys, landlord and tenant"
 
 req GET /api/surveys/prompt "" "$LTOKEN"
 check "GET /surveys/prompt as a landlord" 200 "$STATUS" "$BODY"
@@ -4234,13 +4234,48 @@ else
     red "  FAIL  still prompting after an answer — the same person would be counted twice"; FAIL=$((FAIL+1))
   fi
 
-  # A tenant is not in the audience and must never be asked.
+  # ⚠️ A tenant is asked their OWN survey, and never the landlord's.
+  #
+  # This check used to assert that a tenant was offered NOTHING, which was
+  # true of a feature that could not store a tenant answer at all:
+  # SurveyResponse was keyed on landlordProfileId. Phase 9a gives tenants
+  # their own questions, so the thing to assert is that they get a DIFFERENT
+  # survey — not that they get none.
   req GET /api/surveys/prompt "" "$TTOKEN"
   SURVEY_TENANT=$(echo "$BODY" | jq -r '.slug // empty')
-  if [[ -z "$SURVEY_TENANT" ]]; then
-    green "  PASS  a tenant is not asked a landlord survey"; PASS=$((PASS+1))
+  if [[ -n "$SURVEY_TENANT" && "$SURVEY_TENANT" != "$SURVEY_SLUG" ]]; then
+    green "  PASS  a tenant is asked their own survey ($SURVEY_TENANT), not the landlord's"; PASS=$((PASS+1))
   else
-    red "  FAIL  a tenant was offered a landlord-only survey"; FAIL=$((FAIL+1))
+    red "  FAIL  tenant prompt was '$SURVEY_TENANT' against the landlord's '$SURVEY_SLUG'"; FAIL=$((FAIL+1))
+  fi
+
+  # …and cannot answer the other role's survey even by asking for it directly.
+  req POST "/api/surveys/$SURVEY_SLUG/responses" \
+    '{"answers":{"q3_room_count":"2 to 4"},"source":"onboarding"}' "$TTOKEN"
+  check "a tenant cannot answer the landlord survey" 404 "$STATUS" "$BODY"
+
+  # A part-way save keeps what came before it. This is what makes an
+  # interrupted sign-up resumable, and a replace instead of a merge would lose
+  # every earlier answer the moment somebody answered the next question.
+  req POST "/api/surveys/$SURVEY_TENANT/responses" \
+    '{"answers":{"t1_looking_for":"A backroom or outside room"},"source":"onboarding","complete":false}' "$TTOKEN"
+  check "a part-way save is accepted" 201 "$STATUS" "$BODY"
+  req POST "/api/surveys/$SURVEY_TENANT/responses" \
+    '{"answers":{"t2_when":"This month"},"source":"onboarding","complete":false}' "$TTOKEN"
+  SURVEY_MERGED=$(echo "$BODY" | jq -r '.answered // empty')
+  if [[ "$SURVEY_MERGED" == "2" ]]; then
+    green "  PASS  answers merge across steps (2 kept)"; PASS=$((PASS+1))
+  else
+    red "  FAIL  expected 2 answers kept, got $SURVEY_MERGED — a later step replaced an earlier one"; FAIL=$((FAIL+1))
+  fi
+
+  # An open set still asks; only finishing stops it.
+  req GET /api/surveys/prompt "" "$TTOKEN"
+  SURVEY_OPEN=$(echo "$BODY" | jq -r '.answered // empty')
+  if [[ "$SURVEY_OPEN" == "2" ]]; then
+    green "  PASS  an unfinished set comes back resumable, at 2 of 7"; PASS=$((PASS+1))
+  else
+    red "  FAIL  an unfinished set did not come back with its answers (answered=$SURVEY_OPEN)"; FAIL=$((FAIL+1))
   fi
 
   # Aggregates are admin-only: they are the product's own research, and the

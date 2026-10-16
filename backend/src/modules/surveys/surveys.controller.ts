@@ -1,4 +1,6 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
+import { UserRole } from '@prisma/client';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -43,7 +45,9 @@ export class SurveysController {
     @Param('slug') slug: string,
     @Body() dto: SubmitSurveyDto,
   ) {
-    return this.surveys.submit(user.id, slug, dto.answers, dto.source);
+    return this.surveys.submit(user.id, slug, dto.answers, dto.source, {
+      complete: dto.complete ?? true,
+    });
   }
 
   /** "Not now" — honoured for 30 days, then asked again. */
@@ -62,7 +66,66 @@ export class SurveysController {
   @UseGuards(JwtAuthGuard, AdminGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Counts per option and open text, segmented by room count' })
-  results(@Param('slug') slug: string) {
-    return this.surveys.aggregate(slug);
+  results(
+    @Param('slug') slug: string,
+    @Query('version') version?: string,
+    @Query('role') role?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('includePartial') includePartial?: string,
+  ) {
+    return this.surveys.aggregate(slug, this.readFilters(version, role, from, to, includePartial));
+  }
+
+  /**
+   * The same aggregate as a CSV, for an admin who wants it in a spreadsheet.
+   *
+   * ⚠️ Counts and open text, exactly what the screen shows — NOT a row per
+   * person. An export that carried one line per respondent would turn an
+   * aggregate nobody can read back against an individual into a file that
+   * can, which is the whole POPIA position of this feature given away by a
+   * download button.
+   */
+  @Get('admin/:slug/results.csv')
+  @UseGuards(JwtAuthGuard, AdminGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'The same counts as a CSV — aggregate only, never per person' })
+  async csv(
+    @Res() res: Response,
+    @Param('slug') slug: string,
+    @Query('version') version?: string,
+    @Query('role') role?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('includePartial') includePartial?: string,
+  ) {
+    const body = await this.surveys.csv(slug, this.readFilters(version, role, from, to, includePartial));
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${slug}-results.csv"`);
+    res.send(body);
+  }
+
+  /**
+   * ⚠️ Parsed once, here, for both routes.
+   *
+   * A second copy of this parsing in the CSV route is how the screen and the
+   * download come to disagree about what "this month, landlords only" means —
+   * and the download is the one nobody checks.
+   */
+  private readFilters(version?: string, role?: string, from?: string, to?: string, includePartial?: string) {
+    const asRole = role === 'LANDLORD' || role === 'TENANT' ? (role as UserRole) : undefined;
+    const asDate = (value?: string) => {
+      if (!value) return undefined;
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? undefined : d;
+    };
+    const asVersion = version && /^\d+$/.test(version) ? Number(version) : undefined;
+    return {
+      version: asVersion,
+      role: asRole,
+      from: asDate(from),
+      to: asDate(to),
+      includePartial: includePartial === 'true',
+    };
   }
 }

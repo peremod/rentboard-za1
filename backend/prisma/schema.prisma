@@ -209,6 +209,10 @@ model User {
   refreshTokens   RefreshToken[]
   expenses        Expense[]        @relation("ExpensesRecorded")
 
+  /// Survey answers and skips, both keyed on the user — see SurveyResponse.
+  surveyResponses  SurveyResponse[]
+  surveyDismissals SurveyDismissal[]
+
   @@index([email])
   @@index([role])
   @@map("users")
@@ -2086,6 +2090,8 @@ model WhatsappDraft {
 /// segment whose answers the product knows least about. Pooling them would
 /// hide that difference in the aggregate.
 enum SurveySource {
+  /// Answered during the welcome steps, straight after the account was made.
+  onboarding
   micro
   dashboard
   whatsapp
@@ -2109,7 +2115,16 @@ enum SurveySource {
 model Survey {
   id    String @id @default(uuid())
   /// Stable handle used by the code that triggers it (e.g. 'landlord-pain-2026').
-  slug  String @unique
+  slug  String
+  /// Which edition of that handle this is.
+  ///
+  /// ⚠️ Questions are JSON and answers are keyed by question id, so rewording
+  /// a question in place changes what an existing answer MEANS without
+  /// changing the answer. New wording is therefore a NEW ROW: old responses
+  /// stay attached to the questions they were actually asked, and the admin
+  /// view can show the two editions apart instead of adding them together.
+  /// `promptFor` serves the highest active version for the audience.
+  version Int @default(1)
   title String
 
   /// Shown above the first question. Plain English, like everything else.
@@ -2132,43 +2147,63 @@ model Survey {
   responses  SurveyResponse[]
   dismissals SurveyDismissal[]
 
+  @@unique([slug, version])
+  @@index([active, slug])
   @@map("surveys")
 }
 
 /// One person's answers.
 ///
-/// `landlordProfileId` is nullable because the brief allows triggering before
-/// sign-in. An anonymous response still counts in the aggregate; it simply
-/// cannot be segmented by room count, and the admin view says so rather than
-/// quietly dropping it.
+/// ⚠️ Keyed on the USER, not on a landlord profile. It was
+/// `landlordProfileId`, which made a tenant survey unstorable: `submit()`
+/// opened by looking up a landlord profile and refusing anybody without one.
+/// A survey for tenants was not "not built yet" — it could not be recorded.
 ///
-/// POPIA: answers are opinions about the product, not personal information,
-/// and nothing here stores a name or a number. The link to a landlord exists
-/// so the same person is not asked twice and so question 3 can segment the
-/// rest — not so answers can be read back against an individual. The admin
-/// view aggregates and never shows who said what.
+/// POPIA: answers are opinions about the product and what somebody is looking
+/// for, not personal information, and nothing here stores a name or a number.
+/// The link to a user exists so the same person is not asked twice, so a
+/// half-finished set can be resumed, and so landlord and tenant answers can be
+/// counted apart — not so answers can be read back against an individual. The
+/// admin view aggregates and never shows who said what.
 model SurveyResponse {
   id       String @id @default(uuid())
   surveyId String
   survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
 
-  landlordProfileId String?
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The role this person answered AS, copied at answer time.
+  ///
+  /// Not read through the user at query time: an account that changes role
+  /// later must not silently move its answers into the other group's counts.
+  role UserRole
 
   source SurveySource
 
   /// Keyed by question id: { q1: 'Facebook', q5: { choice: 'yes', text: '…' } }.
-  /// Partial by design — someone who answers two questions and stops has told
+  /// Partial by design - somebody who answers two questions and stops has told
   /// us something, and discarding it to insist on a complete set would bias
   /// the result toward people with time.
   answers Json
 
-  createdAt DateTime @default(now())
+  /// Set when the last step is submitted. Null while a set is still open.
+  ///
+  /// ⚠️ The distinction the old model could not make. A row existed or it did
+  /// not, so "answered two questions and left" and "finished" were the same
+  /// state - which is why nothing could offer to resume, and why a completion
+  /// rate could not be computed at all.
+  completedAt DateTime?
 
-  /// One response per landlord per survey. Without this the dashboard prompt
-  /// and the WhatsApp message collect the same person twice and the counts
-  /// overstate agreement.
-  @@unique([surveyId, landlordProfileId])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One response per person per survey EDITION. A new version is a new row,
+  /// so somebody can answer the 2027 survey without their 2026 answers being
+  /// overwritten.
+  @@unique([surveyId, userId])
   @@index([surveyId, source])
+  @@index([surveyId, role, completedAt])
   @@map("survey_responses")
 }
 
@@ -2176,19 +2211,20 @@ model SurveyResponse {
 ///
 /// Separate from SurveyResponse rather than a status on it, because a
 /// dismissal is not a partial answer and must never be counted as one. Asking
-/// again after 30 days is the point — a landlord who skips in a busy week may
-/// answer in a quiet one — but asking on the next page load is how a prompt
-/// becomes something people learn to dismiss without reading.
+/// again after 30 days is the point - somebody who skips in a busy week may
+/// answer in a quiet one - and it is recorded on the SERVER so that skipping
+/// on a phone is still a skip on a laptop an hour later.
 model SurveyDismissal {
   id       String @id @default(uuid())
   surveyId String
   survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
 
-  landlordProfileId String
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   dismissedAt DateTime @default(now())
 
-  @@unique([surveyId, landlordProfileId])
+  @@unique([surveyId, userId])
   @@map("survey_dismissals")
 }
 

@@ -30,9 +30,23 @@ const T = ll.token;
 // ── A landlord with nothing ────────────────────────────────────────────────
 const empty = await apiCall(API, 'GET', '/api/landlord/inbox', undefined, T);
 empty.status === 200 ? ok('the inbox answers for a landlord with no rooms') : bad(`inbox: ${empty.status} ${JSON.stringify(empty.body).slice(0, 200)}`);
-(empty.body?.items ?? []).length === 0
-  ? ok('and it is empty rather than inventing something to do')
-  : bad(`${empty.body.items.length} items for a landlord with no rooms`);
+/**
+ * ⚠️ "Empty" means nothing about their ROOMS — Phase 9a.
+ *
+ * A brand-new landlord now has exactly one row here: the welcome questions
+ * they have not answered. That is the row that replaced the survey card on
+ * the dashboard, and a new account is precisely when it belongs. So the
+ * assertion is that the inbox invents no WORK, not that it is literally
+ * empty, and the survey row is named rather than filtered by a loose match —
+ * a filter that dropped anything unexpected would hide a real regression.
+ */
+const realWork = (items) => (items ?? []).filter((i) => i.kind !== 'survey_open');
+realWork(empty.body?.items).length === 0
+  ? ok('and it invents no work for a landlord with no rooms')
+  : bad(`${realWork(empty.body?.items).length} items for a landlord with no rooms`);
+(empty.body?.items ?? []).some((i) => i.kind === 'survey_open')
+  ? ok('…while the welcome questions sit there as one quiet row')
+  : bad('the welcome questions are not offered to a new landlord at all');
 
 const h0 = await apiCall(API, 'GET', '/api/landlord/health', undefined, T);
 h0.body?.occupancyPct === null
@@ -196,9 +210,21 @@ typeof h.paymentReliabilityFrom === 'number'
 // ── Nobody else's inbox ─────────────────────────────────────────────────
 const other = await registerUser(API, 'LANDLORD');
 const iOther = await apiCall(API, 'GET', '/api/landlord/inbox', undefined, other.token);
-(iOther.body?.items ?? []).length === 0
+/**
+ * ⚠️ Isolation, and it still has to be able to FAIL.
+ *
+ * The survey row belongs to whoever is reading, so it is excluded by name —
+ * but everything else must be absent, and the room title of the first
+ * landlord's rooms must appear nowhere at all. Weakening this to "no items"
+ * would have been the easy edit and would have stopped it catching a leak.
+ */
+const leaked = realWork(iOther.body?.items);
+leaked.length === 0
   ? ok('another landlord sees none of it')
-  : bad(`leaked ${iOther.body.items.length} items to another landlord`);
+  : bad(`leaked ${leaked.length} items to another landlord (${leaked.map((i) => i.kind).join(', ')})`);
+!JSON.stringify(iOther.body ?? {}).includes('Inbox room with an applicant')
+  ? ok("…and nothing of the first landlord's rooms appears in it by name")
+  : bad("the other landlord's inbox names the first landlord's room");
 const tn = await registerUser(API, 'TENANT');
 const iTenant = await apiCall(API, 'GET', '/api/landlord/inbox', undefined, tn.token);
 iTenant.status === 403 ? ok('and a tenant cannot open it at all') : bad(`tenant got ${iTenant.status}`);

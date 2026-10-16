@@ -4687,6 +4687,262 @@ than its claim — and now one pointed at the right PAGE and the wrong ELEMENT.
 title's own margin gives, with the defect fully reintroduced. The two states are
 5px and 12px, so the line sits at 9px.
 
+## 71. A room on the board that refused everyone, and a record nobody wrote
+
+Three things reported from a live portal on 15 October. Two of them turned out
+to be the same shape as every other defect in this file.
+
+### 🔴 A letting that fell through reopened the room and nothing else
+
+`cancel()` did one half of its job: it archived the tenancy and put the room
+back to `active`, with a long comment explaining why that is right. The
+application it belonged to stayed **`accepted` and un-archived**, and the
+letting cycle never moved.
+
+So, reproduced exactly:
+
+* the tenant's own list showed an acceptance for a letting that had fallen
+  through, while the inbox row for it was suppressed — one state, two readers,
+  disagreeing;
+* the landlord's applicant card offered no action at all, because the action
+  row is hidden on an accepted application;
+* and **nobody could apply.** Applications are unique per
+  `(roomId, tenantId, cycle)`. The accepted tenant got *"You have already
+  applied for this room"*, and every applicant `autoRejectOthers` had rejected
+  when the acceptance happened was locked out too. A listing on the board,
+  taking no applications from anybody who had ever wanted it, with nothing on
+  either screen saying so.
+
+The cycle now ends with the letting, exactly as `relist()` ends one: the
+application closes as `withdrawn` or `rejected` depending on **who** called it
+off (the same split `recordOutcome` uses for a viewing), what is left of the
+cycle is archived, and the counter moves. Nobody is silently reinstated —
+`undoAccept` is the 30-minute path for that — but everyone can apply again,
+which is the honest state of a room that is genuinely free.
+
+### 🔴 The notices screen was empty for almost every account
+
+The screen says, on itself: *"This screen is the record — nothing is sent
+anywhere else."* `NoticeRouter.deliver` **returned as soon as an email had
+been handed off**, so no notice row was written for anybody with an email
+address.
+
+⚠️ And `NotificationsService.send` does **not throw** when email is
+unconfigured: with no `RESEND_API_KEY` it logs `[email skipped — no API key]`,
+records a failed `EmailLog` and resolves. So the hand-off "succeeded", the row
+was skipped, and the person was told **nothing at all, anywhere**. That is the
+owner's report — a shortlisted tenant who was never notified — and it
+reproduced with one shortlist and an empty `GET /api/notices`.
+
+The row is now always written; email is an extra channel, never a replacement
+for the record.
+
+### ⚠️ What that fix then exposed: an invisible button
+
+The "Mark all as read" control only renders when something is unread — and
+nothing was ever unread, because nothing was written. The moment notices
+started existing, `a11y-drive` measured it at **1.00:1**: it carries
+`.btn-ghost`, which is the navbar's (cream at 75% on transparent, right on the
+dark header, invisible on a cream page). `.btn-ghost-light` has existed all
+along. `lease-documents.ts` had the same latent mistake and is fixed with it.
+
+A control nobody could see, behind a row nobody wrote, under a screen that
+promised to be the record.
+
+### A letting that never started is not a past letting
+
+The archive counted both kinds together, so a tenant who had rented one room
+read "Past lettings 2". Both records are kept — losing one would be the easy
+wrong fix — but the called-off one now sits under **"Lettings that never
+started"**, with its own count and a line saying no rent was ever owed on it.
+One row template serves both sections; two copies of two hundred lines is how
+the portal nav came to be defined six times.
+
+### Notices open one at a time
+
+Every notice rendered fully expanded, with body text running past the edge of a
+phone. The head is now a real `<button>` with `aria-expanded` and
+`aria-controls` (44px tall), the body opens on a tap, opening marks it read —
+and `min-width: 0` on the growing flex child is what actually stops the spill,
+the same property that was pushing the room page sideways by 171px.
+
+### Proven by reintroduction, both ways
+
+* Backend reverted → 7 checks fail, among them *"the same tenant can apply
+  again to the reopened room (409)"* and *"…and it is written into their
+  notices (empty)"*.
+* Frontend reverted → 5 fail, among them *"only ONE of them is a past letting
+  ('Past lettings 2')"* and *"collapsed, not a screen of open panels"*.
+
+⚠️ **The first frontend negative was a false green**, and it is worth recording
+why: my reverted code did not compile, `ng serve` kept serving the previous
+bundle, and the drive reported 297 passed against a screen whose source was
+broken — while deliberately proving those checks could fail. The drive now
+looks for the build-error overlay on each screen it measures, not only at
+sign-in, because a stale bundle makes every UI check in the file meaningless.
+
+## 72. The survey could not have asked a tenant anything — Phase 9a
+
+The owner asked for surveys to move into onboarding for BOTH roles and off the
+dashboard. The audit found the first half was not a missing screen: it was
+unstorable.
+
+### 🔴 `SurveyResponse` was keyed on a landlord profile
+
+`submit()` opened by looking up a `landlordProfile` and threw *"Only a landlord
+account can answer this survey"* for anybody without one; `promptFor()` did the
+same and returned null. So a tenant survey was not unbuilt — there was nowhere
+to put a tenant's answer, and no way to ask.
+
+Responses and dismissals are keyed on the **user** now, carry the **role they
+answered as** (copied at answer time, so an account that changes role later
+does not move its old answers into the other group's counts), and the
+migration backfills the old column rather than dropping it. It fails loudly on
+a row it cannot map instead of deleting it.
+
+### The three things the old model could not express
+
+| Missing | What it cost |
+| --- | --- |
+| `completedAt` | A row existed or it did not, so "answered two and left" and "finished" were the same state. Nothing could offer to resume, and no completion rate could be computed |
+| `version` | Questions are JSON and answers are keyed by question id, so rewording a question in place changed what every existing answer MEANT. New wording is a new row now, and old answers stay attached to the questions actually asked |
+| a tenant survey | See above |
+
+### Where the questions are asked, and why not in the form
+
+A dedicated route, `/welcome`, **after** the account exists. The account is
+created by one POST and this is simply the next screen, so a refresh, a lost
+signal, a closed tab or a skip cannot cost anybody their sign-up — the brief's
+"do not disrupt account creation", enforced by sequence rather than by care.
+
+One question per step with a progress bar, **every step saved on the server**,
+so an interrupted sign-up resumes where it stopped, on a different device if
+need be. Every question is optional and the screen says so before the first
+one. "I will do this later" records a dismissal, honoured for 30 days, and
+keeps what was already answered — a skip is not a withdrawal.
+
+### The tenant questions are not the landlord ones with the nouns swapped
+
+The landlord survey asks what is HARD about a job somebody already does. The
+tenant survey asks what they are looking for and what goes wrong while they
+look: what kind of place, when they must move, what they can pay **as a band**,
+where they search now, the hardest part, what has gone wrong, and what a
+listing must carry before they will spend taxi fare on a viewing. The drive
+asserts the two sets share **no question id at all**.
+
+⚠️ No exact budget figure, deliberately. A band answers the product question;
+an exact number on somebody looking for a place to live is sensitive and buys
+nothing — POPIA s.10, the same reasoning that keeps `room_view_days` a count
+with no viewer in it.
+
+### What came off the dashboard
+
+Both `app-survey-prompt` mounts. In their place, ONE row at the bottom of the
+task inbox — below everything where somebody is actually waiting on this
+person — that reads "Finish the questions you started — 3 of 7" and disappears
+when they finish or say not now. The dashboard is where you come to do your
+work; it is not a place to be asked the same question weekly.
+
+### The admin screen's own comment came true
+
+It hardcoded one slug behind *"a second survey would need a picker; the brief
+is explicit that v1 does not build one."* A second survey now exists, so
+without the picker every tenant answer would have been collected and shown to
+nobody. There is a picker, a date range, a landlord/tenant split that is never
+added together, a completion rate (finished over started, null when nobody has
+started — 0% and "nobody asked yet" are different), and a CSV export.
+
+⚠️ The export is **counts and open text, not a row per person**. A per-
+respondent file would hand away the one promise this feature makes, through a
+download button.
+
+### Three things found by running it
+
+⚠️ **`dbQuery` returns only the first line.** A check that said "two answers
+are on the server" printed one — the query was right and the reader truncated
+it. Every multi-row check in every drive has been reading row one. `dbRows` now
+exists beside it, and the one check that needed it uses it.
+
+⚠️ **A negative check passed on a 401.** "The export carries no person in it"
+was true of an error body. It proves the CSV is there before asserting what is
+not — the same rule §67 had to learn.
+
+⚠️ **The first negative run died on a click.** Reverting the role resolution
+left nothing to click on `/welcome`, and the unguarded click threw, ending the
+run before the checks below it. Guarded, as the tenancy drive already is.
+
+### What this deliberately does NOT do
+
+⚠️ Answers change nothing. No tenancy, application, rent record or room state
+is touched by a survey answer, and nothing reads them to decide what somebody
+may do — the brief's section G, left uncrossed. They are research, and the one
+feature that reads them is the admin aggregate.
+
+⚠️ The post-letting micro question is gone from the dashboard with the card.
+`microQuestion` still exists per survey and the API still names it, so the
+contextual prompt can come back as its own deliberate workflow — which is
+what the brief asks for periodic updates, rather than re-showing the
+onboarding set.
+
+## 73. One question, at the one moment it is worth asking — Phase 9b
+
+§72 took both survey cards off the dashboard and left a decision open: the
+contextual question — one question asked at the moment it is relevant — was
+removed with the card it lived in. The brief asks for exactly that to exist, as
+"a separate, intentional workflow rather than repeatedly displaying the
+original onboarding survey". This is that workflow.
+
+### Two moments, one question each
+
+**A landlord who has just marked a room let** is asked what the most stressful
+part of dealing with tenants is. That is the moment it is a memory rather than
+a guess. ⚠️ Q1 — how do you usually find tenants — would be the obvious
+alternative and is the wrong one: asking it moments after somebody found a
+tenant through Mastande invites the answer the product wants to hear.
+
+**A tenant who has just applied for a room** is asked when they need to move.
+They are thinking about moving right then, and it is the one answer that
+changes what the board should show them.
+
+### The three rules that keep it from becoming the card again
+
+1. **It asks only a question that is unanswered.** Somebody who answered it in
+   the welcome questions never sees it — the owner's rule that a survey
+   answered at sign-up does not come back.
+2. **Answering it is what stops it.** There is no counter and no cooldown to
+   get wrong.
+3. **"Not now" on one question does not silence seven.** In full mode that
+   button is a 30-day dismissal; in micro mode it only closes the card.
+   Silencing a whole survey because somebody waved away one question, while
+   busy finishing something else, would be the prompt deciding more than the
+   person did.
+
+### ⚠️ The bug this would have shipped with
+
+`submit()` marks a response **complete**. The card's existing send path used
+it, so answering the single contextual question would have recorded a
+seven-question survey as **finished with six questions never asked** — and the
+inbox row offering to finish them would have disappeared along with them.
+`submitMicro()` saves with `complete: false`, so the answer merges into the
+same open set and the inbox still says "1 of 7 done".
+
+### And the check that could not see it
+
+The first version of the drive asserted the API contract — POST with
+`complete: false` leaves the set open — and that check passed happily with the
+component reverted to `submit()`. **The component is the caller; a check on
+the endpoint cannot see which call it makes.** So the drive now applies for a
+room in a browser, answers the card, and reads the database: the set must
+still be open with one answer.
+
+Removing rule 1 then produced a *green* run too, because nothing exercised it:
+`GET /prompt` rightly still returns the survey (six questions are open), and
+only the card decides to render nothing. The drive now applies for a SECOND
+room and asserts the question is not asked again.
+
+Both of those are the same lesson in two coats: a check pointed at the thing
+below the defect passes while the defect ships.
+
 ## How to check the whole thing still works
 
 ```bash

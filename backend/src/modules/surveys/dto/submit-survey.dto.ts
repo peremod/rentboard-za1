@@ -1,4 +1,4 @@
-import { IsEnum, IsObject, IsOptional } from 'class-validator';
+import { IsBoolean, IsEnum, IsObject, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SurveySource } from '@prisma/client';
 
@@ -29,8 +29,24 @@ export class SubmitSurveyDto {
    * to think, and WhatsApp a landlord who never opens the portal. Pooling them
    * would hide that difference in the aggregate.
    */
-  @ApiPropertyOptional({ enum: ['micro', 'dashboard', 'whatsapp'], default: 'dashboard' })
+  @ApiPropertyOptional({ enum: ['onboarding', 'micro', 'dashboard', 'whatsapp'], default: 'dashboard' })
   @IsOptional()
-  @IsEnum(['micro', 'dashboard', 'whatsapp'])
+  @IsEnum(['onboarding', 'micro', 'dashboard', 'whatsapp'])
   source: SurveySource = 'dashboard';
+
+  /**
+   * False while the welcome questions are still being answered.
+   *
+   * ⚠️ This is what makes a set resumable. Without it there is no difference
+   * between "answered two and left" and "finished", so nothing can offer to
+   * continue and no completion rate can be computed — both of which the old
+   * model simply could not express.
+   *
+   * It only ever moves one way: the service will not un-complete a set that
+   * was already finished.
+   */
+  @ApiPropertyOptional({ default: true, description: 'False for a part-way save.' })
+  @IsOptional()
+  @IsBoolean()
+  complete?: boolean;
 }

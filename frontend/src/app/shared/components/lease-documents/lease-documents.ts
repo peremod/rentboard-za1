@@ -89,9 +89,12 @@ function humanSize(bytes?: number | null): string {
                   @if (d.note) { <span class="muted doc-note">{{ d.note }}</span> }
                 </div>
                 @if (d.mine) {
+                  <!-- btn-ghost-LIGHT: this list is on a card, not on the dark
+                       header bar. The dark variant measures 1.00:1 here — see
+                       the note in notices.ts, where it was caught. -->
                   <button
                     type="button"
-                    class="btn-ghost btn-sm"
+                    class="btn-ghost-light btn-sm"
                     [disabled]="busy() === d.id"
                     [attr.aria-label]="'Remove ' + d.label"
                     (click)="remove(d)">

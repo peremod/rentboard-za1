@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SurveysModule } from '../surveys/surveys.module';
 import { LandlordInboxController } from './landlord-inbox.controller';
 import { LandlordInboxService } from './landlord-inbox.service';
 import { CalendarService } from './calendar.service';
@@ -10,7 +11,7 @@ import { TenanciesModule } from '../tenancies/tenancies.module';
  * eventually disagree, and the landlord would trust whichever they saw first.
  */
 @Module({
-  imports: [TenanciesModule],
+  imports: [TenanciesModule, SurveysModule],
   controllers: [LandlordInboxController],
   providers: [LandlordInboxService, CalendarService],
 })

@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { TenancyArchiveService } from '../../../core/services/tenancy-archive.service';
 import { ArchiveListRow, ArchiveRecord } from '../../../core/models/tenancy-archive.model';
@@ -50,7 +50,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-account-tenancies',
   standalone: true,
-  imports: [DatePipe, RouterLink, ZarCentsPipe, ScreenHint, Loading],
+  imports: [DatePipe, RouterLink, ZarCentsPipe, ScreenHint, Loading, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-screen-hint key="account-tenancies" heading="Everywhere you have let or rented">
@@ -71,274 +71,313 @@ import { Loading } from '../../../shared/components/loading/loading';
         </p>
       </div>
     } @else {
-      <section class="dash-section">
-        <h2 class="dash-section-title">
-          Past lettings
-          <span class="dash-count">{{ rows().length }}</span>
-        </h2>
-        <p class="muted">Newest first. Open one for the whole record.</p>
+      <!-- ⚠️ TWO SECTIONS, because they are two kinds of record.
+           A letting that was called off before anybody moved in is not a past
+           letting: nobody lived there, no rent was ever owed, and counting it
+           under "Past lettings 2" told this tenant they had rented a room
+           twice when they had rented it once. Reported 15 October.
+           It is still KEPT — losing the record would be the easy wrong fix,
+           and the owner has asked for the opposite every time it has come up
+           — so it sits under its own heading, which says what it is. -->
+      @if (past().length) {
+        <section class="dash-section">
+          <h2 class="dash-section-title">
+            Past lettings
+            <span class="dash-count">{{ past().length }}</span>
+          </h2>
+          <p class="muted">Newest first. Open one for the whole record.</p>
 
-        <ul class="arc-list">
-          @for (r of rows(); track r.id) {
-            <li class="arc-row" [class.arc-row--open]="openId() === r.id">
-              <button type="button" class="arc-row__head"
-                      [attr.aria-expanded]="openId() === r.id"
-                      (click)="toggle(r)">
-                <span class="arc-row__title">{{ r.room?.title || 'A room' }}</span>
-                <span class="arc-row__meta">
-                  <!-- One vocabulary, defined in styles.scss. A letting that
-                       never started is a different KIND of record, not a lesser
-                       one — 'closed', not a faded 'past'. -->
-                  <span class="state"
-                        [class.state--past]="r.status !== 'cancelled'"
-                        [class.state--closed]="r.status === 'cancelled'">
-                    {{ r.status === 'cancelled' ? 'Never started' : 'Past letting' }}
+          <ul class="arc-list">
+            @for (r of past(); track r.id) {
+              <ng-container *ngTemplateOutlet="arcRow; context: { $implicit: r }"/>
+            }
+          </ul>
+        </section>
+      }
+
+      <!-- Called off before anybody moved in. Its own section, its own count,
+           and a line saying what it is — not a dimmer version of a letting
+           that happened. -->
+      @if (neverStarted().length) {
+        <section class="dash-section">
+          <h2 class="dash-section-title">
+            Lettings that never started
+            <span class="dash-count">{{ neverStarted().length }}</span>
+          </h2>
+          <p class="muted">
+            Accepted, then called off before anybody moved in. Kept as a record;
+            no rent was ever owed on these.
+          </p>
+
+          <ul class="arc-list">
+            @for (r of neverStarted(); track r.id) {
+              <ng-container *ngTemplateOutlet="arcRow; context: { $implicit: r }"/>
+            }
+          </ul>
+        </section>
+      }
+
+      <!-- One row template for both sections. Two copies of two hundred lines
+           is how the portal nav came to be defined six times, with the copies
+           disagreeing. -->
+      <ng-template #arcRow let-r>
+              <li class="arc-row" [class.arc-row--open]="openId() === r.id">
+                <button type="button" class="arc-row__head"
+                        [attr.aria-expanded]="openId() === r.id"
+                        (click)="toggle(r)">
+                  <span class="arc-row__title">{{ r.room?.title || 'A room' }}</span>
+                  <span class="arc-row__meta">
+                    <!-- One vocabulary, defined in styles.scss. A letting that
+                         never started is a different KIND of record, not a lesser
+                         one — 'closed', not a faded 'past'. -->
+                    <span class="state"
+                          [class.state--past]="r.status !== 'cancelled'"
+                          [class.state--closed]="r.status === 'cancelled'">
+                      {{ r.status === 'cancelled' ? 'Never started' : 'Past letting' }}
+                    </span>
+                    <!-- Which side they were, and who the other person was. On a
+                         screen that mixes both roles this is the first thing a
+                         reader needs. -->
+                    <span>
+                      {{ r.role === 'landlord' ? 'You let it to' : 'You rented from' }}
+                      {{ r.otherParty?.fullName || 'a former user' }}
+                    </span>
+                    @if (r.startDate && r.endDate) {
+                      <span>{{ r.startDate | date: 'MMM yyyy' }} – {{ r.endDate | date: 'MMM yyyy' }}</span>
+                    } @else if (r.endDate) {
+                      <span>ended {{ r.endDate | date: 'MMM yyyy' }}</span>
+                    }
+                    @if (r.status !== 'cancelled') {
+                      <span>{{ r.rentCents | zarCents }} a month</span>
+                    }
+                    @if (r.reviewsOpen) {
+                      <span class="state-text state--waiting">Reviews still open</span>
+                    }
                   </span>
-                  <!-- Which side they were, and who the other person was. On a
-                       screen that mixes both roles this is the first thing a
-                       reader needs. -->
-                  <span>
-                    {{ r.role === 'landlord' ? 'You let it to' : 'You rented from' }}
-                    {{ r.otherParty?.fullName || 'a former user' }}
-                  </span>
-                  @if (r.startDate && r.endDate) {
-                    <span>{{ r.startDate | date: 'MMM yyyy' }} – {{ r.endDate | date: 'MMM yyyy' }}</span>
-                  } @else if (r.endDate) {
-                    <span>ended {{ r.endDate | date: 'MMM yyyy' }}</span>
-                  }
-                  @if (r.status !== 'cancelled') {
-                    <span>{{ r.rentCents | zarCents }} a month</span>
-                  }
-                  @if (r.reviewsOpen) {
-                    <span class="state-text state--waiting">Reviews still open</span>
-                  }
-                </span>
-              </button>
+                </button>
 
-              @if (openId() === r.id) {
-                @if (record(); as rec) {
-                  <div class="arc-detail">
-                    <!-- ── How it began and how it ended ───────────────── -->
-                    <h3 class="arc-detail__h">The letting</h3>
-                    <dl class="arc-facts">
-                      @if (rec.tenancy.room?.locationDisplay) {
-                        <dt>Where</dt><dd>{{ rec.tenancy.room?.locationDisplay }}</dd>
-                      }
-                      @if (rec.tenancy.startDate) {
-                        <dt>Moved in</dt><dd>{{ rec.tenancy.startDate | date: 'd MMMM yyyy' }}</dd>
-                      }
-                      @if (rec.tenancy.endDate) {
-                        <dt>{{ rec.tenancy.status === 'cancelled' ? 'Called off' : 'Moved out' }}</dt>
-                        <dd>
-                          {{ rec.tenancy.endDate | date: 'd MMMM yyyy' }}
-                          @if (rec.tenancy.endedBy) {
-                            — {{ rec.tenancy.endedBy === 'you' ? 'you recorded it' : 'they recorded it' }}
-                          }
-                        </dd>
-                      }
-                      @if (rec.tenancy.endReason) {
-                        <dt>Reason given</dt><dd>{{ rec.tenancy.endReason }}</dd>
-                      }
-                      @if (rec.tenancy.noticeGivenAt) {
-                        <dt>Notice</dt>
-                        <dd>
-                          given {{ rec.tenancy.noticeGivenAt | date: 'd MMM yyyy' }}
-                          by {{ rec.tenancy.noticeGivenBy === 'you' ? 'you' : 'them' }},
-                          {{ rec.tenancy.noticePeriodDays }} days
-                        </dd>
-                      }
-                      @if (rec.tenancy.status !== 'cancelled') {
-                        <dt>Rent</dt><dd>{{ rec.tenancy.rentCents | zarCents }} a month</dd>
-                      }
-                    </dl>
+                @if (openId() === r.id) {
+                  @if (record(); as rec) {
+                    <div class="arc-detail">
+                      <!-- ── How it began and how it ended ───────────────── -->
+                      <h3 class="arc-detail__h">The letting</h3>
+                      <dl class="arc-facts">
+                        @if (rec.tenancy.room?.locationDisplay) {
+                          <dt>Where</dt><dd>{{ rec.tenancy.room?.locationDisplay }}</dd>
+                        }
+                        @if (rec.tenancy.startDate) {
+                          <dt>Moved in</dt><dd>{{ rec.tenancy.startDate | date: 'd MMMM yyyy' }}</dd>
+                        }
+                        @if (rec.tenancy.endDate) {
+                          <dt>{{ rec.tenancy.status === 'cancelled' ? 'Called off' : 'Moved out' }}</dt>
+                          <dd>
+                            {{ rec.tenancy.endDate | date: 'd MMMM yyyy' }}
+                            @if (rec.tenancy.endedBy) {
+                              — {{ rec.tenancy.endedBy === 'you' ? 'you recorded it' : 'they recorded it' }}
+                            }
+                          </dd>
+                        }
+                        @if (rec.tenancy.endReason) {
+                          <dt>Reason given</dt><dd>{{ rec.tenancy.endReason }}</dd>
+                        }
+                        @if (rec.tenancy.noticeGivenAt) {
+                          <dt>Notice</dt>
+                          <dd>
+                            given {{ rec.tenancy.noticeGivenAt | date: 'd MMM yyyy' }}
+                            by {{ rec.tenancy.noticeGivenBy === 'you' ? 'you' : 'them' }},
+                            {{ rec.tenancy.noticePeriodDays }} days
+                          </dd>
+                        }
+                        @if (rec.tenancy.status !== 'cancelled') {
+                          <dt>Rent</dt><dd>{{ rec.tenancy.rentCents | zarCents }} a month</dd>
+                        }
+                      </dl>
 
-                    <!-- ── Rent ─────────────────────────────────────────── -->
-                    @if (rec.rent.periods.length) {
-                      <h3 class="arc-detail__h">
-                        Rent
-                        <span class="dash-count">{{ rentSummary(rec) }}</span>
-                      </h3>
-                      <!-- Chronological, oldest first: this is a record being
-                           read rather than a queue being worked, and a person
-                           checking what they paid reads down the months. -->
-                      <ul class="arc-months">
-                        @for (p of rec.rent.periods; track p.id) {
-                          <li class="arc-month">
-                            <span class="arc-month__when">{{ p.periodStart | date: 'MMM yyyy' }}</span>
-                            <span class="arc-month__amount">{{ p.amountCents | zarCents }}</span>
-                            <span class="app-status" [class]="'app-status status-' + p.status">
-                              {{ rentLabel(p.status) }}
-                            </span>
-                            @if (p.tenantDisputedAt) {
-                              <span class="arc-month__answer">
-                                The tenant said this was wrong on
-                                {{ p.tenantDisputedAt | date: 'd MMM yyyy' }}@if (p.tenantNote) {: “{{ p.tenantNote }}”}
+                      <!-- ── Rent ─────────────────────────────────────────── -->
+                      @if (rec.rent.periods.length) {
+                        <h3 class="arc-detail__h">
+                          Rent
+                          <span class="dash-count">{{ rentSummary(rec) }}</span>
+                        </h3>
+                        <!-- Chronological, oldest first: this is a record being
+                             read rather than a queue being worked, and a person
+                             checking what they paid reads down the months. -->
+                        <ul class="arc-months">
+                          @for (p of rec.rent.periods; track p.id) {
+                            <li class="arc-month">
+                              <span class="arc-month__when">{{ p.periodStart | date: 'MMM yyyy' }}</span>
+                              <span class="arc-month__amount">{{ p.amountCents | zarCents }}</span>
+                              <span class="app-status" [class]="'app-status status-' + p.status">
+                                {{ rentLabel(p.status) }}
                               </span>
-                            }
-                          </li>
-                        }
-                      </ul>
-                      <p class="muted arc-note">
-                        This was the landlord's own record. Mastande never held
-                        the rent and never checked any of it.
-                      </p>
-                    }
-
-                    <!-- ── Reviews ──────────────────────────────────────── -->
-                    <h3 class="arc-detail__h">Reviews</h3>
-                    @if (rec.reviews.length) {
-                      <ul class="arc-reviews">
-                        @for (v of rec.reviews; track v.id) {
-                          <li class="arc-review">
-                            <span class="arc-review__type">{{ reviewLabel(v.type) }}</span>
-                            <span class="arc-review__stars" [attr.aria-label]="v.rating + ' out of 5'">
-                              {{ stars(v.rating) }}
-                            </span>
-                            <span class="arc-review__by">
-                              {{ v.author?.fullName || 'A former user' }},
-                              {{ v.publishedAt | date: 'MMM yyyy' }}
-                            </span>
-                            <span class="arc-review__body">{{ v.comment }}</span>
-                            @if (v.response) {
-                              <span class="arc-review__reply">
-                                Reply: {{ v.response }}
-                              </span>
-                            }
-                          </li>
-                        }
-                      </ul>
-                    } @else {
-                      <!-- ⚠️ Says WHY there is nothing, which matters here: a
-                           review is withheld until both sides have written one
-                           or the window closes, so "none" and "not yet shown"
-                           are different facts and the reader cannot tell them
-                           apart from an empty list. -->
-                      <p class="muted">
-                        @if (rec.tenancy.reviewsOpen) {
-                          Nothing is shown yet. Neither review appears until you
-                          have both written one, or the 30 days run out.
-                        } @else {
-                          No reviews were published for this letting.
-                        }
-                      </p>
-                    }
-
-                    <!-- ── Paperwork ────────────────────────────────────── -->
-                    @if (rec.documents.length) {
-                      <h3 class="arc-detail__h">Paperwork</h3>
-                      <ul class="arc-docs">
-                        @for (d of rec.documents; track d.id) {
-                          <li class="arc-doc">
-                            <span class="arc-doc__label">{{ d.label }}</span>
-                            <span class="muted">
-                              {{ d.kind }}@if (d.sizeBytes) { · {{ kb(d.sizeBytes) }} }
-                              · {{ d.createdAt | date: 'd MMM yyyy' }}
-                            </span>
-                          </li>
-                        }
-                      </ul>
-                      <p class="muted arc-note">
-                        Mastande stored these files and nothing more. It did not
-                        sign anything or check what either of you agreed.
-                      </p>
-                    }
-
-                    <!-- ── How it began ─────────────────────────────────── -->
-                    @if (rec.application || rec.viewings.length) {
-                      <h3 class="arc-detail__h">Before you moved in</h3>
-                      <ul class="arc-timeline">
-                        @if (rec.application) {
-                          <li>Applied {{ rec.application.createdAt | date: 'd MMM yyyy' }}</li>
-                          @if (rec.application.decidedAt) {
-                            <li>Accepted {{ rec.application.decidedAt | date: 'd MMM yyyy' }}</li>
+                              @if (p.tenantDisputedAt) {
+                                <span class="arc-month__answer">
+                                  The tenant said this was wrong on
+                                  {{ p.tenantDisputedAt | date: 'd MMM yyyy' }}@if (p.tenantNote) {: “{{ p.tenantNote }}”}
+                                </span>
+                              }
+                            </li>
                           }
-                        }
-                        @for (v of rec.viewings; track v.id) {
-                          <li>
-                            Viewing {{ v.startsAt | date: 'd MMM yyyy, HH:mm' }} —
-                            {{ viewingLabel(v.status) }}
-                          </li>
-                        }
-                      </ul>
-                    }
+                        </ul>
+                        <p class="muted arc-note">
+                          This was the landlord's own record. Mastande never held
+                          the rent and never checked any of it.
+                        </p>
+                      }
 
-                    <!-- ── What you reported ────────────────────────────── -->
-                    <!-- ⚠️ Only ever the ones THIS person raised. A tenancy
-                         flag and a report are private, unreviewed accusations,
-                         and the schema records why showing one to its subject
-                         is this platform's largest defamation exposure in
-                         South Africa. Enforced server-side; this section just
-                         renders what it is given. -->
-                    @if (rec.flags.length || rec.reports.length) {
-                      <h3 class="arc-detail__h">What you reported</h3>
-                      <p class="muted">
-                        Only what you raised. What the other party may have
-                        reported is not shown to you, and yours is not shown to
-                        them.
-                      </p>
-                      <ul class="arc-reports">
-                        @for (f of rec.flags; track f.id) {
-                          <li class="arc-report">
-                            <span class="arc-report__reason">{{ flagLabel(f.reason) }}</span>
-                            <span class="muted">{{ f.createdAt | date: 'd MMM yyyy' }} · {{ f.status }}</span>
-                            <span class="arc-report__detail">{{ f.detail }}</span>
-                            @if (f.reviewNote) {
-                              <span class="arc-report__outcome">Mastande said: {{ f.reviewNote }}</span>
+                      <!-- ── Reviews ──────────────────────────────────────── -->
+                      <h3 class="arc-detail__h">Reviews</h3>
+                      @if (rec.reviews.length) {
+                        <ul class="arc-reviews">
+                          @for (v of rec.reviews; track v.id) {
+                            <li class="arc-review">
+                              <span class="arc-review__type">{{ reviewLabel(v.type) }}</span>
+                              <span class="arc-review__stars" [attr.aria-label]="v.rating + ' out of 5'">
+                                {{ stars(v.rating) }}
+                              </span>
+                              <span class="arc-review__by">
+                                {{ v.author?.fullName || 'A former user' }},
+                                {{ v.publishedAt | date: 'MMM yyyy' }}
+                              </span>
+                              <span class="arc-review__body">{{ v.comment }}</span>
+                              @if (v.response) {
+                                <span class="arc-review__reply">
+                                  Reply: {{ v.response }}
+                                </span>
+                              }
+                            </li>
+                          }
+                        </ul>
+                      } @else {
+                        <!-- ⚠️ Says WHY there is nothing, which matters here: a
+                             review is withheld until both sides have written one
+                             or the window closes, so "none" and "not yet shown"
+                             are different facts and the reader cannot tell them
+                             apart from an empty list. -->
+                        <p class="muted">
+                          @if (rec.tenancy.reviewsOpen) {
+                            Nothing is shown yet. Neither review appears until you
+                            have both written one, or the 30 days run out.
+                          } @else {
+                            No reviews were published for this letting.
+                          }
+                        </p>
+                      }
+
+                      <!-- ── Paperwork ────────────────────────────────────── -->
+                      @if (rec.documents.length) {
+                        <h3 class="arc-detail__h">Paperwork</h3>
+                        <ul class="arc-docs">
+                          @for (d of rec.documents; track d.id) {
+                            <li class="arc-doc">
+                              <span class="arc-doc__label">{{ d.label }}</span>
+                              <span class="muted">
+                                {{ d.kind }}@if (d.sizeBytes) { · {{ kb(d.sizeBytes) }} }
+                                · {{ d.createdAt | date: 'd MMM yyyy' }}
+                              </span>
+                            </li>
+                          }
+                        </ul>
+                        <p class="muted arc-note">
+                          Mastande stored these files and nothing more. It did not
+                          sign anything or check what either of you agreed.
+                        </p>
+                      }
+
+                      <!-- ── How it began ─────────────────────────────────── -->
+                      @if (rec.application || rec.viewings.length) {
+                        <h3 class="arc-detail__h">Before you moved in</h3>
+                        <ul class="arc-timeline">
+                          @if (rec.application) {
+                            <li>Applied {{ rec.application.createdAt | date: 'd MMM yyyy' }}</li>
+                            @if (rec.application.decidedAt) {
+                              <li>Accepted {{ rec.application.decidedAt | date: 'd MMM yyyy' }}</li>
                             }
-                          </li>
-                        }
-                        @for (r2 of rec.reports; track r2.id) {
-                          <li class="arc-report">
-                            <span class="arc-report__reason">{{ r2.reason }}</span>
-                            <span class="muted">{{ r2.createdAt | date: 'd MMM yyyy' }} · {{ r2.status }}</span>
-                            <span class="arc-report__detail">{{ r2.details }}</span>
-                            @if (r2.resolutionNote) {
-                              <span class="arc-report__outcome">Mastande said: {{ r2.resolutionNote }}</span>
-                            }
-                          </li>
-                        }
-                      </ul>
-                    }
+                          }
+                          @for (v of rec.viewings; track v.id) {
+                            <li>
+                              Viewing {{ v.startsAt | date: 'd MMM yyyy, HH:mm' }} —
+                              {{ viewingLabel(v.status) }}
+                            </li>
+                          }
+                        </ul>
+                      }
 
-                    <!-- ── What is deliberately not here ───────────────── -->
-                    <!-- Said out loud rather than left as an absence. A reader
-                         who knows a thing exists and cannot find it assumes it
-                         was lost. -->
-                    <div class="arc-note arc-note--excluded">
-                      <p class="muted">
-                        Private notes a landlord wrote are not part of a shared
-                        record and are not shown to anybody but their author.
-                        The conversation for this letting is where it has always
-                        been.
-                      </p>
-                      <!-- ⚠️ A block link with real padding, not an inline one
-                           mid-sentence. The drive measured the inline version
-                           at 14px against the 44px target this codebase holds
-                           everything to — WCAG 2.5.8 does exempt a link inside
-                           a sentence, but the useful thing here is the
-                           destination and it deserves to be tappable on a
-                           cheap touch screen rather than technically exempt.
+                      <!-- ── What you reported ────────────────────────────── -->
+                      <!-- ⚠️ Only ever the ones THIS person raised. A tenancy
+                           flag and a report are private, unreviewed accusations,
+                           and the schema records why showing one to its subject
+                           is this platform's largest defamation exposure in
+                           South Africa. Enforced server-side; this section just
+                           renders what it is given. -->
+                      @if (rec.flags.length || rec.reports.length) {
+                        <h3 class="arc-detail__h">What you reported</h3>
+                        <p class="muted">
+                          Only what you raised. What the other party may have
+                          reported is not shown to you, and yours is not shown to
+                          them.
+                        </p>
+                        <ul class="arc-reports">
+                          @for (f of rec.flags; track f.id) {
+                            <li class="arc-report">
+                              <span class="arc-report__reason">{{ flagLabel(f.reason) }}</span>
+                              <span class="muted">{{ f.createdAt | date: 'd MMM yyyy' }} · {{ f.status }}</span>
+                              <span class="arc-report__detail">{{ f.detail }}</span>
+                              @if (f.reviewNote) {
+                                <span class="arc-report__outcome">Mastande said: {{ f.reviewNote }}</span>
+                              }
+                            </li>
+                          }
+                          @for (r2 of rec.reports; track r2.id) {
+                            <li class="arc-report">
+                              <span class="arc-report__reason">{{ r2.reason }}</span>
+                              <span class="muted">{{ r2.createdAt | date: 'd MMM yyyy' }} · {{ r2.status }}</span>
+                              <span class="arc-report__detail">{{ r2.details }}</span>
+                              @if (r2.resolutionNote) {
+                                <span class="arc-report__outcome">Mastande said: {{ r2.resolutionNote }}</span>
+                              }
+                            </li>
+                          }
+                        </ul>
+                      }
 
-                           routerLink, not href: an href reloads the whole
-                           application in an SPA, which on this market's
-                           connections is seconds and a white screen. -->
-                      <a class="arc-note__link" routerLink="/account/messages">
-                        Open your messages
-                      </a>
+                      <!-- ── What is deliberately not here ───────────────── -->
+                      <!-- Said out loud rather than left as an absence. A reader
+                           who knows a thing exists and cannot find it assumes it
+                           was lost. -->
+                      <div class="arc-note arc-note--excluded">
+                        <p class="muted">
+                          Private notes a landlord wrote are not part of a shared
+                          record and are not shown to anybody but their author.
+                          The conversation for this letting is where it has always
+                          been.
+                        </p>
+                        <!-- ⚠️ A block link with real padding, not an inline one
+                             mid-sentence. The drive measured the inline version
+                             at 14px against the 44px target this codebase holds
+                             everything to — WCAG 2.5.8 does exempt a link inside
+                             a sentence, but the useful thing here is the
+                             destination and it deserves to be tappable on a
+                             cheap touch screen rather than technically exempt.
+
+                             routerLink, not href: an href reloads the whole
+                             application in an SPA, which on this market's
+                             connections is seconds and a white screen. -->
+                        <a class="arc-note__link" routerLink="/account/messages">
+                          Open your messages
+                        </a>
+                      </div>
                     </div>
-                  </div>
-                } @else if (detailError()) {
-                  <div class="arc-detail">
-                    <div class="field-error" role="alert">{{ detailError() }}</div>
-                  </div>
-                } @else {
-                  <div class="arc-detail"><app-loading>Loading the record…</app-loading></div>
+                  } @else if (detailError()) {
+                    <div class="arc-detail">
+                      <div class="field-error" role="alert">{{ detailError() }}</div>
+                    </div>
+                  } @else {
+                    <div class="arc-detail"><app-loading>Loading the record…</app-loading></div>
+                  }
                 }
-              }
-            </li>
-          }
-        </ul>
-      </section>
+              </li>
+      </ng-template>
     }
   `,
   /* No emoji in these comments: an emoji inside a CSS comment in an inline
@@ -453,6 +492,20 @@ export class AccountTenancies implements OnInit {
   private archive = inject(TenancyArchiveService);
 
   protected readonly rows = signal<ArchiveListRow[]>([]);
+
+  /**
+   * ⚠️ Two lists, because they are two kinds of record.
+   *
+   * A `cancelled` tenancy was accepted and then called off before anybody
+   * moved in: nobody lived there and no rent was ever owed. Counting it under
+   * "Past lettings 2" told a tenant they had rented a room twice when they had
+   * rented it once — reported 15 October from a live dashboard.
+   *
+   * Filtered here rather than dropped from the API: the record is kept, it
+   * simply stops being called something it is not.
+   */
+  protected readonly past = computed(() => this.rows().filter((r) => r.status !== 'cancelled'));
+  protected readonly neverStarted = computed(() => this.rows().filter((r) => r.status === 'cancelled'));
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
 
