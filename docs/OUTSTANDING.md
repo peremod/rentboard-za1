@@ -4884,6 +4884,65 @@ contextual prompt can come back as its own deliberate workflow — which is
 what the brief asks for periodic updates, rather than re-showing the
 onboarding set.
 
+## 73. One question, at the one moment it is worth asking — Phase 9b
+
+§72 took both survey cards off the dashboard and left a decision open: the
+contextual question — one question asked at the moment it is relevant — was
+removed with the card it lived in. The brief asks for exactly that to exist, as
+"a separate, intentional workflow rather than repeatedly displaying the
+original onboarding survey". This is that workflow.
+
+### Two moments, one question each
+
+**A landlord who has just marked a room let** is asked what the most stressful
+part of dealing with tenants is. That is the moment it is a memory rather than
+a guess. ⚠️ Q1 — how do you usually find tenants — would be the obvious
+alternative and is the wrong one: asking it moments after somebody found a
+tenant through Mastande invites the answer the product wants to hear.
+
+**A tenant who has just applied for a room** is asked when they need to move.
+They are thinking about moving right then, and it is the one answer that
+changes what the board should show them.
+
+### The three rules that keep it from becoming the card again
+
+1. **It asks only a question that is unanswered.** Somebody who answered it in
+   the welcome questions never sees it — the owner's rule that a survey
+   answered at sign-up does not come back.
+2. **Answering it is what stops it.** There is no counter and no cooldown to
+   get wrong.
+3. **"Not now" on one question does not silence seven.** In full mode that
+   button is a 30-day dismissal; in micro mode it only closes the card.
+   Silencing a whole survey because somebody waved away one question, while
+   busy finishing something else, would be the prompt deciding more than the
+   person did.
+
+### ⚠️ The bug this would have shipped with
+
+`submit()` marks a response **complete**. The card's existing send path used
+it, so answering the single contextual question would have recorded a
+seven-question survey as **finished with six questions never asked** — and the
+inbox row offering to finish them would have disappeared along with them.
+`submitMicro()` saves with `complete: false`, so the answer merges into the
+same open set and the inbox still says "1 of 7 done".
+
+### And the check that could not see it
+
+The first version of the drive asserted the API contract — POST with
+`complete: false` leaves the set open — and that check passed happily with the
+component reverted to `submit()`. **The component is the caller; a check on
+the endpoint cannot see which call it makes.** So the drive now applies for a
+room in a browser, answers the card, and reads the database: the set must
+still be open with one answer.
+
+Removing rule 1 then produced a *green* run too, because nothing exercised it:
+`GET /prompt` rightly still returns the survey (six questions are open), and
+only the card decides to render nothing. The drive now applies for a SECOND
+room and asserts the question is not asked again.
+
+Both of those are the same lesson in two coats: a check pointed at the thing
+below the defect passes while the defect ships.
+
 ## How to check the whole thing still works
 
 ```bash

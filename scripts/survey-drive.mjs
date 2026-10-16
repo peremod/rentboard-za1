@@ -249,6 +249,172 @@ console.log('\n── 4. Not now ───────────────�
   check(again.body?.answered === 1, `…resuming at ${again.body?.answered} of ${again.body?.questions?.length}`);
 }
 
+// ── 6. The contextual question, asked once and never after sign-up ──────
+//
+// Phase 9b. The owner's rule: a survey answered during onboarding must not
+// come back as a prompt, and periodic asking is a separate, deliberate
+// workflow rather than re-showing the welcome set.
+console.log('\n── 6. One question, at the moment it is worth asking ────────');
+
+{
+  const stamp = Date.now() + 4000;
+  const tenant = await registerUser(API, 'TENANT', stamp);
+  const prompt = await apiCall(API, 'GET', '/api/surveys/prompt', null, tenant.token);
+  const micro = prompt.body?.microQuestion;
+  check(!!micro, `the tenant survey names a contextual question (${micro?.id})`);
+
+  /**
+   * ⚠️ ONE answer must not finish seven questions.
+   *
+   * `submit` marks a set complete. Sending the contextual answer through it
+   * would have recorded a seven-question survey as finished with six never
+   * asked — and the inbox row offering to finish it would have gone with
+   * them. The micro path saves with complete:false.
+   */
+  const answered = await apiCall(API, 'POST', `/api/surveys/${prompt.body.slug}/responses`,
+    { answers: { [micro.id]: micro.options[0] }, source: 'micro', complete: false }, tenant.token);
+  check(answered.body?.complete === false, 'answering it does NOT finish the whole set');
+  check(answered.body?.answered === 1, `…it is one answer of ${answered.body?.total}`);
+
+  const still = await apiCall(API, 'GET', '/api/tenant-inbox', null, tenant.token);
+  const row = (still.body?.items ?? []).find((i) => i.kind === 'survey_open');
+  check(!!row && /finish/i.test(row.title), `…and the inbox still offers to finish the rest ("${row?.title}")`);
+
+  // Asked once: the question it would ask is now answered, so there is
+  // nothing left for the card to render.
+  const after = await apiCall(API, 'GET', '/api/surveys/prompt', null, tenant.token);
+  check(
+    after.body?.microQuestion?.id === micro.id && micro.id in (after.body?.answers ?? {}),
+    'the contextual question is marked answered, which is what stops it being asked again',
+  );
+
+  // ── and somebody who answered it at SIGN-UP never meets it at all
+  const early = await registerUser(API, 'TENANT', stamp + 1);
+  const p2 = await apiCall(API, 'GET', '/api/surveys/prompt', null, early.token);
+  const all = {};
+  for (const q of p2.body.questions) all[q.id] = q.kind === 'choice' ? q.options[0] : 'Typed at sign-up';
+  await apiCall(API, 'POST', `/api/surveys/${p2.body.slug}/responses`,
+    { answers: all, source: 'onboarding', complete: true }, early.token);
+  const nothing = await apiCall(API, 'GET', '/api/surveys/prompt', null, early.token);
+  check(!nothing.body, 'somebody who answered at sign-up is asked nothing, anywhere, ever again');
+}
+
+// ── 6b. On screen: answering it there must not finish the set ──────────
+//
+// ⚠️ Section 6 proves the API contract. This proves the CALLER honours it —
+// the component chooses between submit() and submitMicro(), and the wrong
+// choice records a seven-question survey as finished with six never asked.
+// A check on the endpoint alone cannot see that choice.
+console.log('\n── 6b. The card, where a person meets it ───────────────────');
+
+{
+  const stamp = Date.now() + 5000;
+  const landlord = await registerUser(API, 'LANDLORD', stamp);
+  const tenant = await registerUser(API, 'TENANT', stamp + 1);
+  const room = await apiCall(API, 'POST', '/api/rooms', {
+    roomType: 'shared_house', title: `Micro room ${stamp}`,
+    description: 'A clean back room on a quiet street, with its own entrance and a shared tap.',
+    rentCents: 200000, province: 'Gauteng', city: 'Pretoria',
+    locationDisplay: 'Sunnyside, Pretoria',
+    availableFrom: new Date().toISOString().slice(0, 10),
+  }, landlord.token);
+  dbQuery(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${room.body.id}'`);
+
+  const page = await signIn(browser, WEB, tenant.email, PASSWORD, { width: 390, height: 1400 });
+  await page.goto(`${WEB}/rooms/${room.body.id}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2500);
+  await freshBundle(page, '/rooms/:id');
+  if (await page.locator('.cookie-notice__ok').count()) {
+    await page.locator('.cookie-notice__ok').click();
+    await page.waitForTimeout(300);
+  }
+
+  const applyButton = page.locator('button', { hasText: 'Apply' }).first();
+  if (!(await applyButton.count())) {
+    bad('the room page has no Apply button for a signed-in tenant — nothing below was measured');
+  } else {
+    await applyButton.click();
+    await page.waitForTimeout(2500);
+    const card = page.locator('app-survey-prompt .survey-prompt');
+    check(await card.count() === 1, 'the one question appears right after applying');
+
+    const text = await card.first().textContent().then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+    check(/one quick question/i.test(text), `…announced as one question ("${text.slice(0, 44)}…")`);
+    check(/when do you need to move/i.test(text), '…and it is the question about moving, not a landlord\'s');
+
+    const option = page.locator('app-survey-prompt .survey-q button, app-survey-prompt .survey-q label').first();
+    if (await page.locator('app-survey-prompt input[type="radio"]').count()) {
+      await page.locator('app-survey-prompt input[type="radio"]').first().check();
+    } else if (await option.count()) {
+      await option.click();
+    }
+    await page.waitForTimeout(200);
+    const send = page.locator('app-survey-prompt button', { hasText: /send|save|answer/i }).first();
+    if (!(await send.count())) {
+      bad('the card has no way to send the answer');
+    } else {
+      await send.click();
+      await page.waitForTimeout(1500);
+
+      /**
+       * ⚠️ THE CHECK THIS SECTION EXISTS FOR. One answer, six questions never
+       * asked — the set must still be open and the inbox must still offer it.
+       */
+      // ⚠️ One line of SQL per call. A query wrapped across lines reaches
+      // psql with a literal backslash-n in it and fails on the syntax —
+      // CLAUDE.md records the same trap for `psql -tAc`.
+      const open = dbQuery(`SELECT "completedAt" IS NULL FROM survey_responses r JOIN users u ON u.id = r."userId" WHERE u.email = '${tenant.email}'`).trim();
+      const keys = dbRows(`SELECT jsonb_object_keys(answers::jsonb) FROM survey_responses r JOIN users u ON u.id = r."userId" WHERE u.email = '${tenant.email}'`);
+      check(
+        open === 't' && keys.length === 1,
+        `answering it on screen leaves the set OPEN with one answer (open=${open}, answers=${keys.join(', ') || 'none'})`,
+      );
+    }
+  }
+  /**
+   * ⚠️ AND IT MUST NOT COME BACK.
+   *
+   * The owner's rule is that a question answered once does not reappear as a
+   * prompt. The API cannot enforce this one on its own: the set is still OPEN
+   * (six questions unanswered), so `GET /prompt` rightly still returns the
+   * survey — it is the CARD that must notice its one question is already
+   * answered and render nothing. Removing that check left this file green,
+   * which is how this check came to exist.
+   */
+  const second = await apiCall(API, 'POST', '/api/rooms', {
+    roomType: 'shared_house', title: `Second micro room ${stamp}`,
+    description: 'A clean back room on a quiet street, with its own entrance and a shared tap.',
+    rentCents: 210000, province: 'Gauteng', city: 'Pretoria',
+    locationDisplay: 'Sunnyside, Pretoria',
+    availableFrom: new Date().toISOString().slice(0, 10),
+  }, landlord.token);
+  dbQuery(`UPDATE rooms SET status='active', "publishedAt"=now(), "heroImagePath"='rooms/stub.jpg' WHERE id = '${second.body.id}'`);
+
+  const again = await signIn(browser, WEB, tenant.email, PASSWORD, { width: 390, height: 1400 });
+  await again.goto(`${WEB}/rooms/${second.body.id}`, { waitUntil: 'domcontentloaded' });
+  await again.waitForTimeout(2500);
+  if (await again.locator('.cookie-notice__ok').count()) {
+    await again.locator('.cookie-notice__ok').click();
+    await again.waitForTimeout(300);
+  }
+  const applyAgain = again.locator('button', { hasText: 'Apply' }).first();
+  if (!(await applyAgain.count())) {
+    bad('the second room has no Apply button — the "asked once" check never ran');
+  } else {
+    await applyAgain.click();
+    await again.waitForTimeout(2500);
+    const applied = await again.locator('.pill--green').count();
+    check(applied === 1, 'applying for a second room works as before');
+    check(
+      (await again.locator('app-survey-prompt .survey-prompt').count()) === 0,
+      'and the question they already answered is NOT asked a second time',
+    );
+  }
+  await again.close();
+
+  await page.close();
+}
+
 // ── 5. The two populations are counted apart ────────────────────────────
 console.log('\n── 5. Landlord and tenant answers never mix ────────────────');
 

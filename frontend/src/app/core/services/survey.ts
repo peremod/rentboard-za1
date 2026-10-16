@@ -83,6 +83,24 @@ export class SurveyService {
   }
 
   /**
+   * One question, answered at the moment it is relevant — Phase 9b.
+   *
+   * ⚠️ `complete: false`, and that is the whole point. Answering the
+   * contextual question is answering ONE of seven: finishing the set here
+   * would record six unanswered questions as a finished survey and close the
+   * door on the rest. It merges into the same open set, which the task inbox
+   * then offers to finish.
+   *
+   * The prompt signal is cleared so the card goes away for this visit.
+   */
+  submitMicro(slug: string, answers: Record<string, SurveyAnswer>) {
+    return this.http
+      .post<SurveySaveResult>(`${this.api}/surveys/${slug}/responses`,
+        { answers, source: 'micro', complete: false })
+      .pipe(tap(() => this.prompt.set(null)));
+  }
+
+  /**
    * Save what has been answered so far WITHOUT finishing.
    *
    * ⚠️ This is what makes the welcome questions survivable. A person who

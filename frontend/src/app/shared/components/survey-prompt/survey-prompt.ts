@@ -186,7 +186,17 @@ export class SurveyPrompt {
     const s = this.survey();
     if (!s) return [];
     if (this.mode() === 'full') return s.questions;
-    return s.microQuestion ? [s.microQuestion] : [];
+    if (!s.microQuestion) return [];
+    /**
+     * ⚠️ Not if it has already been answered — Phase 9b.
+     *
+     * The welcome questions at sign-up cover this one too, and the owner's
+     * rule is that a survey answered there must not come back as a prompt.
+     * So the contextual card asks only a question this person has NOT
+     * answered, which is also why it can never ask twice: answering it is
+     * what makes it stop.
+     */
+    return s.microQuestion.id in (s.answers ?? {}) ? [] : [s.microQuestion];
   });
 
   /**
@@ -242,7 +252,18 @@ export class SurveyPrompt {
     if (!s || this.busy()) return;
     this.busy.set(true);
     this.error.set(null);
-    this.surveys.submit(s.slug, this.answers(), this.mode() === 'micro' ? 'micro' : 'dashboard').subscribe({
+    /**
+     * ⚠️ The micro answer does NOT finish the set.
+     *
+     * `submit` marks a response complete, so sending one answer through it
+     * would have recorded a seven-question survey as finished with six
+     * questions never asked — and the inbox row offering to finish it would
+     * have vanished with them.
+     */
+    const request = this.mode() === 'micro'
+      ? this.surveys.submitMicro(s.slug, this.answers())
+      : this.surveys.submit(s.slug, this.answers(), 'dashboard');
+    request.subscribe({
       next: () => {
         this.busy.set(false);
         this.done.set(true);
@@ -257,9 +278,22 @@ export class SurveyPrompt {
     });
   }
 
+  /**
+   * "Not now."
+   *
+   * ⚠️ In FULL mode this is a 30-day dismissal of the survey, recorded on the
+   * server. In MICRO mode it only closes the card: silencing seven questions
+   * for a month because somebody waved away one of them, at a moment when
+   * they were busy finishing something else, would be the prompt deciding
+   * more than the person did.
+   */
   skip() {
     const s = this.survey();
     if (!s || this.busy()) return;
+    if (this.mode() === 'micro') {
+      this.closed.emit();
+      return;
+    }
     this.busy.set(true);
     this.surveys.dismiss(s.slug).subscribe({
       next: () => {
@@ -268,7 +302,7 @@ export class SurveyPrompt {
       },
       error: () => {
         this.busy.set(false);
-        this.error.set('That did not send. Check your connection and try again.');
+        this.closed.emit();
       },
     });
   }

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { DatePipe } from '@angular/common';
 import { RouterLink, Router } from '@angular/router';
 import { WhatsappDraftsService, WhatsappDraft } from '../../../core/services/whatsapp-drafts.service';
+import { SurveyService } from '../../../core/services/survey';
 import { PortalBadgesService } from '../../../core/services/portal-badges';
 import { ApplicationsService } from '../../../core/services/applications.service';
 import { AuthService } from '../../../core/services/auth.service';
@@ -12,6 +13,7 @@ import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { BILLING_ENABLED } from '../../../core/config/feature-flags';
 import { LandlordInboxPanel } from '../../../shared/components/landlord-inbox/landlord-inbox';
 import { LandlordCalendar } from '../../../shared/components/landlord-calendar/landlord-calendar';
+import { SurveyPrompt } from '../../../shared/components/survey-prompt/survey-prompt';
 import { ReviewPrompt } from '../../../shared/components/review-prompt/review-prompt';
 import { DisputePanel } from '../../../shared/components/dispute-panel/dispute-panel';
 import { ReferralPanel } from '../../../shared/components/referral-panel/referral-panel';
@@ -29,7 +31,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-landlord-dashboard',
   standalone: true,
-  imports: [RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel, ReferralPanel, LandlordInboxPanel, LandlordCalendar, ScreenHint, TenancyLifecycle, Loading],
+  imports: [SurveyPrompt, RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel, ReferralPanel, LandlordInboxPanel, LandlordCalendar, ScreenHint, TenancyLifecycle, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-dashboard" heading="This is your whole letting, on one screen">
@@ -122,7 +124,24 @@ import { Loading } from '../../../shared/components/loading/loading';
 
       <app-review-prompt/>
 
-      <!-- ⚠️ THE SURVEY CARD IS GONE FROM HERE — Phase 9a.
+      <!-- ── One question, at the one moment it is worth asking — 9b ────
+           Not the survey card that was removed in 9a, and not a second copy
+           of it: it renders ONLY right after a room is marked let, and only
+           while the contextual question itself is unanswered. Somebody who
+           answered it at sign-up never sees this, which is the owner's rule
+           that a survey answered during onboarding does not come back.
+
+           Why this moment: a landlord who has just taken a tenant on has the
+           whole of dealing with tenants in front of them, so "what is the
+           most stressful part" is a memory rather than a guess. Q1 — how do
+           you usually find tenants — would be the obvious alternative and is
+           the wrong one: asking it moments after they found one through
+           Mastande invites the answer we want to hear. -->
+      @if (justLetARoom()) {
+        <app-survey-prompt mode="micro" [headingLevel]="2" (closed)="justLetARoom.set(false)"/>
+      }
+
+      <!-- ⚠️ THE FULL SURVEY CARD IS GONE FROM HERE — Phase 9a.
            Both shapes used to render on this screen: the micro question after
            marking a room let, and the full seven-question card otherwise. The
            owner reported the obvious consequence — a prompt on the dashboard
@@ -329,7 +348,17 @@ export class LandlordDashboard implements OnInit {
   private roomsService = inject(RoomsService);
   private router = inject(Router);
   private dialogs = inject(DialogService);
+  private surveys = inject(SurveyService);
   private badges = inject(PortalBadgesService);
+
+  /**
+   * True for the one render after a room is marked let.
+   *
+   * Not persisted: it is about this moment on this screen. A flag that
+   * survived a reload would put the question in front of somebody who came
+   * back an hour later for something else entirely.
+   */
+  readonly justLetARoom = signal(false);
   private applications = inject(ApplicationsService);
 
   billingEnabled = BILLING_ENABLED;
@@ -450,6 +479,13 @@ export class LandlordDashboard implements OnInit {
       next: () => {
         this.marking.set(null);
         this.ngOnInit();   // reload both lists, as relist does
+        // Re-ask the server what is left to ask, then show the card only if
+        // it answers with something. The card renders nothing for null and
+        // nothing for a contextual question already answered.
+        this.surveys.load().subscribe({
+          next: () => this.justLetARoom.set(true),
+          error: () => {},
+        });
       },
       error: () => this.marking.set(null),
     });

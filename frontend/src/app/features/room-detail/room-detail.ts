@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { RoomsService } from '../../core/services/rooms.service';
 import { ApplicationsService } from '../../core/services/applications.service';
+import { SurveyPrompt } from '../../shared/components/survey-prompt/survey-prompt';
+import { SurveyService } from '../../core/services/survey';
 import { AuthService } from '../../core/services/auth.service';
 import { Room } from '../../core/models/room.model';
 import { ZarCentsPipe } from '../../shared/pipes/zar-cents.pipe';
@@ -68,7 +70,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
 @Component({
   selector: 'app-room-detail',
   standalone: true,
-  imports: [NgOptimizedImage, DatePipe, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot, TranslatePipe, Loading],
+  imports: [NgOptimizedImage, DatePipe, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot, TranslatePipe, Loading, SurveyPrompt],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="room-detail">
@@ -260,6 +262,16 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
             <p class="muted">Landlord accounts can't apply to rooms.</p>
           } @else if (applied()) {
             <p class="pill pill--green">✓ {{ 'room.application_sent' | translate }}</p>
+            <!-- ── One question, at the moment it is worth asking — 9b ──────
+                 A person who has just applied for a room is thinking about
+                 moving, so "when do you need to move?" is a fact rather than
+                 a guess — and it is the one answer that changes what the
+                 board should show them. It renders only while that question
+                 is unanswered, so somebody who answered it at sign-up never
+                 sees it, and answering it here is what makes it stop. -->
+            @if (auth.isAuthenticated()) {
+              <app-survey-prompt mode="micro" [headingLevel]="3"/>
+            }
           } @else {
             <h3>Apply for this room</h3>
             <textarea [(ngModel)]="coverNote" rows="3" placeholder="Introduce yourself to the landlord (optional)"></textarea>
@@ -546,6 +558,7 @@ export class RoomDetail implements OnInit {
   back = this.history.backTarget;
   private applicationsService = inject(ApplicationsService);
   auth = inject(AuthService);
+  private surveys = inject(SurveyService);
 
   room = signal<Room | null>(null);
   notFound = signal(false);
@@ -730,7 +743,13 @@ export class RoomDetail implements OnInit {
     this.applying.set(true);
     this.applyError.set(null);
     this.applicationsService.apply(roomId, this.coverNote || undefined).subscribe({
-      next: () => { this.applying.set(false); this.applied.set(true); },
+      next: () => {
+        this.applying.set(false);
+        this.applied.set(true);
+        // Ask the server what is left to ask. Null for most people, and the
+        // card renders nothing for null.
+        this.surveys.load().subscribe({ error: () => {} });
+      },
       error: (err) => {
         this.applying.set(false);
         this.applyError.set(err?.error?.message ?? 'Could not send your application. Please try again.');
