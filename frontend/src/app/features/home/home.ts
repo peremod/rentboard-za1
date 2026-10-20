@@ -172,6 +172,55 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
           </div>
         </div>
 
+        <!-- ── When do you want to move? — Phase 10 ────────────────────
+             A search criterion and nothing else: nothing is held, no landlord
+             is told, and no tenancy date is set by typing here. Said on the
+             screen, because "move-in date" on a property site elsewhere often
+             means a booking.
+
+             Three ways to answer, because people arrive with different
+             certainties: a date, a window if they are flexible, or "as soon
+             as possible" if they just need somewhere. -->
+        <div class="filter-group">
+          <div class="filter-label" id="movein-label">When do you want to move?</div>
+
+          <div class="movein-chips" role="group" aria-labelledby="movein-label">
+            <button type="button" class="quick-chip" [class.quick-chip--on]="availableNow"
+                    [attr.aria-pressed]="availableNow" (click)="toggleAvailableNow()">
+              ⚡ As soon as possible
+            </button>
+            @if (moveIn || availableNow) {
+              <button type="button" class="link-btn" (click)="clearMoveIn()">
+                Clear the date
+              </button>
+            }
+          </div>
+
+          <label class="filter-date">
+            <span>On or after this date, I need a room</span>
+            <input type="date" [(ngModel)]="moveIn" [min]="today"
+                   (ngModelChange)="onMoveInChange()"/>
+          </label>
+
+          @if (moveIn) {
+            <label class="filter-check">
+              <input type="checkbox" [(ngModel)]="flexibleDates" (ngModelChange)="onMoveInChange()"/>
+              I am flexible — show me a range
+            </label>
+            @if (flexibleDates) {
+              <label class="filter-date">
+                <span>…up to</span>
+                <input type="date" [(ngModel)]="moveInTo" [min]="moveIn"
+                       (ngModelChange)="onMoveInChange()"/>
+              </label>
+            }
+            <p class="filter-note">
+              Rooms free on or before {{ moveInLabel() }}.
+              A room that frees up later is not shown.
+            </p>
+          }
+        </div>
+
         <div class="filter-group">
           <div class="filter-label">I need</div>
           <label class="filter-check">
@@ -381,7 +430,23 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                  and so invisible to the heading outline — which made this jump
                  straight from the hero h1 to an h3. -->
             <h2>No rooms match your filters</h2>
-            <p>Try widening your search, or clear the filters to see everything available.</p>
+            @if (moveIn || availableNow) {
+              <!-- ⚠️ The date first, and on its own button. It is the filter
+                   most likely to empty a board — a room free in January is
+                   excluded from a December search however well it matches on
+                   everything else — and making somebody clear ALL their
+                   filters to loosen one is how a search gets abandoned. -->
+              <p>
+                Nothing is free by {{ moveIn ? moveInLabel() : 'the end of the fortnight' }}.
+                Rooms that come free later are not shown.
+              </p>
+              <button type="button" class="btn btn-primary" (click)="clearMoveIn()">
+                Search without a date
+              </button>
+              <p class="muted">Your other filters stay as they are.</p>
+            } @else {
+              <p>Try widening your search, or clear the filters to see everything available.</p>
+            }
             <button type="button" class="btn btn-outline" (click)="clearFilters()">Clear all filters</button>
           </div>
         } @else {
@@ -508,6 +573,24 @@ export class Home implements OnInit, OnDestroy {
   roomType = '';
   billsIncluded = false;
   availableNow = false;
+
+  // ── When somebody wants to move — Phase 10 ───────────────────────────────
+  //
+  // Plain fields like every other filter on this screen, so the drawer, the
+  // URL and the saved-search description all treat them the same way.
+  moveIn = '';
+  moveInTo = '';
+  flexibleDates = false;
+
+  /**
+   * Today, as a date-input min.
+   *
+   * ⚠️ Computed in the BROWSER's timezone on purpose: this is the bound on a
+   * date picker a person is looking at, so it has to mean today where they
+   * are. The matching itself is decided on the server in SAST — see
+   * endOfDaySast in rooms.service.ts.
+   */
+  readonly today = new Date().toLocaleDateString('en-CA');
   couplesAllowed = false;
   dssAccepted = false;
   guarantorAccepted = false;
@@ -700,7 +783,7 @@ export class Home implements OnInit, OnDestroy {
   activeFilterCount(): number {
     return [
       this.province, this.roomType, this.maxRentCents, this.housemates,
-      this.billsIncluded, this.availableNow, this.couplesAllowed,
+      this.billsIncluded, this.availableNow, this.moveIn, this.couplesAllowed,
       this.dssAccepted, this.guarantorAccepted, this.petsAllowed,
       // Phase 6. Counted, because each of these really does narrow the board —
       // which is exactly what the absent `studentsWelcome` filter did not, and
@@ -718,6 +801,58 @@ export class Home implements OnInit, OnDestroy {
     );
   }
 
+  /**
+   * The bound, in the words somebody would use.
+   *
+   * ⚠️ Formatted here rather than with the date pipe: this component imports
+   * no pipes, and pulling DatePipe in for one line is a dependency the
+   * template does not otherwise need. Africa/Johannesburg explicitly, so a
+   * phone set to another timezone does not render the day before.
+   */
+  moveInLabel(): string {
+    const value = this.flexibleDates && this.moveInTo ? this.moveInTo : this.moveIn;
+    if (!value) return '';
+    const at = new Date(`${value}T12:00:00+02:00`);
+    if (Number.isNaN(at.getTime())) return value;
+    return at.toLocaleDateString('en-ZA', {
+      day: 'numeric', month: 'long', timeZone: 'Africa/Johannesburg',
+    });
+  }
+
+  /**
+   * A date changed.
+   *
+   * ⚠️ "As soon as possible" and a chosen date answer the same question two
+   * ways, so picking a date turns the chip off rather than quietly applying
+   * both. Both WOULD work — the server takes the tighter bound — but a chip
+   * that stays lit while a later date is typed tells somebody their search is
+   * narrower than it is.
+   */
+  onMoveInChange() {
+    if (this.moveIn) this.availableNow = false;
+    if (!this.flexibleDates) this.moveInTo = '';
+    // A window that ends before it starts is a typo, not a request. Snapped
+    // rather than refused: an error message on a date box, on a phone, for
+    // something this recoverable, is a dead end.
+    if (this.moveInTo && this.moveInTo < this.moveIn) this.moveInTo = this.moveIn;
+    this.onFilterChange();
+  }
+
+  /**
+   * Clear the date and nothing else.
+   *
+   * The empty state's main button. Losing a province and a price ceiling
+   * because a date was too tight is how a search gets abandoned rather than
+   * widened.
+   */
+  clearMoveIn() {
+    this.moveIn = '';
+    this.moveInTo = '';
+    this.flexibleDates = false;
+    this.availableNow = false;
+    this.onFilterChange();
+  }
+
   clearFilters() {
     this.province = '';
     this.roomType = '';
@@ -726,6 +861,9 @@ export class Home implements OnInit, OnDestroy {
     this.searchTerm = '';
     this.billsIncluded = false;
     this.availableNow = false;
+    this.moveIn = '';
+    this.moveInTo = '';
+    this.flexibleDates = false;
     this.couplesAllowed = false;
     this.dssAccepted = false;
     this.guarantorAccepted = false;
@@ -823,6 +961,17 @@ export class Home implements OnInit, OnDestroy {
   /** The urgent search: rooms free now or very soon. */
   toggleAvailableNow() {
     this.availableNow = !this.availableNow;
+    /**
+     * ⚠️ Phase 10. Picking the chip drops a typed date, because the two answer
+     * the same question in different words. Both would WORK — the server takes
+     * the tighter of the bounds — but a chip left lit beside a date in March
+     * tells somebody their search is narrower than it is.
+     */
+    if (this.availableNow) {
+      this.moveIn = '';
+      this.moveInTo = '';
+      this.flexibleDates = false;
+    }
     // No tracking call here: Home does not inject AnalyticsService, and the
     // board.filtered event is recorded by the filter panel already. Counting
     // it twice would inflate the funnel.
@@ -845,6 +994,11 @@ export class Home implements OnInit, OnDestroy {
       roomType: (this.roomType as any) || undefined,
       billsIncluded: this.billsIncluded || undefined,
       availableNow: this.availableNow || undefined,
+      // Phase 10. The window's end only travels when the person asked for a
+      // window: a stale `moveInTo` left over from an unticked box would widen
+      // a search that looks strict on screen.
+      moveIn: this.moveIn || undefined,
+      moveInTo: (this.flexibleDates && this.moveInTo) || undefined,
       couplesAllowed: this.couplesAllowed || undefined,
       dssAccepted: this.dssAccepted || undefined,
       guarantorAccepted: this.guarantorAccepted || undefined,

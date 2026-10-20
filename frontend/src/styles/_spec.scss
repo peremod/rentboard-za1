@@ -307,6 +307,21 @@ img{display:block;max-width:100%}
   font-size:.83rem;color:var(--ink2);margin-bottom:.4rem;cursor:pointer;
 }
 .filter-check input{accent-color:var(--terra)}
+/* ── The move-in date filter — Phase 10 ──────────────────────────────────
+   Here rather than in home.ts: that component carries no scoped styles on
+   purpose, because Angular's emulated encapsulation made them beat every
+   breakpoint in the responsive layer and the board stopped responding. */
+.movein-chips{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:.5rem}
+.filter-date{display:grid;gap:.25rem;font-size:.8rem;font-weight:600;margin-bottom:.5rem;color:var(--ink2)}
+.filter-date input{
+  font:inherit;font-weight:400;padding:.5rem .75rem;
+  /* 44px, WCAG 2.5.8 — tapped one-handed on a phone, outdoors. min-width:0
+     because a date input has an intrinsic width wider than a narrow drawer. */
+  min-height:44px;width:100%;min-width:0;
+  border:1.5px solid var(--border);border-radius:var(--r4);
+  background:var(--white);color:var(--ink);
+}
+.filter-note{margin:.25rem 0 0;font-size:.75rem;line-height:1.5;color:var(--slate)}
 .filter-pill-wrap{display:flex;flex-wrap:wrap;gap:.4rem}
 /* ⚠️ 22px before Phase 7q — the board's own filters, and the smallest tap
    targets on the busiest page in the product.

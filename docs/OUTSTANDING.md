@@ -4943,6 +4943,101 @@ room and asserts the question is not asked again.
 Both of those are the same lesson in two coats: a check pointed at the thing
 below the defect passes while the defect ships.
 
+## 74. Searching by when you can move — Phase 10
+
+The board could answer "is this free more or less now?" and nothing else. The
+question people actually arrive with is a date: *I have to be out of my place
+by the 1st of December.*
+
+### What already existed, and what did not
+
+`Room.availableFrom` has always existed, is **required** on create and is NOT
+NULL in the database — so every listing already carries a date. What was
+missing was any way to search on it: one boolean, `availableNow`, defined as a
+fortnight's window, and a card badge that agreed with it. No date, no window,
+and a board that said "available now" on some cards and nothing at all on the
+rest.
+
+### The matching rule, in one line
+
+A room qualifies when it is free **on or before** the date asked for. The
+owner's own example, asserted to the day: for a 1 December search, a room free
+on 25 November qualifies, a room free on the 1st qualifies, and a room free on
+15 December does not — however well it matches on everything else.
+
+For somebody flexible, a window. ⚠️ **The far end is the bound, not the near
+one.** Somebody free to move any time in December will take a room that frees
+up on the 15th *and* one standing empty today; what disqualifies a room is
+becoming free after the last day they can move. A clause keyed on the window's
+start would have hidden every empty room — most of what they want to see — and
+the drive fails on exactly that if the bound is moved.
+
+### ⚠️ Timezone, which is a whole day in both directions
+
+`availableFrom` is stored from a date-only string, so it lands at **midnight
+UTC** — 02:00 in Johannesburg. A tenant asking for 1 December means any time on
+the 1st where they live. So the comparison is against the **last instant of
+that day in SAST**, written explicitly as `+02:00` rather than taken from the
+server (UTC) or the browser (wherever the person happens to be). SAST has no
+daylight saving, so a fixed offset is correct all year. `ViewingsService`
+pins Africa/Johannesburg for the same reason.
+
+### One clause, built once
+
+`availableNow` and `moveIn` both constrain `availableFrom`. Two keys of that
+name in the same object literal keep only the last — the exact defect the
+household filters above carry a warning about, a filter that looks set and
+does nothing. They are combined into one bound, the tightest of those set.
+
+On screen the two are made exclusive anyway: picking "as soon as possible"
+clears a typed date and typing a date unticks the chip. Both *work* together,
+but a chip left lit beside a date in March tells somebody their search is
+narrower than it is.
+
+### Every card says when, not just the immediate ones
+
+"⚡ Available now" as before, and "📅 From 25 November" on everything else. A
+board that marks the immediate rooms and stays silent about the rest leaves a
+reader to guess, and the guess is always "probably now".
+
+⚠️ **There is no "availability date not confirmed" badge, because there is no
+such state.** The field is required by the DTO and the column is NOT NULL: a
+listing without a date cannot be created through the API or stored if it were.
+Building a label for it would be a branch nothing can reach — the fault this
+file keeps recording. The drive asserts the refusal and reads
+`information_schema` for the NOT NULL, so if the field ever becomes optional
+those checks fail and the label becomes real work.
+
+### Clearing the date without losing the search
+
+The empty state names the date, offers **"Search without a date"** as its main
+button, and says the other filters stay. Making somebody clear every filter to
+loosen one is how a search gets abandoned instead of widened.
+
+### What searching does NOT do
+
+A move-in date is a **search criterion**. Nothing is reserved, no tenancy
+starts, no landlord is told — the drive asserts the room is byte-for-byte
+unchanged after a search. And a landlord moving their own date reaches the
+board immediately **without touching applications**: the drive applies for a
+room, pushes the date back a month, and asserts the application is still
+`pending`.
+
+### Three reintroductions
+
+* Window keyed on its start → *"widening the window brings in the room that
+  frees up later"* fails, and the count check fails at 3 vs 3.
+* Comparison inverted (`gte`) → all four boundary checks fail.
+* The card's future-date badge removed → *"one that is not says WHEN it will
+  be (none)"*, and 2 badges for 12 cards.
+
+⚠️ And two faults in the drive itself, both found by running it: a count
+comparison between two filters was comparing **capped pages** (50 versus 50,
+proving nothing) until every search was scoped to the run's own rooms; and the
+drawer "opener" was matched by the word *filter*, which also finds "Clear all
+filters" **inside** the panel — so the drive clicked a button that cannot
+close the sheet and timed out against an overlay that was never going away.
+
 ## How to check the whole thing still works
 
 ```bash
