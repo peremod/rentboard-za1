@@ -44,12 +44,24 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
              [attr.role]="mobileOpen() ? 'dialog' : null"
              [attr.aria-modal]="mobileOpen() ? 'true' : null"
              [attr.aria-label]="mobileOpen() ? 'Menu' : null">
-          <!-- Shown only in the drawer. The burger doubles as the close, but
-               it is at the top-right of the header and a thumb that has just
-               scrolled the sheet is nowhere near it. -->
-          <button type="button" class="nav-sheet-close" (click)="close()" #closeBtn>
-            <app-icon name="x"/> Close
-          </button>
+          <!-- ⚠️ Rendered ONLY while the sheet is open, not merely styled
+               for the drawer width.
+               It shipped unconditional for one commit: .nav-links is the
+               ordinary header row on a desktop, and :where(button) paints
+               every button terracotta — so a red "✕ Close" sat in the
+               header at 1280px, beside the logo, doing nothing. The
+               drive's own desktop section missed it because it asked
+               whether the BURGER and the SCRIM were absent and never
+               whether anything belonging to the sheet had leaked out.
+               Found by looking at a screenshot of the dashboard. -->
+          @if (mobileOpen()) {
+            <!-- The burger doubles as the close, but it is at the top-right
+                 of the header and a thumb that has just scrolled the sheet
+                 is nowhere near it. -->
+            <button type="button" class="nav-sheet-close" (click)="close()" #closeBtn>
+              <app-icon name="x"/> Close
+            </button>
+          }
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
              (click)="close()">{{ 'nav.browse_rooms' | translate }}</a>
           <a routerLink="/how-it-works" routerLinkActive="active"

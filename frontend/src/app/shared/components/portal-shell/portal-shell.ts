@@ -5,9 +5,18 @@ import { isPlatformBrowser } from '@angular/common';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { AuthService } from '../../../core/services/auth.service';
+import { Icon } from '../icon/icon';
 
 export interface PortalNavItem {
   label: string;
+  /**
+   * A key of the app-icon set, NOT a glyph.
+   *
+   * These three sidebars carried 38 emoji between them, and a vertical
+   * column of full-colour vendor glyphs at mismatched optical weights was
+   * the loudest thing in the portal. An icon NAME here means the sidebar
+   * cannot be given a picture the design system has not got.
+   */
   icon: string;
   route: string;
   /** Optional count badge, e.g. unread applications. Hidden when 0 or undefined. */
@@ -39,7 +48,7 @@ export interface PortalNavItem {
 @Component({
   selector: 'app-portal-shell',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink, Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="portal-wrap">
@@ -53,7 +62,7 @@ export interface PortalNavItem {
         @for (item of navItems(); track item.label) {
           @if (item.disabled) {
             <span class="portal-nav-link is-disabled" aria-disabled="true" title="Coming soon">
-              <span class="portal-nav-icon" aria-hidden="true">{{ item.icon }}</span>
+              <app-icon class="portal-nav-icon" [name]="item.icon"/>
               {{ item.label }}
               <span class="portal-nav-soon">Soon</span>
             </span>
@@ -61,7 +70,7 @@ export interface PortalNavItem {
             <a class="portal-nav-link" [routerLink]="item.route" [fragment]="item.fragment"
                [class.active]="isActive(item)"
                [attr.aria-current]="isActive(item) ? 'page' : null">
-              <span class="portal-nav-icon" aria-hidden="true">{{ item.icon }}</span>
+              <app-icon class="portal-nav-icon" [name]="item.icon"/>
               {{ item.label }}
               @if (item.badge) { <span class="portal-nav-badge">{{ item.badge }}</span> }
             </a>
@@ -75,7 +84,7 @@ export interface PortalNavItem {
         }
 
         <button type="button" class="portal-nav-link portal-logout" (click)="auth.logout()">
-          <span class="portal-nav-icon" aria-hidden="true">↪</span> Log out
+          <app-icon class="portal-nav-icon" name="log-out"/> Log out
         </button>
       </nav>
 

@@ -2,12 +2,13 @@ import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { Logo } from '../logo/logo';
+import { Icon } from '../icon/icon';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 
 @Component({
   selector: 'app-footer',
   standalone: true,
-  imports: [RouterLink, Logo, TranslatePipe],
+  imports: [RouterLink, Logo, Icon, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <footer class="footer">
@@ -19,7 +20,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
             landlords — no estate agent, no fees to apply.
           </p>
           <p class="footer-popia">
-            🔒 POPIA Compliant · Information Officer registered with the Information Regulator<br/>
+            <app-icon name="lock"/> POPIA Compliant · Information Officer registered with the Information Regulator<br/>
             Rental Housing Act 50 of 1999 aligned · ECTA 25 of 2002 compliant
           </p>
         </div>

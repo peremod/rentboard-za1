@@ -10,6 +10,7 @@ import { WHATSAPP_ENABLED } from '../../core/config/feature-flags';
 import { AuthService } from '../../core/services/auth.service';
 import { Room, SA_PROVINCES } from '../../core/models/room.model';
 import { RoomCard } from '../../shared/components/room-card/room-card';
+import { Icon } from '../../shared/components/icon/icon';
 import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
 import { SkeletonCard } from '../../shared/components/skeleton-card/skeleton-card';
 import { TranslatePipe } from '../../shared/pipes/translate.pipe';
@@ -26,7 +27,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [PluralPipe, FormsModule, RouterLink, RoomCard, SkeletonCard, TranslatePipe, AdSlot],
+  imports: [PluralPipe, FormsModule, RouterLink, RoomCard, SkeletonCard, Icon, TranslatePipe, AdSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="hero" [class.hero--splash]="splash()">
@@ -72,17 +73,17 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
     </section>
 
     <div class="trust-strip">
-      <div class="trust-item"><span class="trust-icon">🔒</span>POPIA Compliant</div>
-      <div class="trust-item"><span class="trust-icon">🏛️</span>Rental Housing Act Aligned</div>
-      <div class="trust-item"><span class="trust-icon">🚫</span>No Agent Fees</div>
+      <div class="trust-item"><app-icon class="trust-icon" name="lock"/>POPIA Compliant</div>
+      <div class="trust-item"><app-icon class="trust-icon" name="scale"/>Rental Housing Act Aligned</div>
+      <div class="trust-item"><app-icon class="trust-icon" name="ban"/>No Agent Fees</div>
       <!-- ⚠️ Phase 8j. This strip is a promise made to a visitor on the
            landing page, so it cannot advertise a channel that is switched off.
            Room alerts are the true version of the same claim: a saved search
            mails you the moment something matches, and costs nobody anything. -->
       @if (whatsappEnabled) {
-        <div class="trust-item"><span class="trust-icon">📱</span>WhatsApp Notifications</div>
+        <div class="trust-item"><app-icon class="trust-icon" name="smartphone"/>WhatsApp Notifications</div>
       } @else {
-        <div class="trust-item"><span class="trust-icon">🔔</span>Free Room Alerts</div>
+        <div class="trust-item"><app-icon class="trust-icon" name="bell"/>Free Room Alerts</div>
       }
     </div>
 
@@ -126,10 +127,10 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
         <select class="search-select" [attr.aria-label]="'search.label_room_type' | translate"
                 [(ngModel)]="roomType" (ngModelChange)="onFilterChange()">
           <option value="">{{ 'search.all_room_types' | translate }}</option>
-          <option value="shared_house">🏠 Shared house</option>
-          <option value="en_suite">🚿 En-suite</option>
-          <option value="studio">🏢 Studio</option>
-          <option value="private">🔑 Private room</option>
+          <option value="shared_house">Shared house</option>
+          <option value="en_suite">En-suite</option>
+          <option value="studio">Studio</option>
+          <option value="private">Private room</option>
         </select>
         <select class="search-select" [attr.aria-label]="'search.label_max_rent' | translate"
                 [(ngModel)]="maxRentCents" (ngModelChange)="onFilterChange()">
@@ -149,7 +150,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
         <div class="filter-drawer-header">
           <h2>{{ 'filters.title' | translate }}</h2>
           <button type="button" class="filter-drawer-close" (click)="filtersOpen.set(false)"
-                  aria-label="Close filters">✕</button>
+                  aria-label="Close filters"><app-icon name="x"/></button>
         </div>
 
         <div class="filter-group">
@@ -187,7 +188,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
           <div class="movein-chips" role="group" aria-labelledby="movein-label">
             <button type="button" class="quick-chip" [class.quick-chip--on]="availableNow"
                     [attr.aria-pressed]="availableNow" (click)="toggleAvailableNow()">
-              ⚡ As soon as possible
+              <app-icon name="zap"/> As soon as possible
             </button>
             @if (moveIn || availableNow) {
               <button type="button" class="link-btn" (click)="clearMoveIn()">
@@ -348,13 +349,19 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
           <div class="filter-alert-cta">
             @if (searchSaved()) {
               <p class="field-hint">
-                ✅ Alert saved. Manage it in
+                <app-icon name="check-circle"/> Alert saved. Manage it in
                 <a routerLink="/tenant/dashboard">your dashboard</a>.
               </p>
             } @else {
               <button type="button" class="btn btn-outline"
                       [disabled]="savingSearch()" (click)="saveCurrentSearch()">
-                {{ savingSearch() ? 'Saving…' : '🔔 Alert me about rooms like this' }}
+                <!-- ⚠️ The icon is beside the interpolation, not inside it:
+                     a string in a ternary cannot hold an element, and the
+                     bell belongs to the resting state only — showing it
+                     next to "Saving…" says the alert already exists. -->
+                @if (savingSearch()) { Saving… } @else {
+                  <app-icon name="bell"/> Alert me about rooms like this
+                }
               </button>
               @if (saveSearchError()) {
                 <p class="field-error" role="alert">{{ saveSearchError() }}</p>
@@ -388,7 +395,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                   class="quick-chip"
                   [class.quick-chip--on]="availableNow"
                   (click)="toggleAvailableNow()">
-            ⚡ Available now
+            <app-icon name="zap"/> Available now
           </button>
           @if (availableNow) {
             <span class="quick-filters__note">Free now or within two weeks</span>

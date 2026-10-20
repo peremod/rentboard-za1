@@ -21,3 +21,11 @@ node scripts/feedback-lint.mjs
 node scripts/scale-lint.mjs
 node scripts/font-lint.mjs
 node scripts/control-contrast-audit.mjs
+
+# ⚠️ Added v1.149.0, and it is a RATCHET, not a ban: 226 emoji were in the
+# tree when the baseline was taken and they cannot all go in one change. The
+# number may fall and never rise. It scans whole files rather than template
+# literals, because the board went on rendering a house emoji twelve times
+# after every emoji in the markup had been replaced — that one lived in a
+# label map in the class, where a sweep of the markup cannot see it.
+node scripts/emoji-lint.mjs

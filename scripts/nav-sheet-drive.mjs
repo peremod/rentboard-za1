@@ -181,6 +181,50 @@ console.log('\n── 1280px ─────────────────
     'the burger is not on a desktop, where the links are in the header');
   check(await page.locator('.nav-scrim').count() === 0,
     '…and nothing is dimmed');
+  /**
+   * ⚠️ And nothing BELONGING to the sheet has leaked into the header.
+   *
+   * The close button shipped unconditional for one commit: .nav-links is
+   * the ordinary header row on a desktop and `:where(button)` paints every
+   * button terracotta, so a red "Close" sat beside the logo at 1280px
+   * doing nothing. This section asked whether the burger and the scrim
+   * were ABSENT and never whether anything else had arrived — a check
+   * scoped more narrowly than its claim, which is the family this file is
+   * about. Found in a screenshot, not here.
+   */
+  check(await page.locator('.nav-sheet-close').count() === 0,
+    '…and the sheet\'s own close has not leaked into the desktop header');
+
+  /**
+   * ⚠️ No two header links are touching.
+   *
+   * The wrapper added so the sheet could demote Privacy/Terms/Disclaimer
+   * was given layout ONLY inside the ≤768px block, so on a desktop it was
+   * a plain div of three inline anchors with no gap and the header read
+   * "PrivacyTermsDisclaimer" as one word. A rule written for one width is
+   * a rule missing at every other, and nothing here was looking at the
+   * width where it was missing. Measured as a real gap in pixels rather
+   * than by reading the CSS, because the CSS is what was wrong.
+   */
+  const gaps = await page.locator('.nav-links a').evaluateAll((els) => {
+    /**
+     * ⚠️ Visible boxes only, and this caught the check out first time.
+     *
+     * .nav-links also holds the DRAWER's copies of Log in and Get started,
+     * which are display:none on a desktop and report a 0×0 rect at the
+     * origin — so the check read a 0px gap and failed a header that was
+     * correct. A measurement that includes elements with no box is a
+     * measurement of nothing, reported as a defect.
+     */
+    const r = els.map((e) => e.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
+    const out = [];
+    for (let i = 1; i < r.length; i++) {
+      if (Math.abs(r[i].top - r[i - 1].top) < 4) out.push(Math.round(r[i].left - r[i - 1].right));
+    }
+    return out;
+  });
+  check(gaps.length > 0 && gaps.every((g) => g >= 8),
+    `…and no two header links are touching (smallest gap ${Math.min(...gaps)}px)`);
   await page.close();
 }
 

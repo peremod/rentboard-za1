@@ -168,6 +168,16 @@ img{display:block;max-width:100%}
   padding:0 1.5rem;height:66px;
 }
 .nav-links{display:flex;gap:1.75rem;flex:1}
+/* ⚠️ On a DESKTOP the legal wrapper must not exist as a box.
+   It was added so the drawer could demote Privacy/Terms/Disclaimer, and it
+   was given layout only inside the ≤768px block — so above that it was a
+   plain div holding three inline anchors with no gap, and the header read
+   "PrivacyTermsDisclaimer" as one word. Shipped for one commit; the ≤768px
+   block overrides this back to flex. `display:contents` rather than
+   `display:flex` here so the three anchors become direct children of
+   .nav-links and take ITS gap, instead of a nested row with a second gap
+   that would have to be kept equal to the first by hand. */
+.nav-links__legal{display:contents}
 .nav-links a{
   color:rgba(250,247,240,.65);font-size:.88rem;font-weight:500;
   transition:color .15s;cursor:pointer;
@@ -660,7 +670,13 @@ img{display:block;max-width:100%}
   color:var(--white);background:rgba(255,255,255,.06);
   border-left-color:var(--terra);
 }
-.portal-nav-icon{font-size:1rem;flex-shrink:0}
+/* ⚠️ A fixed 1.25rem box rather than the inherited text size. These were
+   emoji: every one a different width, so the LABELS down the sidebar never
+   lined up with each other — the ragged left edge was the emoji, not the
+   spacing. app-icon is 1em square, so the box decides the size and every
+   label starts at the same x. */
+.portal-nav-icon{font-size:1.25rem;flex-shrink:0;width:1.25rem;display:inline-flex;justify-content:center;color:var(--white);opacity:.8}
+.portal-nav-link.active .portal-nav-icon,.portal-nav-link:hover .portal-nav-icon{opacity:1}
 /* ⚠️ min-width: 0 — every portal screen's defence against sideways scroll.
    This is a GRID item in .portal-wrap, so its default min-width: auto is its
    min-content width, and a grid TRACK is sized by its widest item. One screen

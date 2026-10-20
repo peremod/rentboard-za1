@@ -367,7 +367,18 @@ console.log('\n── 7. What a card tells you ───────────
     'a room standing empty is marked available now',
   );
   check(
-    badges.some((b) => /^📅 From /.test(b)),
+    /**
+     * ⚠️ The date, not the picture beside it.
+     *
+     * This read /^📅 From / and went red the moment the calendar emoji
+     * became an app-icon — correctly, because the string it asserted had
+     * changed, but it was asserting the wrong half. A drive that pins the
+     * GLYPH fails on every icon change and says nothing about whether the
+     * badge still tells somebody when the room frees up, which is the only
+     * thing this check is for. The SVG carries no text, so the badge's
+     * textContent is now the date alone.
+     */
+    badges.some((b) => /^From \d/.test(b)),
     `…and one that is not says WHEN it will be (${badges.filter((b) => /From/.test(b))[0] ?? 'none'})`,
   );
   check(
