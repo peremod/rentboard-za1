@@ -29,3 +29,12 @@ node scripts/control-contrast-audit.mjs
 # after every emoji in the markup had been replaced — that one lived in a
 # label map in the class, where a sweep of the markup cannot see it.
 node scripts/emoji-lint.mjs
+
+# 🔴 Added v1.150.0 after a commit shipped that did not compile. The icon set
+# was expanded, migrated onto, driven and screenshotted — all green — and then
+# `git checkout` on icon.ts, used to undo a falsification, discarded the whole
+# expansion because the file still held uncommitted work. Every check that
+# could have caught it had already run. A verification that happened before
+# the last change is not a verification of what shipped; this one is source
+# only and takes under a second.
+node scripts/icon-lint.mjs

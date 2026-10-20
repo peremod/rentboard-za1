@@ -1,0 +1,16 @@
+import { chromium } from '@playwright/test';
+import { registerUser, signIn, PASSWORD } from './lib/drive-session.mjs';
+const API = 'http://localhost:3000', WEB = 'http://localhost:4200';
+const OUT = '/tmp/claude-0/-home-user-rentboard-za1/2769e9e6-2ee7-5168-acb5-d2f86a9b3ed5/scratchpad/audit';
+const { email } = await registerUser(API, 'LANDLORD');
+const b = await chromium.launch();
+const warns = [];
+const p = await signIn(b, WEB, email, PASSWORD, { width: 1280, height: 1000 });
+p.on('console', m => { if (/no icon named/.test(m.text())) warns.push(m.text().slice(0,70)); });
+await p.goto(`${WEB}/landlord/dashboard`, { waitUntil: 'networkidle' });
+await p.waitForTimeout(1500);
+await p.evaluate(() => document.querySelector('app-cookie-consent')?.remove());
+console.log('sidebar svg icons:', await p.locator('.portal-nav-icon svg').count());
+console.log('unknown-icon warnings:', warns.length, warns);
+await p.screenshot({ path: `${OUT}/sidebar-v3.png`, clip: { x: 0, y: 0, width: 430, height: 1000 } });
+await b.close();

@@ -56,6 +56,77 @@ const ICONS: Record<string, string[]> = {
   check: ['M20 6 9 17l-5-5'],
   star: ['m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z'],
   flag: ['M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z', 'M4 22v-7'],
+  inbox: [
+    'M22 12h-6l-2 3h-4l-2-3H2',
+    'M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z',
+  ],
+  clipboard: [
+    'M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2',
+    'M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z',
+  ],
+  receipt: [
+    'M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z',
+    'M16 8H8', 'M16 12H8', 'M12 16H8',
+  ],
+  key: ['M10 17a3 3 0 1 1-6 0 3 3 0 1 1 6 0', 'm9.1 14.9 10-10', 'm15 6 2 2', 'm18 3 2 2'],
+  scale: ['M12 3v18', 'M7 21h10', 'M5 7h14', 'm5 7-3 6a3 3 0 0 0 6 0z', 'm19 7 3 6a3 3 0 0 1-6 0z'],
+  megaphone: ['M3 11v2a1 1 0 0 0 1 1h3l7 4V6L7 10H4a1 1 0 0 0-1 1z', 'M18 8a4 4 0 0 1 0 8'],
+  ticket: [
+    'M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z',
+    'M13 6v2', 'M13 11v2', 'M13 16v2',
+  ],
+  'trending-up': ['m3 17 6-6 4 4 7-7', 'M17 8h4v4'],
+  shower: ['m4 4 2.5 2.5', 'M13.5 6.5a4.95 4.95 0 0 0-7 7', 'M15 5 5 15',
+    'M14 17v.01', 'M10 16v.01', 'M13 13v.01', 'M16 10v.01', 'M11 20v.01', 'M17 14v.01'],
+  'log-out': ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'm16 17 5-5-5-5', 'M21 12H9'],
+  signpost: [
+    'M12 3v3', 'M12 15v6',
+    'M18 6H7a2 2 0 0 0-1.4.6L3 9l2.6 2.4A2 2 0 0 0 7 12h11a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1z',
+  ],
+  phone: ['M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z'],
+  camera: [
+    'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z',
+    'M16 13a4 4 0 1 1-8 0 4 4 0 1 1 8 0',
+  ],
+  lightbulb: ['M9 18h6', 'M10 22h4', 'M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z'],
+  'credit-card': ['M3 5h18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z', 'M1 10h22'],
+  mail: ['M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', 'm22 7-10 6L2 7'],
+  repeat: ['m17 2 4 4-4 4', 'M3 11v-1a4 4 0 0 1 4-4h14', 'm7 22-4-4 4-4', 'M21 13v1a4 4 0 0 1-4 4H3'],
+  banknote: [
+    'M3 6h18a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z',
+    'M15 12a3 3 0 1 1-6 0 3 3 0 1 1 6 0', 'M6 10v4', 'M18 10v4',
+  ],
+  smartphone: ['M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z', 'M12 18h.01'],
+  'check-circle': ['M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0', 'm8 12 3 3 6-6'],
+  plus: ['M12 5v14', 'M5 12h14'],
+  upload: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'm17 8-5-5-5 5', 'M12 3v12'],
+  download: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'm7 10 5 5 5-5', 'M12 15V3'],
+  door: ['M13 4h3a2 2 0 0 1 2 2v14', 'M2 20h20', 'M13 2v20H6a2 2 0 0 1-2-2V4a2 2 0 0 1 1.4-1.9z', 'M11 12h.01'],
+  clock: ['M22 12a10 10 0 1 1-20 0 10 10 0 1 1 20 0', 'M12 6v6l4 2'],
+  user: ['M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2', 'M16 7a4 4 0 1 1-8 0 4 4 0 1 1 8 0'],
+  book: ['M4 19.5A2.5 2.5 0 0 1 6.5 17H20', 'M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z'],
+  hand: ['M18 11V6a2 2 0 0 0-4 0v5', 'M14 10V4a2 2 0 0 0-4 0v6', 'M10 10.5V6a2 2 0 0 0-4 0v8', 'M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2a8 8 0 0 1-8-8'],
+  dot: ['M16 12a4 4 0 1 1-8 0 4 4 0 1 1 8 0'],
+  image: [
+    'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z',
+    'M10 9a1.5 1.5 0 1 1-3 0 1.5 1.5 0 1 1 3 0', 'm21 15-5-5L5 21',
+  ],
+  alert: ['m10.3 3.9-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3l-8-14a2 2 0 0 0-3.4 0z', 'M12 9v4', 'M12 17h.01'],
+  wifi: ['M5 12.55a11 11 0 0 1 14 0', 'M2 8.82a16 16 0 0 1 20 0', 'M8.5 16.4a6 6 0 0 1 7 0', 'M12 20h.01'],
+  package: [
+    'm7.5 4.3 9 5.2',
+    'M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z',
+    'm3.3 7 8.7 5 8.7-5', 'M12 22V12',
+  ],
+  sofa: [
+    'M20 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v3',
+    'M2 11a2 2 0 0 1 4 0v3h12v-3a2 2 0 0 1 4 0v5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z',
+    'M4 18v2', 'M20 18v2',
+  ],
+  gift: [
+    'M4 12h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z', 'M3 8h18v4H3z', 'M12 8v13',
+    'M12 8S10 4 7.5 4a2.5 2.5 0 0 0 0 5', 'M12 8s2-4 4.5-4a2.5 2.5 0 0 1 0 5',
+  ],
 };
 
 export type IconName = keyof typeof ICONS;
@@ -65,7 +136,8 @@ export type IconName = keyof typeof ICONS;
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    <svg class="icon" viewBox="0 0 24 24"
+         [attr.fill]="filled() ? 'currentColor' : 'none'" stroke="currentColor"
          stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
          [attr.aria-hidden]="label() ? null : 'true'"
          [attr.role]="label() ? 'img' : null"
@@ -106,6 +178,13 @@ export class Icon {
    * reads the label twice.
    */
   label = input<string>('');
+
+  /**
+   * Fills the shape with the current colour. Only a rating star needs it:
+   * ★ and ☆ were two different characters doing the work of one shape in
+   * two states, which is why a half-filled rating was never possible.
+   */
+  filled = input(false, { transform: (v: unknown) => v === '' || v === true });
 
   paths = computed(() => {
     const found = ICONS[this.name()];
