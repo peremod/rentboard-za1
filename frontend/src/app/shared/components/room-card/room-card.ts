@@ -5,6 +5,7 @@ import { Room } from '../../../core/models/room.model';
 import { ZarCentsPipe } from '../../pipes/zar-cents.pipe';
 import { TranslatePipe } from '../../pipes/translate.pipe';
 import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
+import { Icon } from '../icon/icon';
 
 /**
  * Room card — the notice-board grid item.
@@ -20,7 +21,7 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
 @Component({
   selector: 'app-room-card',
   standalone: true,
-  imports: [NgOptimizedImage, RouterLink, ZarCentsPipe, TranslatePipe],
+  imports: [NgOptimizedImage, RouterLink, Icon, ZarCentsPipe, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <article class="room-card" [class.featured]="room().isFeatured">
@@ -29,7 +30,7 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
               (click)="toggleSaved($event)"
               [attr.aria-pressed]="isSaved()"
               [attr.aria-label]="(isSaved() ? 'Remove ' : 'Save ') + room().title">
-        {{ isSaved() ? '♥' : '♡' }}
+        <app-icon name="heart" [filled]="isSaved()"/>
       </button>
 
       <!-- No aria-label on this anchor. It used to carry
@@ -49,13 +50,23 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
           <img class="room-card-img" [ngSrc]="heroPath()" width="280" height="196"
                [priority]="isFirstCard()" alt=""/>
         } @else {
-          <div class="room-card-img-placeholder" aria-hidden="true">🏠</div>
+          <div class="room-card-img-placeholder" aria-hidden="true"><app-icon name="home"/></div>
         }
 
         <div class="room-badges">
-          @if (room().isFeatured) { <span class="badge badge-featured">⭐ Featured</span> }
+          @if (room().isFeatured) { <span class="badge badge-featured"><app-icon name="star" filled/> Featured</span> }
           @if (isNew()) { <span class="badge badge-new">New</span> }
-          @if (availableNow()) { <span class="badge badge-now">⚡ Available now</span> }
+          <!-- ⚠️ Every card says WHEN, not just whether — Phase 10.
+               A board that marks the immediate rooms and says nothing about
+               the rest leaves a person to guess, and the guess is always
+               "probably now". A room free in six weeks is a good room for
+               somebody moving in six weeks, and a waste of a phone call for
+               anybody else. -->
+          @if (availableNow()) {
+            <span class="badge badge-now"><app-icon name="zap"/> Available now</span>
+          } @else if (availableFromLabel()) {
+            <span class="badge badge-later"><app-icon name="calendar"/> {{ availableFromLabel() }}</span>
+          }
           @if (room().status === 'reserved') { <span class="badge badge-reserved">Reserved</span> }
           <!-- Phase 6. On the CARD and not only on the room page: somebody
                scanning a board of thirty rooms is deciding which to open, and
@@ -70,7 +81,7 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
           <!-- Set only by an approved identity check in the admin queue.
                Nothing else can produce it, which is the point. -->
           @if (room().landlord?.landlordProfile?.idVerified) {
-            <span class="badge badge-verified" title="This landlord's identity has been checked">✓ Verified</span>
+            <span class="badge badge-verified" title="This landlord's identity has been checked"><app-icon name="check"/> Verified</span>
           }
         </div>
 
@@ -83,26 +94,23 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
           <h3 class="room-title">{{ room().title }}</h3>
 
           <p class="room-location">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" aria-hidden="true">
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-            </svg>
+            <app-icon name="map-pin"/>
             {{ room().locationDisplay }}
             <span class="province-badge" [class]="provinceClass()">{{ provinceAbbr() }}</span>
           </p>
 
           <div class="room-features">
-            <span class="room-feature">{{ roomTypeLabel() }}</span>
+            <span class="room-feature"><app-icon [name]="roomTypeIcon()"/> {{ roomTypeLabel() }}</span>
             @if (room().housematesCount > 0) {
-              <span class="room-feature">👥 {{ room().housematesCount }} housemates</span>
+              <span class="room-feature"><app-icon name="users"/> {{ room().housematesCount }} housemates</span>
             }
           </div>
 
           <div class="room-flags">
-            @if (room().dssAccepted) { <span class="flag flag-blue">SASSA ✓</span> }
-            @if (room().couplesAllowed) { <span class="flag flag-green">Couples ✓</span> }
-            @if (room().petsAllowed) { <span class="flag flag-green">Pets ✓</span> }
-            @if (room().guarantorAccepted) { <span class="flag flag-blue">Guarantor ✓</span> }
+            @if (room().dssAccepted) { <span class="flag flag-blue">SASSA <app-icon name="check"/></span> }
+            @if (room().couplesAllowed) { <span class="flag flag-green">Couples <app-icon name="check"/></span> }
+            @if (room().petsAllowed) { <span class="flag flag-green">Pets <app-icon name="check"/></span> }
+            @if (room().guarantorAccepted) { <span class="flag flag-blue">Guarantor <app-icon name="check"/></span> }
           </div>
 
           <div class="room-footer">
@@ -115,7 +123,7 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
               <div>
                 <div class="landlord-name">{{ landlordName() }}</div>
                 @if (room().landlord?.landlordProfile?.rating; as rating) {
-                  <div class="rating">★ {{ rating.toFixed(1) }}</div>
+                  <div class="rating"><app-icon name="star" filled/> {{ rating.toFixed(1) }}</div>
                 } @else {
                   <div class="rating rating--none">New landlord</div>
                 }
@@ -166,15 +174,57 @@ export class RoomCard {
     return new Date(from).getTime() <= Date.now() + 14 * 24 * 60 * 60 * 1000;
   });
 
-  roomTypeLabel = computed(() => {
-    const labels: Record<string, string> = {
-      shared_house: '🏠 Shared house',
-      en_suite: '🚿 En-suite',
-      studio: '🏢 Studio',
-      private: '🔑 Private room',
-    };
-    return labels[this.room().roomType] ?? '🏠 Room';
+  /**
+   * "Available from 25 November", for a room that is not free yet.
+   *
+   * Null when the room is already free (the badge above says so) or when the
+   * date is missing. ⚠️ A missing date cannot happen through the API —
+   * `availableFrom` is required on create and the column is NOT NULL — so
+   * this renders no "not confirmed" badge for a state the product cannot
+   * reach. `scripts/move-in-date-drive.mjs` asserts the API refuses a room
+   * without a date, which is what keeps that true.
+   *
+   * The year is shown only when it is not this one: "25 November" is how
+   * somebody says it, and "25 November 2026" on every card is noise until
+   * the date is far enough away to matter.
+   */
+  availableFromLabel = computed(() => {
+    const from = this.room().availableFrom;
+    if (!from || this.availableNow()) return null;
+    const at = new Date(from);
+    if (Number.isNaN(at.getTime())) return null;
+    const sameYear = at.getFullYear() === new Date().getFullYear();
+    return 'From ' + at.toLocaleDateString('en-ZA', {
+      day: 'numeric', month: 'long', ...(sameYear ? {} : { year: 'numeric' }),
+      timeZone: 'Africa/Johannesburg',
+    });
   });
+
+  /**
+   * ⚠️ The icon and the words are two things now.
+   *
+   * They were one string — '🏠 Shared house' — which is why the board still
+   * rendered a house emoji twelve times after every emoji in the TEMPLATE
+   * had been replaced: the glyph was in a label map in the class, where a
+   * sweep of the markup cannot see it. Found by walking the rendered text
+   * nodes rather than by reading the file, and that is the only way it
+   * could have been found.
+   *
+   * A label is text and an icon is a name; a string holding both can be
+   * neither translated nor restyled.
+   */
+  private static readonly ROOM_TYPES: Record<string, { icon: string; label: string }> = {
+    shared_house: { icon: 'users', label: 'Shared house' },
+    en_suite: { icon: 'shower', label: 'En-suite' },
+    studio: { icon: 'building', label: 'Studio' },
+    private: { icon: 'key', label: 'Private room' },
+  };
+
+  roomTypeIcon = computed(() =>
+    RoomCard.ROOM_TYPES[this.room().roomType]?.icon ?? 'home');
+
+  roomTypeLabel = computed(() =>
+    RoomCard.ROOM_TYPES[this.room().roomType]?.label ?? 'Room');
 
   availableLabel = computed(() => {
     const from = new Date(this.room().availableFrom);

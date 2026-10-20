@@ -80,7 +80,7 @@ import { ReportsService, ReportReason, REPORT_REASON_LABELS } from '../../../cor
       left: 50%; top: 50%; transform: translate(-50%,-50%);
       width: min(30rem, calc(100vw - 2rem));
       max-height: 85vh; overflow-y: auto;
-      background: var(--card); border-radius: var(--r12);
+      background: var(--white); border-radius: var(--r12);
       padding: 1.5rem; box-shadow: var(--shadow-xl);
       h2 { font-size: 1.2rem; margin-bottom: .35rem; }
     }

@@ -1,12 +1,14 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Review } from '../../../core/models/review.model';
+import { Icon } from '../icon/icon';
+import { StarRating } from '../star-rating/star-rating';
 
 /** Published reviews, with any reply from the person reviewed. */
 @Component({
   selector: 'app-review-list',
   standalone: true,
-  imports: [DatePipe],
+  imports: [StarRating, Icon, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (reviews().length === 0) {
@@ -14,7 +16,7 @@ import { Review } from '../../../core/models/review.model';
     } @else {
       @if (average() !== null) {
         <div class="review-summary">
-          <span class="review-summary__score">★ {{ average()!.toFixed(1) }}</span>
+          <span class="review-summary__score"><app-icon name="star" filled/> {{ average()!.toFixed(1) }}</span>
           <span class="review-summary__count">
             from {{ reviews().length }} review{{ reviews().length === 1 ? '' : 's' }}
           </span>
@@ -25,7 +27,7 @@ import { Review } from '../../../core/models/review.model';
         <article class="review">
           <div class="review__head">
             <span class="review__stars" [attr.aria-label]="review.rating + ' out of 5'">
-              {{ stars(review.rating) }}
+              <app-star-rating [value]="review.rating"/>
             </span>
             <span class="review__meta">
               {{ review.author?.fullName ?? 'A previous tenant' }}
@@ -65,9 +67,6 @@ export class ReviewList {
   readonly reviews = input.required<Review[]>();
   readonly emptyMessage = input<string>('No reviews yet.');
 
-  stars(rating: number) {
-    return '★'.repeat(rating) + '☆'.repeat(5 - rating);
-  }
 
   average(): number | null {
     const list = this.reviews();

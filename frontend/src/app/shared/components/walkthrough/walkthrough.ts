@@ -5,9 +5,11 @@ import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { WalkthroughService } from '../../../core/services/walkthrough.service';
 import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
+import { Icon } from '../icon/icon';
 
 /** One card of the tour. `route` is where the thing being described lives. */
 interface Step {
+  /** A key of the app-icon set, not a glyph. See PortalNavItem.icon. */
   icon: string;
   title: string;
   body: string;
@@ -43,7 +45,7 @@ interface Step {
  */
 const LANDLORD_STEPS: Step[] = [
   {
-    icon: '🏠',
+    icon: 'home',
     title: 'Listing a room is free, and stays free',
     body:
       'No fee to post, no fee to keep it up, no commission when you let it. Up to '
@@ -57,7 +59,7 @@ const LANDLORD_STEPS: Step[] = [
     linkLabel: 'List a room',
   },
   {
-    icon: '📥',
+    icon: 'inbox',
     title: 'Everyone who applies, in one place',
     body:
       'Applicants from all your rooms on one screen, with the ones still waiting '
@@ -67,7 +69,7 @@ const LANDLORD_STEPS: Step[] = [
     linkLabel: 'See applicants',
   },
   {
-    icon: '💬',
+    icon: 'message',
     title: WHATSAPP_ENABLED
       ? 'Messages reach you on WhatsApp too'
       : 'Every conversation in one inbox',
@@ -82,7 +84,7 @@ const LANDLORD_STEPS: Step[] = [
     linkLabel: 'Open messages',
   },
   {
-    icon: '🪪',
+    icon: 'id-card',
     title: 'Getting verified gets you more applicants',
     body:
       'A verified badge is the main thing a tenant looks for, because anyone can '
@@ -92,7 +94,7 @@ const LANDLORD_STEPS: Step[] = [
     linkLabel: 'Get verified',
   },
   {
-    icon: '🏘️',
+    icon: 'building',
     title: 'Rooms at one address belong together',
     body:
       'A property groups the rooms at one address, so you set the house rules and '
@@ -102,7 +104,7 @@ const LANDLORD_STEPS: Step[] = [
     linkLabel: 'My properties',
   },
   {
-    icon: '📅',
+    icon: 'calendar',
     title: 'Agree a viewing without losing it in the chat',
     body:
       'Invite an applicant to view before you decide. They answer yes or no, it '
@@ -112,7 +114,7 @@ const LANDLORD_STEPS: Step[] = [
     linkLabel: 'See applicants',
   },
   {
-    icon: '📒',
+    icon: 'book',
     title: 'Rent, written down in one place',
     body:
       'Mark each month paid, unpaid, part-paid or waived, room by room. This is '
@@ -122,7 +124,7 @@ const LANDLORD_STEPS: Step[] = [
     linkLabel: 'Open a property',
   },
   {
-    icon: '📄',
+    icon: 'file-text',
     title: 'The paperwork, free to print',
     body:
       'A lease, a renewal, a move-in inspection and a deposit receipt, ready to '
@@ -135,7 +137,7 @@ const LANDLORD_STEPS: Step[] = [
 
 const TENANT_STEPS: Step[] = [
   {
-    icon: '🔍',
+    icon: 'search',
     title: 'Applying is free. Always.',
     body:
       'No application fee, no fee to message a landlord, no subscription. You are '
@@ -145,7 +147,7 @@ const TENANT_STEPS: Step[] = [
     linkLabel: 'Browse rooms',
   },
   {
-    icon: '🛂',
+    icon: 'id-card',
     title: "The Renter's Passport puts you ahead",
     body:
       'Get your ID, your income and a reference checked once, and every landlord '
@@ -155,7 +157,7 @@ const TENANT_STEPS: Step[] = [
     linkLabel: 'Start my Passport',
   },
   {
-    icon: '📋',
+    icon: 'clipboard',
     title: 'You can see exactly where you stand',
     body:
       'Every application says what has happened in plain words — whether nobody '
@@ -165,7 +167,7 @@ const TENANT_STEPS: Step[] = [
     linkLabel: 'My dashboard',
   },
   {
-    icon: '🧾',
+    icon: 'receipt',
     title: 'Rent, and your side of the record',
     body:
       'Once you move in, your landlord records what was paid. If their record is '
@@ -175,7 +177,7 @@ const TENANT_STEPS: Step[] = [
     linkLabel: 'Rent',
   },
   {
-    icon: '📅',
+    icon: 'calendar',
     title: 'A viewing you can both look up',
     body:
       'When a landlord invites you to see a room, it arrives here with the date '
@@ -185,7 +187,7 @@ const TENANT_STEPS: Step[] = [
     linkLabel: 'Your applications',
   },
   {
-    icon: '💬',
+    icon: 'message',
     title: WHATSAPP_ENABLED
       ? 'Messages reach you on WhatsApp too'
       : 'Your conversations, in one place',
@@ -202,7 +204,7 @@ const TENANT_STEPS: Step[] = [
 
 const ADMIN_STEPS: Step[] = [
   {
-    icon: '🪪',
+    icon: 'id-card',
     title: 'The verification queue is the product',
     body:
       'Everything Mastande claims about a person rests on what gets approved here. '
@@ -212,7 +214,7 @@ const ADMIN_STEPS: Step[] = [
     linkLabel: 'Open the queue',
   },
   {
-    icon: '🚩',
+    icon: 'flag',
     title: 'Reports and disputes',
     body:
       'Scam reports come in from the public without an account, because a scam '
@@ -222,7 +224,7 @@ const ADMIN_STEPS: Step[] = [
     linkLabel: 'Reports',
   },
   {
-    icon: '📊',
+    icon: 'chart',
     title: 'What the numbers do and do not say',
     body:
       'Every figure here ships with what it is from. Anything computed from too '
@@ -265,7 +267,7 @@ const ADMIN_STEPS: Step[] = [
 @Component({
   selector: 'app-walkthrough',
   standalone: true,
-  imports: [RouterLink],
+  imports: [Icon, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   /**
    * ⚠️ Escape is bound on the DOCUMENT, not on the card.
@@ -297,7 +299,7 @@ const ADMIN_STEPS: Step[] = [
           </div>
 
           @if (step(); as s) {
-            <div class="wt-icon" aria-hidden="true">{{ s.icon }}</div>
+            <app-icon class="wt-icon" [name]="s.icon"/>
             <h2 class="wt-title" id="wt-title">{{ s.title }}</h2>
             <p class="wt-body">{{ s.body }}</p>
 

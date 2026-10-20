@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEnum, IsBoolean, IsInt, Min, IsIn } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsBoolean, IsInt, Min, IsIn, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -39,6 +39,37 @@ export class RoomFiltersDto {
   @ApiPropertyOptional({ description: 'Only rooms available within the next 14 days' })
   @IsOptional() @Type(() => Boolean) @IsBoolean()
   availableNow?: boolean;
+
+  /**
+   * The day somebody wants to move in — Phase 10.
+   *
+   * ⚠️ A SEARCH CRITERION, not a booking. Nothing is reserved, no tenancy is
+   * started and no landlord is told: it narrows the board and nothing else.
+   *
+   * A room qualifies when it is free ON OR BEFORE this date. A room free on
+   * 25 November suits somebody moving on 1 December; one free on 15 December
+   * does not. "Available now" stays a separate, looser thing — a fortnight's
+   * window — because somebody who does not have a date in mind is asking a
+   * different question.
+   *
+   * Date only, no time. It is read as a South African day: see endOfDaySast
+   * in rooms.service.ts for why that matters by a whole day either side.
+   */
+  @ApiPropertyOptional({ description: 'Rooms free on or before this date (YYYY-MM-DD)' })
+  @IsOptional() @IsDateString()
+  moveIn?: string;
+
+  /**
+   * The far end of an acceptable window, for somebody who is flexible.
+   *
+   * With `moveIn`, a room qualifies when it is free on or before THIS date —
+   * so a window of 1–31 December includes a room free on the 15th, which a
+   * strict 1 December search would rightly exclude. Ignored without `moveIn`,
+   * and refused when it falls before it.
+   */
+  @ApiPropertyOptional({ description: 'The latest acceptable move-in date (YYYY-MM-DD)' })
+  @IsOptional() @IsDateString()
+  moveInTo?: string;
 
   @ApiPropertyOptional() @IsOptional() @Type(() => Boolean) @IsBoolean() billsIncluded?: boolean;
 

@@ -8,6 +8,7 @@ import { UploadsService } from '../../../core/services/uploads.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { getImageUrl } from '../../../shared/utils/imagekit.utils';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Advertising: the enquiry pipeline and campaign management in one place,
@@ -16,7 +17,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-admin-advertising',
   standalone: true,
-  imports: [DatePipe, DecimalPipe, LowerCasePipe, FormsModule, ReactiveFormsModule, ZarCentsPipe, Loading],
+  imports: [Icon, DatePipe, DecimalPipe, LowerCasePipe, FormsModule, ReactiveFormsModule, ZarCentsPipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -104,7 +105,7 @@ import { Loading } from '../../../shared/components/loading/loading';
         } @else {
           @for (e of enquiries(); track e.id) {
             <div class="app-card" [class.app-card--closed]="e.status === 'lost'">
-              <div class="app-thumb portal-thumb" aria-hidden="true">📣</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="megaphone"/></div>
               <div class="app-info">
                 <div class="app-room">
                   {{ e.companyName }}
@@ -270,7 +271,7 @@ import { Loading } from '../../../shared/components/loading/loading';
             </div>
 
             <div class="insight-banner">
-              ⚠️
+              <app-icon name="alert"/>️
               <span>
                 Creating a campaign does not publish it. It enters review, where the
                 creative and destination are checked before anything is served.
@@ -308,7 +309,7 @@ import { Loading } from '../../../shared/components/loading/loading';
         } @else {
           @for (c of campaigns(); track c.id) {
             <div class="app-card">
-              <div class="app-thumb portal-thumb" aria-hidden="true">📢</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="megaphone"/></div>
               <div class="app-info">
                 <div class="app-room">
                   {{ c.name }}

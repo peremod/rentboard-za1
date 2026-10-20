@@ -21,7 +21,29 @@ const inDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── A landlord with nothing to do ─────────────────────────────────────────
+/**
+ * ⚠️ "Nothing to do" stopped being true in v1.144.0 and this drive did not
+ * notice, because nobody ran it.
+ *
+ * Surveys moved into onboarding and `SurveysService.inboxItem` puts a row in
+ * "Needs you" for a landlord who has not answered yet — correctly: a survey
+ * IS something being asked of them. So a brand-new landlord has exactly one
+ * waiting item, the panel is not empty, and four checks below went red on
+ * behaviour that is right.
+ *
+ * The premise is restored rather than the assertion weakened. The invariant
+ * this section exists for — no panel when genuinely nothing is waiting — is
+ * worth keeping, and it cannot be tested by an account that has something
+ * waiting. The survey is dismissed over the API first, which is what a
+ * landlord who taps "not now" does.
+ */
 const quiet = await registerUser(API, 'LANDLORD');
+for (const slug of ['landlord-pain-2026']) {
+  const res = await apiCall(API, 'POST', `/api/surveys/${slug}/dismiss`, {}, quiet.token);
+  if (res.status >= 300) {
+    console.log(`  ⚠️  could not dismiss ${slug} (${res.status}) — the quiet landlord is not quiet`);
+  }
+}
 const browser = await chromium.launch();
 const qp = await signIn(browser, WEB, quiet.email, PASSWORD);
 await qp.goto(`${WEB}/landlord/dashboard`, { waitUntil: 'domcontentloaded' });
@@ -137,9 +159,31 @@ new Set(labels).size === labels.length
 
 // The link actually goes somewhere real, fragment included.
 const hrefs = await actions.evaluateAll((els) => els.map((e) => e.getAttribute('href') ?? ''));
-hrefs.every((h) => h.startsWith('/landlord/'))
-  ? ok('every action points at a real landlord route')
-  : bad(`hrefs: ${JSON.stringify(hrefs)}`);
+/**
+ * ⚠️ This asked whether every href STARTS WITH /landlord/ while claiming to
+ * check that it "points at a real route" — narrower than its claim, and it
+ * went red the moment v1.144.0 added the survey row, whose action goes to
+ * /welcome. /welcome is a real route a landlord can reach; the check was
+ * wrong, not the link.
+ *
+ * So it now checks what it says: each action is followed, and the page it
+ * lands on must not be the catch-all. A prefix cannot tell a live route
+ * from a dead one — app.routes.ts has a '**' entry that renders ErrorPage
+ * under a 200, which is exactly the soft 404 a prefix test cannot see.
+ */
+let deadLinks = [];
+for (const href of hrefs) {
+  if (!href.startsWith('/')) { deadLinks.push(`${href} (not an in-app path)`); continue; }
+  await qp.goto(`${WEB}${href}`, { waitUntil: 'domcontentloaded' });
+  await qp.waitForTimeout(1200);
+  const title = await qp.title();
+  if (/page not found/i.test(title)) deadLinks.push(`${href} → ${title}`);
+}
+deadLinks.length === 0
+  ? ok(`every action goes somewhere real, followed one by one (${hrefs.length})`)
+  : bad(`dead action link(s): ${JSON.stringify(deadLinks)}`);
+await qp.goto(`${WEB}/landlord/dashboard`, { waitUntil: 'domcontentloaded' });
+await qp.waitForTimeout(2000);
 hrefs.some((h) => h.includes('#'))
   ? ok('and the ones that target a section carry the fragment')
   : bad(`no fragment on any action: ${JSON.stringify(hrefs)}`);

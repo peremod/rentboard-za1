@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import { AdminService } from '../../../core/services/admin.service';
 import { FLAG_REASONS, OpenTenancyFlag, TenancyFlagReason } from '../../../core/models/tenancy.model';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * The post-tenancy dispute queue.
@@ -28,11 +29,11 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-admin-disputes',
   standalone: true,
-  imports: [DatePipe, LowerCasePipe, FormsModule, RouterLink, Loading],
+  imports: [Icon, DatePipe, LowerCasePipe, FormsModule, RouterLink, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <div class="insight-banner">
-        ⚖️
+        <app-icon name="scale"/>️
         <span>
           Reports about how a letting went, raised after it ended. An open
           report pushes that account's rooms down the board; it does not hide
@@ -53,7 +54,7 @@ import { Loading } from '../../../shared/components/loading/loading';
       } @else {
         @for (flag of flags(); track flag.id) {
           <div class="app-card">
-            <div class="app-thumb portal-thumb" aria-hidden="true">🚩</div>
+            <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="flag"/></div>
 
             <div class="app-info">
               <div class="app-room">{{ reasonLabel(flag.reason) }}</div>
@@ -130,7 +131,7 @@ import { Loading } from '../../../shared/components/loading/loading';
     .dispute-detail {
       margin: .6rem 0 0;
       padding: .6rem .8rem;
-      border-left: 3px solid var(--line, #e3ded6);
+      border-left: 3px solid var(--border);
       background: var(--white);
       font-size: .88rem;
       line-height: 1.55;

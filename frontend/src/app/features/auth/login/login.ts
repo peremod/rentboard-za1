@@ -6,6 +6,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
 import { Logo } from '../../../shared/components/logo/logo';
 import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Login — email and password.
@@ -29,7 +30,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
   standalone: true,
   // FormsModule for the phone fields, which use ngModel rather than joining
   // the reactive form — they are a separate sign-in path, not extra login fields.
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterLink, TranslatePipe, Logo],
+  imports: [Icon, CommonModule, FormsModule, ReactiveFormsModule, RouterLink, TranslatePipe, Logo],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="auth">
@@ -67,7 +68,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
         </form>
 
         @if (magicSent()) {
-          <p class="auth__foot">✅ {{ magicMessage() }}</p>
+          <p class="auth__foot"><app-icon name="check-circle"/> {{ magicMessage() }}</p>
         } @else {
           <div class="auth__divider"><span>or</span></div>
 
@@ -77,7 +78,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
           <button type="button" class="auth__magic"
                   [disabled]="!emailForMagic() || sendingMagic()"
                   (click)="sendMagicLink()">
-            {{ sendingMagic() ? 'Sending…' : '✉️ Email me a sign-in link instead' }}
+            @if (sendingMagic()) { Sending… } @else { <app-icon name="mail"/> Email me a sign-in link instead }
           </button>
           <p class="auth__fine">
             No password needed. The link works once and expires in 15 minutes.
@@ -99,7 +100,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
           } @else if (!phoneMode()) {
             <button type="button" class="auth__magic" style="margin-top:.5rem"
                     (click)="phoneMode.set(true)">
-              💬 Use my phone number instead
+              <app-icon name="message"/> Use my phone number instead
             </button>
           } @else {
             <div class="phone-signin">

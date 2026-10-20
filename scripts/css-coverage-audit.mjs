@@ -79,7 +79,6 @@ const ALLOWED = new Map([
   ['money-scope', 'always written as "muted money-scope"; .muted styles it'],
   ['yard__shared', 'always written as "yard__shared muted"; .muted styles it'],
   ['yard-ungrouped-note', 'always written as "muted yard-ungrouped-note"; .muted styles it'],
-  ['rating--none', 'modifier on .rating, which carries the styling'],
 ]);
 
 if (!existsSync(DIST)) {

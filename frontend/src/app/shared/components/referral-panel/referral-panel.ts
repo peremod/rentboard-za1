@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { DatePipe } from '@angular/common';
 import { ReferralsService } from '../../../core/services/referrals.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { Icon } from '../icon/icon';
 
 type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tenant';
 
@@ -15,7 +16,7 @@ type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tena
 @Component({
   selector: 'app-referral-panel',
   standalone: true,
-  imports: [DatePipe],
+  imports: [Icon, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (data(); as d) {
@@ -31,14 +32,14 @@ type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tena
           <div class="referral-code-box__label">Your code</div>
           <div class="referral-code-box__code">{{ d.code }}</div>
           <button type="button" class="btn btn-sm btn-outline" (click)="copyCode(d.code)">
-            {{ copied() === 'code' ? '✓ Copied' : 'Copy code' }}
+            @if (copied() === 'code') { <app-icon name="check"/> Copied } @else { Copy code }
           </button>
         </div>
 
         @if (isLandlord()) {
           @if (d.summary.freeVerificationsAvailable > 0) {
             <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
-              🎁
+              <app-icon name="gift"/>
               <span>
                 You have <strong>{{ d.summary.freeVerificationsAvailable }}</strong>
                 free verification{{ d.summary.freeVerificationsAvailable === 1 ? '' : 's' }} earned.
@@ -70,7 +71,7 @@ type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tena
                    target="_blank" rel="noopener">WhatsApp</a>
                 <button type="button" class="btn btn-sm btn-ghost-light"
                         (click)="copyMessage(option.kind, d.code)">
-                  {{ copied() === option.kind ? '✓ Copied' : 'Copy message' }}
+                  @if (copied() === option.kind) { <app-icon name="check"/> Copied } @else { Copy message }
                 </button>
               </div>
             </div>
@@ -82,7 +83,7 @@ type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tena
           @for (r of d.referrals; track r.id) {
             <div class="app-card">
               <div class="app-thumb portal-thumb" aria-hidden="true">
-                {{ r.referee.role === 'LANDLORD' ? '🔑' : '🏠' }}
+                <app-icon [name]="r.referee.role === 'LANDLORD' ? 'key' : 'home'"/>
               </div>
               <div class="app-info">
                 <div class="app-room">{{ r.referee.fullName }}</div>
@@ -171,7 +172,7 @@ export class ReferralPanel implements OnInit {
     return {
       pending: 'Signed up',
       qualified: 'Active',
-      rewarded: '✓ Reward earned',
+      rewarded: 'Reward earned',
       void: 'Not counted',
     }[status] ?? status;
   }

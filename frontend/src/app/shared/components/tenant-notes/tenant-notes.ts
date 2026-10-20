@@ -7,6 +7,7 @@ import { LandlordNotesService } from '../../../core/services/landlord-notes.serv
 import { LandlordNote } from '../../../core/models/landlord-note.model';
 import { DialogService } from '../../../core/services/dialog.service';
 import { Loading } from '../loading/loading';
+import { Icon } from '../icon/icon';
 
 /**
  * A landlord's private notes about one person — Phase 5e.
@@ -32,7 +33,7 @@ import { Loading } from '../loading/loading';
 @Component({
   selector: 'app-tenant-notes',
   standalone: true,
-  imports: [DatePipe, FormsModule, Loading],
+  imports: [Icon, DatePipe, FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="notes-block">
@@ -52,7 +53,7 @@ import { Loading } from '../loading/loading';
       @if (open()) {
         <div class="notes-body">
           <p class="muted notes-privacy">
-            🔒 Only you can see these. {{ tenantName() }} cannot, and neither can
+            <app-icon name="lock"/> Only you can see these. {{ tenantName() }} cannot, and neither can
             anyone else — not other landlords, not Mastande's staff. They are not
             a rating and they do not affect anyone's listing or application.
           </p>

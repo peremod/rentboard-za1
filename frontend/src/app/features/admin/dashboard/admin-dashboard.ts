@@ -9,6 +9,7 @@ import { PaymentsService, RefundDue } from '../../../core/services/payments.serv
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { PluralPipe } from '../../../shared/pipes/plural.pipe';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Admin overview: platform counts, and account support.
@@ -20,14 +21,14 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-admin-dashboard',
   standalone: true,
-  imports: [PluralPipe, RouterLink, DatePipe, LowerCasePipe, FormsModule, ZarCentsPipe, Loading],
+  imports: [Icon, PluralPipe, RouterLink, DatePipe, LowerCasePipe, FormsModule, ZarCentsPipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
       @if (stats(); as s) {
         @if (s.moderation.pendingVerifications > 0) {
           <div class="insight-banner">
-            📄
+            <app-icon name="file-text"/>
             <span>
               <strong>{{ s.moderation.pendingVerifications }}</strong>
               verification {{ s.moderation.pendingVerifications === 1 ? 'document is' : 'documents are' }}
@@ -52,7 +53,7 @@ import { Loading } from '../../../shared/components/loading/loading';
             </h2>
 
             <div class="insight-banner">
-              💡
+              <app-icon name="lightbulb"/>
               <span>
                 Totals tell you how much data exists. These tell you whether the
                 board is working: listings nobody applies to, and applications
@@ -104,7 +105,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 
             @if (k.queues.openReports > 0 || k.queues.pendingVerifications > 0 || k.queues.newEnquiries > 0) {
               <div class="insight-banner">
-                📥
+                <app-icon name="inbox"/>
                 <span>
                   Waiting on you:
                   @if (k.queues.openReports > 0) {
@@ -140,7 +141,7 @@ import { Loading } from '../../../shared/components/loading/loading';
           </h2>
 
           <div class="insight-banner">
-            💸
+            <app-icon name="banknote"/>
             <span>
               The pricing page promises a full refund when we cannot verify
               someone, so each of these is a commitment already made. PayFast
@@ -191,7 +192,7 @@ import { Loading } from '../../../shared/components/loading/loading';
         </h2>
 
         <div class="insight-banner">
-          📲
+          <app-icon name="smartphone"/>
           <span>
             For a landlord sitting with you who has a phone and no email address.
             <strong>The code goes to their handset, not yours</strong> — ask them to
@@ -223,7 +224,7 @@ import { Loading } from '../../../shared/components/loading/loading';
               <div class="app-info">
                 <div class="app-room">
                   @if (a.becameAnAccount) {
-                    ✅ Finished — they accepted
+                    <app-icon name="check-circle"/> Finished — they accepted
                     {{ a.theyAcceptedAt | date:'d MMM, HH:mm' }}
                   } @else if (a.stillOpen) {
                     ⏳ Waiting for {{ a.phone }}
@@ -261,7 +262,7 @@ import { Loading } from '../../../shared/components/loading/loading';
           @for (u of users(); track u.id) {
             <div class="app-card" [class.app-card--closed]="!u.isActive">
               <div class="app-thumb portal-thumb" aria-hidden="true">
-                {{ u.role === 'LANDLORD' ? '🔑' : '🏠' }}
+                <app-icon [name]="u.role === 'LANDLORD' ? 'key' : 'home'"/>
               </div>
               <div class="app-info">
                 <div class="app-room">

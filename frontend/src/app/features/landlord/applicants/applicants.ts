@@ -17,6 +17,7 @@ import { TenantReferences } from '../../../core/models/review.model';
 import { applicationState, stateClass } from '../../../core/models/state.model';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Applicant manager — one room's full applicant list, with shortlist/accept/
@@ -27,7 +28,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-applicants',
   standalone: true,
-  imports: [DatePipe, FormsModule, RouterLink, MessageThread, ReviewList, TenantNotes, ScreenHint, Loading],
+  imports: [Icon, DatePipe, FormsModule, RouterLink, MessageThread, ReviewList, TenantNotes, ScreenHint, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-applicants" heading="Everyone who applied, across every room">
@@ -67,7 +68,7 @@ import { Loading } from '../../../shared/components/loading/loading';
         @if (shortlisted().length > 0) {
           <div class="applicant-group">
             <h2 class="applicant-group__title">
-              ⭐ Shortlisted <span class="applicant-group__count">({{ shortlisted().length }})</span>
+              <app-icon name="star" filled/> Shortlisted <span class="applicant-group__count">({{ shortlisted().length }})</span>
             </h2>
             <p class="applicant-group__hint">
               Arrange viewings with these, then accept one. Accepting closes the
@@ -107,8 +108,8 @@ import { Loading } from '../../../shared/components/loading/loading';
                     (click)="toggleOpen(app)">
               <span class="applicant-card__who">
                 <strong>{{ app.tenant?.fullName }}</strong>
-                @if (app.tenant?.isVerified) { <span class="pill">✓ Verified</span> }
-                @if (app.tenant?.tenantProfile?.hasPassport) { <span class="pill pill--passport">🛂 Passport</span> }
+                @if (app.tenant?.isVerified) { <span class="pill"><app-icon name="check"/> Verified</span> }
+                @if (app.tenant?.tenantProfile?.hasPassport) { <span class="pill pill--passport"><app-icon name="id-card"/> Passport</span> }
                 <span [class]="'state ' + stateClass(applicationState(app.status))">{{ app.status }}</span>
               </span>
               <span aria-hidden="true">{{ openId() === app.id ? '▲' : '▼' }}</span>
@@ -132,11 +133,11 @@ import { Loading } from '../../../shared/components/loading/loading';
                        "income proof: rejected" would be screening on a private
                        failure. -->
                   <div class="passport-basis">
-                    <strong>🛂 Renter's Passport</strong>
+                    <strong><app-icon name="id-card"/> Renter's Passport</strong>
                     @if (basis()[app.tenant!.id]; as checks) {
                       <ul>
                         @for (check of checks.checks; track check.type) {
-                          <li>✓ {{ check.label }}<span>{{ check.confirmedAt | date: 'MMM yyyy' }}</span></li>
+                          <li><app-icon name="check"/> {{ check.label }}<span>{{ check.confirmedAt | date: 'MMM yyyy' }}</span></li>
                         }
                       </ul>
                     } @else {
@@ -171,13 +172,14 @@ import { Loading } from '../../../shared/components/loading/loading';
                 @if (!['accepted','rejected','withdrawn'].includes(app.status)) {
                   <div class="applicant-card__actions">
                     @if (app.status !== 'shortlisted') {
-                      <button type="button" (click)="shortlist(app)">⭐ Shortlist</button>
+                      <button type="button" (click)="shortlist(app)"><app-icon name="star" filled/> Shortlist</button>
                     } @else {
-                      <button type="button" (click)="unshortlist(app)">Remove from shortlist</button>
+                      <button type="button" class="unshortlist"
+                              (click)="unshortlist(app)">Remove from shortlist</button>
                     }
-                    <button type="button" (click)="startInvite(app)">📅 Invite to view</button>
-                    <button type="button" class="accept" (click)="accept(app)">✓ Accept</button>
-                    <button type="button" class="reject" (click)="reject(app)">✕ Reject</button>
+                    <button type="button" (click)="startInvite(app)"><app-icon name="calendar"/> Invite to view</button>
+                    <button type="button" class="accept" (click)="accept(app)"><app-icon name="check"/> Accept</button>
+                    <button type="button" class="reject" (click)="reject(app)"><app-icon name="x"/> Reject</button>
                   </div>
 
                   <!-- ── Viewings — Phase 7l ─────────────────────────────
@@ -225,7 +227,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                           <div class="viewing__outcomes">
                             @for (o of outcomes; track o.value) {
                               <button type="button" class="viewing__outcome"
-                                      (click)="pickOutcome(app.id, o.value)">{{ o.label }}</button>
+                                      (click)="pickOutcome(app.id, o.value)"><app-icon [name]="o.icon"/> {{ o.label }}</button>
                             }
                           </div>
                           <!-- The reschedule option. It works because invite()
@@ -233,7 +235,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                                already arranged — a past time gives nobody
                                anywhere to be. -->
                           <button type="button" class="link-btn"
-                                  (click)="startInvite(app)">📅 Offer another time</button>
+                                  (click)="startInvite(app)"><app-icon name="calendar"/> Offer another time</button>
                         }
                       } @else if (v.status === 'proposed' || v.status === 'accepted') {
                         <button type="button" class="link-btn" [disabled]="busyViewing() === app.id"
@@ -283,7 +285,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 
                 <div class="applicant-card__refs">
                   <button type="button" class="refs-toggle" (click)="toggleRefs(app)">
-                    {{ openRefs() === app.id ? 'Hide references' : '📄 References' }}
+                    {{ openRefs() === app.id ? 'Hide references' : 'References' }}
                   </button>
 
                   @if (openRefs() === app.id) {
@@ -395,7 +397,7 @@ import { Loading } from '../../../shared/components/loading/loading';
          its content width and these labels are sentences. */
       min-height: 44px; padding: .5rem .75rem; min-width: 0; max-width: 100%;
       white-space: normal; line-height: 1.3;
-      background: var(--card); color: var(--ink);
+      background: var(--white); color: var(--ink);
       border: 1.5px solid var(--border); border-radius: var(--r4); cursor: pointer;
     }
     .viewing__outcome:hover { border-color: var(--terra); }
@@ -417,6 +419,13 @@ import { Loading } from '../../../shared/components/loading/loading';
     }
     .viewing-form .field-hint { font-weight: 400; line-height: 1.6; }
     .viewing-form__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; }
+    /* ⚠️ Undoing a shortlist is not inviting someone to a viewing, and the
+       two rendered as the same button. Reversible, so not the danger
+       treatment Delete gets — slate on a slate hairline, which reads as
+       "step back" beside three actions that step forward. */
+    .applicant-card__actions .unshortlist {
+      color: var(--slate); border-color: var(--border-strong); background: var(--cream2);
+    }
     .applicant-card__actions .accept { background: var(--sage); color: var(--white); border: none; }
     .applicant-card__actions .reject { background: var(--danger); color: var(--white); border: none; }
 
@@ -585,13 +594,13 @@ export class Applicants implements OnInit {
   viewingLabel(v: RoomViewing): string {
     // ⚠️ An elapsed viewing is NOT "they are coming". That sentence was on
     // this screen about Saturdays weeks gone, which is the bug Phase 8n fixes.
-    if (this.elapsed(v)) return '⏰ The agreed time has passed';
+    if (this.elapsed(v)) return 'The agreed time has passed';
     if (v.outcome) return this.outcomeLabel(v.outcome);
     return {
-      proposed: '📅 Invited, waiting for an answer',
-      accepted: '✅ They are coming',
-      declined: '✕ They cannot make it',
-      cancelled: '✕ Called off',
+      proposed: 'Invited, waiting for an answer',
+      accepted: 'They are coming',
+      declined: 'They cannot make it',
+      cancelled: 'Called off',
     }[v.status];
   }
 
@@ -607,12 +616,12 @@ export class Applicants implements OnInit {
    * only the values are shared, never the wording, because "they did not come"
    * and "I could not go" are one outcome told from two ends.
    */
-  readonly outcomes: ReadonlyArray<{ value: ViewingOutcome; label: string; closes: boolean }> = [
-    { value: 'happened', label: '✅ They came and saw it', closes: false },
-    { value: 'rearranged_privately', label: '🕓 We met at a different time', closes: false },
-    { value: 'no_answer', label: '✕ They did not turn up', closes: false },
-    { value: 'fell_through_other_room', label: '🚪 They have taken another room', closes: true },
-    { value: 'fell_through_other_tenant', label: '🔒 I have let it to somebody else', closes: true },
+  readonly outcomes: ReadonlyArray<{ value: ViewingOutcome; icon: string; label: string; closes: boolean }> = [
+    { value: 'happened', icon: 'check-circle', label: 'They came and saw it', closes: false },
+    { value: 'rearranged_privately', icon: 'clock', label: 'We met at a different time', closes: false },
+    { value: 'no_answer', icon: 'x', label: 'They did not turn up', closes: false },
+    { value: 'fell_through_other_room', icon: 'door', label: 'They have taken another room', closes: true },
+    { value: 'fell_through_other_tenant', icon: 'lock', label: 'I have let it to somebody else', closes: true },
   ];
 
   private outcomeLabel(o: ViewingOutcome): string {

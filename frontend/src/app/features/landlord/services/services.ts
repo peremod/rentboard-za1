@@ -6,6 +6,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 import {
   SERVICE_LABELS, ServiceCategory, ServiceProvider, checksFor, whatsappLink,
 } from '../../../core/models/service-provider.model';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Who to phone when something breaks.
@@ -20,7 +21,7 @@ import {
 @Component({
   selector: 'app-landlord-services',
   standalone: true,
-  imports: [FormsModule, DatePipe, Loading],
+  imports: [Icon, FormsModule, DatePipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -30,7 +31,7 @@ import {
            banner says what the list IS, and each name carries the checks it
            actually has. -->
       <div class="insight-banner">
-        🔧
+        <app-icon name="wrench"/>
         <span>
           Names we have looked into ourselves — <strong>each one says below what
           we checked and when</strong>, so you can judge it rather than take our
@@ -96,7 +97,7 @@ import {
                   @if (done.length) {
                     <ul class="provider__checks">
                       @for (c of done; track c.label) {
-                        <li>✓ {{ c.label }} <span class="muted">— {{ c.on | date: 'd MMM yyyy' }}</span></li>
+                        <li><app-icon name="check"/> {{ c.label }} <span class="muted">— {{ c.on | date: 'd MMM yyyy' }}</span></li>
                       }
                     </ul>
                   } @else {
@@ -121,7 +122,7 @@ import {
                   <!-- tel: and wa.me, not an in-app message. The whole point is
                        to get the landlord onto the phone. -->
                   <a class="btn btn-sm btn-primary" [href]="'tel:' + p.phone"
-                     (click)="noteContact(p, 'call')">📞 Call {{ p.phone }}</a>
+                     (click)="noteContact(p, 'call')"><app-icon name="phone"/> Call {{ p.phone }}</a>
                   @if (p.whatsapp) {
                     <a class="btn btn-sm btn-sage" [href]="waLink(p)" target="_blank" rel="noopener"
                        (click)="noteContact(p, 'whatsapp')">

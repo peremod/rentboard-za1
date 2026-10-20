@@ -19,9 +19,15 @@
   display: none;
   background: none;
   border: none;
-  color: var(--cream);
+  color: var(--white);
+  // Sizes the app-icon inside it, which is 1em square. Was 1.5rem on a
+  // text glyph; the SVG is drawn to a 24px grid so this is the same
+  // optical weight on every handset rather than whatever the system
+  // emoji font happened to supply.
   font-size: 1.5rem;
   line-height: 1;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   padding: .25rem .5rem;
   // ⚠️ 32px before Phase 7q, and it is THE ONLY NAVIGATION A PHONE HAS.
@@ -36,6 +42,30 @@
   // min-width as well, because an icon button has no text to make it wide.
   min-height: 44px;
   min-width: 44px;
+  border-radius: var(--r-full);
+
+  /**
+   * ⚠️ Its own hover, because the global one is wrong here.
+   *
+   * `:where(button)` in styles.scss paints EVERY button terracotta and
+   * darkens it on hover, at zero specificity, so any variant without its
+   * own :hover inherits it. `.nav-burger` sets `background:none` and so
+   * looked right at rest and turned into a second filled terracotta
+   * button the instant a thumb touched it — beside "Get started", which
+   * is a real filled terracotta button. That is the reported complaint
+   * ("the hamburger competes with Get started") and it was invisible in
+   * a screenshot of the resting state.
+   *
+   * A translucent white wash instead: it reads as pressed on a dark
+   * header without borrowing the colour that means "this is the action".
+   */
+  &:hover:not(:disabled),
+  &:focus-visible {
+    background: rgba(255, 255, 255, .14);
+    color: var(--white);
+    transform: none;
+    box-shadow: none;
+  }
 }
 .nav-links-lang { display: none; }
 // The drawer's copy of the auth actions. Hidden on desktop, where the header
@@ -151,20 +181,128 @@
 @media (max-width: 768px) {
   // Nav
   .nav-links { display: none; }
-  .nav-burger { display: block; order: 3; }
+  // flex, not block: the icon is centred in a 44px box rather than sitting
+  // on a text baseline inside one.
+  .nav-burger { display: flex; order: 3; }
   .nav-inner { gap: 1rem; position: relative; }
 
+  // ⚠️ The drawer was a dark panel on a dark hero with no scrim, no close,
+  // no scroll lock and no way out but the burger. It is a sheet now, and
+  // it is WHITE: ink-on-ink meant the boundary between the menu and the
+  // page behind it was invisible in the one screenshot that showed both.
   .nav-links.open {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: .75rem;
     position: absolute;
     top: 66px; left: 0; right: 0;
-    background: var(--ink);
-    padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid rgba(255, 255, 255, .1);
+    background: var(--white);
+    color: var(--ink);
+    padding: 1rem 1.5rem 1.5rem;
+    border-bottom: 1px solid var(--border);
     box-shadow: var(--shadow-lg);
+    // Above the scrim, which is 98.
     z-index: 99;
+    // The sheet can be taller than the phone once a landlord is signed in
+    // and it carries Dashboard, List a room and Log out as well. Scrolls
+    // itself rather than the page, which is the other half of the lock.
+    max-height: calc(100vh - 66px);
+    overflow-y: auto;
+  }
+  // The links were written for ink. On white they have to be re-stated, and
+  // the active one needs a colour that is not "slightly less faint".
+  .nav-links.open a {
+    color: var(--ink2);
+    font-weight: 600;
+    padding: .5rem 0;
+    // 44px, WCAG 2.5.8. A link in a list is not a .btn and no .btn rule
+    // reaches it — the fourth time that sentence has been written in this
+    // file, which is why the sweep exists.
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+  .nav-links.open a:hover,
+  .nav-links.open a.active { color: var(--terra); }
+
+  /**
+   * ⚠️ Every BUTTON inside the sheet, re-coloured for a light surface.
+   *
+   * This is row 88's defect arriving by a new route. `:where(button)` sets
+   * `color: var(--white)` for the whole app, and `.btn-ghost` sets
+   * `rgba(250,247,240,.75)` with a translucent border — both correct while
+   * this drawer was ink, both invisible the moment it became white. The
+   * language switcher went white-on-white at 1.00:1, which is the exact
+   * ratio and the exact failure `.hint__close` shipped with.
+   *
+   * ⚠️ And `control-contrast-audit` passed the whole time, because it asks
+   * whether a rule that repaints a BACKGROUND also sets a colour — and
+   * nothing repainted a background here. The surface moved out from under
+   * a foreground that never changed. Found by looking at the sheet.
+   *
+   * Scoped to `.nav-links.open` so the header's own copies of these same
+   * controls, which are still on ink, are untouched.
+   */
+  .nav-links.open button,
+  .nav-links.open .btn {
+    color: var(--ink);
+  }
+  .nav-links.open .btn-ghost {
+    color: var(--ink2);
+    border-color: var(--border-strong);
+  }
+  .nav-links.open .btn-ghost:hover { color: var(--ink); border-color: var(--ink2); }
+  // The primary action keeps its own fill, so it keeps white text.
+  .nav-links.open .btn-primary { color: var(--white); }
+
+  // Handed to app-lang-switcher, whose component styles a global rule here
+  // cannot reach. See the note on .lang-switcher > button.
+  .nav-links.open {
+    --lang-fg: var(--ink2);
+    --lang-edge: var(--border-strong);
+  }
+
+  .nav-scrim {
+    position: fixed;
+    inset: 66px 0 0;
+    background: rgba(28, 22, 14, .5);
+    z-index: 98;
+  }
+
+  .nav-sheet-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    align-self: flex-end;
+    min-height: 44px;
+    min-width: 44px;
+    padding: .25rem .75rem;
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--r-full);
+    background: var(--white);
+    color: var(--ink2);
+    font: inherit;
+    font-size: .8rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  // Privacy / Terms / Disclaimer, demoted. They are still links and still
+  // 44px; they are no longer the same visual weight as the one item most
+  // people opened the menu to reach.
+  .nav-links__legal {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-top: .5rem;
+    padding-top: .75rem;
+    border-top: 1px solid var(--border);
+  }
+  .nav-links.open .nav-links__legal a {
+    font-size: .75rem;
+    font-weight: 400;
+    color: var(--slate);
   }
 
   // Hero
@@ -186,8 +324,16 @@
   .trust-item { white-space: nowrap; flex-shrink: 0; }
 
   // Search
-  .search-bar { flex-direction: column; }
-  .search-input-wrap, .search-select { width: 100%; min-width: 0; }
+  /* ⚠️ Four full-width rows before a single room was four rows of chrome
+     at the top of the busiest page in the product, on the device it is
+     built for. The text box stays full width because it is the primary
+     thing; the three selects share a two-column grid, so the band is three
+     rows instead of four and the selects are ~170px at 390px — wide enough
+     for "All room types" without truncating. */
+  .search-bar { flex-direction: column; align-items: stretch; }
+  .search-input-wrap { width: 100%; min-width: 0; }
+  .search-selects { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+  .search-select { width: 100%; min-width: 0; }
 
   // NOTE: results-header layout is defined once, further down, in the
   // 'Results header on mobile' block. It used to stack here too, and that rule
@@ -541,19 +687,13 @@
   .hiw-safety { padding: 1.1rem; }
 }
 
-// Verified landlord badge. The spec predates verification existing, so it has
-// no rule for this; sage keeps it distinct from Featured (gold) and New.
-.badge-verified { background: var(--sage); color: var(--white); }
-/* Sand rather than red: an unverified landlord is the normal case today, not a
-   warning about that person. Global rather than in room-detail's own styles —
-   component styles are MORE specific under emulated encapsulation, which is
-   what silently overrode the whole responsive layer in v0.9.3. */
-.badge-unverified { background: var(--cream2); color: var(--ink2); border: 1px solid var(--border); }
-/* Sublet — Phase 6. Amber, deliberately between the green badges and a warning:
-   a sublet is a legitimate listing with a real extra risk attached, and styling
-   it as either "good" or "danger" would misdescribe it. Global, for the same
-   encapsulation reason as the two above. */
-.badge-sublet { background: rgba(200,144,42,.9); color: var(--white); }
+// ⚠️ badge-verified, badge-unverified and badge-sublet moved to _spec.scss
+// in v1.153.0, with the rest of the vocabulary. They were declared here
+// because the spec predates verification and subletting — reasonable each
+// time, and the result was a vocabulary split across two files in which
+// .badge-new and .badge-verified ended up identical (solid sage, white) for
+// two claims that have nothing to do with each other. One place now, and
+// badge-lint fails if any two render alike.
 /* The note under the household filters, which says they hide listings that have
    not described themselves. Smaller than a label, not a muted aside: it is the
    difference between "no rooms match" and "the board is broken". */
@@ -665,7 +805,7 @@
   font-size: .85rem;
   line-height: 1.3;
   white-space: nowrap;
-  background: var(--card);
+  background: var(--white);
   border: 1px solid var(--border);
   border-radius: var(--r-full);
   cursor: pointer;
@@ -719,7 +859,7 @@
 .search-suggest {
   position: absolute; top: calc(100% + .35rem); left: 0; right: 0; z-index: 40;
   margin: 0; padding: .3rem; list-style: none;
-  background: var(--card); border: 1px solid var(--border);
+  background: var(--white); border: 1px solid var(--border);
   border-radius: var(--r8); box-shadow: var(--shadow-lg);
   max-height: 17rem; overflow-y: auto;
 
@@ -962,7 +1102,7 @@
   min-height: 44px;
   font-size: .85rem;
   font-weight: 600;
-  background: var(--card);
+  background: var(--white);
   border: 1.5px solid var(--border);
   border-radius: var(--r-full);
   color: var(--ink2);
@@ -980,5 +1120,7 @@
 
 .quick-filters__note { font-size: .78rem; color: var(--slate); }
 
-// Matches the quick-filter chip so the badge and the filter read as one idea.
-.badge-now { background: rgba(61, 112, 64, .12); color: var(--sage); border: 1px solid rgba(61, 112, 64, .3); }
+// ⚠️ badge-now and badge-later moved to _spec.scss in v1.153.0 — see the
+// badge block there. They kept the quick-filter chip's tint, which is still
+// the intent; what changed is that the whole vocabulary is declared in one
+// place so no two members of it can drift into looking the same.

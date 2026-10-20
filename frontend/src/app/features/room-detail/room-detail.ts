@@ -22,6 +22,7 @@ import {
 } from '../../core/models/room.model';
 import { environment } from '@env/environment';
 import { Loading } from '../../shared/components/loading/loading';
+import { Icon } from '../../shared/components/icon/icon';
 
 /** Plain English, in a tenant's terms. `unstated` has no entry: it is never shown. */
 const HOUSEMATE_SENTENCE: Record<'professionals' | 'students' | 'mixed' | 'couples', string> = {
@@ -70,14 +71,18 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
 @Component({
   selector: 'app-room-detail',
   standalone: true,
-  imports: [NgOptimizedImage, DatePipe, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot, TranslatePipe, Loading, SurveyPrompt],
+  imports: [Icon, NgOptimizedImage, DatePipe, FormsModule, RouterLink, ZarCentsPipe, ReportDialog, ReviewList, AdSlot, TranslatePipe, Loading, SurveyPrompt],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="room-detail">
       @if (room(); as r) {
         <!-- Points back where they came from: a room opened from a dashboard
              returns to that dashboard, not to the public board. -->
-        <p><a [routerLink]="back().url">{{ back().label }}</a></p>
+        <!-- ⚠️ A class so it can be given a height. It is the only link in
+             its paragraph, so it is standalone navigation and not words in
+             a sentence — 2.5.8's inline exemption does not apply and it was
+             a 17px target 4px from its neighbour. -->
+        <p><a class="back-link" [routerLink]="back().url">{{ back().label }}</a></p>
 
         <!-- Main image plus up to four thumbnails beside it. A row of
              equal thumbnails under a hero gave no sense of which photo
@@ -121,7 +126,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
           <div class="lightbox" role="dialog" aria-modal="true"
                (click)="closeLightbox()" (keydown.escape)="closeLightbox()" tabindex="-1">
             <button type="button" class="lightbox__close" (click)="closeLightbox()"
-                    aria-label="Close">✕</button>
+                    aria-label="Close"><app-icon name="x"/></button>
             <button type="button" class="lightbox__nav lightbox__nav--prev"
                     (click)="step(-1); $event.stopPropagation()" aria-label="Previous">‹</button>
             <img [src]="allPhotos()[lightboxIndex()!]" [alt]="r.title"
@@ -136,7 +141,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
 
         <h1>{{ r.title }}</h1>
         <p class="room-detail__price figure">{{ r.rentCents | zarCents:'monthly' }} @if (r.billsIncluded) { <span class="pill">Bills included</span> }</p>
-        <p class="room-detail__location">📍 {{ r.locationDisplay }}</p>
+        <p class="room-detail__location"><app-icon name="map-pin"/> {{ r.locationDisplay }}</p>
 
         <!-- Sub-let notice — Phase 6.
              ABOVE the fold and above the apply box, not in the small print at
@@ -148,7 +153,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
              invalid, so they get told before they decide, not after. -->
         @if (r.listerType === 'sublessor') {
           <div class="sublet-notice">
-            <p class="sublet-notice__head">🔑 Sublet by a tenant, not the owner</p>
+            <p class="sublet-notice__head"><app-icon name="key"/> Sublet by a tenant, not the owner</p>
             <p>
               The person letting this room rents the place themselves. Most South
               African leases allow this only with the owner's written consent.
@@ -158,7 +163,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
             </p>
             @if (r.subletCheckedAt) {
               <p class="sublet-notice__checked">
-                ✓ Lease and consent to sublet <strong>checked on
+                <app-icon name="check"/> Lease and consent to sublet <strong>checked on
                 {{ r.subletCheckedAt | date: 'd MMMM y' }}</strong>. That means we
                 saw documents for this address — not that we phoned the owner, and
                 not that consent still stands today.
@@ -217,7 +222,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
 
             @if (landlord.landlordProfile?.idVerified) {
               <p class="landlord-trust__state">
-                <span class="badge badge-verified">✓ Verified</span>
+                <span class="badge badge-verified"><app-icon name="check"/> Verified</span>
                 A Mastande reviewer checked their identity document against this
                 account. It is not a credit or criminal check.
               </p>
@@ -231,7 +236,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
 
             @if (landlord.landlordProfile?.ratingCount) {
               <p class="landlord-trust__rating">
-                ★ {{ landlord.landlordProfile!.rating }} from
+                <app-icon name="star" filled/> {{ landlord.landlordProfile!.rating }} from
                 {{ landlord.landlordProfile!.ratingCount }}
                 {{ landlord.landlordProfile!.ratingCount === 1 ? 'review' : 'reviews' }}
                 by previous tenants
@@ -261,7 +266,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
           } @else if (auth.isLandlord()) {
             <p class="muted">Landlord accounts can't apply to rooms.</p>
           } @else if (applied()) {
-            <p class="pill pill--green">✓ {{ 'room.application_sent' | translate }}</p>
+            <p class="pill pill--green"><app-icon name="check"/> {{ 'room.application_sent' | translate }}</p>
             <!-- ── One question, at the moment it is worth asking — 9b ──────
                  A person who has just applied for a room is thinking about
                  moving, so "when do you need to move?" is a fact rather than
@@ -361,7 +366,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
             under the Rental Housing Act 50 of 1999.
           </p>
           <button type="button" class="btn btn-sm btn-ghost-light" (click)="reportOpen.set(true)">
-            🚩 Report this listing
+            <app-icon name="flag"/> Report this listing
           </button>
         </aside>
 
@@ -470,7 +475,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
     .shared-household { margin: .6rem 0 1rem; padding-left: 1.1rem; line-height: 1.6; }
     .shared-household li { margin-bottom: .2rem; }
     .room-detail__apply { border-top: 1px solid var(--border); padding-top: 1.5rem; }
-    .room-detail__apply textarea { width: 100%; padding: .6rem; border: 1.5px solid var(--border); border-radius: var(--r4); margin-bottom: .6rem; font-family: inherit; }
+    .room-detail__apply textarea { width: 100%; padding: .6rem; border: 1.5px solid var(--border-strong); border-radius: var(--r4); margin-bottom: .6rem; font-family: inherit; }
     .room-detail__apply button { padding: .6rem 1.2rem; border-radius: var(--r4); border: none; background: var(--terra); color: var(--white); font-weight: 700; cursor: pointer; }
     .room-detail__apply button:disabled { opacity: .5; }
     .error { color: var(--danger); font-size: .82rem; margin-bottom: .5rem; }

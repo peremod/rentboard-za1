@@ -103,6 +103,77 @@ backLabel.includes('your dashboard')
   ? ok(`back link from the dashboard reads "${backLabel}"`)
   : bad(`back link reads "${backLabel}" — should return to the dashboard`);
 
+// ── 6. The search box can be emptied, and a select looks like a select ───
+/**
+ * ⚠️ Both are phone problems before they are anything else.
+ *
+ * The board's text search had NO clear. Every other filter has one — the
+ * date has "Clear the date", the panel has "Clear all filters" — and the
+ * one control a person types into, which is the hardest to empty with a
+ * thumb, had nothing but backspace.
+ *
+ * And every select on the board rendered as a plain box: styles.scss sets
+ * `appearance:none` and draws the arrow back with a background-image, and
+ * four class rules set the `background` SHORTHAND, which resets that image
+ * to none. So the suppression stayed and the replacement went. Measured on
+ * the composited page, because the defect is the cascade — both rules are
+ * correct alone and neither file mentions the other.
+ */
+{
+  const sp = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await sp.goto(`${WEB}/`, { waitUntil: 'networkidle' });
+  await sp.waitForTimeout(1500);
+  const got = sp.getByRole('button', { name: /got it/i });
+  if (await got.count()) { await got.first().click(); await sp.waitForTimeout(400); }
+
+  const input = sp.locator('.search-input');
+  (await sp.locator('.search-clear').count()) === 0
+    ? ok('no clear button on an empty search box')
+    : bad('a clear button is offered when there is nothing to clear');
+
+  await input.fill('Soweto');
+  await sp.waitForTimeout(1600);
+  const clear = sp.locator('.search-clear');
+  if (!(await clear.count())) {
+    bad('typing a search offers no way to empty it again');
+  } else {
+    ok('typing a search offers a way to empty it again');
+    const cb = await clear.boundingBox();
+    (cb && cb.width >= 44 && cb.height >= 44)
+      ? ok(`…at 44px for a thumb (${Math.round(cb?.width ?? 0)}×${Math.round(cb?.height ?? 0)})`)
+      : bad(`clear button is ${Math.round(cb?.width ?? 0)}×${Math.round(cb?.height ?? 0)}, under 44px`);
+
+    const before = (await sp.locator('.results-count, .board-count').first().textContent().catch(() => '')) ?? '';
+    await clear.dispatchEvent('mousedown');
+    await sp.waitForTimeout(1800);
+    (await input.inputValue()) === ''
+      ? ok('…and pressing it empties the box')
+      : bad('the clear button does not empty the box');
+    /**
+     * ⚠️ The box AND the board. Setting the field alone would clear what a
+     * person sees and leave the results filtered — a control that only
+     * looks like a control, which is the fault this repo keeps shipping.
+     */
+    const after = (await sp.locator('.results-count, .board-count').first().textContent().catch(() => '')) ?? '';
+    after !== before || before === ''
+      ? ok(`…and re-runs the board rather than only the box (${before.trim()} → ${after.trim()})`)
+      : bad(`the box emptied but the results did not change (${before.trim()})`);
+  }
+
+  const blind = await sp.locator('select').evaluateAll((els) => els
+    .filter((e) => e.offsetParent !== null)
+    .filter((e) => {
+      const c = getComputedStyle(e);
+      return c.appearance === 'none' && (!c.backgroundImage || c.backgroundImage === 'none');
+    }).length);
+  const total = await sp.locator('select:visible').count();
+  blind === 0
+    ? ok(`all ${total} select(s) on the board show they open a list`)
+    : bad(`${blind} of ${total} select(s) suppress the arrow and draw no replacement`);
+
+  await sp.close();
+}
+
 await browser.close();
 console.log(fail?`\n❌ ${fail} failure(s)`:'\n✅ all reported bugs fixed');
 process.exit(fail?1:0);

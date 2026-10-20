@@ -36,6 +36,10 @@ export class RoomsService {
     if (filters.maxRentCents) params = params.set('maxRentCents', filters.maxRentCents);
     if (filters.billsIncluded) params = params.set('billsIncluded', 'true');
     if (filters.availableNow) params = params.set('availableNow', 'true');
+    // Phase 10. Sent only when set: an empty string would be a date the
+    // server has to reject, and "no date" is not a date.
+    if (filters.moveIn) params = params.set('moveIn', filters.moveIn);
+    if (filters.moveIn && filters.moveInTo) params = params.set('moveInTo', filters.moveInTo);
     if (filters.couplesAllowed) params = params.set('couplesAllowed', 'true');
     if (filters.dssAccepted) params = params.set('dssAccepted', 'true');
     if (filters.guarantorAccepted) params = params.set('guarantorAccepted', 'true');

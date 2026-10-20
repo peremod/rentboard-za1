@@ -168,7 +168,7 @@ import { Loading } from '../../../shared/components/loading/loading';
       min-height: 44px; min-width: 0; padding: .75rem;
       font: inherit; font-size: .9rem; text-align: left;
       white-space: normal; line-height: 1.3;
-      background: var(--card); color: var(--ink);
+      background: var(--white); color: var(--ink);
       border: 1.5px solid var(--border); border-radius: var(--r8); cursor: pointer;
     }
     .welcome__option:hover { border-color: var(--terra); }
@@ -179,7 +179,7 @@ import { Loading } from '../../../shared/components/loading/loading';
     .welcome__text input, .welcome__text textarea {
       font: inherit; font-weight: 400; padding: .75rem; min-height: 44px;
       border: 1.5px solid var(--border); border-radius: var(--r4);
-      background: var(--card); color: var(--ink); width: 100%;
+      background: var(--white); color: var(--ink); width: 100%;
     }
     .welcome__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
     .welcome__later { justify-self: start; font-size: .8rem; }

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { DatePipe, LowerCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AdminService, RecoveryLookup, AccountRecovery } from '../../../core/services/admin.service';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Handing an account back when the phone is gone — Phase 7q.
@@ -19,11 +20,11 @@ import { AdminService, RecoveryLookup, AccountRecovery } from '../../../core/ser
 @Component({
   selector: 'app-admin-recoveries',
   standalone: true,
-  imports: [FormsModule, DatePipe, LowerCasePipe],
+  imports: [Icon, FormsModule, DatePipe, LowerCasePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="insight-banner">
-      ⚠️
+      <app-icon name="alert"/>️
       <span>
         This is the only way to move an account whose owner has lost their phone,
         and it is the only thing here that can hand somebody's rooms, tenants and
@@ -130,17 +131,17 @@ import { AdminService, RecoveryLookup, AccountRecovery } from '../../../core/ser
 
             @if (r.idSeenAt) {
               <div class="app-location">
-                🪪 ID seen {{ r.idSeenAt | date:'d MMM' }} — {{ r.idSeenNote }}
+                <app-icon name="id-card"/> ID seen {{ r.idSeenAt | date:'d MMM' }} — {{ r.idSeenNote }}
               </div>
             }
             @if (r.knowledgeCheckedAt) {
               <div class="app-location">
-                💬 Asked {{ r.knowledgeCheckedAt | date:'d MMM' }} — {{ r.knowledgeCheckedNote }}
+                <app-icon name="message"/> Asked {{ r.knowledgeCheckedAt | date:'d MMM' }} — {{ r.knowledgeCheckedNote }}
               </div>
             }
             @if (r.approvedAt) {
               <div class="app-location">
-                ✅ Approved {{ r.approvedAt | date:'d MMM, HH:mm' }}
+                <app-icon name="check-circle"/> Approved {{ r.approvedAt | date:'d MMM, HH:mm' }}
                 @if (r.approvedByAdmin) { by {{ r.approvedByAdmin.fullName }} }
                 @if (!r.recoveredAt) { · waiting for them to enter the code }
                 @if (r.attempts) { · {{ r.attempts }} wrong code(s) }
@@ -148,12 +149,12 @@ import { AdminService, RecoveryLookup, AccountRecovery } from '../../../core/ser
             }
             @if (r.recoveredAt) {
               <div class="app-location">
-                🔑 Handed over {{ r.recoveredAt | date:'d MMM, HH:mm' }}
+                <app-icon name="key"/> Handed over {{ r.recoveredAt | date:'d MMM, HH:mm' }}
               </div>
             }
             @if (r.refusedAt) {
               <div class="app-location">
-                🚫 Refused {{ r.refusedAt | date:'d MMM' }} — {{ r.refusedReason }}
+                <app-icon name="ban"/> Refused {{ r.refusedAt | date:'d MMM' }} — {{ r.refusedReason }}
               </div>
             }
 

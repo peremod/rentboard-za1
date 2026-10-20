@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, input, output, signal } fro
 import { FormsModule } from '@angular/forms';
 import { ReviewsService } from '../../../core/services/reviews.service';
 import { ReviewType } from '../../../core/models/review.model';
+import { Icon } from '../icon/icon';
 
 /**
  * A single review. Kept deliberately small — a long form after someone has
@@ -13,7 +14,7 @@ import { ReviewType } from '../../../core/models/review.model';
 @Component({
   selector: 'app-review-form',
   standalone: true,
-  imports: [FormsModule],
+  imports: [Icon, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="review-form">
@@ -28,7 +29,7 @@ import { ReviewType } from '../../../core/models/review.model';
           <button type="button" class="star" [class.star--on]="star <= rating()"
                   role="radio" [attr.aria-checked]="rating() === star"
                   [attr.aria-label]="star + ' out of 5'"
-                  (click)="rating.set(star)">★</button>
+                  (click)="rating.set(star)"><app-icon name="star" filled/></button>
         }
         @if (rating() > 0) { <span class="review-form__rating-label">{{ ratingLabel() }}</span> }
       </div>
@@ -51,7 +52,7 @@ import { ReviewType } from '../../../core/models/review.model';
     </div>
   `,
   styles: [`
-    .review-form { padding: 1.1rem; background: var(--card); border: 1px solid var(--border);
+    .review-form { padding: 1.1rem; background: var(--white); border: 1px solid var(--border);
                    border-radius: var(--r8); margin-bottom: .85rem; }
     .review-form__title { font-size: .95rem; font-weight: 700; margin-bottom: .3rem; }
     .review-form__blind { font-size: .78rem; color: var(--slate); line-height: 1.6; margin-bottom: .85rem; }

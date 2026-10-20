@@ -121,6 +121,19 @@ const ALLOWED = new Map([
     'frontend/src/app/features/templates/template-document.ts:246',
     'same print block: the signature box must be white on paper whatever the screen theme is',
   ],
+  // Both surfaced the moment v1.147.0 lightened --border and --cream2 toward
+  // white: the literals did not move, the tokens moved to meet them. Same
+  // print block and the same reason as the two above — a note's fill and a
+  // table header on A4 are toner, and must not follow a screen surface that
+  // is now white, or they would print as nothing at all.
+  [
+    'frontend/src/app/features/templates/template-document.ts:250',
+    'print stylesheet: the note fill is a grey for toner, not the page surface — on white it would print as nothing',
+  ],
+  [
+    'frontend/src/app/features/templates/template-document.ts:251',
+    'same print block: a table header has to be visibly a header on paper, so it cannot follow a white screen surface',
+  ],
 ]);
 
 const walk = (dir) =>

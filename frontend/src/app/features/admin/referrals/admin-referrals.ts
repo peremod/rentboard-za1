@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { AdminService, ReferralStats, LaunchCode } from '../../../core/services/admin.service';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Referral performance and the launch invite codes.
@@ -11,13 +12,13 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-admin-referrals',
   standalone: true,
-  imports: [Loading],
+  imports: [Icon, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
       @if (stats(); as s) {
         <div class="insight-banner">
-          💡
+          <app-icon name="lightbulb"/>
           <span>
             A referral counts only once the person does something — a landlord
             publishing a room, a tenant applying. Conversion below is signups
@@ -45,7 +46,7 @@ import { Loading } from '../../../shared/components/loading/loading';
           } @else {
             @for (c of s.byCity; track c.city) {
               <div class="app-card">
-                <div class="app-thumb portal-thumb" aria-hidden="true">📍</div>
+                <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="map-pin"/></div>
                 <div class="app-info">
                   <div class="app-room">{{ c.city }}</div>
                   <div class="app-location">
@@ -68,7 +69,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                     @for (code of codes(); track code.id) {
                       <span class="code-chip" [class.code-chip--used]="code.useCount > 0">
                         {{ code.code }}
-                        @if (code.useCount > 0) { ✓ }
+                        @if (code.useCount > 0) { <app-icon name="check"/> }
                       </span>
                     }
                   </div>

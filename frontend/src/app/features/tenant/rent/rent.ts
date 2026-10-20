@@ -9,6 +9,7 @@ import { LeaseDocuments } from '../../../shared/components/lease-documents/lease
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/tenancy-lifecycle';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * The tenant's side of rent tracking.
@@ -67,7 +68,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-tenant-rent',
   standalone: true,
-  imports: [DatePipe, NgTemplateOutlet, FormsModule, ZarCentsPipe, LeaseDocuments, ScreenHint, TenancyLifecycle, Loading],
+  imports: [Icon, DatePipe, NgTemplateOutlet, FormsModule, ZarCentsPipe, LeaseDocuments, ScreenHint, TenancyLifecycle, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="tenant-rent" heading="This is your landlord's record, and your answer to it">
@@ -78,7 +79,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 
 
       <div class="insight-banner">
-        🧾
+        <app-icon name="receipt"/>
         <span>
           This is what your landlord has recorded. <strong>Mastande does not
           handle your rent and has not checked any of it</strong> — if a month
@@ -213,7 +214,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 
                 @if (p.tenantDisputedAt) {
                   <div class="rent-answer">
-                    ✋ You said this is wrong on {{ p.tenantDisputedAt | date: 'd MMM yyyy' }}.
+                    <app-icon name="hand"/> You said this is wrong on {{ p.tenantDisputedAt | date: 'd MMM yyyy' }}.
                     @if (p.tenantNote) { <em>“{{ p.tenantNote }}”</em> }
                     <br/>Your landlord can see this, and no more reminders
                     will be sent for this month.
@@ -365,7 +366,7 @@ export class TenantRent implements OnInit {
   statusLabel(status: string): string {
     return {
       unpaid: 'Marked unpaid',
-      paid: '✓ Marked paid',
+      paid: 'Marked paid',
       partial: 'Marked part-paid',
       waived: 'Not being chased',
     }[status] ?? status;

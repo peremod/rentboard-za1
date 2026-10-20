@@ -1694,6 +1694,137 @@ already-answered guard stayed green because only the card decides to render
 nothing. The drive answers the card in a browser now, and applies for a second
 room to prove the question is not asked twice."
 
+tag_if_missing "v1.146.0" "60ffb7aeae813734fe3a448f8b282057cdcbb066" "2026-10-20T02:05:17+00:00" "v1.146.0 - search the board by when you can move in
+
+availableFrom was always required and always there; nothing could search on it
+beyond one fortnight-wide boolean. A room qualifies when it is free on or
+before the date asked for - 25 November suits a 1 December move, 15 December
+does not - with a window for somebody flexible whose FAR end is the bound,
+because what disqualifies a room is becoming free after the last day they can
+move.
+
+The comparison is against the last instant of that day at a fixed +02:00: the
+stored date lands at midnight UTC, which is 02:00 in Johannesburg, and the
+difference is a whole day in both directions. Every card says when it is free,
+and there is no date-not-confirmed badge because the column is NOT NULL and
+that state cannot exist.
+
+A date is a search criterion: nothing is reserved, no landlord is told, and a
+landlord moving their own date does not touch anybody's application."
+
+tag_if_missing "v1.146.1" "99b1df5b768677701b827a4c0a80ceb359b51658" "2026-10-20T07:56:15+00:00" "v1.146.1 - echo the move-in date in words, so no digit can be read as the day
+
+A native date input renders in the BROWSER's locale, not the page's.
+index.html has said lang=en-ZA since the beginning and it changes nothing: on
+a browser set to en-US the most important field in the filter asked a South
+African for the month first, refused 25/11, and showed 11/12 to somebody with
+no way to tell which number was the day.
+
+The order cannot be set from the page at all, so the fix is not to format the
+box but to echo the chosen date beneath it in words - 25 November 2026 -
+where the month is a name and no digit can be misread."
+
+tag_if_missing "v1.147.0" "0ea8874567f413dfe08e0185c409ed255ee110b8" "2026-10-20T08:11:29+00:00" "v1.147.0 - white surfaces, and the display figure that had no callers
+
+The palette was never the problem; applying it as every surface was. --cream,
+--card and --cream2 sat within 3% of each other, so --border carried the whole
+hierarchy alone.
+
+--cream was two tokens wearing one name: thirteen of its seventeen uses were
+text on a dark surface and three were the page. Text on dark is --white now,
+and the ground is --cream2 lightened, so a white card lifts off the page.
+
+--border-strong draws the edge of anything a person types in: WCAG 1.4.11
+wants 3:1 and --border has never met it on any surface this app has had.
+
+And .figure was a design-system class with a paragraph of rationale and zero
+callers, so every figure rendered in the platform monospace while the system
+said otherwise."
+
+tag_if_missing "v1.148.0" "0d7f8165b87ed92a84d83971f242659759c59d58" "2026-10-20T08:31:22+00:00" "v1.148.0 - the hamburger becomes a sheet, and app-icon replaces emoji
+
+The burger was the character U+2630 - a typeface's idea of three lines, a
+different weight on every handset - and the drawer had no scrim, no Escape, no
+focus trap, no scroll lock and no close. Each was measured before it was fixed.
+
+The white sheet then produced row 88's defect by a new route: :where(button)
+sets color white app-wide, so the language switcher rendered white on white at
+1.00:1. control-contrast-audit passed throughout and was not wrong to - nothing
+repainted anything. The surface moved out from under a foreground that never
+changed."
+
+tag_if_missing "v1.149.0" "ecc0cff3440b42922848534d917b5550b318f987" "2026-10-20T09:04:46+00:00" "v1.149.0 - migrate the sidebars, the board and the card off emoji
+
+The three portal rails carried 38 emoji between them. The labels down the
+sidebar never lined up and the emoji were why: every glyph a different width.
+
+The board still rendered a house emoji twelve times after every emoji in the
+markup had been replaced - that one lived in a label map in the class, where a
+sweep of the markup cannot see it."
+
+tag_if_missing "v1.150.0" "a000bce66cd79d3840b462161edbfa033f740892" "2026-10-20T09:58:45+00:00" "v1.150.0 - restore the icon set v1.149.0 shipped without, and gate it
+
+v1.149.0 did not compile. Falsifying emoji-lint meant appending an emoji to
+icon.ts and undoing it with git checkout; the file still held uncommitted work,
+so the checkout discarded the whole expansion.
+
+The lesson is not to be careful with git checkout. It is that a verification
+which happened before the last change is not a verification of what shipped.
+icon-lint closes it, falsified against the actual broken commit."
+
+tag_if_missing "v1.151.0" "6846c3fbd08cd959bf32359689e638f30f4d5eb4" "2026-10-20T10:35:53+00:00" "v1.151.0 - inbox-ui-drive has been red since v1.144.0
+
+Surveys moved into onboarding and put a row in Needs you, so this drive's
+opening premise - a landlord with nothing to do - stopped being true the same
+day. The premise is restored rather than the assertion weakened.
+
+The fourth failure was a check scoped more narrowly than its claim: it asked
+whether every href starts with /landlord/ while reporting that every action
+points at a real route. app.routes.ts serves ErrorPage under a 200, so a prefix
+test cannot tell a live route from a dead one."
+
+tag_if_missing "v1.152.0" "acb9927c7327be304e2f4a06fea7821f9a329133" "2026-10-20T12:39:07+00:00" "v1.152.0 - every select looked like a text box, and the search had no clear
+
+styles.scss sets appearance none on every select and draws the arrow back with
+a background-image. Four class rules set the background SHORTHAND, which resets
+that image to none: all 11 selects on the board had the suppression and not the
+replacement.
+
+Both rules are correct alone and neither file mentions the other - the defect is
+the cascade. On the new clear button, the check that matters is not that the box
+empties but that the BOARD does."
+
+tag_if_missing "v1.153.0" "f243a782ddebcfdbcb6715329f97b12711e4e631" "2026-10-20T12:55:10+00:00" "v1.153.0 - two pairs of badges meant different things and looked the same
+
+badge-new and badge-verified were both solid sage: listed a few days ago and
+this landlord's identity has been checked were the same pill. badge-featured
+and badge-sublet were both gold.
+
+badge-lint compares resolved COLOUR, not the text of the declaration, because
+the gold pair was written two different ways. Solid is now the state of the
+room and outline is everything said about it."
+
+tag_if_missing "v1.154.0" "07e4a08e3c78a76ba9837cfb5a44d0127d81c704" "2026-10-20T14:08:48+00:00" "v1.154.0 - Delete and Edit were byte-for-byte the same button
+
+Delete on an active listing had identical computed background, colour and
+border to Edit, View and Pause beside it. The gate found two more at once.
+
+And the inbox showed a bare dot because the type meant to prevent it was the
+thing that was wrong: both ICONS maps are exhaustive by construction, and both
+frontend unions were missing the survey_open the server has sent since
+v1.144.0."
+
+tag_if_missing "v1.155.0" "f6f3431e3eeabdf222f36d89d533c5affe7cb8de" "2026-10-20T16:37:45+00:00" "v1.155.0 - the accessibility gate ran at one width; four defects hid there
+
+CLAUDE.md has made 360/390/768/1280 a standing rule since the beginning.
+a11y-drive ran at 412px only. The other three widths held a 360px composer
+overflow, the board's five filter checkboxes at 20px, every footer link at 17px
+on all 33 pages, and a contrast failure visible ONLY at desktop width because
+below 900px the element is not rendered at all.
+
+A gate that runs at a single viewport measures a single viewport.
+scripts/a11y-widths.sh makes the sweep the default and CI calls it."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
