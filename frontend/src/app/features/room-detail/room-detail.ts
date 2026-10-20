@@ -470,7 +470,7 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
     .shared-household { margin: .6rem 0 1rem; padding-left: 1.1rem; line-height: 1.6; }
     .shared-household li { margin-bottom: .2rem; }
     .room-detail__apply { border-top: 1px solid var(--border); padding-top: 1.5rem; }
-    .room-detail__apply textarea { width: 100%; padding: .6rem; border: 1.5px solid var(--border); border-radius: var(--r4); margin-bottom: .6rem; font-family: inherit; }
+    .room-detail__apply textarea { width: 100%; padding: .6rem; border: 1.5px solid var(--border-strong); border-radius: var(--r4); margin-bottom: .6rem; font-family: inherit; }
     .room-detail__apply button { padding: .6rem 1.2rem; border-radius: var(--r4); border: none; background: var(--terra); color: var(--white); font-weight: 700; cursor: pointer; }
     .room-detail__apply button:disabled { opacity: .5; }
     .error { color: var(--danger); font-size: .82rem; margin-bottom: .5rem; }

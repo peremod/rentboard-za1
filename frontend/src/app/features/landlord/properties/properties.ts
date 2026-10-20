@@ -280,7 +280,7 @@ import { Loading } from '../../../shared/components/loading/loading';
     }
     .prop-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
     .prop-card {
-      border: 1.5px solid var(--border); border-radius: var(--r8);
+      border: 1.5px solid var(--border-strong); border-radius: var(--r8);
       background: var(--white); overflow: hidden;
     }
     .prop-card--loose { border-style: dashed; }
@@ -304,7 +304,7 @@ import { Loading } from '../../../shared/components/loading/loading';
     .prop-form { margin-top: 1.25rem; max-width: 34rem; }
     .prop-form label { display: block; margin-bottom: .75rem; }
     .prop-form label > span:first-child { display: block; font-size: .85rem; font-weight: 600; margin-bottom: .2rem; }
-    .prop-form input, .prop-form select { width: 100%; padding: .55rem; border: 1.5px solid var(--border); border-radius: var(--r4); font: inherit; }
+    .prop-form input, .prop-form select { width: 100%; padding: .55rem; border: 1.5px solid var(--border-strong); border-radius: var(--r4); font: inherit; }
     .prop-form__row { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .6rem; }
     .prop-form__actions { display: flex; gap: .5rem; margin-top: .5rem; }
   `,

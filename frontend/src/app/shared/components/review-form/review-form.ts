@@ -51,7 +51,7 @@ import { ReviewType } from '../../../core/models/review.model';
     </div>
   `,
   styles: [`
-    .review-form { padding: 1.1rem; background: var(--card); border: 1px solid var(--border);
+    .review-form { padding: 1.1rem; background: var(--white); border: 1px solid var(--border);
                    border-radius: var(--r8); margin-bottom: .85rem; }
     .review-form__title { font-size: .95rem; font-weight: 700; margin-bottom: .3rem; }
     .review-form__blind { font-size: .78rem; color: var(--slate); line-height: 1.6; margin-bottom: .85rem; }

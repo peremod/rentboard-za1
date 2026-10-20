@@ -111,7 +111,7 @@ interface SurveyAggregate {
           </button>
         </div>
 
-        <p class="muted survey-who">
+        <p class="muted">
           Showing <strong>{{ d.audienceRole === 'TENANT' ? 'tenant' : 'landlord' }}</strong> answers,
           edition {{ d.version }}. Landlord and tenant answers are counted separately and are never
           added together — they were asked different questions.
@@ -206,6 +206,35 @@ interface SurveyAggregate {
   `,
   styles: [
     `
+      /* The filter row had NO rule at all, so five labels and a button
+         stacked as blocks down the left of the admin screen. Found by the
+         coverage audit rather than by looking, which is the point of it:
+         a class that is styled nowhere renders as unstyled inline content
+         and nothing about the template says so. */
+      .survey-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+      }
+      .survey-controls > label {
+        display: grid;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--ink2);
+      }
+      /* A checkbox and its words sit on one line; the others are stacked. */
+      .survey-controls__check {
+        display: flex !important;
+        flex-direction: row;
+        align-items: center;
+        gap: 0.5rem;
+        /* 44px, WCAG 2.5.8 — the same floor every other control in this app
+           has, and an admin on a phone is still on a phone. */
+        min-height: 44px;
+      }
       .table-scroll {
         overflow-x: auto;
       }

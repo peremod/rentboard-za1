@@ -185,7 +185,7 @@ import {
          these labels are sentences — without it they push the card wider
          than a 360px screen. */
       min-width: 0; max-width: 100%; white-space: normal; line-height: 1.3;
-      background: var(--card); color: var(--ink);
+      background: var(--white); color: var(--ink);
       border: 1.5px solid var(--border); border-radius: var(--r4);
       cursor: pointer;
     }

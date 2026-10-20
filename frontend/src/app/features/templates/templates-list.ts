@@ -55,7 +55,7 @@ import { SeoService } from '../../core/services/seo.service';
     .tpl-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
     .tpl-card {
       display: block; text-decoration: none; color: inherit;
-      background: var(--card); border: 1.5px solid var(--border);
+      background: var(--white); border: 1.5px solid var(--border);
       border-radius: var(--r8); padding: 1.25rem;
       transition: border-color .15s, transform .15s;
     }

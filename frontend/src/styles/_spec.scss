@@ -1,3 +1,5 @@
+@use 'variables' as *;
+
 // ═══════════════════════════════════════════════════════════════════════
 // SPEC STYLESHEET — originally ported from RentBoard-ZA-Visual-Preview.html
 //
@@ -38,8 +40,27 @@
    Warm South African palette. Earthy, trustworthy, bold.
 ═══════════════════════════════════════════════════════ */
 :root{
-  --cream:#FAF7F0;
-  --cream2:#F2EDE3;
+  /**
+   * ⚠️ The surfaces are WHITE as of v1.147.0, and --cream is gone.
+   *
+   * It served two unrelated jobs under one name: the page background, and
+   * the text colour on every dark surface (nav, footer, hero, portal rail).
+   * Thirteen of its seventeen uses were the second one, which is why
+   * "the product is cream" was true on screen and hard to see in the file.
+   * Text on dark is now --white, which is what it should always have been.
+   *
+   * The ground is --cream2, lightened, so a white card LIFTS off the page
+   * instead of sitting flush on a surface 3% away from it. That was the
+   * whole hierarchy problem: everything was within a hair of everything
+   * else, so --border had to carry depth on its own.
+   *
+   * Contrast moved in the safe direction. Every text token here was
+   * measured against cream or the old card, and both grounds got lighter,
+   * so each ratio in the comments below is now a FLOOR rather than a
+   * reading. Nothing needed darkening. The one thing that got worse is
+   * --border against white, which is why --border-strong exists.
+   */
+  --cream2:#F4F2ED;
   --ink:#1C160E;
   --ink2:#3A3228;
   /* Was #C04E28, which is 4.50:1 on --cream — the WCAG AA minimum to two
@@ -84,8 +105,20 @@
    * threshold on both surfaces this token is used over.
    */
   --slate:#736755;
-  --border:#E0D5C4;
-  --card:#FDFAF4;
+  /* Hairline. Decorative only: it is 1.3:1 on white and was never going to
+     be a control boundary, which nothing in here said out loud until a
+     white card made an input with this border disappear into it. */
+  --border:#E5E0D7;
+  /**
+   * The boundary of anything a person types in or picks from.
+   *
+   * WCAG 1.4.11 wants 3:1 for the edge of a control, and --border has never
+   * met it on any surface this app has had. It did not show while the card
+   * was #FDFAF4 and the input was #FFFFFF — the fill was the boundary, and
+   * the border was decoration on top of it. On a white card the fill is the
+   * card, so the border is all there is. 3.55:1 on white.
+   */
+  --border-strong:#8E8679;
   --white:#FFFFFF;
   --font-display:'Playfair Display',Georgia,serif;
   --font-body:'DM Sans',system-ui,sans-serif;
@@ -118,7 +151,7 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:16px;scroll-behavior:smooth}
-body{font-family:var(--font-body);background:var(--cream);color:var(--ink);line-height:1.5;overflow-x:hidden}
+body{font-family:var(--font-body);background:var(--cream2);color:var(--ink);line-height:1.5;overflow-x:hidden}
 a{color:var(--terra);text-decoration:none}
 a:hover{text-decoration:underline}
 img{display:block;max-width:100%}
@@ -139,7 +172,7 @@ img{display:block;max-width:100%}
   color:rgba(250,247,240,.65);font-size:.88rem;font-weight:500;
   transition:color .15s;cursor:pointer;
 }
-.nav-links a:hover,.nav-links a.active{color:var(--cream);text-decoration:none}
+.nav-links a:hover,.nav-links a.active{color:var(--white);text-decoration:none}
 .nav-actions{display:flex;gap:.65rem;margin-left:auto;align-items:center}
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:.4rem;
@@ -194,7 +227,7 @@ img{display:block;max-width:100%}
    background under white text it is 3.56:1. See --terra-deep. */
 .btn-primary:hover{background:var(--terra-deep);transform:translateY(-1px);box-shadow:var(--shadow-lift)}
 .btn-ghost{background:transparent;color:rgba(250,247,240,.75);border:1.5px solid rgba(250,247,240,.25)}
-.btn-ghost:hover{border-color:rgba(250,247,240,.6);color:var(--cream)}
+.btn-ghost:hover{border-color:rgba(255,255,255,.6);color:var(--white)}
 .btn-outline{background:transparent;color:var(--terra);border:1.5px solid var(--terra)}
 .btn-outline:hover{background:var(--terra);color:var(--white)}
 .btn-sage{background:var(--sage);color:var(--white)}
@@ -231,7 +264,7 @@ img{display:block;max-width:100%}
 .hero h1{
   font-family:var(--font-display);
   font-size:clamp(2.4rem,5vw,3.8rem);
-  font-weight:900;color:var(--cream);
+  font-weight:900;color:var(--white);
   line-height:1.1;margin-bottom:1.25rem;
   max-width:680px;
 }
@@ -244,9 +277,17 @@ img{display:block;max-width:100%}
 .hero-stats{
   display:flex;gap:2.5rem;flex-wrap:wrap;
 }
+/* ⚠️ Display figure, not a ledger one. styles.scss has carried the rule
+   since Phase 8 — display face for a number a person looks FOR, mono only
+   where a column has to line up — and .figure, the class that implements
+   it, had no callers at all. So every figure in the product rendered in
+   the platform monospace, which is the single loudest "assembled quickly"
+   signal on the board. font-variant-numeric because Playfair ships
+   old-style figures: without it the 2 and 5 of R2 500 drop below the
+   baseline and a price reads as a typo. */
 .hero-stat strong{
-  display:block;font-family:var(--font-mono);
-  font-size:1.6rem;font-weight:500;color:var(--cream);
+  @include display-figure;
+  display:block;font-size:1.6rem;color:var(--white);
 }
 .hero-stat span{font-size:.82rem;color:rgba(250,247,240,.5)}
 
@@ -265,14 +306,14 @@ img{display:block;max-width:100%}
 }
 .search-input{
   width:100%;padding:.6rem .85rem .6rem 2.4rem;
-  border:1.5px solid var(--border);border-radius:var(--r8);
+  border:1.5px solid var(--border-strong);border-radius:var(--r8);
   font-family:var(--font-body);font-size:.9rem;
   background:var(--white);color:var(--ink);
   transition:border-color .15s;
 }
 .search-input:focus{outline:none;border-color:var(--terra)}
 .search-select{
-  padding:.6rem .85rem;border:1.5px solid var(--border);
+  padding:.6rem .85rem;border:1.5px solid var(--border-strong);
   border-radius:var(--r8);font-family:var(--font-body);font-size:.88rem;
   background:var(--white);color:var(--ink);cursor:pointer;
   min-width:160px;
@@ -286,7 +327,7 @@ img{display:block;max-width:100%}
   gap:2rem;padding:2rem 1.5rem;
 }
 .filter-panel{
-  background:var(--card);border:1px solid var(--border);
+  background:var(--white);border:1px solid var(--border);
   border-radius:var(--r12);padding:1.25rem;
   position:sticky;top:82px;height:fit-content;
 }
@@ -298,7 +339,7 @@ img{display:block;max-width:100%}
 .filter-group:last-child{border:none;margin-bottom:0;padding-bottom:0}
 .filter-label{font-size:.8rem;font-weight:600;color:var(--ink2);margin-bottom:.5rem;display:block}
 .filter-select{
-  width:100%;padding:.5rem .75rem;border:1.5px solid var(--border);
+  width:100%;padding:.5rem .75rem;border:1.5px solid var(--border-strong);
   border-radius:var(--r4);font-family:var(--font-body);font-size:.85rem;
   background:var(--white);color:var(--ink);
 }
@@ -318,7 +359,7 @@ img{display:block;max-width:100%}
   /* 44px, WCAG 2.5.8 — tapped one-handed on a phone, outdoors. min-width:0
      because a date input has an intrinsic width wider than a narrow drawer. */
   min-height:44px;width:100%;min-width:0;
-  border:1.5px solid var(--border);border-radius:var(--r4);
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);
   background:var(--white);color:var(--ink);
 }
 /* The chosen date, in words, under the box that cannot say which number is
@@ -343,7 +384,7 @@ img{display:block;max-width:100%}
    person uses to find a room at all. */
 .filter-pill{
   padding:.28rem .65rem;border-radius:var(--r-full);
-  font-size:.72rem;font-weight:600;border:1.5px solid var(--border);
+  font-size:.72rem;font-weight:600;border:1.5px solid var(--border-strong);
   cursor:pointer;transition:all .12s;color:var(--slate);background:var(--white);
   min-height:44px;display:inline-flex;align-items:center;justify-content:center;
 }
@@ -361,7 +402,7 @@ img{display:block;max-width:100%}
 .results-count{font-size:.88rem;color:var(--slate);font-weight:500}
 .results-count strong{color:var(--ink);font-weight:700}
 .sort-select{
-  padding:.4rem .75rem;border:1.5px solid var(--border);border-radius:var(--r4);
+  padding:.4rem .75rem;border:1.5px solid var(--border-strong);border-radius:var(--r4);
   font-size:.82rem;font-family:var(--font-body);background:var(--white);color:var(--ink);cursor:pointer;
 }
 
@@ -372,7 +413,7 @@ img{display:block;max-width:100%}
   gap:1.25rem;
 }
 .room-card{
-  background:var(--card);border:1px solid var(--border);
+  background:var(--white);border:1px solid var(--border);
   border-radius:var(--r12);overflow:hidden;cursor:pointer;
   transition:transform .2s,box-shadow .2s,border-color .2s;
   position:relative;
@@ -415,9 +456,15 @@ img{display:block;max-width:100%}
 }
 .save-btn:hover,.save-btn.saved{color:var(--terra);background:var(--white)}
 .room-card-body{padding:1rem 1rem .85rem}
+/* ⚠️ The price was mono AND terracotta: the most important number on the
+   board set in the face reserved for code, in the colour reserved for the
+   primary button. It competed with every Apply on the page and read as a
+   control rather than a fact. Ink at display weight instead — it wins on
+   size and weight, which is how a price should win. */
 .room-price{
-  font-family:var(--font-mono);font-size:1.15rem;font-weight:500;
-  color:var(--terra);margin-bottom:.15rem;display:flex;align-items:center;gap:.5rem;
+  @include display-figure;
+  font-size:1.25rem;color:var(--ink);margin-bottom:.15rem;
+  display:flex;align-items:center;gap:.5rem;
 }
 .bills-tag{
   font-family:var(--font-body);font-size:.65rem;font-weight:700;
@@ -474,11 +521,12 @@ img{display:block;max-width:100%}
   gap:1.5rem;margin-top:3rem;
 }
 .hiw-step{
-  background:var(--card);border:1px solid var(--border);
+  background:var(--white);border:1px solid var(--border);
   border-radius:var(--r12);padding:1.75rem;position:relative;
 }
 .hiw-num{
-  font-family:var(--font-mono);font-size:2.5rem;font-weight:500;
+  @include display-figure;
+  font-size:2.5rem;
   /* --terra at 72%. Was rgba(192,78,40,.15) — 1.22:1 on --card, which is not
      a faint watermark, it is an invisible one: nobody could read the step
      numbers, and the accessibility audit failed 1.4.3 on all eight of them
@@ -511,7 +559,7 @@ img{display:block;max-width:100%}
   gap:1.25rem;margin-top:2.5rem;
 }
 .plan-card{
-  background:var(--card);border:1px solid var(--border);
+  background:var(--white);border:1px solid var(--border);
   border-radius:var(--r12);padding:1.75rem;position:relative;overflow:hidden;
 }
 .plan-card.featured{
@@ -527,8 +575,8 @@ img{display:block;max-width:100%}
 }
 .plan-name{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--slate);margin-bottom:.5rem}
 .plan-price{
-  font-family:var(--font-mono);font-size:2rem;font-weight:500;
-  color:var(--ink);margin-bottom:.1rem;
+  @include display-figure;
+  font-size:2rem;color:var(--ink);margin-bottom:.1rem;
 }
 .plan-price span{font-size:.9rem;color:var(--slate)}
 .plan-desc{font-size:.82rem;color:var(--slate);margin-bottom:1.25rem;line-height:1.6}
@@ -574,7 +622,7 @@ img{display:block;max-width:100%}
   border-bottom:2px solid var(--border);font-weight:700;color:var(--ink);
 }
 .legal-table td{padding:.55rem .85rem;border-bottom:1px solid var(--border);color:var(--ink2)}
-.legal-table tr:hover td{background:var(--cream)}
+.legal-table tr:hover td{background:var(--cream2)}
 
 /* ═══ PORTAL DASH ═══ */
 .portal-wrap{
@@ -591,7 +639,7 @@ img{display:block;max-width:100%}
   display:flex;align-items:center;justify-content:center;
   font-size:1.1rem;font-weight:700;color:var(--white);margin-bottom:.6rem;
 }
-.portal-user-name{font-size:.9rem;font-weight:700;color:var(--cream)}
+.portal-user-name{font-size:.9rem;font-weight:700;color:var(--white)}
 .portal-user-role{font-size:.72rem;color:rgba(250,247,240,.45)}
 /* ⚠️ 37px on DESKTOP before Phase 7q, including "Log out".
 
@@ -609,7 +657,7 @@ img{display:block;max-width:100%}
   min-height:44px;
 }
 .portal-nav-link:hover,.portal-nav-link.active{
-  color:var(--cream);background:rgba(255,255,255,.06);
+  color:var(--white);background:rgba(255,255,255,.06);
   border-left-color:var(--terra);
 }
 .portal-nav-icon{font-size:1rem;flex-shrink:0}
@@ -623,7 +671,7 @@ img{display:block;max-width:100%}
    Measured on the create-room wizard by hiding each child of the step in turn.
    Without this, every portal screen is one wide element away from the same
    bug, and the element that gets blamed will be the nav again. */
-.portal-main{padding:2rem;background:var(--cream);min-width:0}
+.portal-main{padding:2rem;background:var(--cream2);min-width:0}
 // The portal's h1. Deliberately close in size to a section title: this is a
 // working screen, not a landing page, and the point of the heading is the
 // outline rather than the drama.
@@ -636,7 +684,7 @@ img{display:block;max-width:100%}
 }
 .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.75rem}
 .stat-box{
-  background:var(--card);border:1px solid var(--border);
+  background:var(--white);border:1px solid var(--border);
   border-radius:var(--r8);padding:1rem;text-align:center;
 }
 /* ⚠️ The display face, not the mono one — §H3's first identity move.
@@ -666,7 +714,7 @@ img{display:block;max-width:100%}
 
 /* ═══ APP CARD ═══ */
 .app-card{
-  background:var(--card);border:1px solid var(--border);
+  background:var(--white);border:1px solid var(--border);
   border-radius:var(--r8);padding:1rem;
   display:flex;align-items:center;gap:1rem;margin-bottom:.75rem;
   transition:box-shadow .15s;
@@ -692,7 +740,7 @@ img{display:block;max-width:100%}
 .cookie-banner{
   position:fixed;bottom:1.25rem;left:1.25rem;
   max-width:480px;z-index:9999;
-  background:var(--ink);color:var(--cream);
+  background:var(--ink);color:var(--white);
   border-radius:var(--r12);padding:1.5rem;
   box-shadow:var(--shadow-xl);
   border-top:3px solid var(--terra);
@@ -728,7 +776,7 @@ img{display:block;max-width:100%}
   font-size:.83rem;color:rgba(250,247,240,.62);
   transition:color .15s;cursor:pointer;
 }
-.footer-col ul li a:hover{color:var(--cream);text-decoration:none}
+.footer-col ul li a:hover{color:var(--white);text-decoration:none}
 .footer-bottom{
   border-top:1px solid rgba(255,255,255,.07);
   max-width:1200px;margin:0 auto;
@@ -752,7 +800,7 @@ img{display:block;max-width:100%}
 .passport-steps{display:flex;gap:.75rem;margin:1.25rem 0}
 .passport-step{
   flex:1;display:flex;gap:.65rem;align-items:flex-start;
-  padding:.85rem;border:1.5px solid var(--border);border-radius:var(--r4);background:var(--white);
+  padding:.85rem;border:1.5px solid var(--border-strong);border-radius:var(--r4);background:var(--white);
 }
 .passport-step.done{border-color:var(--sage);background:rgba(61,112,64,.05)}
 .passport-step__mark{
@@ -770,7 +818,7 @@ img{display:block;max-width:100%}
 }
 
 .passport-card{
-  border:1.5px solid var(--border);border-radius:var(--r4);
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);
   padding:1rem;margin-bottom:.85rem;background:var(--white);
 }
 .passport-card__head{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin-bottom:.4rem}
@@ -795,7 +843,7 @@ img{display:block;max-width:100%}
 .passport-ref label{display:block;font-size:.82rem;margin-bottom:.6rem}
 .passport-ref input{
   display:block;width:100%;margin-top:.25rem;padding:.55rem;
-  border:1.5px solid var(--border);border-radius:var(--r4);font:inherit;
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);font:inherit;
 }
 .passport-trail summary{font-size:.8rem;color:var(--terra);cursor:pointer}
 .passport-trail ul{list-style:none;margin:.6rem 0 0;padding:0}
@@ -839,15 +887,18 @@ img{display:block;max-width:100%}
 .yard-totals{display:flex;gap:.6rem;margin-bottom:1.25rem}
 .yard-total{
   flex:1;text-align:center;padding:.85rem .5rem;
-  border:1.5px solid var(--border);border-radius:var(--r4);background:var(--white);
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);background:var(--white);
 }
-.yard-total strong{display:block;font-family:var(--font-mono);font-size:1.5rem;line-height:1.1}
+.yard-total strong{
+  @include display-figure;
+  display:block;font-size:1.5rem;line-height:1.1;
+}
 .yard-total span{font-size:.72rem;color:var(--ink2);text-transform:uppercase;letter-spacing:1px}
 .yard-total--good strong{color:var(--sage)}
 .yard-total--alert strong{color:var(--terra)}
 
 .yard{
-  border:1.5px solid var(--border);border-radius:var(--r4);
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);
   background:var(--white);margin-bottom:.85rem;overflow:hidden;
 }
 .yard__head{
@@ -892,7 +943,7 @@ img{display:block;max-width:100%}
    44px via padding so the label text stays vertically centred against it. */
 .yard-adopt__row{
   display:flex;align-items:center;gap:.6rem;min-height:44px;
-  padding:.3rem .5rem;border:1.5px solid var(--border);border-radius:var(--r4);
+  padding:.3rem .5rem;border:1.5px solid var(--border-strong);border-radius:var(--r4);
   background:var(--white);font-size:.85rem;cursor:pointer;
 }
 .yard-adopt__row input{width:20px;height:20px;flex:0 0 auto}
@@ -919,7 +970,7 @@ img{display:block;max-width:100%}
 .yard-shared-form textarea,
 .yard-shared-form select{
   width:100%;font:inherit;font-weight:400;padding:.55rem .6rem;
-  border:1.5px solid var(--border);border-radius:var(--r4);min-height:44px;
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);min-height:44px;
 }
 .yard-shared-form textarea{min-height:5rem;line-height:1.5}
 .yard-shared-form__actions{display:flex;flex-wrap:wrap;align-items:center;gap:.9rem}
@@ -951,7 +1002,7 @@ img{display:block;max-width:100%}
 .expense-form input,
 .expense-form select{
   width:100%;font:inherit;font-weight:400;padding:.55rem .6rem;
-  border:1.5px solid var(--border);border-radius:var(--r4);min-height:44px;
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);min-height:44px;
 }
 /* The error and the actions belong across the whole form, not in one column. */
 .expense-form .field-error,
@@ -963,12 +1014,12 @@ img{display:block;max-width:100%}
    Cards, not a dropdown: a landlord recognises "Ext 7 back rooms" and a photo
    of their own yard; they do not recognise an address in a select. 44px targets
    because this is a phone. */
-.prop-picker{border:1.5px solid var(--border);border-radius:var(--r8);padding:.85rem;margin-bottom:1.1rem}
+.prop-picker{border:1.5px solid var(--border-strong);border-radius:var(--r8);padding:.85rem;margin-bottom:1.1rem}
 .prop-picker legend{font-size:.88rem;font-weight:700;padding:0 .3rem}
 .prop-picker__options{display:grid;gap:.5rem;margin-top:.5rem}
 .prop-picker__card{
   display:flex;align-items:center;gap:.7rem;width:100%;min-height:56px;
-  padding:.5rem .6rem;border:1.5px solid var(--border);border-radius:var(--r8);
+  padding:.5rem .6rem;border:1.5px solid var(--border-strong);border-radius:var(--r8);
   background:var(--white);text-align:left;font:inherit;cursor:pointer;
 }
 .prop-picker__card:hover{border-color:var(--terra)}
@@ -1008,7 +1059,7 @@ img{display:block;max-width:100%}
      this market. The vertical space is worth it on the one control a
      landlord taps every month. */
   min-height:44px;min-width:44px;
-  padding:.25rem .7rem;border-radius:var(--r4);border:1.5px solid var(--border);
+  padding:.25rem .7rem;border-radius:var(--r4);border:1.5px solid var(--border-strong);
   background:var(--white);color:var(--ink);font-size:.78rem;cursor:pointer;
 }
 .yard-rent__actions button:hover:not(:disabled){border-color:var(--terra);color:var(--terra)}
@@ -1072,13 +1123,13 @@ img{display:block;max-width:100%}
 
 .yard-new{margin-top:1rem}
 .yard-new form{
-  border:1.5px solid var(--border);border-radius:var(--r4);
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);
   padding:1rem;background:var(--white);
 }
 .yard-new label{display:block;font-size:.82rem;margin-bottom:.6rem}
 .yard-new input{
   display:block;width:100%;margin-top:.25rem;padding:.55rem;
-  border:1.5px solid var(--border);border-radius:var(--r4);font:inherit;
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);font:inherit;
 }
 .yard-new__row{display:flex;gap:.6rem}
 .yard-new__row label{flex:1}
@@ -1110,7 +1161,7 @@ img{display:block;max-width:100%}
 .rent-answer label{display:block;margin-bottom:.35rem;font-weight:600;color:var(--ink)}
 .rent-answer input{
   width:100%;min-height:40px;padding:.4rem .6rem;margin-bottom:.5rem;
-  border:1.5px solid var(--border);border-radius:var(--r4);
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);
   background:var(--white);color:var(--ink);font-size:.85rem;font-family:inherit;
 }
 .rent-answer .btn{min-height:40px}

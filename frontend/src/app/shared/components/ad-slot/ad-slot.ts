@@ -53,7 +53,7 @@ import { getImageUrl } from '../../utils/imagekit.utils';
     :host(:empty) { display: none; }
 
     .ad-slot { border: 1px solid var(--border); border-radius: var(--r12);
-               background: var(--card); overflow: hidden; margin-bottom: 1.25rem; }
+               background: var(--white); overflow: hidden; margin-bottom: 1.25rem; }
     .ad-slot__label { display: block; font-size: .62rem; font-weight: 700;
                       text-transform: uppercase; letter-spacing: .1em;
                       color: var(--slate); padding: .45rem .75rem 0; }

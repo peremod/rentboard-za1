@@ -130,7 +130,7 @@ import { Loading } from '../../../shared/components/loading/loading';
     .dispute-detail {
       margin: .6rem 0 0;
       padding: .6rem .8rem;
-      border-left: 3px solid var(--line, #e3ded6);
+      border-left: 3px solid var(--border);
       background: var(--white);
       font-size: .88rem;
       line-height: 1.55;

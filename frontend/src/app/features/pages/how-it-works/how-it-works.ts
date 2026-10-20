@@ -16,7 +16,7 @@ import { RouterLink } from '@angular/router';
     <section class="section" style="background:var(--ink);padding-bottom:3rem">
       <div class="section-inner">
         <div class="section-eyebrow" style="color:var(--terra2)">How Mastande works</div>
-        <h1 class="section-title" style="color:var(--cream)">
+        <h1 class="section-title" style="color:var(--white)">
           Simple for landlords.<br/>Simple for tenants.
         </h1>
         <p class="hero-sub">

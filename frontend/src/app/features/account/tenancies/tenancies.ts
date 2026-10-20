@@ -391,7 +391,7 @@ import { Loading } from '../../../shared/components/loading/loading';
     .arc-row {
       border: 1.5px solid var(--border);
       border-radius: var(--r4);
-      background: var(--card);
+      background: var(--white);
       margin-bottom: .6rem;
       overflow: hidden;
     }

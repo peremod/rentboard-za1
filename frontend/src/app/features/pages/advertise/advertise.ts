@@ -20,7 +20,7 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
     <section class="section" style="background:var(--ink);padding-bottom:3rem">
       <div class="section-inner">
         <div class="section-eyebrow" style="color:var(--terra2)">Advertise</div>
-        <h1 class="section-title" style="color:var(--cream)">
+        <h1 class="section-title" style="color:var(--white)">
           Reach people at the moment they move
         </h1>
         <p class="hero-sub">

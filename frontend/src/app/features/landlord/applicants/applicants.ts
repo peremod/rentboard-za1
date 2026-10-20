@@ -395,7 +395,7 @@ import { Loading } from '../../../shared/components/loading/loading';
          its content width and these labels are sentences. */
       min-height: 44px; padding: .5rem .75rem; min-width: 0; max-width: 100%;
       white-space: normal; line-height: 1.3;
-      background: var(--card); color: var(--ink);
+      background: var(--white); color: var(--ink);
       border: 1.5px solid var(--border); border-radius: var(--r4); cursor: pointer;
     }
     .viewing__outcome:hover { border-color: var(--terra); }
