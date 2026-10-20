@@ -13,6 +13,15 @@ node scripts/workflow-lint.mjs
 # Angular.
 node scripts/shell-backtick-lint.mjs
 
+# 🔴 Added 20 October, after both Neon database passwords were committed and
+# pushed inside scripts/migrate-targets.json — a field that wanted a hostname
+# fragment, filled from the dashboard's DATABASE_URL. `git rm` does not undo
+# that: the blob stays in every clone and GitHub serves it by SHA, so the only
+# remedy is rotation. This runs before the commit, which is the only moment
+# that is still cheap. Calibrated so localhost credentials, which are in this
+# repo legitimately, do not trip it.
+node scripts/secret-scan.mjs
+
 # ⚠️ The three source-only gates run HERE as well as in CI, and the reason is
 # measured: 1.075s for all six together. They need no build, no API and no
 # browser, so there is no cost to catching their defects before the commit

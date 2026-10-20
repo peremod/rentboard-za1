@@ -140,7 +140,12 @@ if [ -z "$TARGET" ]; then
   echo "     export NEON_POOLED=\"postgresql://…-pooler…\""
   echo "     export NEON_DIRECT=\"postgresql://…\"   # no -pooler"
   echo "     DATABASE_URL=\"\$NEON_POOLED\" DIRECT_URL=\"\$NEON_DIRECT\" \\"
-  echo "       bash scripts/migrate-remote.sh"
+  echo "       bash scripts/migrate-remote.sh --env $ENV_NAME"
+  echo
+  echo "   ⚠️ --env is in that line because this message used to omit it, and"
+  echo "   following it exactly then earned a second refusal. A tool whose own"
+  echo "   instructions do not satisfy its own requirements is the same defect"
+  echo "   as the comment that handed out the production host for STAGING_API_HOST."
   exit 1
 fi
 
@@ -253,6 +258,32 @@ if [ -z "$EXPECTED" ]; then
   echo "   Commit it, and every run after this one is checked."
   exit 1
 fi
+
+# 🔴 The recorded value must be an ENDPOINT ID, not a connection string. On
+# 20 October both fields were filled with the full DATABASE_URL from the
+# Render dashboard, passwords included, and pushed — both Neon passwords went
+# into public git history and had to be rotated. This file asks for the value
+# from "Environment -> DATABASE_URL", and what you find there is a connection
+# string, so the mistake was invited. Refusing it here means the next person
+# who does it learns before the push rather than after.
+case "$EXPECTED" in
+  *://*|*@*)
+    red "❌ migrate-targets.json holds a CONNECTION STRING for $ENV_NAME, not an endpoint."
+    echo
+    echo "   That value almost certainly contains a password, and if it has"
+    echo "   been committed it is in the git history for good — \`git rm\`"
+    echo "   leaves the blob in every clone. ROTATE the database password in"
+    echo "   Neon rather than only deleting the line."
+    echo
+    echo "   The field wants the endpoint id alone:"
+    echo
+    echo "     ✅ ep-flat-flower-b1my1tch"
+    echo
+    echo "   Take the host from between '@' and the first '.', and drop any"
+    echo "   trailing '-pooler'. Nothing else from that string belongs here."
+    exit 1
+    ;;
+esac
 
 if [ "$EP_DIRECT" != "$EXPECTED" ]; then
   red "❌ That database is not the one recorded for $ENV_NAME."

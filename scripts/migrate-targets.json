@@ -17,8 +17,22 @@
     "  ep-x-y-123-pooler.c-5.eu-central-1.aws.neon.tech  ->  ep-x-y-123",
     "  ep-x-y-123.c-5.eu-central-1.aws.neon.tech         ->  ep-x-y-123",
     "",
-    "A hostname is not a credential — the password lives in the connection string",
-    "the operator exports and is never printed, logged or stored here.",
+    "🔴 THIS FIELD TAKES AN ENDPOINT ID, NEVER A CONNECTION STRING. On 20 October",
+    "both fields were filled with the full DATABASE_URL copied from the Render",
+    "dashboard, passwords included, and pushed — so both database passwords went",
+    "into public git history and had to be rotated. That is partly this file's",
+    "fault: it says to get the value from 'Environment -> DATABASE_URL', and what",
+    "you find there is a connection string. So migrate-remote.sh now REFUSES a",
+    "value containing '://' or '@' and says why, and scripts/secret-scan.mjs",
+    "fails the commit before it can happen again.",
+    "",
+    "An endpoint id is a hostname fragment and carries no credential:",
+    "",
+    "  ✅ ep-flat-flower-b1my1tch",
+    "  🔴 the whole DATABASE_URL, user and password and query string included",
+    "",
+    "Take the DATABASE_URL, keep only the part between '@' and the first '.',",
+    "and drop any trailing '-pooler'. Nothing else from that string belongs here.",
     "",
     "⚠️ RECORDING A VALUE IS AN ASSERTION, AND IT IS THE ONE STEP NOTHING CAN",
     "CHECK FOR YOU. Nothing here can tell on its own that a given Neon endpoint",
@@ -32,15 +46,13 @@
     "skipping — an unrecorded environment is the state in which there is no check",
     "at all, so it must not be the state in which the script quietly proceeds."
   ],
-
   "staging": {
-    "endpoint": null,
+    "endpoint": "ep-flat-flower-b1my1tch",
     "service": "mastande-api",
     "branch": "develop"
   },
-
   "production": {
-    "endpoint": null,
+    "endpoint": "ep-royal-hill-b1vy1vmt",
     "service": "rentboard-api",
     "branch": "master"
   }
