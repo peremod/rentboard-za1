@@ -140,7 +140,12 @@ if [ -z "$TARGET" ]; then
   echo "     export NEON_POOLED=\"postgresql://…-pooler…\""
   echo "     export NEON_DIRECT=\"postgresql://…\"   # no -pooler"
   echo "     DATABASE_URL=\"\$NEON_POOLED\" DIRECT_URL=\"\$NEON_DIRECT\" \\"
-  echo "       bash scripts/migrate-remote.sh"
+  echo "       bash scripts/migrate-remote.sh --env $ENV_NAME"
+  echo
+  echo "   ⚠️ --env is in that line because this message used to omit it, and"
+  echo "   following it exactly then earned a second refusal. A tool whose own"
+  echo "   instructions do not satisfy its own requirements is the same defect"
+  echo "   as the comment that handed out the production host for STAGING_API_HOST."
   exit 1
 fi
 
