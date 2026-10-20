@@ -1694,6 +1694,24 @@ already-answered guard stayed green because only the card decides to render
 nothing. The drive answers the card in a browser now, and applies for a second
 room to prove the question is not asked twice."
 
+tag_if_missing "v1.146.0" "60ffb7aeae813734fe3a448f8b282057cdcbb066" "2026-10-20T02:05:17+00:00" "v1.146.0 - search the board by when you can move in
+
+availableFrom was always required and always there; nothing could search on it
+beyond one fortnight-wide boolean. A room qualifies when it is free on or
+before the date asked for - 25 November suits a 1 December move, 15 December
+does not - with a window for somebody flexible whose FAR end is the bound,
+because what disqualifies a room is becoming free after the last day they can
+move.
+
+The comparison is against the last instant of that day at a fixed +02:00: the
+stored date lands at midnight UTC, which is 02:00 in Johannesburg, and the
+difference is a whole day in both directions. Every card says when it is free,
+and there is no date-not-confirmed badge because the column is NOT NULL and
+that state cannot exist.
+
+A date is a search criterion: nothing is reserved, no landlord is told, and a
+landlord moving their own date does not touch anybody's application."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
