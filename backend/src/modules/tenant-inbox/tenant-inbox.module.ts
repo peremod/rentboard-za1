@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SurveysModule } from '../surveys/surveys.module';
 import { TenantInboxController } from './tenant-inbox.controller';
 import { TenantInboxService } from './tenant-inbox.service';
 
@@ -10,6 +11,7 @@ import { TenantInboxService } from './tenant-inbox.service';
  * serves. Nothing here needs those providers.
  */
 @Module({
+  imports: [SurveysModule],
   controllers: [TenantInboxController],
   providers: [TenantInboxService],
 })

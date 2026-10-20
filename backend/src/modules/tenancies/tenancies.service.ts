@@ -97,6 +97,16 @@ export class TenanciesService {
       throw new BadRequestException('Only a tenancy that has not started can be cancelled. End it instead.');
     }
 
+    /**
+     * ⚠️ WHO called it off decides the word on the application.
+     *
+     * The same split `recordOutcome` uses for a viewing that fell through:
+     * `withdrawn` when the tenant walked, `rejected` when the landlord did.
+     * The vocabulary already records who ended it, and a third status meaning
+     * "the letting fell through" would be a second name for that.
+     */
+    const byTenant = tenancy.tenantId === userId;
+
     const cancelled = await this.prisma.tenancy.update({
       where: { id },
       data: {
@@ -136,6 +146,59 @@ export class TenanciesService {
      * Only from `let`. A landlord who has already paused, removed or relisted
      * the room in the meantime has said something more recent than this.
      */
+    /**
+     * ⚠️ THE APPLICATION HAS TO END WITH THE LETTING, AND THE CYCLE WITH IT.
+     *
+     * Reported 15 October and reproduced exactly: a room back on the board
+     * that nobody could apply for.
+     *
+     * Cancelling put the room back to `active` and stopped there. The
+     * application stayed `accepted` and un-archived, so:
+     *
+     *   · the tenant's own list still showed an acceptance for a letting that
+     *     had fallen through, while the inbox row was suppressed — one state,
+     *     two readers, disagreeing, which is the fault this codebase keeps
+     *     being fixed for;
+     *   · the landlord's applicant card offered no action, because the action
+     *     row is hidden on an accepted application;
+     *   · and NOBODY could apply. Applications are unique per
+     *     `(roomId, tenantId, cycle)` and the cycle never moved, so the
+     *     accepted tenant got "You have already applied for this room" and
+     *     every applicant `autoRejectOthers` had rejected was locked out of a
+     *     room that was live again. A listing on the board that refuses
+     *     everyone who ever wanted it.
+     *
+     * So the cycle ends here, exactly as `relist()` ends one: archive what is
+     * left of it and increment the counter. The rejected applicants are NOT
+     * silently reinstated — `undoAccept` is the 30-minute path for that, and
+     * its own comment says why reinstating people days later is worse — but
+     * every one of them can apply again, which is the honest state of a room
+     * that is genuinely free.
+     *
+     * ⚠️ `relistCount` is the LETTING-CYCLE counter, not a tally of button
+     * presses, and a letting that fell through genuinely ends a cycle. The one
+     * screen that renders it as "relisted N×" is the admin room list.
+     */
+    const closedAt = new Date();
+    await this.prisma.$transaction([
+      this.prisma.application.update({
+        where: { id: tenancy.applicationId },
+        data: {
+          status: byTenant ? 'withdrawn' : 'rejected',
+          decidedAt: closedAt,
+          archivedAt: closedAt,
+        },
+      }),
+      this.prisma.application.updateMany({
+        where: { roomId: tenancy.roomId, archivedAt: null },
+        data: { archivedAt: closedAt },
+      }),
+      this.prisma.room.update({
+        where: { id: tenancy.roomId },
+        data: { relistCount: { increment: 1 }, applicationCount: 0 },
+      }),
+    ]);
+
     await this.restoreRoomIfStillLet(tenancy.roomId, 'the letting fell through');
 
     return cancelled;

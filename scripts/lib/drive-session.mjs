@@ -194,3 +194,23 @@ export function dbQuery(sql) {
   const out = execSync(`psql "${url}" -tAc ${JSON.stringify(sql)}`, { encoding: 'utf8' });
   return out.trim().split('\n')[0].trim();
 }
+
+/**
+ * Every row, not just the first.
+ *
+ * ⚠️ `dbQuery` returns `split('\n')[0]` — one line — which is right for the
+ * scalar reads it was written for and silently WRONG for anything that
+ * returns several rows: the check reads row one and reports it as the whole
+ * answer. Found on 16 October by a check that said "two answers are on the
+ * server" and printed one, when both were there: the query was fine and the
+ * reader truncated it.
+ *
+ * Use this whenever the SELECT can return more than one row. For a count, a
+ * scalar `count(*)` through dbQuery is still the simpler thing.
+ */
+export function dbRows(sql) {
+  const url = process.env.DATABASE_URL
+    ?? 'postgresql://rentboard:rentboard@localhost:5432/rentboard_dev';
+  const out = execSync(`psql "${url}" -tAc ${JSON.stringify(sql)}`, { encoding: 'utf8' });
+  return out.trim().split('\n').map((line) => line.trim()).filter(Boolean);
+}

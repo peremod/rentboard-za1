@@ -1643,6 +1643,57 @@ HEADER. The navbar renders on those routes, so app-logo resolves to three hosts
 and index 0 is the header's. MA is #C4522C on /auth/login was true of a
 wordmark in the navbar. The route was in the loop; the subject never was."
 
+tag_if_missing "v1.143.0" "bf22c516e07aad52f254696e126dc88328e65331" "2026-10-15T04:35:58+00:00" "v1.143.0 - a letting that falls through closes its application
+
+Cancelling archived the tenancy and put the room back on the board, and left
+the application accepted with the letting cycle unmoved. Applications are
+unique per room, tenant and cycle, so the room was live and refused everyone
+who had ever applied to it - the accepted tenant with You have already applied
+for this room, and everyone the acceptance had auto-rejected along with them.
+
+And NoticeRouter returned as soon as an email had been handed off, so no notice
+row was written for anybody with an email address, under a screen that says it
+is the record. Email does not throw when unconfigured, so those people were
+told nothing anywhere. That fix then exposed an invisible button: Mark all as
+read had never rendered, and measures 1.00:1.
+
+A letting that never started is no longer counted as a past letting, and
+notices open one at a time instead of spilling past the edge of a phone."
+
+tag_if_missing "v1.144.0" "5061bc34cba779e4188a39fa88ba127e855b69d8" "2026-10-16T10:42:24+00:00" "v1.144.0 - surveys for both roles, asked at sign-up
+
+The tenant half of this feature was not missing, it was unstorable:
+SurveyResponse was keyed on landlordProfileId and submit refused anybody
+without one. Responses and dismissals are keyed on the user now, carry the
+role answered as, and gained the two things the old model could not express -
+a completion state, so a part-answered set can be resumed and a completion
+rate computed, and a version, so rewording a question does not rewrite the
+meaning of answers already given.
+
+The questions are asked at /welcome, after the account exists and never inside
+the registration form, one at a time, saved per step on the server, every one
+optional. Both dashboard cards are gone; an unfinished set is one row at the
+bottom of the task inbox.
+
+Found by running it: dbQuery returns only the first line, so every multi-row
+check in every drive has been reading row one."
+
+tag_if_missing "v1.145.0" "f6154804306c6ceee38f7cfc8bb7efa48c21faa5" "2026-10-16T11:33:44+00:00" "v1.145.0 - one question, at the one moment it is worth asking
+
+The contextual question returns as its own workflow, not as the card that was
+removed: a landlord who has just marked a room let is asked what is most
+stressful about tenants, a tenant who has just applied is asked when they need
+to move. It asks only a question that is unanswered, answering it is what
+stops it, and not-now on one question does not silence the other six.
+
+It would have shipped recording a seven-question survey as finished with six
+never asked: submit() marks a response complete and the card used it. And two
+checks could not see their subject - the API check passed with the component
+reverted, because the component is the caller, and removing the
+already-answered guard stayed green because only the card decides to render
+nothing. The drive answers the card in a browser now, and applies for a second
+room to prove the question is not asked twice."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could

@@ -172,7 +172,10 @@ export class Register implements OnInit {
       referralCode: raw.referralCode?.trim() || undefined,
       role: this.role(),
     }).subscribe({
-      next: (res) => this.router.navigate([this.auth.homeRouteFor(res.user.role)]),
+      // ⚠️ The welcome questions, not the dashboard. The account is already
+      // created and the session is already set by the time this runs, so
+      // skipping, refreshing or closing the tab on that screen costs nothing.
+      next: () => this.router.navigate(['/welcome']),
       error: (err) => {
         this.loading.set(false);
         this.error.set(err?.error?.message ?? 'Something went wrong. Please try again.');
