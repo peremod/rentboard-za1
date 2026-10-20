@@ -1,12 +1,13 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Review } from '../../../core/models/review.model';
+import { Icon } from '../icon/icon';
 
 /** Published reviews, with any reply from the person reviewed. */
 @Component({
   selector: 'app-review-list',
   standalone: true,
-  imports: [DatePipe],
+  imports: [Icon, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (reviews().length === 0) {
@@ -14,7 +15,7 @@ import { Review } from '../../../core/models/review.model';
     } @else {
       @if (average() !== null) {
         <div class="review-summary">
-          <span class="review-summary__score">★ {{ average()!.toFixed(1) }}</span>
+          <span class="review-summary__score"><app-icon name="star" filled/> {{ average()!.toFixed(1) }}</span>
           <span class="review-summary__count">
             from {{ reviews().length }} review{{ reviews().length === 1 ? '' : 's' }}
           </span>

@@ -8,6 +8,7 @@ import { AnalyticsService } from '../../../core/services/analytics.service';
 import { DialogService } from '../../../core/services/dialog.service';
 import { PhotoUpload, UploadedPhoto } from '../../../shared/components/photo-upload/photo-upload';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Create-room wizard — 4 steps: basics → pricing/location → preferences → photos.
@@ -23,7 +24,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 @Component({
   selector: 'app-create-room',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink, PhotoUpload, ScreenHint],
+  imports: [Icon, ReactiveFormsModule, RouterLink, PhotoUpload, ScreenHint],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-rooms-new" heading="Listing is free, and stays free">
@@ -49,7 +50,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
            applicants will be told. -->
       @if (isSublet()) {
         <div class="sublet-banner">
-          <p><strong>🔑 You are listing a room in a place you rent.</strong></p>
+          <p><strong><app-icon name="key"/> You are listing a room in a place you rent.</strong></p>
           <p>
             Applicants are told this plainly, and told that we have not confirmed
             you are allowed to sublet. You can upload your lease and your
@@ -117,7 +118,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
                     @if (p.thumbnail) {
                       <img class="prop-picker__img" [src]="p.thumbnail" alt="" width="64" height="48"/>
                     } @else {
-                      <span class="prop-picker__img prop-picker__img--none" aria-hidden="true">🏘️</span>
+                      <span class="prop-picker__img prop-picker__img--none" aria-hidden="true"><app-icon name="building"/>️</span>
                     }
                     <span class="prop-picker__text">
                       <strong>{{ p.name }}</strong>
@@ -356,7 +357,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
       <div class="save-dialog" role="alertdialog" aria-modal="true"
            aria-labelledby="save-dialog-title">
         <div class="save-dialog__panel">
-          <div class="save-dialog__icon" aria-hidden="true">✅</div>
+          <div class="save-dialog__icon" aria-hidden="true"><app-icon name="check-circle"/></div>
           <h2 id="save-dialog-title" class="save-dialog__title">Changes saved</h2>
           <p class="save-dialog__body">Your listing is still live.</p>
           <button type="button" class="btn btn-primary save-dialog__ok"

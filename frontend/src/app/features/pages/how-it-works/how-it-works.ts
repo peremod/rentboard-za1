@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * How it works. Structure follows the visual spec's two-audience layout
@@ -10,7 +11,7 @@ import { RouterLink } from '@angular/router';
 @Component({
   selector: 'app-how-it-works',
   standalone: true,
-  imports: [RouterLink],
+  imports: [Icon, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="section" style="background:var(--ink);padding-bottom:3rem">
@@ -30,7 +31,7 @@ import { RouterLink } from '@angular/router';
         <p class="hiw-audience">For tenants</p>
         <div class="hiw-grid">
           <div class="hiw-step">
-            <div class="hiw-num">01</div><div class="hiw-icon">🔍</div>
+            <div class="hiw-num">01</div><div class="hiw-icon"><app-icon name="search"/></div>
             <div class="hiw-title">Browse rooms</div>
             <div class="hiw-desc">
               Search by city, suburb, price and room type. Filter for bills included,
@@ -38,7 +39,7 @@ import { RouterLink } from '@angular/router';
             </div>
           </div>
           <div class="hiw-step">
-            <div class="hiw-num">02</div><div class="hiw-icon">🔔</div>
+            <div class="hiw-num">02</div><div class="hiw-icon"><app-icon name="bell"/></div>
             <div class="hiw-title">Set an alert</div>
             <div class="hiw-desc">
               Rooms are often taken within days. Save your search and we'll email you
@@ -46,7 +47,7 @@ import { RouterLink } from '@angular/router';
             </div>
           </div>
           <div class="hiw-step">
-            <div class="hiw-num">03</div><div class="hiw-icon">📝</div>
+            <div class="hiw-num">03</div><div class="hiw-icon"><app-icon name="edit"/></div>
             <div class="hiw-title">Apply free</div>
             <div class="hiw-desc">
               A short cover note is all it takes. No CV, no application fee — free to
@@ -54,7 +55,7 @@ import { RouterLink } from '@angular/router';
             </div>
           </div>
           <div class="hiw-step">
-            <div class="hiw-num">04</div><div class="hiw-icon">💬</div>
+            <div class="hiw-num">04</div><div class="hiw-icon"><app-icon name="message"/></div>
             <div class="hiw-title">Talk directly</div>
             <div class="hiw-desc">
               Message the landlord on Mastande, arrange a viewing, and agree a
@@ -88,7 +89,7 @@ import { RouterLink } from '@angular/router';
         <p class="hiw-audience">For landlords</p>
         <div class="hiw-grid">
           <div class="hiw-step">
-            <div class="hiw-num">01</div><div class="hiw-icon">📸</div>
+            <div class="hiw-num">01</div><div class="hiw-icon"><app-icon name="camera"/></div>
             <div class="hiw-title">List your room free</div>
             <div class="hiw-desc">
               Add photos, set your rent in Rand, and describe the house and who would
@@ -96,7 +97,7 @@ import { RouterLink } from '@angular/router';
             </div>
           </div>
           <div class="hiw-step">
-            <div class="hiw-num">02</div><div class="hiw-icon">🪪</div>
+            <div class="hiw-num">02</div><div class="hiw-icon"><app-icon name="id-card"/></div>
             <div class="hiw-title">Get verified</div>
             <div class="hiw-desc">
               A once-off check puts a verified badge on your listings. Tenants are wary
@@ -104,7 +105,7 @@ import { RouterLink } from '@angular/router';
             </div>
           </div>
           <div class="hiw-step">
-            <div class="hiw-num">03</div><div class="hiw-icon">⭐</div>
+            <div class="hiw-num">03</div><div class="hiw-icon"><app-icon name="star" filled/></div>
             <div class="hiw-title">Shortlist and choose</div>
             <div class="hiw-desc">
               Review applicants, shortlist the ones you like, arrange viewings, and
@@ -112,7 +113,7 @@ import { RouterLink } from '@angular/router';
             </div>
           </div>
           <div class="hiw-step">
-            <div class="hiw-num">04</div><div class="hiw-icon">🔁</div>
+            <div class="hiw-num">04</div><div class="hiw-icon"><app-icon name="repeat"/></div>
             <div class="hiw-title">Relist in one click</div>
             <div class="hiw-desc">
               When a tenant moves on, relist the same room instantly. Photos and details

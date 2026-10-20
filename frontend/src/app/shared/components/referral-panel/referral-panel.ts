@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { DatePipe } from '@angular/common';
 import { ReferralsService } from '../../../core/services/referrals.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { Icon } from '../icon/icon';
 
 type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tenant';
 
@@ -15,7 +16,7 @@ type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tena
 @Component({
   selector: 'app-referral-panel',
   standalone: true,
-  imports: [DatePipe],
+  imports: [Icon, DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (data(); as d) {
@@ -38,7 +39,7 @@ type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tena
         @if (isLandlord()) {
           @if (d.summary.freeVerificationsAvailable > 0) {
             <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
-              🎁
+              <app-icon name="gift"/>
               <span>
                 You have <strong>{{ d.summary.freeVerificationsAvailable }}</strong>
                 free verification{{ d.summary.freeVerificationsAvailable === 1 ? '' : 's' }} earned.

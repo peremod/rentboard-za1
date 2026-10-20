@@ -3,6 +3,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { AdsService } from '../../../core/services/ads.service';
 import { SA_PROVINCES } from '../../../core/models/room.model';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * "Advertise with us" — the front door for inventory.
@@ -14,7 +15,7 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
 @Component({
   selector: 'app-advertise',
   standalone: true,
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [Icon, ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="section" style="background:var(--ink);padding-bottom:3rem">
@@ -37,7 +38,7 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
           <h2 class="advertise-h2">Who's here</h2>
           <div class="hiw-grid">
             <div class="hiw-step">
-              <div class="hiw-icon">📦</div>
+              <div class="hiw-icon"><app-icon name="package"/></div>
               <div class="hiw-title">People about to move</div>
               <div class="hiw-desc">
                 Movers, van hire, storage, boxes. A tenant who has just been accepted
@@ -45,7 +46,7 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
               </div>
             </div>
             <div class="hiw-step">
-              <div class="hiw-icon">📶</div>
+              <div class="hiw-icon"><app-icon name="wifi"/></div>
               <div class="hiw-title">New addresses</div>
               <div class="hiw-desc">
                 Fibre and ISPs. Moving is the one moment people genuinely reconsider
@@ -53,7 +54,7 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
               </div>
             </div>
             <div class="hiw-step">
-              <div class="hiw-icon">🛋️</div>
+              <div class="hiw-icon"><app-icon name="sofa"/>️</div>
               <div class="hiw-title">Furnishing a room</div>
               <div class="hiw-desc">
                 Furniture and appliance rental, bedding, small electricals. Many rooms
@@ -61,7 +62,7 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
               </div>
             </div>
             <div class="hiw-step">
-              <div class="hiw-icon">🔧</div>
+              <div class="hiw-icon"><app-icon name="wrench"/></div>
               <div class="hiw-title">Landlords with property</div>
               <div class="hiw-desc">
                 Electricians, plumbers, painters, cleaning. Between tenants is when
@@ -152,7 +153,7 @@ import { SA_PROVINCES } from '../../../core/models/room.model';
 
           @if (sent()) {
             <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
-              ✅ <span>{{ response() }}</span>
+              <app-icon name="check-circle"/> <span>{{ response() }}</span>
             </div>
           } @else {
             <form [formGroup]="form" (ngSubmit)="onSubmit()" class="advertise-form">

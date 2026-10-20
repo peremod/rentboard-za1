@@ -7,6 +7,7 @@ import { YardDashboard, YardGroup } from '../../../core/models/property.model';
 import { SA_PROVINCES } from '../../../core/models/room.model';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * My properties — Phase 7b.
@@ -36,7 +37,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-properties',
   standalone: true,
-  imports: [RouterLink, FormsModule, NgOptimizedImage, ScreenHint, Loading],
+  imports: [Icon, RouterLink, FormsModule, NgOptimizedImage, ScreenHint, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-properties" heading="A property groups the rooms at one address">
@@ -109,7 +110,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                   @if (thumbnail(group); as path) {
                     <img class="prop-card__img" [ngSrc]="path" width="96" height="72" alt=""/>
                   } @else {
-                    <div class="prop-card__img prop-card__img--none" aria-hidden="true">🏘️</div>
+                    <div class="prop-card__img prop-card__img--none" aria-hidden="true"><app-icon name="building"/>️</div>
                   }
 
                   <div class="prop-card__body">
@@ -143,7 +144,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                      none. Grouping is optional by design, so it cannot be the
                      price of seeing your own money. -->
                 <a class="prop-card__link" routerLink="/landlord/properties/ungrouped">
-                  <div class="prop-card__img prop-card__img--none" aria-hidden="true">🏠</div>
+                  <div class="prop-card__img prop-card__img--none" aria-hidden="true"><app-icon name="home"/></div>
                   <div class="prop-card__body">
                     <strong class="prop-card__name">Not grouped</strong>
                     <span class="prop-card__where">

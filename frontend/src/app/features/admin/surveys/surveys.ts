@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } 
 import { HttpClient } from '@angular/common/http';
 import { environment } from '@env/environment';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 interface AggregateQuestion {
   id: string;
@@ -67,7 +68,7 @@ interface SurveyAggregate {
 @Component({
   selector: 'app-admin-surveys',
   standalone: true,
-  imports: [Loading],
+  imports: [Icon, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -118,7 +119,7 @@ interface SurveyAggregate {
         </p>
 
         <div class="insight-banner">
-          💡
+          <app-icon name="lightbulb"/>
           <span>
             Counts, not percentages, and the number who answered each question is
             shown beside it — the same answer means a different thing at five

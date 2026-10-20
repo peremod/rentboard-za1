@@ -7,11 +7,12 @@ import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
 import { Logo } from '../../../shared/components/logo/logo';
 import { ReferralsService } from '../../../core/services/referrals.service';
 import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
+import { Icon } from '../../../shared/components/icon/icon';
 
 @Component({
   selector: 'app-register',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterLink, TranslatePipe, Logo],
+  imports: [Icon, CommonModule, ReactiveFormsModule, RouterLink, TranslatePipe, Logo],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="auth">
@@ -30,13 +31,13 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
         <div class="auth__roles" role="group" aria-label="What brings you here?">
           <button type="button" class="auth__role" [class.is-active]="role() === 'TENANT'"
                   [attr.aria-pressed]="role() === 'TENANT'" (click)="role.set('TENANT')">
-            <span class="auth__role-icon" aria-hidden="true">🏠</span>
+            <span class="auth__role-icon" aria-hidden="true"><app-icon name="home"/></span>
             <span class="auth__role-title">I'm looking for a room</span>
             <span class="auth__role-sub">Tenant</span>
           </button>
           <button type="button" class="auth__role" [class.is-active]="role() === 'LANDLORD'"
                   [attr.aria-pressed]="role() === 'LANDLORD'" (click)="role.set('LANDLORD')">
-            <span class="auth__role-icon" aria-hidden="true">🔑</span>
+            <span class="auth__role-icon" aria-hidden="true"><app-icon name="key"/></span>
             <span class="auth__role-title">I have a room to let</span>
             <span class="auth__role-sub">Landlord</span>
           </button>
@@ -67,7 +68,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
             @if (checkingCode()) {
               <p class="field-hint">Checking…</p>
             } @else if (codeCheck()?.valid) {
-              <p class="field-hint">✓ Invited by {{ codeCheck()!.invitedBy }}</p>
+              <p class="field-hint"><app-icon name="check"/> Invited by {{ codeCheck()!.invitedBy }}</p>
             } @else if (codeCheck() && !codeCheck()!.valid) {
               <p class="field-hint">
                 We don't recognise that code. You can still sign up without it.
@@ -93,7 +94,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
              likely to go looking. -->
         @if (whatsappEnabled) {
           <a class="auth__magic" routerLink="/auth/register-phone">
-            💬 No email address? Sign up with your phone number
+            <app-icon name="message"/> No email address? Sign up with your phone number
           </a>
         }
 

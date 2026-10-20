@@ -20,6 +20,7 @@ import { ReferralPanel } from '../../../shared/components/referral-panel/referra
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/tenancy-lifecycle';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Billing (Upgrade link, Boost button) is hidden behind BILLING_ENABLED —
@@ -31,7 +32,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-landlord-dashboard',
   standalone: true,
-  imports: [SurveyPrompt, RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel, ReferralPanel, LandlordInboxPanel, LandlordCalendar, ScreenHint, TenancyLifecycle, Loading],
+  imports: [Icon, SurveyPrompt, RouterLink, ZarCentsPipe, DatePipe, ReviewPrompt, DisputePanel, ReferralPanel, LandlordInboxPanel, LandlordCalendar, ScreenHint, TenancyLifecycle, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-dashboard" heading="This is your whole letting, on one screen">
@@ -48,7 +49,7 @@ import { Loading } from '../../../shared/components/loading/loading';
       @for (draft of whatsappDrafts.drafts(); track draft.id) {
         <div class="wa-draft">
           <div class="wa-draft__head">
-            <strong>💬 A listing you started on WhatsApp</strong>
+            <strong><app-icon name="message"/> A listing you started on WhatsApp</strong>
             <span>{{ draft.imagePaths.length }} photo{{ draft.imagePaths.length === 1 ? '' : 's' }}</span>
           </div>
           <p class="wa-draft__parsed">
@@ -118,7 +119,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 
       @if (!billingEnabled) {
         <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
-          🎉 <span>Free for everyone right now — unlimited listings, up to 20 photos per room, one-click relist.</span>
+          <app-icon name="check-circle"/> <span>Free for everyone right now — unlimited listings, up to 20 photos per room, one-click relist.</span>
         </div>
       }
 
@@ -172,11 +173,11 @@ import { Loading } from '../../../shared/components/loading/loading';
         } @else {
           @for (room of activeRooms(); track room.id) {
             <div class="app-card">
-              <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="home"/></div>
               <div class="app-info">
                 <div class="app-room">
                   {{ room.title }}
-                  @if (room.isFeatured) { <span class="badge badge-featured">⭐ Featured</span> }
+                  @if (room.isFeatured) { <span class="badge badge-featured"><app-icon name="star" filled/> Featured</span> }
                 </div>
                 <div class="app-location">{{ room.locationDisplay }}</div>
                 <div class="app-rent">
@@ -220,7 +221,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                   </button>
                 }
                 @if (billingEnabled && !room.isFeatured && room.status === 'active') {
-                  <button type="button" class="btn btn-sm btn-sage" (click)="boost(room.id)">⭐ Boost R99</button>
+                  <button type="button" class="btn btn-sm btn-sage" (click)="boost(room.id)"><app-icon name="star" filled/> Boost R99</button>
                 }
               </div>
             </div>
@@ -281,7 +282,7 @@ import { Loading } from '../../../shared/components/loading/loading';
         } @else {
           @for (room of draftRooms(); track room.id) {
             <div class="app-card app-card--archived">
-              <div class="app-thumb portal-thumb" aria-hidden="true">📝</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="edit"/></div>
               <div class="app-info">
                 <div class="app-room">{{ room.title || 'Untitled draft' }}</div>
                 <div class="app-location">
@@ -316,7 +317,7 @@ import { Loading } from '../../../shared/components/loading/loading';
         } @else {
           @for (room of archivedRooms(); track room.id) {
             <div class="app-card app-card--archived">
-              <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="home"/></div>
               <div class="app-info">
                 <div class="app-room">{{ room.title }}</div>
                 <div class="app-location">

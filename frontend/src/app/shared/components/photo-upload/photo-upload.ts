@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, effect, inject, input, output, signal } from '@angular/core';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { MAX_PHOTOS_PER_ROOM } from '../../../core/config/feature-flags';
+import { Icon } from '../icon/icon';
 
 export interface UploadedPhoto {
   path: string;
@@ -16,13 +17,14 @@ export interface UploadedPhoto {
 @Component({
   selector: 'app-photo-upload',
   standalone: true,
+  imports: [Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="photo-upload">
       @if (photos().length < maxPhotos) {
         <div class="photo-upload__dropzone" (click)="fileInput.click()" (dragover)="$event.preventDefault()" (drop)="onDrop($event)">
           <input #fileInput type="file" accept="image/jpeg,image/png,image/webp" multiple hidden (change)="onFileSelect($event)"/>
-          <p>📷 Click or drag photos here</p>
+          <p><app-icon name="camera"/> Click or drag photos here</p>
           <p class="muted">JPEG, PNG or WebP, up to 8MB each. First photo becomes the cover. {{ maxPhotos - photos().length }} of {{ maxPhotos }} remaining.</p>
         </div>
       } @else {
@@ -37,7 +39,7 @@ export interface UploadedPhoto {
             <div class="photo-upload__item" [class.hero]="i === 0">
               <img [src]="photo.url" [alt]="'Room photo ' + (i + 1)"/>
               @if (i === 0) { <span class="photo-upload__badge">Cover</span> }
-              <button type="button" (click)="remove(i)" aria-label="Remove photo">✕</button>
+              <button type="button" (click)="remove(i)" aria-label="Remove photo"><app-icon name="x"/></button>
             </div>
           }
         </div>

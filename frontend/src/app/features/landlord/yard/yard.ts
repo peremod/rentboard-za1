@@ -36,6 +36,7 @@ import { LeasePanel } from '../../../shared/components/lease-panel/lease-panel';
 import { LeaseDocuments } from '../../../shared/components/lease-documents/lease-documents';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * The yard dashboard.
@@ -64,7 +65,7 @@ const UNGROUPED = 'ungrouped';
 @Component({
   selector: 'app-yard',
   standalone: true,
-  imports: [PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink, ZarCentsPipe, LeasePanel, LeaseDocuments, ScreenHint, Loading],
+  imports: [Icon, PluralPipe, NgTemplateOutlet, DatePipe, FormsModule, RouterLink, ZarCentsPipe, LeasePanel, LeaseDocuments, ScreenHint, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-property" heading="Everything about this address">
@@ -320,7 +321,7 @@ const UNGROUPED = 'ungrouped';
                      list of four says nothing about which. -->
                 @if (sharedSaved() === group.property.id) {
                   <p class="muted yard-saved" role="status">
-                    ✅ Saved. {{ group.property.name }} is updated — the house rules and
+                    <app-icon name="check-circle"/> Saved. {{ group.property.name }} is updated — the house rules and
                     shared facilities apply to every room at this address.
                   </p>
                 }

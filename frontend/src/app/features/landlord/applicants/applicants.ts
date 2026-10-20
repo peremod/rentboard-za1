@@ -17,6 +17,7 @@ import { TenantReferences } from '../../../core/models/review.model';
 import { applicationState, stateClass } from '../../../core/models/state.model';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Applicant manager — one room's full applicant list, with shortlist/accept/
@@ -27,7 +28,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-applicants',
   standalone: true,
-  imports: [DatePipe, FormsModule, RouterLink, MessageThread, ReviewList, TenantNotes, ScreenHint, Loading],
+  imports: [Icon, DatePipe, FormsModule, RouterLink, MessageThread, ReviewList, TenantNotes, ScreenHint, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-applicants" heading="Everyone who applied, across every room">
@@ -67,7 +68,7 @@ import { Loading } from '../../../shared/components/loading/loading';
         @if (shortlisted().length > 0) {
           <div class="applicant-group">
             <h2 class="applicant-group__title">
-              ⭐ Shortlisted <span class="applicant-group__count">({{ shortlisted().length }})</span>
+              <app-icon name="star" filled/> Shortlisted <span class="applicant-group__count">({{ shortlisted().length }})</span>
             </h2>
             <p class="applicant-group__hint">
               Arrange viewings with these, then accept one. Accepting closes the
@@ -107,8 +108,8 @@ import { Loading } from '../../../shared/components/loading/loading';
                     (click)="toggleOpen(app)">
               <span class="applicant-card__who">
                 <strong>{{ app.tenant?.fullName }}</strong>
-                @if (app.tenant?.isVerified) { <span class="pill">✓ Verified</span> }
-                @if (app.tenant?.tenantProfile?.hasPassport) { <span class="pill pill--passport">🛂 Passport</span> }
+                @if (app.tenant?.isVerified) { <span class="pill"><app-icon name="check"/> Verified</span> }
+                @if (app.tenant?.tenantProfile?.hasPassport) { <span class="pill pill--passport"><app-icon name="id-card"/> Passport</span> }
                 <span [class]="'state ' + stateClass(applicationState(app.status))">{{ app.status }}</span>
               </span>
               <span aria-hidden="true">{{ openId() === app.id ? '▲' : '▼' }}</span>
@@ -132,11 +133,11 @@ import { Loading } from '../../../shared/components/loading/loading';
                        "income proof: rejected" would be screening on a private
                        failure. -->
                   <div class="passport-basis">
-                    <strong>🛂 Renter's Passport</strong>
+                    <strong><app-icon name="id-card"/> Renter's Passport</strong>
                     @if (basis()[app.tenant!.id]; as checks) {
                       <ul>
                         @for (check of checks.checks; track check.type) {
-                          <li>✓ {{ check.label }}<span>{{ check.confirmedAt | date: 'MMM yyyy' }}</span></li>
+                          <li><app-icon name="check"/> {{ check.label }}<span>{{ check.confirmedAt | date: 'MMM yyyy' }}</span></li>
                         }
                       </ul>
                     } @else {
@@ -171,13 +172,13 @@ import { Loading } from '../../../shared/components/loading/loading';
                 @if (!['accepted','rejected','withdrawn'].includes(app.status)) {
                   <div class="applicant-card__actions">
                     @if (app.status !== 'shortlisted') {
-                      <button type="button" (click)="shortlist(app)">⭐ Shortlist</button>
+                      <button type="button" (click)="shortlist(app)"><app-icon name="star" filled/> Shortlist</button>
                     } @else {
                       <button type="button" (click)="unshortlist(app)">Remove from shortlist</button>
                     }
-                    <button type="button" (click)="startInvite(app)">📅 Invite to view</button>
-                    <button type="button" class="accept" (click)="accept(app)">✓ Accept</button>
-                    <button type="button" class="reject" (click)="reject(app)">✕ Reject</button>
+                    <button type="button" (click)="startInvite(app)"><app-icon name="calendar"/> Invite to view</button>
+                    <button type="button" class="accept" (click)="accept(app)"><app-icon name="check"/> Accept</button>
+                    <button type="button" class="reject" (click)="reject(app)"><app-icon name="x"/> Reject</button>
                   </div>
 
                   <!-- ── Viewings — Phase 7l ─────────────────────────────
@@ -233,7 +234,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                                already arranged — a past time gives nobody
                                anywhere to be. -->
                           <button type="button" class="link-btn"
-                                  (click)="startInvite(app)">📅 Offer another time</button>
+                                  (click)="startInvite(app)"><app-icon name="calendar"/> Offer another time</button>
                         }
                       } @else if (v.status === 'proposed' || v.status === 'accepted') {
                         <button type="button" class="link-btn" [disabled]="busyViewing() === app.id"

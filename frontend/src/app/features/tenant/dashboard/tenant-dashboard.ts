@@ -22,11 +22,12 @@ import { ViewingInvitations } from '../../../shared/components/viewing-invitatio
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/tenancy-lifecycle';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
-  imports: [RouterLink, DatePipe, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations, ScreenHint, TenancyLifecycle, Loading],
+  imports: [Icon, RouterLink, DatePipe, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations, ScreenHint, TenancyLifecycle, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="tenant-dashboard" heading="Where you stand, on everything you applied for">
@@ -83,7 +84,7 @@ import { Loading } from '../../../shared/components/loading/loading';
           </p>
           @for (app of currentHomes(); track app.id) {
             <div class="app-card">
-              <div class="app-thumb portal-thumb" aria-hidden="true">🔑</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="key"/></div>
               <div class="app-info">
                 <div class="app-room">{{ app.room?.title }}</div>
                 @if (app.room) {
@@ -148,7 +149,7 @@ import { Loading } from '../../../shared/components/loading/loading';
         } @else {
           @for (app of activeApplications(); track app.id) {
             <div class="app-card" [class.app-card--closed]="app.status === 'rejected'">
-              <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="home"/></div>
 
               <div class="app-info">
                 <div class="app-room">{{ app.room?.title }}</div>
@@ -202,7 +203,7 @@ import { Loading } from '../../../shared/components/loading/loading';
           </p>
           @for (app of availableAgain(); track app.id) {
             <div class="app-card">
-              <div class="app-thumb portal-thumb" aria-hidden="true">🔁</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="repeat"/></div>
               <div class="app-info">
                 <div class="app-room">{{ app.room?.title }}</div>
                 @if (app.room) {
@@ -233,7 +234,7 @@ import { Loading } from '../../../shared/components/loading/loading';
           <p class="muted">Finished — nothing more to do on these.</p>
           @for (app of closedApplications(); track app.id) {
             <div class="app-card app-card--closed">
-              <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="home"/></div>
               <div class="app-info">
                 <div class="app-room">{{ app.room?.title }}</div>
                 @if (app.room) {
@@ -277,7 +278,7 @@ import { Loading } from '../../../shared/components/loading/loading';
         } @else {
           @for (search of alerts.searches(); track search.id) {
             <div class="app-card" [class.app-card--closed]="!search.isActive">
-              <div class="app-thumb portal-thumb" aria-hidden="true">🔔</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="bell"/></div>
               <div class="app-info">
                 <div class="app-room">{{ search.name }}</div>
                 <div class="app-location">{{ describe(search) }}</div>
@@ -345,7 +346,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                        applicant looks for. -->
                   @if (room.subletCheckedAt) {
                     <span class="sublet-row__checked">
-                      ✓ Lease and consent checked
+                      <app-icon name="check"/> Lease and consent checked
                     </span>
                   } @else {
                     <a class="sublet-row__todo" routerLink="/tenant/passport">
@@ -372,7 +373,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 
         @if (savedRooms.count() === 0) {
           <p class="muted">
-            No saved rooms yet. Tap the ♡ on any room to keep it here while you decide.
+            No saved rooms yet. Tap the <app-icon name="heart"/> on any room to keep it here while you decide.
           </p>
         } @else if (loadingSaved()) {
           <app-loading>Loading saved rooms…</app-loading>

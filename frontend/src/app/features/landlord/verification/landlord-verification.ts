@@ -7,6 +7,7 @@ import { PaymentsService } from '../../../core/services/payments.service';
 import { ActivatedRoute } from '@angular/router';
 import { VerificationType, VerificationRequest } from '../../../core/models/verification.model';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Landlord-facing verification.
@@ -20,7 +21,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 @Component({
   selector: 'app-landlord-verification',
   standalone: true,
-  imports: [DatePipe, ScreenHint],
+  imports: [Icon, DatePipe, ScreenHint],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="landlord-verification" heading="The badge is the main thing a tenant looks for">
@@ -30,11 +31,11 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 
       @if (verification.isIdentityVerified()) {
         <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
-          ✅ <span>Your identity is verified. Your listings carry a verified badge.</span>
+          <app-icon name="check-circle"/> <span>Your identity is verified. Your listings carry a verified badge.</span>
         </div>
       } @else {
         <div class="insight-banner">
-          🪪
+          <app-icon name="id-card"/>
           <span>
             Verified landlords get noticeably more applications — tenants are
             wary of scams, and a badge is the clearest signal you are real.
@@ -44,7 +45,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 
       @if (paymentOutcome() === 'success') {
         <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
-          ✅
+          <app-icon name="check-circle"/>
           <span>
             Payment received. Your document is in the review queue — we usually
             decide within 2 business days and will email you either way.
@@ -95,9 +96,9 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
                 @if (refundState(req); as refund) {
                   <div class="verify-refund">
                     @if (refund === 'refunded') {
-                      💸 Your R149 has been refunded in full.
+                      <app-icon name="banknote"/> Your R149 has been refunded in full.
                     } @else {
-                      💸 We could not verify this, so your R149 is being refunded in
+                      <app-icon name="banknote"/> We could not verify this, so your R149 is being refunded in
                       full. It takes a few working days to reach you.
                     }
                     You are welcome to try again with a clearer document — a new
@@ -120,7 +121,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
               } @else if (isPending(type.value)) {
                 <span class="muted">Awaiting review</span>
               } @else if (isApproved(type.value)) {
-                <span class="muted">✓ Approved</span>
+                <span class="muted"><app-icon name="check"/> Approved</span>
               } @else {
                 <label class="btn btn-sm btn-outline" [class.is-busy]="uploading() === type.value">
                   {{ uploading() === type.value ? 'Uploading…' : 'Choose file' }}

@@ -4,6 +4,7 @@ import { AuthService } from '../../../core/services/auth.service';
 import { MessagesService } from '../../../core/services/messages.service';
 import { Message } from '../../../core/models/message.model';
 import { Loading } from '../loading/loading';
+import { Icon } from '../icon/icon';
 
 /**
  * Reusable conversation thread — embedded in the tenant dashboard (per
@@ -20,7 +21,7 @@ import { Loading } from '../loading/loading';
 @Component({
   selector: 'app-message-thread',
   standalone: true,
-  imports: [FormsModule, Loading],
+  imports: [Icon, FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="thread">
@@ -28,7 +29,7 @@ import { Loading } from '../loading/loading';
         @if (loading()) {
           <app-loading>Loading conversation…</app-loading>
         } @else if (messages().length === 0) {
-          <p class="muted">No messages yet — say hello 👋</p>
+          <p class="muted">No messages yet — say hello <app-icon name="hand"/></p>
         } @else {
           @for (m of messages(); track m.id) {
             <div class="thread__message" [class.mine]="m.senderId === auth.user()?.id">

@@ -9,6 +9,7 @@ import { EmptyState } from '../../../shared/components/empty-state/empty-state';
 import {
   ApplicantInboxRow, ApplicantInboxFilters, ApplicationStatus,
 } from '../../../core/models/application.model';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * All applicants — Phase 7c.
@@ -45,7 +46,7 @@ import {
 @Component({
   selector: 'app-applicants-inbox',
   standalone: true,
-  imports: [RouterLink, DatePipe, Loading, ErrorState, EmptyState],
+  imports: [Icon, RouterLink, DatePipe, Loading, ErrorState, EmptyState],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <section class="dash-section">
@@ -155,9 +156,9 @@ import {
               <div class="ai-row__main">
                 <div class="ai-row__who">
                   <strong>{{ a.tenant?.fullName }}</strong>
-                  @if (a.tenant?.isVerified) { <span class="pill">✓ Verified</span> }
+                  @if (a.tenant?.isVerified) { <span class="pill"><app-icon name="check"/> Verified</span> }
                   @if (a.tenant?.tenantProfile?.hasPassport) {
-                    <span class="pill pill--passport">🛂 Passport</span>
+                    <span class="pill pill--passport"><app-icon name="id-card"/> Passport</span>
                   }
                   <span [class]="'state ' + stateClass(applicationState(a.status))">{{ statusLabel(a.status) }}</span>
                 </div>

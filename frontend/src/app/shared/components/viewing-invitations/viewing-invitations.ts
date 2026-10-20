@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import {
   ApplicationsService, UpcomingViewing, ViewingOutcome,
 } from '../../../core/services/applications.service';
+import { Icon } from '../icon/icon';
 
 /**
  * Viewings a tenant has been invited to — Phase 7l, brief item 26.
@@ -32,7 +33,7 @@ import {
 @Component({
   selector: 'app-viewing-invitations',
   standalone: true,
-  imports: [DatePipe, FormsModule, RouterLink],
+  imports: [Icon, DatePipe, FormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (viewings().length) {
@@ -51,7 +52,7 @@ import {
               <span class="muted">{{ v.application.room.locationDisplay }}</span>
               <!-- Where to meet, in the landlord's words. This is the one place
                    an address is deliberately shared, with this one person. -->
-              <span class="vi__place">📍 {{ v.meetingPlace }}</span>
+              <span class="vi__place"><app-icon name="map-pin"/> {{ v.meetingPlace }}</span>
               @if (v.note) { <span class="muted">{{ v.note }}</span> }
             </div>
 
@@ -128,7 +129,7 @@ import {
                   }
                 </div>
               } @else {
-                <span class="vi__going">✅ You said you are coming</span>
+                <span class="vi__going"><app-icon name="check-circle"/> You said you are coming</span>
                 <button type="button" class="link-btn" [disabled]="busy() === v.id"
                         (click)="callOff(v)">Call it off</button>
               }

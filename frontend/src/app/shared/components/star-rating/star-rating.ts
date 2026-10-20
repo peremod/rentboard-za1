@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
+import { Icon } from '../icon/icon';
 
 /**
  * Star rating. Interactive when `editable`, otherwise a display.
@@ -10,6 +11,7 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
 @Component({
   selector: 'app-star-rating',
   standalone: true,
+  imports: [Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (editable()) {
@@ -19,7 +21,7 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
           <label class="stars__star" [class.is-on]="star <= value()">
             <input type="radio" [name]="name()" [value]="star"
                    [checked]="value() === star" (change)="value.set(star)"/>
-            <span aria-hidden="true">★</span>
+            <span aria-hidden="true"><app-icon name="star" filled/></span>
             <span class="sr-only">{{ star }} out of 5</span>
           </label>
         }
@@ -27,7 +29,7 @@ import { ChangeDetectionStrategy, Component, input, model } from '@angular/core'
     } @else {
       <span class="stars" [attr.aria-label]="value() + ' out of 5'">
         @for (star of [1, 2, 3, 4, 5]; track star) {
-          <span class="stars__star" [class.is-on]="star <= value()" aria-hidden="true">★</span>
+          <span class="stars__star" [class.is-on]="star <= value()" aria-hidden="true"><app-icon name="star" filled/></span>
         }
       </span>
     }

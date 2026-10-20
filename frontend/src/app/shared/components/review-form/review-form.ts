@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, input, output, signal } fro
 import { FormsModule } from '@angular/forms';
 import { ReviewsService } from '../../../core/services/reviews.service';
 import { ReviewType } from '../../../core/models/review.model';
+import { Icon } from '../icon/icon';
 
 /**
  * A single review. Kept deliberately small — a long form after someone has
@@ -13,7 +14,7 @@ import { ReviewType } from '../../../core/models/review.model';
 @Component({
   selector: 'app-review-form',
   standalone: true,
-  imports: [FormsModule],
+  imports: [Icon, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="review-form">
@@ -28,7 +29,7 @@ import { ReviewType } from '../../../core/models/review.model';
           <button type="button" class="star" [class.star--on]="star <= rating()"
                   role="radio" [attr.aria-checked]="rating() === star"
                   [attr.aria-label]="star + ' out of 5'"
-                  (click)="rating.set(star)">★</button>
+                  (click)="rating.set(star)"><app-icon name="star" filled/></button>
         }
         @if (rating() > 0) { <span class="review-form__rating-label">{{ ratingLabel() }}</span> }
       </div>
