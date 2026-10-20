@@ -278,6 +278,7 @@ any dependency change, schema migration, or deploy.
 # Browser drives — need the API on :3000 and the app on :4200
 node scripts/phase-drive.mjs           # every screen is reachable
 node scripts/a11y-drive.mjs            # 25 pages: headings, names, contrast
+node scripts/search-drive.mjs          # keyword search: URL state, chips, 4 widths
 node scripts/mobile-drive.mjs          # the five bugs found on a real phone, at 390px
 node scripts/lease-drive.mjs           # lease windows and notice, as dates
 node scripts/lease-ui-drive.mjs        # the yard panel, and both Phase 4 cards together

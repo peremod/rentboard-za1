@@ -5529,6 +5529,11 @@ node scripts/messages-inbox-drive.mjs    # 43 checks — Phase 7c. Includes the 
                                          # is from, and that readAt is written
 node scripts/messages-inbox-ui-drive.mjs # 33 checks — which channel a reply
                                          # leaves by, said out loud
+node scripts/search-drive.mjs            # keyword search in a real browser: a
+                                         # shared ?q= URL, typing reaching the URL,
+                                         # back/forward, the chip that removes a
+                                         # place, and 44px targets at 360/390/768/
+                                         # 1280. 28 checks.
 node scripts/a11y-drive.mjs              # 26 pages WITH CONTENT on them. Before
                                          # Phase 7c it seeded nothing and so
                                          # audited every portal screen empty
