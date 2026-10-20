@@ -78,7 +78,11 @@ const SOCIAL_SENTENCE: Record<HouseholdSocial, string | null> = {
       @if (room(); as r) {
         <!-- Points back where they came from: a room opened from a dashboard
              returns to that dashboard, not to the public board. -->
-        <p><a [routerLink]="back().url">{{ back().label }}</a></p>
+        <!-- ⚠️ A class so it can be given a height. It is the only link in
+             its paragraph, so it is standalone navigation and not words in
+             a sentence — 2.5.8's inline exemption does not apply and it was
+             a 17px target 4px from its neighbour. -->
+        <p><a class="back-link" [routerLink]="back().url">{{ back().label }}</a></p>
 
         <!-- Main image plus up to four thumbnails beside it. A row of
              equal thumbnails under a hero gave no sense of which photo

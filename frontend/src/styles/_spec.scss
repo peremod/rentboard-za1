@@ -409,9 +409,22 @@ img{display:block;max-width:100%}
   border-radius:var(--r4);font-family:var(--font-body);font-size:.85rem;
   background-color:var(--white);color:var(--ink);
 }
+/**
+ * 🔴 20px tall, stacked 6px apart, on the busiest page in the product.
+ *
+ * The checkbox is 18px and the LABEL is the target — clicking the words
+ * toggles it — and the label had no height of its own, so it was whatever
+ * one line of .83rem text came to. Five of them in a column: "Bills
+ * included", "Couples welcome", "SASSA grants welcome", "Guarantor
+ * accepted", "Pets allowed". A straight WCAG 2.2 AA failure (2.5.8, 24px)
+ * with no spacing exception available, because they touch.
+ *
+ * 44px rather than 24: these are the board's own filters, tapped
+ * one-handed, and this codebase's floor is 44.
+ */
 .filter-check{
-  display:flex;align-items:center;gap:.5rem;
-  font-size:.83rem;color:var(--ink2);margin-bottom:.4rem;cursor:pointer;
+  display:flex;align-items:center;gap:.5rem;min-height:44px;
+  font-size:.83rem;color:var(--ink2);cursor:pointer;
 }
 .filter-check input{accent-color:var(--terra)}
 /* ── The move-in date filter — Phase 10 ──────────────────────────────────
@@ -764,7 +777,18 @@ img{display:block;max-width:100%}
   font-size:1.1rem;font-weight:700;color:var(--white);margin-bottom:.6rem;
 }
 .portal-user-name{font-size:.9rem;font-weight:700;color:var(--white)}
-.portal-user-role{font-size:.72rem;color:rgba(250,247,240,.45)}
+/**
+ * 🔴 3.72:1 on 21 portal pages, where small text needs 4.5:1.
+ *
+ * ⚠️ Visible only at desktop width, which is why four years of runs at one
+ * viewport never saw it: below 900px the portal rail becomes a strip
+ * across the top and this element is not rendered at all. A contrast gate
+ * that runs at a single width measures a single width.
+ *
+ * .62 rather than .5, which is the value the footer's links already use
+ * against the same ink — measured rather than nudged until it passed.
+ */
+.portal-user-role{font-size:.72rem;color:rgba(250,247,240,.62)}
 /* ⚠️ 37px on DESKTOP before Phase 7q, including "Log out".
 
    The ≤900px block gives these 44px because the sidebar becomes a phone strip
@@ -907,12 +931,34 @@ img{display:block;max-width:100%}
   letter-spacing:1.5px;color:rgba(250,247,240,.62);margin-bottom:1rem;
 }
 .footer-col ul{list-style:none}
-.footer-col ul li{margin-bottom:.5rem}
+/* ⚠️ The margin goes; the padding on the link replaces it, so the GAP
+   between rows is now part of the target instead of dead space beside it.
+   Same rhythm on screen, a tappable row instead of a 17px line. */
+.footer-col ul li{margin-bottom:0}
+/**
+ * ⚠️ WCAG 2.2 AA, 2.5.8 Target Size (Minimum): 24×24 CSS px.
+ *
+ * 🔴 These were 17px tall on every page in the product, and had been since
+ * the footer was written. A column of links is not "words in a sentence",
+ * so none of 2.5.8's exemptions apply — it was a straight AA failure, on
+ * all 33 pages, and nothing saw it because every tap-target check in this
+ * repository was written for one screen by whoever was working on it.
+ * Found by sweeping every visible control instead of a list somebody
+ * remembered to write.
+ *
+ * `inline-flex` because padding on an inline element does not grow the
+ * box the way a target needs; `min-height` rather than a line-height
+ * trick so the number is the thing being asserted.
+ */
 .footer-col ul li a{
+  display:inline-flex;align-items:center;min-height:28px;padding:.25rem 0;
   font-size:.83rem;color:rgba(250,247,240,.62);
   transition:color .15s;cursor:pointer;
 }
 .footer-col ul li a:hover{color:var(--white);text-decoration:none}
+/* The one standalone link down here — "Information Regulator" — was 16px
+   tall. Same 2.5.8 AA failure as the column links above, same fix. */
+.footer-bottom a{display:inline-flex;align-items:center;min-height:28px}
 .footer-bottom{
   border-top:1px solid rgba(255,255,255,.07);
   max-width:1200px;margin:0 auto;
@@ -1172,8 +1218,16 @@ img{display:block;max-width:100%}
 .yard-room__actions{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.3rem;font-size:.78rem}
 .yard-room:last-child{border-bottom:none}
 .yard-room__main{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;font-size:.86rem}
-.yard-room__main a{font-weight:700}
-.yard-room__applicants{display:inline-block;margin-top:.35rem;font-size:.8rem;font-weight:700}
+/* The room's name, and the way into it. A 21px line 4px from the status
+   beside it: under 2.5.8 AA with no spacing exception available. */
+.yard-room__main a{display:inline-flex;align-items:center;min-height:28px;font-weight:700}
+/* The only way into a room's applicants from the yard, and it was a 19px
+   line 7px from the row above it. inline-flex so the height applies. */
+/* A standalone "back" link: alone in its paragraph, so it is navigation
+   rather than prose and needs a real target (2.5.8 AA). Global because the
+   same shape appears on more than one screen. */
+.back-link{display:inline-flex;align-items:center;min-height:28px;font-weight:600}
+.yard-room__applicants{display:inline-flex;align-items:center;min-height:28px;margin-top:.25rem;font-size:.8rem;font-weight:700}
 
 .yard-rent{
   display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;

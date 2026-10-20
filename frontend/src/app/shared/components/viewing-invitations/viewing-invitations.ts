@@ -166,6 +166,10 @@ import { Icon } from '../icon/icon';
     .vi__when { display: flex; align-items: baseline; gap: .5rem; }
     .vi__time { font-size: 1.05rem; font-weight: 700; color: var(--terra); }
     .vi__what { display: grid; gap: .15rem; font-size: .85rem; line-height: 1.6; }
+    /* The room's name is the link out of this card, and it was a 22px line.
+       justify-self:start so the inline-flex box is the width of the words
+       rather than the whole grid column. */
+    .vi__what a { display: inline-flex; align-items: center; min-height: 28px; justify-self: start; }
     .vi__place { font-weight: 600; }
     .vi__answer { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; }
     .vi__going { font-size: .85rem; font-weight: 600; color: var(--sage); }

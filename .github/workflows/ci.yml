@@ -551,9 +551,15 @@ jobs:
         # `set -o pipefail` first: without it the pipeline's status is tee's,
         # which always succeeds, and a failing drive would report green — the
         # exact class of defect this whole suite keeps finding.
+        # ⚠️ The SWEEP, at four widths, not the drive at one.
+        # a11y-drive ran at 412px for its whole life; the pass that added
+        # this found a 360px-only overflow, three tap-target failures and a
+        # contrast failure visible ONLY at desktop width, because below
+        # 900px the element is not rendered at all. A gate that runs at a
+        # single viewport measures a single viewport.
         run: |
           set -o pipefail
-          node scripts/a11y-drive.mjs 2>&1 | tee /tmp/a11y.log
+          bash scripts/a11y-widths.sh 2>&1 | tee /tmp/a11y.log
 
       - name: The three phases, driven in a browser
         if: ${{ !cancelled() }}

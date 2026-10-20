@@ -67,8 +67,24 @@ import { Icon } from '../icon/icon';
     .thread__message.mine { align-self: flex-end; background: var(--terra); color: var(--white); }
     .thread__channel { display: block; font-size: .6rem; opacity: .7; margin-top: .2rem; }
     .thread__composer { display: flex; border-top: 1px solid var(--border); }
-    .thread__composer input { flex: 1; border: none; padding: .6rem .7rem; font-size: .82rem; font-family: inherit; }
-    .thread__composer button { border: none; background: #1A1410; color: var(--white); padding: 0 1rem; cursor: pointer; font-weight: 700; font-size: .8rem; }
+    /* ⚠️ min-width:0. A flex child with flex:1 still refuses to go below its
+       INTRINSIC width, and a text input's intrinsic width is about twenty
+       characters — so at 360px the composer was wider than the card holding
+       it and pushed the page sideways. Found by a11y-drive once it was run
+       at 360 instead of only at 412; it is invisible at the wider size,
+       which is why four widths are a standing rule and not a preference. */
+    .thread__composer input {
+      flex: 1; min-width: 0; border: none; padding: .6rem .7rem;
+      font-size: .82rem; font-family: inherit; min-height: 44px;
+    }
+    /* flex-shrink:0 so the input absorbs the squeeze rather than the Send
+       button losing its label; 44px because this is a control on a phone
+       (WCAG 2.5.8) and it had no height of its own at all. */
+    .thread__composer button {
+      border: none; background: #1A1410; color: var(--white); padding: 0 1rem;
+      cursor: pointer; font-weight: 700; font-size: .8rem;
+      flex-shrink: 0; min-height: 44px;
+    }
     .thread__composer button:disabled { opacity: .5; cursor: not-allowed; }
     .thread__closed { margin: 0; padding: .6rem .7rem; font-size: .75rem; color: var(--slate);
                       border-top: 1px solid var(--border); background: #FDFAF5; line-height: 1.5; }
