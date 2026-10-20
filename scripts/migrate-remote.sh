@@ -32,6 +32,22 @@
 #
 # It refuses rather than guesses when the target is missing or local.
 #
+# ── Correction to the record, 20 October
+#
+# The commit that reworded the DATABASE_URL refusal below (6876566) says the
+# claim ".env is a local database" was "contradicted on 20 October: a seed run
+# printed ep-flat-flower-b1my1tch-pooler…neon.tech having read .env". THAT IS
+# WRONG and nothing should be built on it. The seed reached Neon because it was
+# invoked as `DATABASE_URL="$NEON_POOLED" npm run seed:survey`, and an inline
+# prefix applies to that one command — which is why this script, run next in
+# the same shell, correctly saw nothing. backend/.env held
+# localhost:5432/rentboard_dev throughout, as it should.
+#
+# The reworded message still stands on its own: .env can hold anything, and
+# the guard refuses either way. But it was prompted by a misreading, and a
+# wrong reason recorded confidently is how the STAGING_API_HOST comment came
+# to hand out the production host for a week.
+#
 # ── --env, and the two things it closed
 #
 # ⚠️ `--env` is REQUIRED, and it is not a label. It is checked against
