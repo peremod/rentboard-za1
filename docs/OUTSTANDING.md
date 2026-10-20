@@ -5373,9 +5373,28 @@ the message it was written to print. It failed safe — exit 1, nothing migrated
 ---
 
 
-## 78. 🔴 ROTATE BOTH NEON DATABASE PASSWORDS
+## 78. Both Neon database passwords were committed — ✅ ROTATED 20 October
 
-**Do this first. Both database passwords are in public git history.**
+**✅ DONE. Both passwords were rotated in Neon, both Render services updated
+and redeployed, and both verified serving with the new credential** — runs 97
+and 98 at 19:37 UTC:
+
+```
+production  {"status":"ok","db":"connected","version":"1.159.0","env":"production","uptime":172}
+staging     {"status":"ok","db":"connected","version":"1.159.0","env":"staging","uptime":39}
+```
+
+`db: connected` on both is the assertion that matters: a mis-pasted string
+would have come back `"db":"unavailable"` with `status: degraded`, and the
+short uptimes line up with the redeploys. ⚠️ That proves the NEW credential
+works. It does not prove the old one is dead — only Neon's role history shows
+that, and a leaked credential should not be tested even to confirm it is
+revoked.
+
+The rest of this section is the record of what happened and what now prevents
+it. Nothing here is outstanding.
+
+**Both database passwords went into public git history.**
 
 On 20 October `scripts/migrate-targets.json` was filled in with the full
 `DATABASE_URL` of both databases — user, password, host and query string —
