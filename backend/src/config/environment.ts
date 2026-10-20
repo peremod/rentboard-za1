@@ -95,10 +95,43 @@ export function validateEnvironment(): void {
   }
 
   // ── Cross-environment contamination ──
-  if (env !== 'production' && siteUrl?.includes('umastande.co.za') && !siteUrl.includes('staging')) {
-    errors.push(
-      `SITE_URL is "${siteUrl}" but APP_ENV is "${env}". A non-production deployment publishing production URLs will be treated by search engines as a duplicate of the real site.`,
-    );
+  /**
+   * ⚠️ BOTH variables, and FRONTEND_URL is the more urgent of the two.
+   *
+   * 🔴 This check covered SITE_URL alone for its whole life, while the live
+   * staging API ran with `FRONTEND_URL=https://www.umastande.co.za` —
+   * production — and nothing said a word. OUTSTANDING.md §61 records what
+   * that costs, and the first item is the serious one:
+   *
+   *   · `auth.controller.ts` redirects to `${FRONTEND_URL}/auth/callback#…`
+   *     with the tokens in the fragment, so a Google sign-in against
+   *     STAGING hands staging-minted JWTs to the live site;
+   *   · `corsOrigins()` returns `[frontend]`, so staging's only permitted
+   *     origin is production — the real staging frontend cannot call its
+   *     own API and production can;
+   *   · reference-verification links sent to real people over WhatsApp are
+   *     `${FRONTEND_URL}/reference/${token}`: a staging token in a link to
+   *     production, where it does not exist.
+   *
+   * §61 concluded "nothing in this repository can detect it… logged rather
+   * than built", because FRONTEND_URL is `sync: false` and the blueprint
+   * never sees its value. That is true of the BLUEPRINT and not of the
+   * running process, which can read its own environment — which is what
+   * this does.
+   *
+   * An ERROR rather than a warning: a warning is a line in a log nobody
+   * reads on a box nobody is watching, and the failure mode is live tokens
+   * in a URL fragment. Refusing to boot is the visible version.
+   */
+  for (const [key, value] of [['SITE_URL', siteUrl], ['FRONTEND_URL', process.env.FRONTEND_URL]] as const) {
+    if (env !== 'production' && value?.includes('umastande.co.za') && !value.includes('staging')) {
+      errors.push(
+        `${key} is "${value}" but APP_ENV is "${env}". `
+        + (key === 'FRONTEND_URL'
+          ? 'The OAuth callback, reference links and PayFast return URLs are all built from it, so this deployment would send its own tokens and links to the live site.'
+          : 'A non-production deployment publishing production URLs will be treated by search engines as a duplicate of the real site.'),
+      );
+    }
   }
 
   // ── Production-only requirements ──
