@@ -5373,6 +5373,83 @@ the message it was written to print. It failed safe — exit 1, nothing migrated
 ---
 
 
+## 78. 🔴 ROTATE BOTH NEON DATABASE PASSWORDS
+
+**Do this first. Both database passwords are in public git history.**
+
+On 20 October `scripts/migrate-targets.json` was filled in with the full
+`DATABASE_URL` of both databases — user, password, host and query string —
+copied from the Render dashboard, and pushed to `origin/develop` in commit
+`b4c9852`. The `endpoint` field wanted a hostname fragment.
+
+### What is exposed
+
+Both Neon roles, for the staging and the production database. Each string
+carries `neondb_owner` and its password, which is full read-write on that
+database: every landlord, every tenant, every phone number, every application,
+every verification outcome. Under POPIA that is a reportable personal-data
+exposure if it was accessed.
+
+### Rotate, do not delete
+
+```
+Neon console → the project → Roles → neondb_owner → Reset password
+```
+
+Production first. Then update `DATABASE_URL` and `DIRECT_URL` on the matching
+Render service (`rentboard-api` for production, `mastande-api` for staging) and
+redeploy, or the API will come up unable to reach its database.
+
+⚠️ **Deleting the line is not a fix and neither is a revert.** The blob stays
+in the history, in every clone and every fetch, and GitHub serves it by SHA
+indefinitely — a commit that is no longer reachable from any branch is still
+served at its URL until GitHub garbage-collects, which can be asked for but
+not relied on. Rotation is the remedy. Assume the strings are known.
+
+### What limits the damage
+
+The leak is on `develop` only: `b4c9852` is not an ancestor of `master`, and
+`origin/master`'s tip has never carried the file with credentials in it.
+Verified with `git merge-base --is-ancestor`. That narrows who could have
+pulled it; it does not change the need to rotate.
+
+The values are replaced with endpoint ids, which is what the field was always
+for and which carry no credential:
+
+```
+staging     ep-flat-flower-b1my1tch
+production  ep-royal-hill-b1vy1vmt
+```
+
+Those also confirm, incidentally, that the 20 October staging migrate and
+survey seed did reach **staging** — `ep-flat-flower-b1my1tch` is the staging
+endpoint, and it is the one both of those runs printed.
+
+### Why it happened, and what now stops it
+
+This file told the operator to get the value from "Environment →
+`DATABASE_URL`", and what you find there is a connection string. A field that
+invites a secret will eventually be given one, so two guards now exist rather
+than a sterner comment:
+
+- `scripts/migrate-remote.sh` **refuses** a recorded value containing `://`
+  or `@`, names the rotation as the remedy, and shows the endpoint-id form.
+- `scripts/secret-scan.mjs` fails the commit, in the pre-commit hook. It
+  flags Neon `npg_` passwords, database URLs carrying a password for a
+  non-local host, and private-key blocks, and it prints the line **redacted**
+  so the gate's own output does not become a second copy.
+
+⚠️ It is calibrated rather than guessed: `localhost` credentials are not
+secrets and are in this repository legitimately (`README.md`,
+`scripts/lib/drive-session.mjs`), and a gate that flagged those would be
+switched off within a day. Eleven patterns classified correctly, including
+both real leaked lines, both legitimate localhost strings, the documented
+`postgresql://…-pooler…` placeholder, and an elided `npg_...` in prose.
+Falsified by putting the real leaked value back and watching both guards fire.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash
