@@ -5210,6 +5210,87 @@ healthy one from inside GitHub.
 ---
 
 
+## 76. A stale Prisma client blames the file that uses it
+
+**Hit on 20 October, immediately after staging was migrated.** The survey seed
+failed with six TypeScript errors, every one of them pointing into
+`prisma/seed-survey.ts`:
+
+```
+prisma/seed-survey.ts:100:14 - error TS2353: Object literal may only specify
+  known properties, and 'slug_version' does not exist in type 'SurveyWhereUniqueInput'.
+prisma/seed-survey.ts:140:39 - error TS2339: Property '_count' does not exist
+  on type '{ id: string; slug: string; title: string; … }'
+```
+
+Nothing was wrong with the seed script, the schema, or the database.
+`node_modules/.prisma/client` was generated from a schema older than
+16 October, so it had never heard of `Survey.version` or the
+`@@unique([slug, version])` that `slug_version` is the client's name for.
+
+### The fix, if you hit it
+
+```bash
+cd backend && npx prisma generate
+```
+
+Then re-run whatever failed. One command, no migration, no reinstall.
+
+### Why it happens, and why it will happen again
+
+`prisma migrate deploy` does **not** regenerate the client — only
+`migrate dev` does. `postinstall` regenerates it, but only on install. So the
+ordinary sequence of `git pull` → migrate → run leaves the client exactly one
+step behind the schema, and every error names a caller.
+
+**Note what the type in the error message actually lists.** It prints the
+Survey model the *client* knows — `{ id, slug, title, intro, questions,
+audience, active, createdAt, updatedAt }`, with no `version` and no relations
+at all. That object is the evidence, and it says the client is old rather than
+the code being wrong. Worth reading rather than scrolling past, because six
+errors in one file read as a broken file.
+
+### What now prevents it
+
+`npm run seed:survey` and `npm run seed:house-ads` run `prisma generate`
+first, so the documented path cannot meet a stale client. Use those rather
+than `npx ts-node prisma/seed-survey.ts`; pass `--apply` as
+`npm run seed:survey -- --apply`, which is verified to forward (`Mode: WRITE`).
+
+`scripts/prisma-client-check.mjs` is the diagnosis for everything else — the
+API build, `db:seed`, the drives. It compares every model, field, enum and
+enum value in `schema.prisma` against the generated client's own DMMF and
+names what is missing:
+
+```
+❌ The generated Prisma client is STALE.
+   schema.prisma declares these, and the client does not:
+     · Survey.version
+     · SurveyResponse.completedAt
+     · SurveySource.onboarding
+   Fix it with one command:
+     cd backend && npx prisma generate
+```
+
+Run it with `cd backend && npm run prisma:check`.
+
+⚠️ **It cannot be a guard inside the seed script, and that is the whole
+design constraint.** The seed script does not *compile*, so ts-node rejects it
+before a line of it runs — a check written at the top of the file can never
+execute, because the thing it would report is what stops it running. It has to
+be a separate process that does not import the generated types at all, which
+is why it reads the DMMF (plain runtime JSON, present whatever state the types
+are in) rather than the client's types.
+
+Falsified by reproducing the exact state: generated the client from the
+pre-16-October schema, restored the current schema, and confirmed the checker
+reports `Survey.version` and ten others including an enum value. Confirmed the
+same stale client reproduces all six original errors at identical lines,
+columns and codes (`[2353, 2353, 2339, 2339, 2339, 2353]`).
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash

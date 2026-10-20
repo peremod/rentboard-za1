@@ -4236,7 +4236,7 @@ check "GET /surveys/prompt as a landlord" 200 "$STATUS" "$BODY"
 SURVEY_SLUG=$(echo "$BODY" | jq -r '.slug // empty')
 
 if [[ -z "$SURVEY_SLUG" ]]; then
-  skipped "no active survey seeded — run npx ts-node prisma/seed-survey.ts --apply"
+  skipped "no active survey seeded — run (cd backend && npm run seed:survey -- --apply)"
 else
   SURVEY_MICRO=$(echo "$BODY" | jq -r '.microQuestion.id // empty')
   if [[ -n "$SURVEY_MICRO" ]]; then

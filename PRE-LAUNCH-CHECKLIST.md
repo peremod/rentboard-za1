@@ -305,7 +305,7 @@ ADMIN_EMAIL=<seeded admin> ADMIN_PASSWORD=<their password> \
 
 with the API started against real `IMAGEKIT_*` credentials, the frontend running
 on :4200, and the database seeded including `SEED_LAUNCH_CODES=true` and
-`npx ts-node prisma/seed-survey.ts --apply`. That is 432 checks; the suite prints
+`npm run seed:survey -- --apply`. That is 432 checks; the suite prints
 this list itself whenever anything skipped.
 
 `storage-drive.mjs` is the one that must not be skipped before a release. It is

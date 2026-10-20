@@ -6,8 +6,14 @@
  * password** on the way past, which is far too large a side effect for
  * publishing a questionnaire.
  *
- *   npx ts-node prisma/seed-survey.ts           # dry run — shows the diff
- *   npx ts-node prisma/seed-survey.ts --apply   # writes
+ *   npm run seed:survey             # dry run — shows the diff
+ *   npm run seed:survey -- --apply  # writes
+ *
+ * ⚠️ Use the npm script, not `npx ts-node prisma/seed-survey.ts` directly.
+ * The script runs `prisma generate` first, and without that a generated
+ * client left behind by a pull fails this file with six TypeScript errors
+ * that all name THIS file and none of which is about it — see
+ * scripts/prisma-client-check.mjs and docs/OUTSTANDING.md §76.
  *
  * ── The check that matters here
  *
