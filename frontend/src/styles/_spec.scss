@@ -489,9 +489,54 @@ img{display:block;max-width:100%}
   padding:.22rem .55rem;border-radius:var(--r-full);
   font-size:.68rem;font-weight:700;
 }
+/**
+ * ⚠️ ONE badge vocabulary, declared once, in two shapes.
+ *
+ * 🔴 It used to be eight variants across two files, and two pairs of them
+ * were indistinguishable: `.badge-new` and `.badge-verified` were both
+ * solid sage on white — "listed a few days ago" and "this landlord's
+ * identity has been checked", which are not remotely the same claim —
+ * and `.badge-featured` and `.badge-sublet` were both gold, one paid
+ * placement and the other a tenant letting a room they rent themselves.
+ * Neither file was wrong on its own; `state-lint` has guarded exactly this
+ * for `.state--*` since Phase 8 and badges had no such gate.
+ *
+ * The shapes carry the distinction a colour alone cannot:
+ *
+ *   SOLID  — the state of the room itself. What you act on, or cannot.
+ *            Available now, Reserved, Featured.
+ *   OUTLINE— everything said ABOUT the room or the person letting it.
+ *            Verified, Sublet, New, From a date.
+ *
+ * So a card never shows two solid badges meaning different kinds of thing,
+ * and the outline ones recede behind the photo instead of fighting it.
+ * `badge-lint` fails if any two land within 32 in sRGB on both fill and
+ * text.
+ */
 .badge-featured{background:var(--gold);color:var(--white)}
-.badge-new{background:var(--sage);color:var(--white)}
+/* Solid, because an empty room is the one thing a searcher acts on. */
+.badge-now{background:var(--sage);color:var(--white)}
 .badge-reserved{background:var(--slate);color:var(--white)}
+/* Outline. Free, but not yet: information, not an invitation — and it says
+   a DATE, so it reads whether or not the colour registers. */
+.badge-later{background:var(--white);color:var(--ink2);border:1px solid var(--border-strong)}
+/* Outline in sage: a claim about the LANDLORD, not about the room, so it
+   must not look like the room's own state. Set only by an approved identity
+   check in the admin queue. */
+.badge-verified{background:var(--white);color:var(--sage-deep);border:1px solid var(--sage)}
+/* Outline in sand. Deliberately between the green badges and a warning: a
+   sublet is a legitimate listing with a real extra risk attached, and
+   styling it as either "good" or "danger" would misdescribe it. */
+.badge-sublet{background:var(--white);color:var(--gold-text);border:1px solid var(--gold)}
+/* The normal case today, not a warning about that person — so it is the
+   only badge with no colour at all, and --slate rather than --ink2 so it
+   does not read as the same grey pill as "From 3 December". The gate
+   measured those two at 25 apart on fill and 0 on text; slate puts 90
+   between them, which is the difference between a date and a person. */
+.badge-unverified{background:var(--cream2);color:var(--slate);border:1px solid var(--border)}
+/* The quietest of the lot, on purpose: how recently something was listed is
+   the least decision-relevant thing on the card, and it was the loudest. */
+.badge-new{background:var(--white);color:var(--terra);border:1px solid var(--terra)}
 /* ⚠️ 32px before Phase 7q, on every room card on the board — eleven of them
    on one screen at 360px. An icon button has no text to make it big, so both
    dimensions are set rather than a min-height. */
@@ -548,6 +593,18 @@ img{display:block;max-width:100%}
 }
 .landlord-name{font-size:.75rem;color:var(--slate);font-weight:500}
 .rating{font-size:.72rem;color:var(--gold-text);font-weight:600}
+/**
+ * ⚠️ "New landlord" is not a rating, and it was rendering as one.
+ *
+ * `.rating--none` had no rule at all and was ALLOWLISTED in
+ * css-coverage-audit as "a modifier on .rating, which carries the
+ * styling" — true about the mechanism and wrong about the result: .rating
+ * is --gold-text at weight 600 because it sits beside a star and a score.
+ * Inheriting that put "New landlord" on the card in the colour and weight
+ * of a rating, where it read as a score or a link. It is the absence of a
+ * rating, so it is the quietest thing in the row.
+ */
+.rating--none{color:var(--slate);font-weight:500}
 .avail-from{font-size:.72rem;color:var(--slate)}
 
 /* ═══ PAGE SECTIONS ═══ */

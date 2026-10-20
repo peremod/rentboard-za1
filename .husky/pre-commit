@@ -38,3 +38,13 @@ node scripts/emoji-lint.mjs
 # the last change is not a verification of what shipped; this one is source
 # only and takes under a second.
 node scripts/icon-lint.mjs
+
+# 🔴 Added v1.153.0. A room card can carry seven badges over its photo, and
+# they were declared across two files: .badge-new and .badge-verified both
+# ended up solid sage on white — "listed a few days ago" and "this landlord's
+# identity has been checked" rendering identically — and .badge-featured and
+# .badge-sublet were both gold. Neither file was wrong on its own, which is
+# why state-lint has guarded the same thing for .state--* since Phase 8.
+# Compares resolved COLOUR, not the text of the declaration: the gold pair
+# was written two different ways.
+node scripts/badge-lint.mjs

@@ -687,19 +687,13 @@
   .hiw-safety { padding: 1.1rem; }
 }
 
-// Verified landlord badge. The spec predates verification existing, so it has
-// no rule for this; sage keeps it distinct from Featured (gold) and New.
-.badge-verified { background: var(--sage); color: var(--white); }
-/* Sand rather than red: an unverified landlord is the normal case today, not a
-   warning about that person. Global rather than in room-detail's own styles —
-   component styles are MORE specific under emulated encapsulation, which is
-   what silently overrode the whole responsive layer in v0.9.3. */
-.badge-unverified { background: var(--cream2); color: var(--ink2); border: 1px solid var(--border); }
-/* Sublet — Phase 6. Amber, deliberately between the green badges and a warning:
-   a sublet is a legitimate listing with a real extra risk attached, and styling
-   it as either "good" or "danger" would misdescribe it. Global, for the same
-   encapsulation reason as the two above. */
-.badge-sublet { background: rgba(200,144,42,.9); color: var(--white); }
+// ⚠️ badge-verified, badge-unverified and badge-sublet moved to _spec.scss
+// in v1.153.0, with the rest of the vocabulary. They were declared here
+// because the spec predates verification and subletting — reasonable each
+// time, and the result was a vocabulary split across two files in which
+// .badge-new and .badge-verified ended up identical (solid sage, white) for
+// two claims that have nothing to do with each other. One place now, and
+// badge-lint fails if any two render alike.
 /* The note under the household filters, which says they hide listings that have
    not described themselves. Smaller than a label, not a muted aside: it is the
    difference between "no rooms match" and "the board is broken". */
@@ -1126,9 +1120,7 @@
 
 .quick-filters__note { font-size: .78rem; color: var(--slate); }
 
-// Matches the quick-filter chip so the badge and the filter read as one idea.
-.badge-now { background: rgba(61, 112, 64, .12); color: var(--sage); border: 1px solid rgba(61, 112, 64, .3); }
-/* Phase 10. Free, but not yet — slate rather than sage, because it is
-   information and not an invitation. Colour and a date, not colour alone:
-   the badge reads "From 25 November" whether or not the green registers. */
-.badge-later { background: var(--cream2); color: var(--ink); border: 1px solid var(--border); }
+// ⚠️ badge-now and badge-later moved to _spec.scss in v1.153.0 — see the
+// badge block there. They kept the quick-filter chip's tint, which is still
+// the intent; what changed is that the whole vocabulary is declared in one
+// place so no two members of it can drift into looking the same.
