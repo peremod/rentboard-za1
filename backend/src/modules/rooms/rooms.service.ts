@@ -109,11 +109,78 @@ export class RoomsService {
     private notice: NoticeRouter,
   ) {}
 
+  /**
+   * The last instant of a South African day, as a UTC Date.
+   *
+   * ⚠️ This is a whole day of difference, twice over, and it is why the
+   * comparison is not `new Date(dateString)`.
+   *
+   * `availableFrom` is stored from a date-only string, so it lands at midnight
+   * UTC — 02:00 in Johannesburg. A tenant asking for 1 December means "any
+   * time on the 1st, where I live". Comparing against midnight would drop a
+   * room whose own availability date IS the 1st in any timezone west of us,
+   * and a naive local-midnight comparison on a browser set to another zone
+   * would drop or add a day depending on where the person happens to be.
+   *
+   * SAST has no daylight saving, so a fixed +02:00 is correct all year —
+   * unlike the server's own locale, which is UTC. `ViewingsService.describe`
+   * pins Africa/Johannesburg for the same reason: a time described two hours
+   * out is somebody standing at a gate alone.
+   */
+  private endOfDaySast(dateOnly: string): Date | null {
+    const day = /^\d{4}-\d{2}-\d{2}/.exec(dateOnly)?.[0];
+    if (!day) return null;
+    const at = new Date(`${day}T23:59:59.999+02:00`);
+    return Number.isNaN(at.getTime()) ? null : at;
+  }
+
+  /**
+   * The availability half of the where-clause, or nothing.
+   *
+   * Returns `{}` when no date filter is set, so the spread adds no key at all
+   * — an `availableFrom: undefined` would be a Prisma filter on undefined
+   * rather than no filter.
+   */
+  private availabilityClause(availableNow?: boolean, moveIn?: string, moveInTo?: string) {
+    const bounds: Date[] = [];
+
+    if (availableNow) bounds.push(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000));
+
+    if (moveIn) {
+      const from = this.endOfDaySast(moveIn);
+      const to = moveInTo ? this.endOfDaySast(moveInTo) : null;
+      if (from) {
+        /**
+         * ⚠️ The window's FAR end is the bound, not its start.
+         *
+         * Somebody flexible between the 1st and the 31st will take a room that
+         * frees up on the 15th — and also one free today. The thing that
+         * disqualifies a room is becoming free AFTER the last day they can
+         * move. A clause of `gte: start` would have excluded every room
+         * already standing empty, which is most of what they want to see.
+         *
+         * A window that ends before it begins is ignored rather than refused:
+         * it is a typo in a date box, and an empty board with an error on it
+         * teaches people the filter is broken.
+         */
+        bounds.push(to && to >= from ? to : from);
+      }
+    }
+
+    if (!bounds.length) return {};
+    // The tightest bound wins when more than one is set: somebody who ticked
+    // "available now" AND typed a date in January means both, and the stricter
+    // of the two is what both of them are true of.
+    const tightest = bounds.reduce((a, b) => (a < b ? a : b));
+    return { availableFrom: { lte: tightest } };
+  }
+
   /** Public notice-board search — only ever returns status = 'active' rooms. */
   async findAll(filters: RoomFiltersDto) {
     const {
       search, roomType, province, city, maxRentCents, minRentCents,
       billsIncluded, couplesAllowed, dssAccepted, guarantorAccepted, petsAllowed, availableNow,
+      moveIn, moveInTo,
       listerType, housemateProfile, householdSchedule, householdCleanliness, householdSocial,
       sortBy = 'newest', page = 1, limit = 12,
     } = filters;
@@ -153,12 +220,21 @@ export class RoomsService {
       ...(minRentCents && { rentCents: { gte: minRentCents } }),
       ...(listerType && { listerType }),
       ...(Object.keys(household).length > 0 && { property: { is: household } }),
-      // 'Available now' means within a fortnight, not strictly today. Someone
-      // searching on the 25th counts a room free on the 1st as immediate, and
-      // a same-day filter would return almost nothing on most days.
-      ...(availableNow && {
-        availableFrom: { lte: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000) },
-      }),
+      /**
+       * When somebody can move in — Phase 10.
+       *
+       * ⚠️ ONE clause, built once, because `availableNow` and `moveIn` both
+       * constrain `availableFrom`. Two keys of the same name in this object
+       * literal would silently keep only the last, which is the exact defect
+       * the household filters above carry a warning about — a filter that
+       * looks set and does nothing.
+       *
+       * 'Available now' means within a fortnight rather than strictly today:
+       * somebody searching on the 25th counts a room free on the 1st as
+       * immediate, and a same-day filter returns almost nothing on most days.
+       * A date search is stricter and exact, because it was asked for.
+       */
+      ...(this.availabilityClause(availableNow, moveIn, moveInTo)),
       ...(search && {
         OR: [
           { title: { contains: search, mode: 'insensitive' } },

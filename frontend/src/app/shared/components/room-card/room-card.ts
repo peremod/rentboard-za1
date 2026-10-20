@@ -55,7 +55,17 @@ import { SavedRoomsService } from '../../../core/services/saved-rooms.service';
         <div class="room-badges">
           @if (room().isFeatured) { <span class="badge badge-featured">⭐ Featured</span> }
           @if (isNew()) { <span class="badge badge-new">New</span> }
-          @if (availableNow()) { <span class="badge badge-now">⚡ Available now</span> }
+          <!-- ⚠️ Every card says WHEN, not just whether — Phase 10.
+               A board that marks the immediate rooms and says nothing about
+               the rest leaves a person to guess, and the guess is always
+               "probably now". A room free in six weeks is a good room for
+               somebody moving in six weeks, and a waste of a phone call for
+               anybody else. -->
+          @if (availableNow()) {
+            <span class="badge badge-now">⚡ Available now</span>
+          } @else if (availableFromLabel()) {
+            <span class="badge badge-later">📅 {{ availableFromLabel() }}</span>
+          }
           @if (room().status === 'reserved') { <span class="badge badge-reserved">Reserved</span> }
           <!-- Phase 6. On the CARD and not only on the room page: somebody
                scanning a board of thirty rooms is deciding which to open, and
@@ -164,6 +174,32 @@ export class RoomCard {
     const from = this.room().availableFrom;
     if (!from) return false;
     return new Date(from).getTime() <= Date.now() + 14 * 24 * 60 * 60 * 1000;
+  });
+
+  /**
+   * "Available from 25 November", for a room that is not free yet.
+   *
+   * Null when the room is already free (the badge above says so) or when the
+   * date is missing. ⚠️ A missing date cannot happen through the API —
+   * `availableFrom` is required on create and the column is NOT NULL — so
+   * this renders no "not confirmed" badge for a state the product cannot
+   * reach. `scripts/move-in-date-drive.mjs` asserts the API refuses a room
+   * without a date, which is what keeps that true.
+   *
+   * The year is shown only when it is not this one: "25 November" is how
+   * somebody says it, and "25 November 2026" on every card is noise until
+   * the date is far enough away to matter.
+   */
+  availableFromLabel = computed(() => {
+    const from = this.room().availableFrom;
+    if (!from || this.availableNow()) return null;
+    const at = new Date(from);
+    if (Number.isNaN(at.getTime())) return null;
+    const sameYear = at.getFullYear() === new Date().getFullYear();
+    return 'From ' + at.toLocaleDateString('en-ZA', {
+      day: 'numeric', month: 'long', ...(sameYear ? {} : { year: 'numeric' }),
+      timeZone: 'Africa/Johannesburg',
+    });
   });
 
   roomTypeLabel = computed(() => {

@@ -127,6 +127,15 @@ export interface RoomFilters {
   minRentCents?: number;
   /** Rooms free now or within a fortnight — the urgent search. */
   availableNow?: boolean;
+  /**
+   * The day somebody wants to move in — Phase 10.
+   *
+   * A SEARCH CRITERION, not a booking: nothing is held and no landlord is
+   * told. A room qualifies when it is free on or before this date.
+   */
+  moveIn?: string;
+  /** The far end of an acceptable window, for somebody who is flexible. */
+  moveInTo?: string;
   billsIncluded?: boolean;
   couplesAllowed?: boolean;
   dssAccepted?: boolean;

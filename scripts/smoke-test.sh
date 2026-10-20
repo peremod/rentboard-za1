@@ -3322,6 +3322,39 @@ else
   red "  FAIL  $LATE result(s) are not available until after $CUTOFF"; FAIL=$((FAIL+1))
 fi
 
+# ── The move-in date filter (Phase 10) ────────────────────────────────────
+#
+# ⚠️ The matching rule, asserted against whatever is on the board rather than
+# against a fixture: a room qualifies when it is free ON OR BEFORE the date
+# asked for. The drive builds its own rooms and proves the boundary cases to
+# the day; this is the contract check that runs against every environment,
+# including one whose board is empty.
+MOVEIN=$(date -u -d '+30 days' +%Y-%m-%d 2>/dev/null || date -u -v+30d +%Y-%m-%d)
+MOVEIN_TO=$(date -u -d '+60 days' +%Y-%m-%d 2>/dev/null || date -u -v+60d +%Y-%m-%d)
+
+req GET "/api/rooms?moveIn=$MOVEIN&limit=20"
+check "the move-in date filter is accepted" 200 "$STATUS" "$BODY"
+AFTER=$(echo "$BODY" | jq -r --arg d "$MOVEIN" '[.data[]? | select(.availableFrom > ($d + "T21:59:59.999Z"))] | length')
+if [[ "$AFTER" == "0" ]]; then
+  green "  PASS  no result frees up after the date asked for"; PASS=$((PASS+1))
+else
+  red "  FAIL  $AFTER result(s) are not free until after $MOVEIN"; FAIL=$((FAIL+1))
+fi
+
+MOVEIN_N=$(echo "$BODY" | jq -r '.total // 0')
+req GET "/api/rooms?moveIn=$MOVEIN&moveInTo=$MOVEIN_TO&limit=20"
+WINDOW_N=$(echo "$BODY" | jq -r '.total // 0')
+if [[ "$WINDOW_N" -ge "$MOVEIN_N" ]]; then
+  green "  PASS  a window is never narrower than the single date ($WINDOW_N vs $MOVEIN_N)"; PASS=$((PASS+1))
+else
+  red "  FAIL  the window returned FEWER rooms ($WINDOW_N) than the single date ($MOVEIN_N) — it is keyed on the wrong end"; FAIL=$((FAIL+1))
+fi
+
+# A date that is not a date is refused, rather than silently ignored and
+# returning a board that looks filtered and is not.
+req GET "/api/rooms?moveIn=next-tuesday"
+check "a move-in date that is not a date is refused" 400 "$STATUS" "$BODY"
+
 # It must combine with other filters rather than replacing them.
 req GET "/api/rooms?availableNow=true&province=Gauteng"
 check "combines with a province filter" 200 "$STATUS" "$BODY"

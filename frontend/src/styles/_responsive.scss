@@ -982,3 +982,7 @@
 
 // Matches the quick-filter chip so the badge and the filter read as one idea.
 .badge-now { background: rgba(61, 112, 64, .12); color: var(--sage); border: 1px solid rgba(61, 112, 64, .3); }
+/* Phase 10. Free, but not yet — slate rather than sage, because it is
+   information and not an invitation. Colour and a date, not colour alone:
+   the badge reads "From 25 November" whether or not the green registers. */
+.badge-later { background: var(--cream2); color: var(--ink); border: 1px solid var(--border); }
