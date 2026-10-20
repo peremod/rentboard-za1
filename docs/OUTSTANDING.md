@@ -5427,10 +5427,22 @@ not relied on. Rotation is the remedy. Assume the strings are known.
 
 ### What limits the damage
 
-The leak is on `develop` only: `b4c9852` is not an ancestor of `master`, and
-`origin/master`'s tip has never carried the file with credentials in it.
-Verified with `git merge-base --is-ancestor`. That narrows who could have
-pulled it; it does not change the need to rotate.
+When first measured the leak was on `develop` only: `b4c9852` was not an
+ancestor of `master`, and `origin/master`'s tip had never carried the file
+with credentials in it. Verified with `git merge-base --is-ancestor`.
+
+⚠️ **That is no longer true, deliberately.** `develop` was merged to `master`
+later the same evening and `b4c9852` is now in `master`'s ancestry too. That
+was judged acceptable rather than overlooked: the passwords were already
+rotated and dead, and GitHub serves a blob by SHA regardless of which branch
+references it, so the merge changed the reachability and not the exposure. The
+alternative — a squash merge to keep that one commit out of `master` — would
+have left `develop` carrying it anyway and made every later merge diverge.
+
+The reason this paragraph was rewritten rather than left: it said "the leak is
+on develop only", and a document that goes on asserting a narrower blast
+radius than is true is the same failure as the comment that handed out the
+production host for a week.
 
 The values are replaced with endpoint ids, which is what the field was always
 for and which carry no credential:
