@@ -1,0 +1,96 @@
+# Keeps the production API awake, because the free plan sleeps.
+#
+# ── What this is buying, and what it costs ──────────────────────────────
+#
+# Render's free tier suspends a web service after roughly fifteen minutes
+# of no traffic, and the next request takes 30–60 seconds to wake it. On
+# staging that is survivable. On production it means the first person to
+# open umastande.co.za after a quiet quarter-hour waits up to a minute for
+# a room board to appear, on a cheap Android, on mobile data — which is the
+# person this product exists for, and they close the tab.
+#
+# ⚠️ This is a WORKAROUND, chosen deliberately over the alternative, and it
+# is worth being honest about three things:
+#
+#   1. It is against the spirit of the free tier. Render provides the tier
+#      on the assumption that idle services idle. This makes one that does
+#      not. The clean fix is the cheapest paid instance, which also restores
+#      preDeployCommand and would make migrations automatic rather than the
+#      manual step that cost production an hour on 5 October (OUTSTANDING
+#      §5a).
+#   2. 🔴 IT CONSUMES THE FREE INSTANCE-HOUR ALLOWANCE. A service kept awake
+#      around the clock runs ~730 hours a month. If the account's free
+#      allowance is 750 hours TOTAL, this one service is very nearly all of
+#      it — so pinging STAGING as well would exceed it and take production
+#      down with it. That is why only production is listed below. Verify the
+#      current number on Render's pricing page; render.yaml's header already
+#      warns that free-tier terms change.
+#   3. GitHub's scheduled runners are best-effort and are frequently late
+#      under load — a */10 schedule does not guarantee a ping every ten
+#      minutes. This reduces how often somebody meets a cold start; it does
+#      not eliminate it. A missed window is a slow page, not an outage, so
+#      the job does not fail on one.
+#
+# ── Why /health/live and not /health ────────────────────────────────────
+#
+# /health calls prisma.isHealthy(), which is correct for a READINESS check
+# and wrong for this one: pinging it every ten minutes forever would hold
+# the Neon compute open around the clock as a side effect of keeping the
+# web service awake — paying a second bill to solve the first.
+# /health/live touches no database. See health.controller.ts.
+name: Keep production warm
+
+on:
+  schedule:
+    # Every ten minutes. The sleep threshold is ~15, so a late run still
+    # usually lands inside the window.
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+# If a run is somehow still going when the next fires, the new one wins:
+# a backlog of wake-up pings is pointless.
+concurrency:
+  group: keep-warm
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    name: Wake the API
+    runs-on: ubuntu-latest
+    # A ceiling, not an expectation — the lesson verify-deployment.yml
+    # learned by burning six hours of runner time per push.
+    timeout-minutes: 5
+    steps:
+      - name: GET /health/live
+        # ⚠️ Production only. See cost note 2 above: adding staging here
+        # would roughly double the instance-hours and can take production
+        # down when the allowance runs out.
+        env:
+          URL: https://api.umastande.co.za/health/live
+        run: |
+          set -u
+          # --max-time, because a suspended service accepts the connection
+          # and then says nothing; an unbounded curl is how this repository
+          # once froze a job until the platform killed it at six hours.
+          # 75s: longer than the 30-60s cold start it is here to trigger.
+          code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 75 "$URL" || echo "000")
+          echo "HTTP $code"
+          cat /tmp/body 2>/dev/null || true
+          echo
+
+          # ⚠️ A non-200 does NOT fail the job, and that is deliberate.
+          #
+          # The purpose here is to send traffic, and traffic wakes the
+          # service whatever it answers. Failing on a blip would mean a red
+          # cross in the Actions tab every time Render restarted, six times
+          # a day, until nobody looks at the tab at all — and this repository
+          # has a gate nobody reads for exactly that reason.
+          #
+          # Whether production is HEALTHY is a different question, and
+          # verify-deployment.yml is the thing that asks it.
+          if [ "$code" != "200" ]; then
+            echo "::warning::Keep-warm ping returned $code. The request still wakes the service; use verify-deployment.yml to judge health."
+          fi

@@ -65,4 +65,29 @@ export class HealthController {
       ts: new Date().toISOString(),
     };
   }
+
+  /**
+   * GET /health/live — liveness only. Deliberately does NOT touch the database.
+   *
+   * ⚠️ The distinction matters because of what pings this. `/health` above
+   * calls `prisma.isHealthy()`, which is right for a READINESS check —
+   * Render's healthCheckPath and the deploy verifier both want to know the
+   * API can serve real traffic, and an API that cannot reach its database
+   * cannot.
+   *
+   * But the keep-warm cron (.github/workflows/keep-warm.yml) runs every ten
+   * minutes forever, and pointing that at `/health` would hold the NEON
+   * COMPUTE open around the clock as a side effect of keeping the Render
+   * web service awake — paying a second bill to solve the first. Those are
+   * two different questions and they now have two different endpoints.
+   *
+   * No database, no filesystem, no version read: if the process is running
+   * and the event loop is turning, this answers. That is exactly and only
+   * what a wake-up ping needs to know.
+   */
+  @Get('live')
+  @HttpCode(HttpStatus.OK)
+  live() {
+    return { status: 'live', uptime: Math.floor(process.uptime()) };
+  }
 }
