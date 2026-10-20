@@ -1876,6 +1876,41 @@ added one and never came back, so three releases went to production with
 nothing verifying them."
 
 echo
+
+tag_if_missing "v1.159.0" "22a8bd3b6fe39c24bf34a83c0f3efe164d5aa7ed" "2026-10-20T19:12:36+00:00" "v1.159.0 - three guards that reported success while checking nothing
+
+verify-deployment.yml was GREEN on master while verifying nothing:
+PRODUCTION_API_HOST had never been set and the unset-host branch was exit 0,
+so the tick was the missing variable. The 'nothing to verify yet' reading
+that justified it expired on 13 October, when render.yaml gained a service
+for both branches.
+
+It also misdiagnosed a wrong HOST as a wrong APP_ENV. STAGING_API_HOST held
+rentboard-api.onrender.com, which is production, so a run fetched
+production's robots.txt and blamed a service whose APP_ENV was correct. The
+comment beside the variable had handed out that value - true before the
+13 October rename, never revisited. /health already returns env, so the
+service is now asked who it thinks it is before anything judges how it
+behaves.
+
+migrate-remote.sh could tell remote from local and pooled from direct but
+not staging from production, so the one command that WRITES said 'Applied to
+ep-...' without naming an environment. It also printed a host it was not
+writing to: the prompt came from DATABASE_URL while migrate deploy connects
+through directUrl.
+
+And a stale Prisma client blamed the file that used it - six errors in
+seed-survey.ts while the script, the schema and all 38 migrations were
+correct. The check for it cannot live inside that script, because the script
+does not compile.
+
+Two of the gates were blind to bugs written with them: a JSDoc block inside
+a shell script, which bash -n accepts and bash then globs to /bin and
+executes, and backticks in a double-quoted string on the refusal path whose
+next sentence is 'Nothing has been written'. Both now linted, both falsified
+against the text that nearly shipped."
+
+echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
 # not have shown: "Created 0, skipped 19" was indistinguishable from a complete
