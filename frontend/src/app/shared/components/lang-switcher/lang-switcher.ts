@@ -2,16 +2,18 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { Router } from '@angular/router';
 import { I18nService } from '../../../core/services/i18n.service';
 import { LanguageCode, localizePath, stripLocalePrefix } from '../../../core/models/language.model';
+import { Icon } from '../icon/icon';
 
 /** Dropdown language switcher — lives in the navbar. */
 @Component({
   selector: 'app-lang-switcher',
   standalone: true,
+  imports: [Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="lang-switcher">
       <button type="button" (click)="open.update(v => !v)" [attr.aria-expanded]="open()">
-        🌐 {{ i18n.currentLanguage()?.nativeName ?? 'English' }}
+        <app-icon name="globe"/> {{ i18n.currentLanguage()?.nativeName ?? 'English' }}
       </button>
       @if (open()) {
         <ul class="lang-switcher__menu">
@@ -31,7 +33,18 @@ import { LanguageCode, localizePath, stripLocalePrefix } from '../../../core/mod
     /* 24px before Phase 7q — the smallest tap target measured anywhere in the
        app, on the control that switches the whole site's language. Not a .btn
        and not an input, so neither app-wide rule reached it. */
-    .lang-switcher > button { background: none; border: 1px solid rgba(255,255,255,.25); color: rgba(255,255,255,.85); font-size: .75rem; padding: .3rem .6rem; border-radius: var(--r4); cursor: pointer; font-family: inherit; min-height: 44px; }
+    /* ⚠️ The trigger lives on TWO surfaces now: the ink header and the white
+       nav sheet. It was hardcoded for the dark one, so inside the sheet it
+       rendered white-on-white at 1.00:1 — the same ratio and the same
+       failure .hint__close shipped with, arriving by a different route:
+       nothing repainted the button, the surface moved out from under it.
+
+       Custom properties rather than a parent selector, because this is a
+       component style under emulated encapsulation and a global rule in
+       _responsive.scss loses to it. A custom property inherits straight
+       through the shadow boundary, so the sheet sets --lang-fg and this
+       button picks it up without either file naming the other's class. */
+    .lang-switcher > button { background: none; border: 1px solid var(--lang-edge, rgba(255,255,255,.25)); color: var(--lang-fg, rgba(255,255,255,.85)); font-size: .75rem; padding: .3rem .6rem; border-radius: var(--r4); cursor: pointer; font-family: inherit; min-height: 44px; }
     .lang-switcher__menu { position: absolute; top: calc(100% + 4px); right: 0; background: #1A1410; border: 1px solid rgba(255,255,255,.15); border-radius: var(--r8); list-style: none; padding: .3rem; min-width: 180px; max-height: 320px; overflow-y: auto; z-index: 60; }
     /* The menu entries are tap targets too — eleven languages in a list where
        every row is something to hit with a thumb. */

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 
 import { AdminService, Funnels, ContentSignals, Growth } from '../../../core/services/admin.service';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * UX measurement, aggregate only.
@@ -14,7 +15,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-admin-analytics',
   standalone: true,
-  imports: [Loading],
+  imports: [Icon, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -110,7 +111,7 @@ import { Loading } from '../../../shared/components/loading/loading';
       }
 
       <div class="insight-banner">
-        🔒
+        <app-icon name="lock"/>
         <span>
           Counts only — no user ids, no session ids, no journeys. This tells you
           how many people left at a step, never which person did. That is the

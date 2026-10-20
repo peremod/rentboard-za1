@@ -21,3 +21,30 @@ node scripts/feedback-lint.mjs
 node scripts/scale-lint.mjs
 node scripts/font-lint.mjs
 node scripts/control-contrast-audit.mjs
+
+# ⚠️ Added v1.149.0, and it is a RATCHET, not a ban: 226 emoji were in the
+# tree when the baseline was taken and they cannot all go in one change. The
+# number may fall and never rise. It scans whole files rather than template
+# literals, because the board went on rendering a house emoji twelve times
+# after every emoji in the markup had been replaced — that one lived in a
+# label map in the class, where a sweep of the markup cannot see it.
+node scripts/emoji-lint.mjs
+
+# 🔴 Added v1.150.0 after a commit shipped that did not compile. The icon set
+# was expanded, migrated onto, driven and screenshotted — all green — and then
+# `git checkout` on icon.ts, used to undo a falsification, discarded the whole
+# expansion because the file still held uncommitted work. Every check that
+# could have caught it had already run. A verification that happened before
+# the last change is not a verification of what shipped; this one is source
+# only and takes under a second.
+node scripts/icon-lint.mjs
+
+# 🔴 Added v1.153.0. A room card can carry seven badges over its photo, and
+# they were declared across two files: .badge-new and .badge-verified both
+# ended up solid sage on white — "listed a few days ago" and "this landlord's
+# identity has been checked" rendering identically — and .badge-featured and
+# .badge-sublet were both gold. Neither file was wrong on its own, which is
+# why state-lint has guarded the same thing for .state--* since Phase 8.
+# Compares resolved COLOUR, not the text of the declaration: the gold pair
+# was written two different ways.
+node scripts/badge-lint.mjs

@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { WalkthroughService } from '../../../core/services/walkthrough.service';
 import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Account settings, shared by landlords and tenants — the needs are identical,
@@ -15,7 +16,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 @Component({
   selector: 'app-account-settings',
   standalone: true,
-  imports: [FormsModule, ReactiveFormsModule, RouterLink],
+  imports: [Icon, FormsModule, ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
@@ -55,7 +56,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
                        answered "a code is on its way" and sent nothing. The
                        field now refuses it and this says where to go. -->
                   <p class="field-hint">
-                    ✅ Verified. <strong>This number is how you sign in</strong>, and it is
+                    <app-icon name="check-circle"/> Verified. <strong>This number is how you sign in</strong>, and it is
                     the only way into your account — so we confirm a new one before
                     changing it, rather than taking it from this box.
                   </p>
@@ -99,9 +100,9 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
                 } @else {
                   <p class="field-hint">
                     @if (whatsappOn) {
-                      ✅ Verified — you can sign in with a WhatsApp code using this number.
+                      <app-icon name="check-circle"/> Verified — you can sign in with a WhatsApp code using this number.
                     } @else {
-                      ✅ Verified. Signing in with a code to this number is switched off
+                      <app-icon name="check-circle"/> Verified. Signing in with a code to this number is switched off
                       at the moment, so use your email address and password.
                     }
                     Changing it here will need verifying again.

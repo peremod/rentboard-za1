@@ -1,8 +1,10 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { Icon } from '../../../shared/components/icon/icon';
 
 @Component({
   selector: 'app-disclaimer',
   standalone: true,
+  imports: [Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="legal-page">
@@ -11,7 +13,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
           <h1>Platform Disclaimer</h1>
           <p class="legal-meta">Last updated: 28 July 2026 · Republic of South Africa</p>
           <div class="disclaimer-banner">
-            ⚠️ Mastande is an online intermediary under <strong>ECTA 25 of 2002</strong>. We are
+            <app-icon name="alert"/>️ Mastande is an online intermediary under <strong>ECTA 25 of 2002</strong>. We are
             <strong>NOT</strong> a PPRA-registered estate agent, and are not party to any tenancy agreement.
           </div>
         </header>
@@ -25,7 +27,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
         <section>
           <h2>2. No Verification of Listings</h2>
           <p>We do not verify property descriptions, landlord authority, or municipal by-law compliance.</p>
-          <p><strong>⚠️ Tenants must NEVER pay a deposit before viewing a room in person and signing a lease.</strong></p>
+          <p><strong><app-icon name="alert"/>️ Tenants must NEVER pay a deposit before viewing a room in person and signing a lease.</strong></p>
           <ul>
             <li>Always view in person before committing</li>
             <li>Request proof the landlord is authorised to let the property</li>

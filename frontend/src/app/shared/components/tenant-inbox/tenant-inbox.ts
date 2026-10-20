@@ -5,14 +5,15 @@ import { TenantInboxItem, TenantInboxKind } from '../../../core/models/tenant-in
 
 /** A glyph per kind. Never the only signal — every row also says it in words. */
 const ICONS: Record<TenantInboxKind, string> = {
-  application_accepted: '🎉',
-  message_unread: '💬',
-  application_shortlisted: '⭐',
-  notice_given: '📤',
-  lease_ending: '📅',
-  rent_unrecorded: '🧾',
-  passport_expired: '🪪',
-  passport_expiring: '🪪',
+  application_accepted: 'check-circle',
+  message_unread: 'message',
+  application_shortlisted: 'star',
+  notice_given: 'upload',
+  lease_ending: 'calendar',
+  rent_unrecorded: 'receipt',
+  passport_expired: 'id-card',
+  passport_expiring: 'id-card',
+  survey_open: 'clipboard',
 };
 
 /**

@@ -34,7 +34,7 @@ export interface LandlordNavBadges {
  */
 export function landlordNav(badges: LandlordNavBadges = {}): PortalNavItem[] {
   return [
-    { label: 'Dashboard', icon: '📊', route: '/landlord/dashboard', exact: true },
+    { label: 'Dashboard', icon: 'chart', route: '/landlord/dashboard', exact: true },
     // These two name sections of the dashboard, not pages of their own.
     // Without the fragment they navigate to the dashboard root, which from the
     // dashboard is indistinguishable from a click that did nothing.
@@ -45,8 +45,8 @@ export function landlordNav(badges: LandlordNavBadges = {}): PortalNavItem[] {
     // drafts clicked "My Rooms" and read "No rooms listed yet" while holding
     // three of them. The two names are now one, and Drafts has its own entry
     // below so the other case is reachable rather than inferred.
-    { label: 'Active listings', icon: '🏠', route: '/landlord/dashboard', fragment: 'active-listings' },
-    { label: 'Drafts', icon: '📝', route: '/landlord/dashboard', fragment: 'drafts', badge: badges.drafts },
+    { label: 'Active listings', icon: 'home', route: '/landlord/dashboard', fragment: 'active-listings' },
+    { label: 'Drafts', icon: 'edit', route: '/landlord/dashboard', fragment: 'drafts', badge: badges.drafts },
     // ⚠️ History, because it explains the item below and the one after it.
     // There was an "Applicants" item here pointing at #active-listings, and it
     // was a promise the dashboard could not keep: there was no applicants
@@ -58,40 +58,40 @@ export function landlordNav(badges: LandlordNavBadges = {}): PortalNavItem[] {
     //
     // This slot keeps pointing at the section that exists for the things
     // waiting on a landlord — applications first among them.
-    { label: 'Needs you', icon: '👀', route: '/landlord/dashboard', fragment: 'needs-attention' },
+    { label: 'Needs you', icon: 'eye', route: '/landlord/dashboard', fragment: 'needs-attention' },
     // Phase 7c. Phase 7a DELETED an "Applicants" item from this nav because it
     // pointed at a dashboard section of another name — a destination that did
     // not exist. The entry is back because the destination is: one list across
     // every room, which is the question a landlord with six of them actually
     // has. The badge counts what is waiting on them, not everything ever sent.
-    { label: 'All applicants', icon: '📥', route: '/landlord/applicants', badge: badges.applicants },
+    { label: 'All applicants', icon: 'inbox', route: '/landlord/applicants', badge: badges.applicants },
     // Phase 7c. Was `disabled` with a "Soon" chip, because until now threads
     // lived only inside an application and there was no inbox to point at.
     // There is now: /account/messages, one screen for both roles — see the
     // route for why it is in /account rather than here.
-    { label: 'Messages', icon: '💬', route: '/account/messages' },
+    { label: 'Messages', icon: 'message', route: '/account/messages' },
     // Phase 7b. Was "My property" → /landlord/yard, which was both singular for
     // a thing a landlord can have several of and a word ("yard") that appeared
     // nowhere else in the nav. The screen behind it is now a list of properties
     // with a detail view, and the label says so.
-    { label: 'My properties', icon: '🏘️', route: '/landlord/properties' },
-    { label: 'Verification', icon: '🪪', route: '/landlord/verification' },
+    { label: 'My properties', icon: 'building', route: '/landlord/properties' },
+    { label: 'Verification', icon: 'id-card', route: '/landlord/verification' },
     // A reason to open the app with no vacancy and no rent due: something is
     // broken and you need a number.
-    { label: 'Your public page', icon: '🪧', route: '/landlord/public-page' },
-    { label: 'Who to call', icon: '🔧', route: '/landlord/services' },
+    { label: 'Your public page', icon: 'signpost', route: '/landlord/public-page' },
+    { label: 'Who to call', icon: 'wrench', route: '/landlord/services' },
     // Phase 8a. The four documents a landlord keeps asking for. Points at the
     // PUBLIC page rather than a portal copy, so there is one of them.
-    { label: 'Forms and templates', icon: '📄', route: '/landlord/templates' },
+    { label: 'Forms and templates', icon: 'file-text', route: '/landlord/templates' },
     // Phase F. In /account because a sub-lessor lets one room and rents
     // another, and their history is one list — the same reasoning as Messages
     // two items up. A landlord loses the tenant, the dates and the whole
     // ledger the moment a letting ends without it.
-    { label: 'Past lettings', icon: '🗂️', route: '/account/tenancies' },
+    { label: 'Past lettings', icon: 'folder', route: '/account/tenancies' },
     // Phase 7g. Not optional furniture: for a landlord with no email address
     // this screen is the only place a notification can be read at all.
-    { label: 'Notices', icon: '🔔', route: '/account/notices', badge: badges.notices },
-    { label: 'Settings', icon: '⚙️', route: '/account/settings' },
+    { label: 'Notices', icon: 'bell', route: '/account/notices', badge: badges.notices },
+    { label: 'Settings', icon: 'sliders', route: '/account/settings' },
     // No Billing entry. It pointed at /landlord/upgrade, which has been
     // deleted — there are no paid plans to bill for, so a landlord has no
     // billing to look at. Restoring this means restoring a real page first.

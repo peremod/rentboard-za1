@@ -7,6 +7,8 @@ import { DeletionPreview } from '../../../core/services/account-lifecycle.servic
 
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
+import { StarRating } from '../../../shared/components/star-rating/star-rating';
 
 /**
  * One account, everything about it.
@@ -22,7 +24,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-admin-user-detail',
   standalone: true,
-  imports: [DatePipe, FormsModule, RouterLink, ZarCentsPipe, Loading],
+  imports: [StarRating, Icon, DatePipe, FormsModule, RouterLink, ZarCentsPipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <a routerLink="/admin/dashboard" class="muted">← Back to accounts</a>
@@ -36,12 +38,12 @@ import { Loading } from '../../../shared/components/loading/loading';
         <h2 class="dash-section-title" style="margin-top:1rem">
           {{ d.user.fullName }}
           @if (!d.user.isActive) { <span class="badge badge-reserved">Suspended</span> }
-          @if (d.user.landlordProfile?.idVerified) { <span class="badge badge-verified">✓ Verified</span> }
+          @if (d.user.landlordProfile?.idVerified) { <span class="badge badge-verified"><app-icon name="check"/> Verified</span> }
         </h2>
 
         @if (d.activity.reportsAgainst > 0) {
           <div class="insight-banner" style="background:rgba(178,59,59,.08);border-color:rgba(178,59,59,.25)">
-            🚩
+            <app-icon name="flag"/>
             <span>
               This account has been reported <strong>{{ d.activity.reportsAgainst }}</strong>
               time{{ d.activity.reportsAgainst === 1 ? '' : 's' }}.
@@ -62,7 +64,7 @@ import { Loading } from '../../../shared/components/loading/loading';
               <div><dt>Last seen</dt><dd>{{ d.user.lastLoginAt ? (d.user.lastLoginAt | date:'d MMM yyyy') : 'Never' }}</dd></div>
               <div><dt>Marketing email</dt><dd>{{ d.user.marketingEmails === false ? 'Opted out' : 'Opted in' }}</dd></div>
               @if (d.user.landlordProfile?.rating) {
-                <div><dt>Rating</dt><dd>★ {{ d.user.landlordProfile!.rating!.toFixed(1) }} ({{ d.user.landlordProfile!.ratingCount }})</dd></div>
+                <div><dt>Rating</dt><dd><app-icon name="star" filled/> {{ d.user.landlordProfile!.rating!.toFixed(1) }} ({{ d.user.landlordProfile!.ratingCount }})</dd></div>
               }
             </dl>
           </div>
@@ -83,7 +85,7 @@ import { Loading } from '../../../shared/components/loading/loading';
             <h2 class="dash-section-title">Listings</h2>
             @for (r of d.rooms; track r.id) {
               <div class="app-card">
-                <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
+                <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="home"/></div>
                 <div class="app-info">
                   <div class="app-room">{{ r.title }}</div>
                   <div class="app-location">{{ r.locationDisplay }} · {{ r.rentCents | zarCents:'monthly' }}</div>
@@ -106,7 +108,7 @@ import { Loading } from '../../../shared/components/loading/loading';
             <h2 class="dash-section-title">Applications</h2>
             @for (a of d.applications; track a.id) {
               <div class="app-card" [class.app-card--closed]="!!a.archivedAt">
-                <div class="app-thumb portal-thumb" aria-hidden="true">📋</div>
+                <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="clipboard"/></div>
                 <div class="app-info">
                   <div class="app-room">{{ a.room?.title ?? 'Room removed' }}</div>
                   <div class="app-location">
@@ -126,7 +128,7 @@ import { Loading } from '../../../shared/components/loading/loading';
             <h2 class="dash-section-title">Tenancies</h2>
             @for (t of d.tenancies; track t.id) {
               <div class="app-card">
-                <div class="app-thumb portal-thumb" aria-hidden="true">🔑</div>
+                <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="key"/></div>
                 <div class="app-info">
                   <div class="app-room">{{ t.room?.title ?? 'Room removed' }}</div>
                   <div class="app-location">
@@ -145,7 +147,7 @@ import { Loading } from '../../../shared/components/loading/loading';
             <h2 class="dash-section-title">Verification history</h2>
             @for (v of d.verifications; track v.id) {
               <div class="app-card">
-                <div class="app-thumb portal-thumb" aria-hidden="true">🪪</div>
+                <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="id-card"/></div>
                 <div class="app-info">
                   <div class="app-room">{{ v.type }}</div>
                   <div class="app-location">
@@ -169,7 +171,7 @@ import { Loading } from '../../../shared/components/loading/loading';
             <h2 class="dash-section-title">Payments</h2>
             @for (p of d.payments; track p.id) {
               <div class="app-card">
-                <div class="app-thumb portal-thumb" aria-hidden="true">💳</div>
+                <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="credit-card"/></div>
                 <div class="app-info">
                   <div class="app-room">{{ p.amountCents | zarCents }} — {{ p.purpose }}</div>
                   <div class="app-location">
@@ -188,9 +190,9 @@ import { Loading } from '../../../shared/components/loading/loading';
             <h2 class="dash-section-title">Reviews received</h2>
             @for (r of d.reviewsReceived; track r.id) {
               <div class="app-card" [class.app-card--closed]="r.isHidden">
-                <div class="app-thumb portal-thumb" aria-hidden="true">⭐</div>
+                <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="star" filled/></div>
                 <div class="app-info">
-                  <div class="app-room">{{ stars(r.rating) }} <span class="muted">({{ r.type }})</span></div>
+                  <div class="app-room"><app-star-rating [value]="r.rating"/> <span class="muted">({{ r.type }})</span></div>
                   <p class="cover-note">"{{ r.comment }}"</p>
                   @if (r.isHidden) { <div class="field-error">Hidden by moderation.</div> }
                 </div>
@@ -413,9 +415,6 @@ export class AdminUserDetailPage implements OnInit {
     });
   }
 
-  stars(rating: number) {
-    return '★'.repeat(rating) + '☆'.repeat(5 - rating);
-  }
 
   verificationClass(s: string) {
     return { approved: 'accepted', rejected: 'rejected', pending: 'pending', pending_payment: 'viewed' }[s] ?? 'pending';

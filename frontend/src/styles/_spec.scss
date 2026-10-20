@@ -1,3 +1,5 @@
+@use 'variables' as *;
+
 // ═══════════════════════════════════════════════════════════════════════
 // SPEC STYLESHEET — originally ported from RentBoard-ZA-Visual-Preview.html
 //
@@ -38,8 +40,27 @@
    Warm South African palette. Earthy, trustworthy, bold.
 ═══════════════════════════════════════════════════════ */
 :root{
-  --cream:#FAF7F0;
-  --cream2:#F2EDE3;
+  /**
+   * ⚠️ The surfaces are WHITE as of v1.147.0, and --cream is gone.
+   *
+   * It served two unrelated jobs under one name: the page background, and
+   * the text colour on every dark surface (nav, footer, hero, portal rail).
+   * Thirteen of its seventeen uses were the second one, which is why
+   * "the product is cream" was true on screen and hard to see in the file.
+   * Text on dark is now --white, which is what it should always have been.
+   *
+   * The ground is --cream2, lightened, so a white card LIFTS off the page
+   * instead of sitting flush on a surface 3% away from it. That was the
+   * whole hierarchy problem: everything was within a hair of everything
+   * else, so --border had to carry depth on its own.
+   *
+   * Contrast moved in the safe direction. Every text token here was
+   * measured against cream or the old card, and both grounds got lighter,
+   * so each ratio in the comments below is now a FLOOR rather than a
+   * reading. Nothing needed darkening. The one thing that got worse is
+   * --border against white, which is why --border-strong exists.
+   */
+  --cream2:#F4F2ED;
   --ink:#1C160E;
   --ink2:#3A3228;
   /* Was #C04E28, which is 4.50:1 on --cream — the WCAG AA minimum to two
@@ -84,8 +105,20 @@
    * threshold on both surfaces this token is used over.
    */
   --slate:#736755;
-  --border:#E0D5C4;
-  --card:#FDFAF4;
+  /* Hairline. Decorative only: it is 1.3:1 on white and was never going to
+     be a control boundary, which nothing in here said out loud until a
+     white card made an input with this border disappear into it. */
+  --border:#E5E0D7;
+  /**
+   * The boundary of anything a person types in or picks from.
+   *
+   * WCAG 1.4.11 wants 3:1 for the edge of a control, and --border has never
+   * met it on any surface this app has had. It did not show while the card
+   * was #FDFAF4 and the input was #FFFFFF — the fill was the boundary, and
+   * the border was decoration on top of it. On a white card the fill is the
+   * card, so the border is all there is. 3.55:1 on white.
+   */
+  --border-strong:#8E8679;
   --white:#FFFFFF;
   --font-display:'Playfair Display',Georgia,serif;
   --font-body:'DM Sans',system-ui,sans-serif;
@@ -118,7 +151,7 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:16px;scroll-behavior:smooth}
-body{font-family:var(--font-body);background:var(--cream);color:var(--ink);line-height:1.5;overflow-x:hidden}
+body{font-family:var(--font-body);background:var(--cream2);color:var(--ink);line-height:1.5;overflow-x:hidden}
 a{color:var(--terra);text-decoration:none}
 a:hover{text-decoration:underline}
 img{display:block;max-width:100%}
@@ -135,11 +168,21 @@ img{display:block;max-width:100%}
   padding:0 1.5rem;height:66px;
 }
 .nav-links{display:flex;gap:1.75rem;flex:1}
+/* ⚠️ On a DESKTOP the legal wrapper must not exist as a box.
+   It was added so the drawer could demote Privacy/Terms/Disclaimer, and it
+   was given layout only inside the ≤768px block — so above that it was a
+   plain div holding three inline anchors with no gap, and the header read
+   "PrivacyTermsDisclaimer" as one word. Shipped for one commit; the ≤768px
+   block overrides this back to flex. `display:contents` rather than
+   `display:flex` here so the three anchors become direct children of
+   .nav-links and take ITS gap, instead of a nested row with a second gap
+   that would have to be kept equal to the first by hand. */
+.nav-links__legal{display:contents}
 .nav-links a{
   color:rgba(250,247,240,.65);font-size:.88rem;font-weight:500;
   transition:color .15s;cursor:pointer;
 }
-.nav-links a:hover,.nav-links a.active{color:var(--cream);text-decoration:none}
+.nav-links a:hover,.nav-links a.active{color:var(--white);text-decoration:none}
 .nav-actions{display:flex;gap:.65rem;margin-left:auto;align-items:center}
 .btn{
   display:inline-flex;align-items:center;justify-content:center;gap:.4rem;
@@ -188,13 +231,31 @@ img{display:block;max-width:100%}
 }
 .btn-danger:hover:not(:disabled){background:#BE3333}
 .btn-danger:disabled{opacity:.5;cursor:not-allowed}
+/**
+ * ⚠️ A destructive action that is NOT the primary action on its row.
+ *
+ * 🔴 Delete on an active listing was `.btn-ghost-light` — byte-for-byte the
+ * same computed style as Edit, View and Pause beside it: same background,
+ * same colour, same border, measured. Four buttons in a row, one of which
+ * deletes the listing, and nothing told them apart but the word.
+ *
+ * Solid `.btn-danger` would be wrong here — it would make Delete the
+ * loudest thing on a row whose primary action is seeing the applicants.
+ * So: the danger colour, at the weight of a secondary action, filling in
+ * only on hover, which is the point at which it matters. #D63B3B is
+ * 4.62:1 on white, over the 4.5:1 small text needs.
+ */
+.btn-ghost-danger{
+  background:transparent;color:#D63B3B;border:1.5px solid rgba(214,59,59,.4);
+}
+.btn-ghost-danger:hover:not(:disabled){background:#D63B3B;color:var(--white);border-color:#D63B3B}
 
 .btn-primary{background:var(--terra);color:var(--white)}
 /* Darkens on hover. --terra2 is the brand accent for text on dark; as a
    background under white text it is 3.56:1. See --terra-deep. */
 .btn-primary:hover{background:var(--terra-deep);transform:translateY(-1px);box-shadow:var(--shadow-lift)}
 .btn-ghost{background:transparent;color:rgba(250,247,240,.75);border:1.5px solid rgba(250,247,240,.25)}
-.btn-ghost:hover{border-color:rgba(250,247,240,.6);color:var(--cream)}
+.btn-ghost:hover{border-color:rgba(255,255,255,.6);color:var(--white)}
 .btn-outline{background:transparent;color:var(--terra);border:1.5px solid var(--terra)}
 .btn-outline:hover{background:var(--terra);color:var(--white)}
 .btn-sage{background:var(--sage);color:var(--white)}
@@ -231,7 +292,7 @@ img{display:block;max-width:100%}
 .hero h1{
   font-family:var(--font-display);
   font-size:clamp(2.4rem,5vw,3.8rem);
-  font-weight:900;color:var(--cream);
+  font-weight:900;color:var(--white);
   line-height:1.1;margin-bottom:1.25rem;
   max-width:680px;
 }
@@ -244,14 +305,30 @@ img{display:block;max-width:100%}
 .hero-stats{
   display:flex;gap:2.5rem;flex-wrap:wrap;
 }
+/* ⚠️ Display figure, not a ledger one. styles.scss has carried the rule
+   since Phase 8 — display face for a number a person looks FOR, mono only
+   where a column has to line up — and .figure, the class that implements
+   it, had no callers at all. So every figure in the product rendered in
+   the platform monospace, which is the single loudest "assembled quickly"
+   signal on the board. font-variant-numeric because Playfair ships
+   old-style figures: without it the 2 and 5 of R2 500 drop below the
+   baseline and a price reads as a typo. */
 .hero-stat strong{
-  display:block;font-family:var(--font-mono);
-  font-size:1.6rem;font-weight:500;color:var(--cream);
+  @include display-figure;
+  display:block;font-size:1.6rem;color:var(--white);
 }
 .hero-stat span{font-size:.82rem;color:rgba(250,247,240,.5)}
 
 /* ═══ SEARCH BAR ═══ */
-.search-wrap{background:var(--cream2);border-bottom:1px solid var(--border);padding:1rem 1.5rem}
+/* ⚠️ White, not --cream2. The page ground became --cream2 in v1.147.0, so
+   this band was the same colour as everything below it and read as part of
+   the board rather than as the thing you search with. White plus a shadow
+   puts it on the same plane as a card: the one strip of chrome between the
+   hero and the results. */
+.search-wrap{
+  background:var(--white);border-bottom:1px solid var(--border);
+  box-shadow:var(--shadow-sm);padding:1rem 1.5rem;position:relative;z-index:2;
+}
 .search-bar{
   max-width:1200px;margin:0 auto;
   display:flex;gap:.65rem;flex-wrap:wrap;align-items:center;
@@ -265,16 +342,45 @@ img{display:block;max-width:100%}
 }
 .search-input{
   width:100%;padding:.6rem .85rem .6rem 2.4rem;
-  border:1.5px solid var(--border);border-radius:var(--r8);
+  border:1.5px solid var(--border-strong);border-radius:var(--r8);
   font-family:var(--font-body);font-size:.9rem;
   background:var(--white);color:var(--ink);
   transition:border-color .15s;
 }
 .search-input:focus{outline:none;border-color:var(--terra)}
+/* The clear sits inside the box, on the right, and keeps its 44px target
+   (WCAG 2.5.8) without making the input taller — the box is 44px already,
+   so the button fills it rather than adding to it. */
+.search-clear{
+  position:absolute;right:.25rem;top:50%;transform:translateY(-50%);
+  display:flex;align-items:center;justify-content:center;
+  min-width:44px;min-height:44px;padding:0;
+  background:none;border:none;border-radius:var(--r-full);
+  color:var(--slate);font-size:1rem;cursor:pointer;
+}
+.search-clear:hover{background:var(--cream2);color:var(--ink);transform:translateY(-50%);box-shadow:none}
+/* Room for it, so a long suburb name does not run under the button. */
+/* 3rem = 48px, and the clear button occupies 4px..48px from the right, so
+   this is the first scale value that clears it completely. 2.5rem let a long
+   suburb name run under the button. */
+.search-input{padding-right:3rem}
+/* ⚠️ `background-color`, NOT the `background` shorthand.
+   styles.scss sets `appearance:none` on every select and draws the chevron
+   back with a `background-image`. The shorthand resets background-image to
+   none, so these three class rules cancelled it — and because appearance
+   was still none, the NATIVE arrow was gone too. Measured: all 11 selects
+   on the board had `appearance:none` and `background-image:none`, so every
+   dropdown in the product looked like a text input and gave no sign it
+   opened. `padding-right` for the same reason: the shorthand `padding`
+   below overrode the room the chevron needs. */
+/* No box on a desktop — the three selects stay direct children of the flex
+   row and keep its gap. _responsive.scss makes this a grid at <=768px. */
+.search-selects{display:contents}
 .search-select{
-  padding:.6rem .85rem;border:1.5px solid var(--border);
+  padding:.6rem .85rem;padding-right:2.5rem;
+  border:1.5px solid var(--border-strong);
   border-radius:var(--r8);font-family:var(--font-body);font-size:.88rem;
-  background:var(--white);color:var(--ink);cursor:pointer;
+  background-color:var(--white);color:var(--ink);cursor:pointer;
   min-width:160px;
 }
 .search-select:focus{outline:none;border-color:var(--terra)}
@@ -286,7 +392,7 @@ img{display:block;max-width:100%}
   gap:2rem;padding:2rem 1.5rem;
 }
 .filter-panel{
-  background:var(--card);border:1px solid var(--border);
+  background:var(--white);border:1px solid var(--border);
   border-radius:var(--r12);padding:1.25rem;
   position:sticky;top:82px;height:fit-content;
 }
@@ -298,13 +404,27 @@ img{display:block;max-width:100%}
 .filter-group:last-child{border:none;margin-bottom:0;padding-bottom:0}
 .filter-label{font-size:.8rem;font-weight:600;color:var(--ink2);margin-bottom:.5rem;display:block}
 .filter-select{
-  width:100%;padding:.5rem .75rem;border:1.5px solid var(--border);
+  width:100%;padding:.5rem .75rem;padding-right:2.5rem;
+  border:1.5px solid var(--border-strong);
   border-radius:var(--r4);font-family:var(--font-body);font-size:.85rem;
-  background:var(--white);color:var(--ink);
+  background-color:var(--white);color:var(--ink);
 }
+/**
+ * 🔴 20px tall, stacked 6px apart, on the busiest page in the product.
+ *
+ * The checkbox is 18px and the LABEL is the target — clicking the words
+ * toggles it — and the label had no height of its own, so it was whatever
+ * one line of .83rem text came to. Five of them in a column: "Bills
+ * included", "Couples welcome", "SASSA grants welcome", "Guarantor
+ * accepted", "Pets allowed". A straight WCAG 2.2 AA failure (2.5.8, 24px)
+ * with no spacing exception available, because they touch.
+ *
+ * 44px rather than 24: these are the board's own filters, tapped
+ * one-handed, and this codebase's floor is 44.
+ */
 .filter-check{
-  display:flex;align-items:center;gap:.5rem;
-  font-size:.83rem;color:var(--ink2);margin-bottom:.4rem;cursor:pointer;
+  display:flex;align-items:center;gap:.5rem;min-height:44px;
+  font-size:.83rem;color:var(--ink2);cursor:pointer;
 }
 .filter-check input{accent-color:var(--terra)}
 /* ── The move-in date filter — Phase 10 ──────────────────────────────────
@@ -318,9 +438,13 @@ img{display:block;max-width:100%}
   /* 44px, WCAG 2.5.8 — tapped one-handed on a phone, outdoors. min-width:0
      because a date input has an intrinsic width wider than a narrow drawer. */
   min-height:44px;width:100%;min-width:0;
-  border:1.5px solid var(--border);border-radius:var(--r4);
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);
   background:var(--white);color:var(--ink);
 }
+/* The chosen date, in words, under the box that cannot say which number is
+   the day. Weight rather than colour: this is a confirmation of what was
+   typed, not a warning about it. */
+.filter-date-echo{font-size:.75rem;font-weight:600;color:var(--slate)}
 .filter-note{margin:.25rem 0 0;font-size:.75rem;line-height:1.5;color:var(--slate)}
 .filter-pill-wrap{display:flex;flex-wrap:wrap;gap:.4rem}
 /* ⚠️ 22px before Phase 7q — the board's own filters, and the smallest tap
@@ -339,7 +463,7 @@ img{display:block;max-width:100%}
    person uses to find a room at all. */
 .filter-pill{
   padding:.28rem .65rem;border-radius:var(--r-full);
-  font-size:.72rem;font-weight:600;border:1.5px solid var(--border);
+  font-size:.72rem;font-weight:600;border:1.5px solid var(--border-strong);
   cursor:pointer;transition:all .12s;color:var(--slate);background:var(--white);
   min-height:44px;display:inline-flex;align-items:center;justify-content:center;
 }
@@ -357,8 +481,9 @@ img{display:block;max-width:100%}
 .results-count{font-size:.88rem;color:var(--slate);font-weight:500}
 .results-count strong{color:var(--ink);font-weight:700}
 .sort-select{
-  padding:.4rem .75rem;border:1.5px solid var(--border);border-radius:var(--r4);
-  font-size:.82rem;font-family:var(--font-body);background:var(--white);color:var(--ink);cursor:pointer;
+  padding:.4rem .75rem;padding-right:2.5rem;
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);
+  font-size:.82rem;font-family:var(--font-body);background-color:var(--white);color:var(--ink);cursor:pointer;
 }
 
 /* ═══ ROOM GRID ═══ */
@@ -368,7 +493,7 @@ img{display:block;max-width:100%}
   gap:1.25rem;
 }
 .room-card{
-  background:var(--card);border:1px solid var(--border);
+  background:var(--white);border:1px solid var(--border);
   border-radius:var(--r12);overflow:hidden;cursor:pointer;
   transition:transform .2s,box-shadow .2s,border-color .2s;
   position:relative;
@@ -395,9 +520,54 @@ img{display:block;max-width:100%}
   padding:.22rem .55rem;border-radius:var(--r-full);
   font-size:.68rem;font-weight:700;
 }
+/**
+ * ⚠️ ONE badge vocabulary, declared once, in two shapes.
+ *
+ * 🔴 It used to be eight variants across two files, and two pairs of them
+ * were indistinguishable: `.badge-new` and `.badge-verified` were both
+ * solid sage on white — "listed a few days ago" and "this landlord's
+ * identity has been checked", which are not remotely the same claim —
+ * and `.badge-featured` and `.badge-sublet` were both gold, one paid
+ * placement and the other a tenant letting a room they rent themselves.
+ * Neither file was wrong on its own; `state-lint` has guarded exactly this
+ * for `.state--*` since Phase 8 and badges had no such gate.
+ *
+ * The shapes carry the distinction a colour alone cannot:
+ *
+ *   SOLID  — the state of the room itself. What you act on, or cannot.
+ *            Available now, Reserved, Featured.
+ *   OUTLINE— everything said ABOUT the room or the person letting it.
+ *            Verified, Sublet, New, From a date.
+ *
+ * So a card never shows two solid badges meaning different kinds of thing,
+ * and the outline ones recede behind the photo instead of fighting it.
+ * `badge-lint` fails if any two land within 32 in sRGB on both fill and
+ * text.
+ */
 .badge-featured{background:var(--gold);color:var(--white)}
-.badge-new{background:var(--sage);color:var(--white)}
+/* Solid, because an empty room is the one thing a searcher acts on. */
+.badge-now{background:var(--sage);color:var(--white)}
 .badge-reserved{background:var(--slate);color:var(--white)}
+/* Outline. Free, but not yet: information, not an invitation — and it says
+   a DATE, so it reads whether or not the colour registers. */
+.badge-later{background:var(--white);color:var(--ink2);border:1px solid var(--border-strong)}
+/* Outline in sage: a claim about the LANDLORD, not about the room, so it
+   must not look like the room's own state. Set only by an approved identity
+   check in the admin queue. */
+.badge-verified{background:var(--white);color:var(--sage-deep);border:1px solid var(--sage)}
+/* Outline in sand. Deliberately between the green badges and a warning: a
+   sublet is a legitimate listing with a real extra risk attached, and
+   styling it as either "good" or "danger" would misdescribe it. */
+.badge-sublet{background:var(--white);color:var(--gold-text);border:1px solid var(--gold)}
+/* The normal case today, not a warning about that person — so it is the
+   only badge with no colour at all, and --slate rather than --ink2 so it
+   does not read as the same grey pill as "From 3 December". The gate
+   measured those two at 25 apart on fill and 0 on text; slate puts 90
+   between them, which is the difference between a date and a person. */
+.badge-unverified{background:var(--cream2);color:var(--slate);border:1px solid var(--border)}
+/* The quietest of the lot, on purpose: how recently something was listed is
+   the least decision-relevant thing on the card, and it was the loudest. */
+.badge-new{background:var(--white);color:var(--terra);border:1px solid var(--terra)}
 /* ⚠️ 32px before Phase 7q, on every room card on the board — eleven of them
    on one screen at 360px. An icon button has no text to make it big, so both
    dimensions are set rather than a min-height. */
@@ -411,9 +581,15 @@ img{display:block;max-width:100%}
 }
 .save-btn:hover,.save-btn.saved{color:var(--terra);background:var(--white)}
 .room-card-body{padding:1rem 1rem .85rem}
+/* ⚠️ The price was mono AND terracotta: the most important number on the
+   board set in the face reserved for code, in the colour reserved for the
+   primary button. It competed with every Apply on the page and read as a
+   control rather than a fact. Ink at display weight instead — it wins on
+   size and weight, which is how a price should win. */
 .room-price{
-  font-family:var(--font-mono);font-size:1.15rem;font-weight:500;
-  color:var(--terra);margin-bottom:.15rem;display:flex;align-items:center;gap:.5rem;
+  @include display-figure;
+  font-size:1.25rem;color:var(--ink);margin-bottom:.15rem;
+  display:flex;align-items:center;gap:.5rem;
 }
 .bills-tag{
   font-family:var(--font-body);font-size:.65rem;font-weight:700;
@@ -448,6 +624,18 @@ img{display:block;max-width:100%}
 }
 .landlord-name{font-size:.75rem;color:var(--slate);font-weight:500}
 .rating{font-size:.72rem;color:var(--gold-text);font-weight:600}
+/**
+ * ⚠️ "New landlord" is not a rating, and it was rendering as one.
+ *
+ * `.rating--none` had no rule at all and was ALLOWLISTED in
+ * css-coverage-audit as "a modifier on .rating, which carries the
+ * styling" — true about the mechanism and wrong about the result: .rating
+ * is --gold-text at weight 600 because it sits beside a star and a score.
+ * Inheriting that put "New landlord" on the card in the colour and weight
+ * of a rating, where it read as a score or a link. It is the absence of a
+ * rating, so it is the quietest thing in the row.
+ */
+.rating--none{color:var(--slate);font-weight:500}
 .avail-from{font-size:.72rem;color:var(--slate)}
 
 /* ═══ PAGE SECTIONS ═══ */
@@ -470,11 +658,12 @@ img{display:block;max-width:100%}
   gap:1.5rem;margin-top:3rem;
 }
 .hiw-step{
-  background:var(--card);border:1px solid var(--border);
+  background:var(--white);border:1px solid var(--border);
   border-radius:var(--r12);padding:1.75rem;position:relative;
 }
 .hiw-num{
-  font-family:var(--font-mono);font-size:2.5rem;font-weight:500;
+  @include display-figure;
+  font-size:2.5rem;
   /* --terra at 72%. Was rgba(192,78,40,.15) — 1.22:1 on --card, which is not
      a faint watermark, it is an invisible one: nobody could read the step
      numbers, and the accessibility audit failed 1.4.3 on all eight of them
@@ -507,7 +696,7 @@ img{display:block;max-width:100%}
   gap:1.25rem;margin-top:2.5rem;
 }
 .plan-card{
-  background:var(--card);border:1px solid var(--border);
+  background:var(--white);border:1px solid var(--border);
   border-radius:var(--r12);padding:1.75rem;position:relative;overflow:hidden;
 }
 .plan-card.featured{
@@ -523,8 +712,8 @@ img{display:block;max-width:100%}
 }
 .plan-name{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--slate);margin-bottom:.5rem}
 .plan-price{
-  font-family:var(--font-mono);font-size:2rem;font-weight:500;
-  color:var(--ink);margin-bottom:.1rem;
+  @include display-figure;
+  font-size:2rem;color:var(--ink);margin-bottom:.1rem;
 }
 .plan-price span{font-size:.9rem;color:var(--slate)}
 .plan-desc{font-size:.82rem;color:var(--slate);margin-bottom:1.25rem;line-height:1.6}
@@ -570,7 +759,7 @@ img{display:block;max-width:100%}
   border-bottom:2px solid var(--border);font-weight:700;color:var(--ink);
 }
 .legal-table td{padding:.55rem .85rem;border-bottom:1px solid var(--border);color:var(--ink2)}
-.legal-table tr:hover td{background:var(--cream)}
+.legal-table tr:hover td{background:var(--cream2)}
 
 /* ═══ PORTAL DASH ═══ */
 .portal-wrap{
@@ -587,8 +776,19 @@ img{display:block;max-width:100%}
   display:flex;align-items:center;justify-content:center;
   font-size:1.1rem;font-weight:700;color:var(--white);margin-bottom:.6rem;
 }
-.portal-user-name{font-size:.9rem;font-weight:700;color:var(--cream)}
-.portal-user-role{font-size:.72rem;color:rgba(250,247,240,.45)}
+.portal-user-name{font-size:.9rem;font-weight:700;color:var(--white)}
+/**
+ * 🔴 3.72:1 on 21 portal pages, where small text needs 4.5:1.
+ *
+ * ⚠️ Visible only at desktop width, which is why four years of runs at one
+ * viewport never saw it: below 900px the portal rail becomes a strip
+ * across the top and this element is not rendered at all. A contrast gate
+ * that runs at a single width measures a single width.
+ *
+ * .62 rather than .5, which is the value the footer's links already use
+ * against the same ink — measured rather than nudged until it passed.
+ */
+.portal-user-role{font-size:.72rem;color:rgba(250,247,240,.62)}
 /* ⚠️ 37px on DESKTOP before Phase 7q, including "Log out".
 
    The ≤900px block gives these 44px because the sidebar becomes a phone strip
@@ -605,10 +805,16 @@ img{display:block;max-width:100%}
   min-height:44px;
 }
 .portal-nav-link:hover,.portal-nav-link.active{
-  color:var(--cream);background:rgba(255,255,255,.06);
+  color:var(--white);background:rgba(255,255,255,.06);
   border-left-color:var(--terra);
 }
-.portal-nav-icon{font-size:1rem;flex-shrink:0}
+/* ⚠️ A fixed 1.25rem box rather than the inherited text size. These were
+   emoji: every one a different width, so the LABELS down the sidebar never
+   lined up with each other — the ragged left edge was the emoji, not the
+   spacing. app-icon is 1em square, so the box decides the size and every
+   label starts at the same x. */
+.portal-nav-icon{font-size:1.25rem;flex-shrink:0;width:1.25rem;display:inline-flex;justify-content:center;color:var(--white);opacity:.8}
+.portal-nav-link.active .portal-nav-icon,.portal-nav-link:hover .portal-nav-icon{opacity:1}
 /* ⚠️ min-width: 0 — every portal screen's defence against sideways scroll.
    This is a GRID item in .portal-wrap, so its default min-width: auto is its
    min-content width, and a grid TRACK is sized by its widest item. One screen
@@ -619,7 +825,7 @@ img{display:block;max-width:100%}
    Measured on the create-room wizard by hiding each child of the step in turn.
    Without this, every portal screen is one wide element away from the same
    bug, and the element that gets blamed will be the nav again. */
-.portal-main{padding:2rem;background:var(--cream);min-width:0}
+.portal-main{padding:2rem;background:var(--cream2);min-width:0}
 // The portal's h1. Deliberately close in size to a section title: this is a
 // working screen, not a landing page, and the point of the heading is the
 // outline rather than the drama.
@@ -632,7 +838,7 @@ img{display:block;max-width:100%}
 }
 .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.75rem}
 .stat-box{
-  background:var(--card);border:1px solid var(--border);
+  background:var(--white);border:1px solid var(--border);
   border-radius:var(--r8);padding:1rem;text-align:center;
 }
 /* ⚠️ The display face, not the mono one — §H3's first identity move.
@@ -662,7 +868,7 @@ img{display:block;max-width:100%}
 
 /* ═══ APP CARD ═══ */
 .app-card{
-  background:var(--card);border:1px solid var(--border);
+  background:var(--white);border:1px solid var(--border);
   border-radius:var(--r8);padding:1rem;
   display:flex;align-items:center;gap:1rem;margin-bottom:.75rem;
   transition:box-shadow .15s;
@@ -672,7 +878,13 @@ img{display:block;max-width:100%}
 .app-info{flex:1}
 .app-room{font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:.15rem}
 .app-location{font-size:.75rem;color:var(--slate)}
-.app-rent{font-family:var(--font-mono);font-size:.85rem;color:var(--terra)}
+/* ⚠️ Ink, not --terra. This is a LEDGER figure — a column of rents down a
+   list of rooms or applications, which is why it keeps the mono face for
+   alignment — but it was painted in the primary-action colour, so every
+   rent on the dashboard read as something to press, beside buttons that
+   actually were. Same fault the board card had and the same fix: a price
+   wins on weight, not on the colour that means "act on me". */
+.app-rent{font-family:var(--font-mono);font-size:.85rem;color:var(--ink)}
 .app-status{
   padding:.28rem .7rem;border-radius:var(--r-full);font-size:.72rem;font-weight:700;
   white-space:nowrap;
@@ -688,7 +900,7 @@ img{display:block;max-width:100%}
 .cookie-banner{
   position:fixed;bottom:1.25rem;left:1.25rem;
   max-width:480px;z-index:9999;
-  background:var(--ink);color:var(--cream);
+  background:var(--ink);color:var(--white);
   border-radius:var(--r12);padding:1.5rem;
   box-shadow:var(--shadow-xl);
   border-top:3px solid var(--terra);
@@ -719,12 +931,34 @@ img{display:block;max-width:100%}
   letter-spacing:1.5px;color:rgba(250,247,240,.62);margin-bottom:1rem;
 }
 .footer-col ul{list-style:none}
-.footer-col ul li{margin-bottom:.5rem}
+/* ⚠️ The margin goes; the padding on the link replaces it, so the GAP
+   between rows is now part of the target instead of dead space beside it.
+   Same rhythm on screen, a tappable row instead of a 17px line. */
+.footer-col ul li{margin-bottom:0}
+/**
+ * ⚠️ WCAG 2.2 AA, 2.5.8 Target Size (Minimum): 24×24 CSS px.
+ *
+ * 🔴 These were 17px tall on every page in the product, and had been since
+ * the footer was written. A column of links is not "words in a sentence",
+ * so none of 2.5.8's exemptions apply — it was a straight AA failure, on
+ * all 33 pages, and nothing saw it because every tap-target check in this
+ * repository was written for one screen by whoever was working on it.
+ * Found by sweeping every visible control instead of a list somebody
+ * remembered to write.
+ *
+ * `inline-flex` because padding on an inline element does not grow the
+ * box the way a target needs; `min-height` rather than a line-height
+ * trick so the number is the thing being asserted.
+ */
 .footer-col ul li a{
+  display:inline-flex;align-items:center;min-height:28px;padding:.25rem 0;
   font-size:.83rem;color:rgba(250,247,240,.62);
   transition:color .15s;cursor:pointer;
 }
-.footer-col ul li a:hover{color:var(--cream);text-decoration:none}
+.footer-col ul li a:hover{color:var(--white);text-decoration:none}
+/* The one standalone link down here — "Information Regulator" — was 16px
+   tall. Same 2.5.8 AA failure as the column links above, same fix. */
+.footer-bottom a{display:inline-flex;align-items:center;min-height:28px}
 .footer-bottom{
   border-top:1px solid rgba(255,255,255,.07);
   max-width:1200px;margin:0 auto;
@@ -748,7 +982,7 @@ img{display:block;max-width:100%}
 .passport-steps{display:flex;gap:.75rem;margin:1.25rem 0}
 .passport-step{
   flex:1;display:flex;gap:.65rem;align-items:flex-start;
-  padding:.85rem;border:1.5px solid var(--border);border-radius:var(--r4);background:var(--white);
+  padding:.85rem;border:1.5px solid var(--border-strong);border-radius:var(--r4);background:var(--white);
 }
 .passport-step.done{border-color:var(--sage);background:rgba(61,112,64,.05)}
 .passport-step__mark{
@@ -766,7 +1000,7 @@ img{display:block;max-width:100%}
 }
 
 .passport-card{
-  border:1.5px solid var(--border);border-radius:var(--r4);
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);
   padding:1rem;margin-bottom:.85rem;background:var(--white);
 }
 .passport-card__head{display:flex;justify-content:space-between;align-items:center;gap:.75rem;margin-bottom:.4rem}
@@ -791,7 +1025,7 @@ img{display:block;max-width:100%}
 .passport-ref label{display:block;font-size:.82rem;margin-bottom:.6rem}
 .passport-ref input{
   display:block;width:100%;margin-top:.25rem;padding:.55rem;
-  border:1.5px solid var(--border);border-radius:var(--r4);font:inherit;
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);font:inherit;
 }
 .passport-trail summary{font-size:.8rem;color:var(--terra);cursor:pointer}
 .passport-trail ul{list-style:none;margin:.6rem 0 0;padding:0}
@@ -835,15 +1069,18 @@ img{display:block;max-width:100%}
 .yard-totals{display:flex;gap:.6rem;margin-bottom:1.25rem}
 .yard-total{
   flex:1;text-align:center;padding:.85rem .5rem;
-  border:1.5px solid var(--border);border-radius:var(--r4);background:var(--white);
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);background:var(--white);
 }
-.yard-total strong{display:block;font-family:var(--font-mono);font-size:1.5rem;line-height:1.1}
+.yard-total strong{
+  @include display-figure;
+  display:block;font-size:1.5rem;line-height:1.1;
+}
 .yard-total span{font-size:.72rem;color:var(--ink2);text-transform:uppercase;letter-spacing:1px}
 .yard-total--good strong{color:var(--sage)}
 .yard-total--alert strong{color:var(--terra)}
 
 .yard{
-  border:1.5px solid var(--border);border-radius:var(--r4);
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);
   background:var(--white);margin-bottom:.85rem;overflow:hidden;
 }
 .yard__head{
@@ -888,7 +1125,7 @@ img{display:block;max-width:100%}
    44px via padding so the label text stays vertically centred against it. */
 .yard-adopt__row{
   display:flex;align-items:center;gap:.6rem;min-height:44px;
-  padding:.3rem .5rem;border:1.5px solid var(--border);border-radius:var(--r4);
+  padding:.3rem .5rem;border:1.5px solid var(--border-strong);border-radius:var(--r4);
   background:var(--white);font-size:.85rem;cursor:pointer;
 }
 .yard-adopt__row input{width:20px;height:20px;flex:0 0 auto}
@@ -915,7 +1152,7 @@ img{display:block;max-width:100%}
 .yard-shared-form textarea,
 .yard-shared-form select{
   width:100%;font:inherit;font-weight:400;padding:.55rem .6rem;
-  border:1.5px solid var(--border);border-radius:var(--r4);min-height:44px;
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);min-height:44px;
 }
 .yard-shared-form textarea{min-height:5rem;line-height:1.5}
 .yard-shared-form__actions{display:flex;flex-wrap:wrap;align-items:center;gap:.9rem}
@@ -947,7 +1184,7 @@ img{display:block;max-width:100%}
 .expense-form input,
 .expense-form select{
   width:100%;font:inherit;font-weight:400;padding:.55rem .6rem;
-  border:1.5px solid var(--border);border-radius:var(--r4);min-height:44px;
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);min-height:44px;
 }
 /* The error and the actions belong across the whole form, not in one column. */
 .expense-form .field-error,
@@ -959,12 +1196,12 @@ img{display:block;max-width:100%}
    Cards, not a dropdown: a landlord recognises "Ext 7 back rooms" and a photo
    of their own yard; they do not recognise an address in a select. 44px targets
    because this is a phone. */
-.prop-picker{border:1.5px solid var(--border);border-radius:var(--r8);padding:.85rem;margin-bottom:1.1rem}
+.prop-picker{border:1.5px solid var(--border-strong);border-radius:var(--r8);padding:.85rem;margin-bottom:1.1rem}
 .prop-picker legend{font-size:.88rem;font-weight:700;padding:0 .3rem}
 .prop-picker__options{display:grid;gap:.5rem;margin-top:.5rem}
 .prop-picker__card{
   display:flex;align-items:center;gap:.7rem;width:100%;min-height:56px;
-  padding:.5rem .6rem;border:1.5px solid var(--border);border-radius:var(--r8);
+  padding:.5rem .6rem;border:1.5px solid var(--border-strong);border-radius:var(--r8);
   background:var(--white);text-align:left;font:inherit;cursor:pointer;
 }
 .prop-picker__card:hover{border-color:var(--terra)}
@@ -981,8 +1218,16 @@ img{display:block;max-width:100%}
 .yard-room__actions{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.3rem;font-size:.78rem}
 .yard-room:last-child{border-bottom:none}
 .yard-room__main{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;font-size:.86rem}
-.yard-room__main a{font-weight:700}
-.yard-room__applicants{display:inline-block;margin-top:.35rem;font-size:.8rem;font-weight:700}
+/* The room's name, and the way into it. A 21px line 4px from the status
+   beside it: under 2.5.8 AA with no spacing exception available. */
+.yard-room__main a{display:inline-flex;align-items:center;min-height:28px;font-weight:700}
+/* The only way into a room's applicants from the yard, and it was a 19px
+   line 7px from the row above it. inline-flex so the height applies. */
+/* A standalone "back" link: alone in its paragraph, so it is navigation
+   rather than prose and needs a real target (2.5.8 AA). Global because the
+   same shape appears on more than one screen. */
+.back-link{display:inline-flex;align-items:center;min-height:28px;font-weight:600}
+.yard-room__applicants{display:inline-flex;align-items:center;min-height:28px;margin-top:.25rem;font-size:.8rem;font-weight:700}
 
 .yard-rent{
   display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
@@ -1004,7 +1249,7 @@ img{display:block;max-width:100%}
      this market. The vertical space is worth it on the one control a
      landlord taps every month. */
   min-height:44px;min-width:44px;
-  padding:.25rem .7rem;border-radius:var(--r4);border:1.5px solid var(--border);
+  padding:.25rem .7rem;border-radius:var(--r4);border:1.5px solid var(--border-strong);
   background:var(--white);color:var(--ink);font-size:.78rem;cursor:pointer;
 }
 .yard-rent__actions button:hover:not(:disabled){border-color:var(--terra);color:var(--terra)}
@@ -1068,13 +1313,13 @@ img{display:block;max-width:100%}
 
 .yard-new{margin-top:1rem}
 .yard-new form{
-  border:1.5px solid var(--border);border-radius:var(--r4);
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);
   padding:1rem;background:var(--white);
 }
 .yard-new label{display:block;font-size:.82rem;margin-bottom:.6rem}
 .yard-new input{
   display:block;width:100%;margin-top:.25rem;padding:.55rem;
-  border:1.5px solid var(--border);border-radius:var(--r4);font:inherit;
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);font:inherit;
 }
 .yard-new__row{display:flex;gap:.6rem}
 .yard-new__row label{flex:1}
@@ -1106,7 +1351,7 @@ img{display:block;max-width:100%}
 .rent-answer label{display:block;margin-bottom:.35rem;font-weight:600;color:var(--ink)}
 .rent-answer input{
   width:100%;min-height:40px;padding:.4rem .6rem;margin-bottom:.5rem;
-  border:1.5px solid var(--border);border-radius:var(--r4);
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);
   background:var(--white);color:var(--ink);font-size:.85rem;font-family:inherit;
 }
 .rent-answer .btn{min-height:40px}

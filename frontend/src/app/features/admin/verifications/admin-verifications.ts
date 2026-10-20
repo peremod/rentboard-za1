@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { AdminService, PendingVerification } from '../../../core/services/admin.service';
 import { VerificationService } from '../../../core/services/verification.service';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Verification review queue.
@@ -20,12 +21,12 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-admin-verifications',
   standalone: true,
-  imports: [DatePipe, FormsModule, Loading],
+  imports: [Icon, DatePipe, FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
       <div class="insight-banner">
-        🔒
+        <app-icon name="lock"/>
         <span>
           Documents are deleted the moment you decide, approved or rejected —
           only the outcome is kept. Approving an identity check is what sets the
@@ -45,7 +46,7 @@ import { Loading } from '../../../shared/components/loading/loading';
       } @else {
         @for (req of requests(); track req.id) {
           <div class="app-card">
-            <div class="app-thumb portal-thumb" aria-hidden="true">📄</div>
+            <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="file-text"/></div>
 
             <div class="app-info">
               <div class="app-room">{{ req.user.fullName }} — {{ typeLabel(req.type) }}</div>

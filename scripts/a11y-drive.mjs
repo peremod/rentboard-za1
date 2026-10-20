@@ -69,6 +69,14 @@ const API = (process.env.API_URL ?? 'http://localhost:3000').replace(/\/$/, '');
  * arriving at is that an allowlist absorbs new defects quietly, and a ratchet
  * refuses them while admitting the ones already shipped.
  */
+/**
+ * Controls that clear WCAG 2.2 AA (24px) but miss this codebase's own 44px
+ * floor. Counted across the whole run and ratcheted, not failed — see the
+ * tap-target note below.
+ */
+let tapDebt = 0;
+const TAP_DEBT_BASELINE = Number(process.env.TAP_DEBT_BASELINE ?? 999);
+
 const OVERFLOW_BASELINE = JSON.parse(
   readFileSync(new URL('./overflow-baseline.json', import.meta.url), 'utf8'),
 );
@@ -490,6 +498,214 @@ async function auditPage(page, path, { close = true } = {}) {
     // WCAG 2.5.3 is the reason it is a failure rather than a preference.
     console.log(`    ❌ <${c.tag}> ${locate(c)}: aria-label "${c.ariaLabel}" hides visible text "${clip(c.visibleText)}"`);
     failures.push(`${path}: <${c.tag}> ${locate(c)} aria-label hides its own visible text`);
+  }
+
+  /**
+   * ── A select still looks like a select ────────────────────────────────
+   *
+   * 🔴 styles.scss sets `appearance:none` on every select — which removes
+   * the NATIVE arrow — and draws one back with a `background-image`. Three
+   * class rules then set `background:` — the SHORTHAND — which resets
+   * background-image to none. So the replacement was cancelled while the
+   * suppression stayed, and all eleven selects on the board rendered as
+   * plain text boxes with nothing to say they opened a list.
+   *
+   * ⚠️ Measured on the composited page rather than read from the
+   * stylesheet, because the defect IS the cascade: both rules are correct
+   * in isolation and the file says nothing about the pair. The same shape
+   * as `.hint__close` and the nav sheet's buttons — a property set by one
+   * rule and quietly undone by another that was not thinking about it.
+   *
+   * A native arrow (`appearance` left alone) is fine; what is not fine is
+   * suppressing it and supplying nothing.
+   */
+  /**
+   * ── An action that takes something away looks different ───────────────
+   *
+   * 🔴 Delete on an active listing rendered as `.btn-ghost-light` — the
+   * same computed background, colour and border as Edit, View and Pause
+   * sitting beside it on the same row. Four identical buttons, one of
+   * which deletes the listing, told apart only by the word on them.
+   *
+   * ⚠️ "Takes something away", not "destructive", and the wording was
+   * corrected rather than the word list narrowed. The check's first run
+   * flagged "Remove from shortlist" beside "Invite to view", and that is
+   * NOT irreversible — one click puts it back. Narrowing the pattern until
+   * the gate went green would have been tuning to a result; the honest
+   * reading is that the finding is real for a different reason. One of
+   * those buttons undoes a state and the other schedules a viewing with a
+   * person, and they were the same button to look at.
+   *
+   * ⚠️ Measured by COMPUTED STYLE against the controls it actually sits
+   * with, not by looking for a class name: a check that asserted
+   * `.btn-danger` would pass on a danger class that had been overridden to
+   * look like everything else, which is the fault this file keeps finding.
+   */
+  const lookalikes = await page.evaluate(() => {
+    const subtractive = /^(delete|remove|discard|close account|revoke|cancel my|withdraw)/i;
+    const rows = new Map();
+    for (const el of document.querySelectorAll('button, a[href]')) {
+      if (el.offsetParent === null) continue;
+      const parent = el.parentElement;
+      if (!parent) continue;
+      if (!rows.has(parent)) rows.set(parent, []);
+      rows.get(parent).push(el);
+    }
+    const out = [];
+    for (const [, group] of rows) {
+      if (group.length < 2) continue;
+      for (const el of group) {
+        const text = (el.textContent || '').trim();
+        if (!subtractive.test(text)) continue;
+        const c = getComputedStyle(el);
+        const mine = `${c.backgroundColor}|${c.color}|${c.borderTopColor}`;
+        const twin = group.find((o) => {
+          if (o === el) return false;
+          const oc = getComputedStyle(o);
+          return `${oc.backgroundColor}|${oc.color}|${oc.borderTopColor}` === mine;
+        });
+        if (twin) out.push({ text: text.slice(0, 24), twin: (twin.textContent || '').trim().slice(0, 24) });
+      }
+    }
+    return out;
+  });
+
+  if (lookalikes.length) {
+    for (const l of lookalikes) {
+      console.log(`    ❌ "${l.text}" is styled identically to "${l.twin}" beside it`);
+    }
+    failures.push(`${path}: ${lookalikes.length} control(s) that take something away look like a neighbour that does not`);
+  }
+
+  /**
+   * ── Tap targets, swept rather than listed ─────────────────────────────
+   *
+   * ⚠️ Every 44px check in this repository was written for one screen by
+   * whoever was working on it, and `.filter-pill` was the FOURTH control
+   * found under size by a sweep after three app-wide rules had each
+   * reached a different subset. CLAUDE.md names the failure in those
+   * words: a row-shaped check only ever finds what somebody thought to
+   * list. So this asks EVERY visible control on all 33 pages.
+   *
+   * ⚠️ TWO thresholds, because they are two different claims.
+   *
+   *   · 24px is WCAG 2.2 AA (2.5.8 Target Size Minimum). It is a
+   *     conformance requirement, so it FAILS the run. The first sweep
+   *     found the footer's link list at 17px tall — a column of targets,
+   *     not words in a sentence, so no exemption applies and it has been
+   *     an AA failure on every page since the footer was written.
+   *   · 44px is this codebase's own floor (2.5.5 AAA), because the device
+   *     this is built for is a cheap Android used one-handed. It is
+   *     RATCHETED, not enforced: a flat 44px fails the logo at 88×30,
+   *     which is fine under AA, and retrofitting every link in one change
+   *     is a layout decision rather than a defect fix. The number may fall
+   *     and never rise, the same arrangement token-lint and emoji-lint use.
+   *
+   * Inline links inside a sentence are exempt from both — 2.5.8 exempts
+   * them, and making a link in running text 44px tall breaks the sentence.
+   */
+  const small = await page.evaluate((floor) => {
+    const out = [];
+    for (const el of document.querySelectorAll('button, a[href], select, input, textarea, [role="button"]')) {
+      if (el.offsetParent === null) continue;
+      const type = (el.getAttribute('type') || '').toLowerCase();
+      if (type === 'hidden') continue;
+      // A link inside running text is not a tap target in the 2.5.8 sense.
+      const inProse = el.tagName === 'A' && /^(P|LI|SPAN|LABEL)$/.test(el.parentElement?.tagName || '')
+        && (el.parentElement.textContent || '').trim().length > (el.textContent || '').trim().length + 12;
+      if (inProse) continue;
+      /**
+       * ⚠️ A checkbox or radio inside a <label> is not the target — the
+       * label is, because clicking the words toggles it. Measuring the
+       * 18px box and calling it a failure measures the wrong element,
+       * which is the fault this file keeps finding in other checks.
+       */
+      let target = el;
+      if (/^(INPUT)$/.test(el.tagName) && /^(checkbox|radio)$/.test(type)) {
+        const label = el.closest('label');
+        if (label) target = label;
+      }
+      const r = target.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      if (r.height + 0.5 < floor || r.width + 0.5 < floor) {
+        out.push({
+          tag: el.tagName.toLowerCase(),
+          cls: (el.getAttribute('class') || '').split(' ')[0] || '',
+          text: (el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 28),
+          w: Math.round(r.width), h: Math.round(r.height),
+          /**
+           * ⚠️ Where it lives, not just what it is. The first findings from
+           * this sweep were classless <a> elements reported as
+           * `<a class="">`, which names nothing a person can go and edit.
+           * Two ancestors is enough to locate any of them.
+           */
+          where: (() => {
+            const parts = [];
+            let n = el.parentElement;
+            for (let i = 0; i < 2 && n; i++) {
+              parts.push(n.tagName.toLowerCase() + (n.getAttribute('class') ? `.${n.getAttribute('class').split(' ')[0]}` : ''));
+              n = n.parentElement;
+            }
+            return parts.join(' < ');
+          })(),
+          /**
+           * 2.5.8's SPACING exception: an undersized target conforms if a
+           * 24px circle centred on it touches no other target's circle.
+           * Implemented as the gap to the nearest other target, which is
+           * the same question asked in rectangles. Without this the check
+           * is stricter than the criterion it cites.
+           */
+          gap: (() => {
+            let nearest = Infinity;
+            for (const other of document.querySelectorAll('button, a[href], select, input, textarea, [role="button"]')) {
+              if (other === el || other === target || other.offsetParent === null) continue;
+              if (target.contains(other) || other.contains(target)) continue;
+              const o = other.getBoundingClientRect();
+              if (o.width === 0 || o.height === 0) continue;
+              const dx = Math.max(o.left - r.right, r.left - o.right, 0);
+              const dy = Math.max(o.top - r.bottom, r.top - o.bottom, 0);
+              nearest = Math.min(nearest, Math.hypot(dx, dy));
+            }
+            return nearest === Infinity ? 9999 : Math.round(nearest);
+          })(),
+        });
+      }
+    }
+    return out;
+  }, 44);
+
+  // Undersized AND crowded. Undersized with 24px of clear air around it is
+  // what 2.5.8's spacing exception allows.
+  const belowAA = small.filter((c) => (c.h + 0.5 < 24 || c.w + 0.5 < 24) && c.gap < 24);
+  if (belowAA.length) {
+    for (const c of belowAA) {
+      console.log(`    ❌ <${c.tag} class="${c.cls}"> "${c.text}" is ${c.w}×${c.h} with ${c.gap}px to its neighbour, in ${c.where} — under 2.5.8 AA`);
+    }
+    failures.push(`${path}: ${belowAA.length} control(s) under 24px (2.5.8 AA) at ${WIDTH}px`);
+  }
+  /** The house floor, counted and carried rather than enforced. See above. */
+  tapDebt += small.length - belowAA.length;
+
+  const blindSelects = await page.locator('select').evaluateAll((els) => els
+    .filter((el) => el.offsetParent !== null)
+    .map((el) => {
+      const c = getComputedStyle(el);
+      return {
+        cls: (el.getAttribute('class') || '').split(' ')[0] || 'select',
+        suppressed: c.appearance === 'none' || c['-webkit-appearance'] === 'none',
+        image: c.backgroundImage,
+      };
+    })
+    .filter((s) => s.suppressed && (!s.image || s.image === 'none')));
+
+  if (blindSelects.length) {
+    for (const b of blindSelects) {
+      console.log(`    ❌ <select class="${b.cls}"> suppresses the native arrow and draws no replacement`);
+    }
+    failures.push(`${path}: ${blindSelects.length} select(s) with no opener affordance`);
+  } else {
+    const selects = await page.locator('select').count();
+    if (selects) console.log(`  ✅ all ${selects} select(s) show they open a list`);
   }
 
   // ── Colour contrast, measured by axe against the composited page ────────

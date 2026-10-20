@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Creating an account with a phone number and nothing else — Phase 7g part two.
@@ -36,7 +37,7 @@ import { AuthService } from '../../../core/services/auth.service';
 @Component({
   selector: 'app-register-phone',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [Icon, CommonModule, FormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="auth">
@@ -95,18 +96,18 @@ import { AuthService } from '../../../core/services/auth.service';
             Use a different number
           </button>
         } @else {
-          <p class="auth__fine">✅ {{ phone }} is confirmed. Last bit.</p>
+          <p class="auth__fine"><app-icon name="check-circle"/> {{ phone }} is confirmed. Last bit.</p>
 
           <div class="auth__roles" role="group" aria-label="What brings you here?">
             <button type="button" class="auth__role" [class.is-active]="role() === 'TENANT'"
                     [attr.aria-pressed]="role() === 'TENANT'" (click)="role.set('TENANT')">
-              <span class="auth__role-icon" aria-hidden="true">🏠</span>
+              <span class="auth__role-icon" aria-hidden="true"><app-icon name="home"/></span>
               <span class="auth__role-title">I'm looking for a room</span>
               <span class="auth__role-sub">Tenant</span>
             </button>
             <button type="button" class="auth__role" [class.is-active]="role() === 'LANDLORD'"
                     [attr.aria-pressed]="role() === 'LANDLORD'" (click)="role.set('LANDLORD')">
-              <span class="auth__role-icon" aria-hidden="true">🔑</span>
+              <span class="auth__role-icon" aria-hidden="true"><app-icon name="key"/></span>
               <span class="auth__role-title">I have a room to let</span>
               <span class="auth__role-sub">Landlord</span>
             </button>

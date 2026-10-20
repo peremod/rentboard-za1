@@ -4,6 +4,7 @@ import { Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../../environments/environment';
 import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * The last step of getting back in when the phone is gone — Phase 7q.
@@ -24,7 +25,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 @Component({
   selector: 'app-lost-number',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [Icon, FormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="auth">
@@ -50,7 +51,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
         }
 
         <div class="insight-banner">
-          📞
+          <app-icon name="phone"/>
           <span>
             <strong>Talk to us first.</strong> Because your account has no email
             address and no password, your number is the only way in — so we have

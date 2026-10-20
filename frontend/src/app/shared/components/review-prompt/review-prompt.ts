@@ -3,6 +3,7 @@ import { DatePipe } from '@angular/common';
 import { ReviewsService } from '../../../core/services/reviews.service';
 import { ReviewableTenancy, ReviewType } from '../../../core/models/review.model';
 import { ReviewForm } from '../review-form/review-form';
+import { Icon } from '../icon/icon';
 
 /**
  * "You lived at X — how was it?" Shown on both dashboards after a tenancy ends.
@@ -14,7 +15,7 @@ import { ReviewForm } from '../review-form/review-form';
 @Component({
   selector: 'app-review-prompt',
   standalone: true,
-  imports: [DatePipe, ReviewForm],
+  imports: [Icon, DatePipe, ReviewForm],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (pending().length > 0) {
@@ -48,7 +49,7 @@ import { ReviewForm } from '../review-form/review-form';
 
             @if (remaining(item).length === 0) {
               <p class="field-hint">
-                ✅ Thank you — your review is held until
+                <app-icon name="check-circle"/> Thank you — your review is held until
                 {{ counterparty(item) }} has written theirs, or the window closes.
               </p>
             }

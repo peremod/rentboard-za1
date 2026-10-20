@@ -10,6 +10,7 @@ import { WHATSAPP_ENABLED } from '../../core/config/feature-flags';
 import { AuthService } from '../../core/services/auth.service';
 import { Room, SA_PROVINCES } from '../../core/models/room.model';
 import { RoomCard } from '../../shared/components/room-card/room-card';
+import { Icon } from '../../shared/components/icon/icon';
 import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
 import { SkeletonCard } from '../../shared/components/skeleton-card/skeleton-card';
 import { TranslatePipe } from '../../shared/pipes/translate.pipe';
@@ -26,7 +27,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [PluralPipe, FormsModule, RouterLink, RoomCard, SkeletonCard, TranslatePipe, AdSlot],
+  imports: [PluralPipe, FormsModule, RouterLink, RoomCard, SkeletonCard, Icon, TranslatePipe, AdSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="hero" [class.hero--splash]="splash()">
@@ -72,33 +73,45 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
     </section>
 
     <div class="trust-strip">
-      <div class="trust-item"><span class="trust-icon">🔒</span>POPIA Compliant</div>
-      <div class="trust-item"><span class="trust-icon">🏛️</span>Rental Housing Act Aligned</div>
-      <div class="trust-item"><span class="trust-icon">🚫</span>No Agent Fees</div>
+      <div class="trust-item"><app-icon class="trust-icon" name="lock"/>POPIA Compliant</div>
+      <div class="trust-item"><app-icon class="trust-icon" name="scale"/>Rental Housing Act Aligned</div>
+      <div class="trust-item"><app-icon class="trust-icon" name="ban"/>No Agent Fees</div>
       <!-- ⚠️ Phase 8j. This strip is a promise made to a visitor on the
            landing page, so it cannot advertise a channel that is switched off.
            Room alerts are the true version of the same claim: a saved search
            mails you the moment something matches, and costs nobody anything. -->
       @if (whatsappEnabled) {
-        <div class="trust-item"><span class="trust-icon">📱</span>WhatsApp Notifications</div>
+        <div class="trust-item"><app-icon class="trust-icon" name="smartphone"/>WhatsApp Notifications</div>
       } @else {
-        <div class="trust-item"><span class="trust-icon">🔔</span>Free Room Alerts</div>
+        <div class="trust-item"><app-icon class="trust-icon" name="bell"/>Free Room Alerts</div>
       }
     </div>
 
     <div class="search-wrap">
       <div class="search-bar">
         <div class="search-input-wrap">
-          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" aria-hidden="true">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-          </svg>
+          <!-- The one hand-rolled SVG left on this page. Same shape as
+               app-icon's search icon, drawn a second time. -->
+          <app-icon class="search-icon" name="search"/>
           <input class="search-input" type="text" [placeholder]="'search.placeholder' | translate"
                  [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()"
                  (focus)="suggestOpen.set(true)" (blur)="closeSuggestions()"
                  autocomplete="off" role="combobox"
                  [attr.aria-expanded]="suggestOpen() && suggestions().length > 0"
                  aria-autocomplete="list"/>
+
+          <!-- ⚠️ There was no way to empty this box but backspace.
+               Every other filter on the board has a clear — the date has
+               "Clear the date", the panel has "Clear all filters" — and the
+               one a person types into, which is the hardest to empty on a
+               phone, had none. mousedown rather than click for the same
+               reason as the suggestions above: blur fires first. -->
+          @if (searchTerm) {
+            <button type="button" class="search-clear" aria-label="Clear the search"
+                    (mousedown)="clearSearch()">
+              <app-icon name="x"/>
+            </button>
+          }
 
           @if (suggestOpen() && suggestions().length > 0) {
             <ul class="search-suggest" role="listbox">
@@ -118,25 +131,31 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
             </ul>
           }
         </div>
-        <select class="search-select" [attr.aria-label]="'search.label_province' | translate"
-                [(ngModel)]="province" (ngModelChange)="onFilterChange()">
-          <option value="">{{ 'search.all_provinces' | translate }}</option>
-          @for (p of provinces; track p) { <option [value]="p">{{ p }}</option> }
-        </select>
-        <select class="search-select" [attr.aria-label]="'search.label_room_type' | translate"
-                [(ngModel)]="roomType" (ngModelChange)="onFilterChange()">
-          <option value="">{{ 'search.all_room_types' | translate }}</option>
-          <option value="shared_house">🏠 Shared house</option>
-          <option value="en_suite">🚿 En-suite</option>
-          <option value="studio">🏢 Studio</option>
-          <option value="private">🔑 Private room</option>
-        </select>
-        <select class="search-select" [attr.aria-label]="'search.label_max_rent' | translate"
-                [(ngModel)]="maxRentCents" (ngModelChange)="onFilterChange()">
-          @for (p of priceOptions; track p.value) {
-            <option [value]="p.value">{{ p.label }}</option>
-          }
-        </select>
+        <!-- ⚠️ A wrapper that is display:contents on a desktop and a
+             two-column grid on a phone. The three selects were four
+             full-width rows with the text box; contents means the
+             desktop row is unchanged and the element adds no box. -->
+        <div class="search-selects">
+          <select class="search-select" [attr.aria-label]="'search.label_province' | translate"
+                  [(ngModel)]="province" (ngModelChange)="onFilterChange()">
+            <option value="">{{ 'search.all_provinces' | translate }}</option>
+            @for (p of provinces; track p) { <option [value]="p">{{ p }}</option> }
+          </select>
+          <select class="search-select" [attr.aria-label]="'search.label_room_type' | translate"
+                  [(ngModel)]="roomType" (ngModelChange)="onFilterChange()">
+            <option value="">{{ 'search.all_room_types' | translate }}</option>
+            <option value="shared_house">Shared house</option>
+            <option value="en_suite">En-suite</option>
+            <option value="studio">Studio</option>
+            <option value="private">Private room</option>
+          </select>
+          <select class="search-select" [attr.aria-label]="'search.label_max_rent' | translate"
+                  [(ngModel)]="maxRentCents" (ngModelChange)="onFilterChange()">
+            @for (p of priceOptions; track p.value) {
+              <option [value]="p.value">{{ p.label }}</option>
+            }
+          </select>
+        </div>
       </div>
     </div>
 
@@ -149,7 +168,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
         <div class="filter-drawer-header">
           <h2>{{ 'filters.title' | translate }}</h2>
           <button type="button" class="filter-drawer-close" (click)="filtersOpen.set(false)"
-                  aria-label="Close filters">✕</button>
+                  aria-label="Close filters"><app-icon name="x"/></button>
         </div>
 
         <div class="filter-group">
@@ -187,7 +206,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
           <div class="movein-chips" role="group" aria-labelledby="movein-label">
             <button type="button" class="quick-chip" [class.quick-chip--on]="availableNow"
                     [attr.aria-pressed]="availableNow" (click)="toggleAvailableNow()">
-              ⚡ As soon as possible
+              <app-icon name="zap"/> As soon as possible
             </button>
             @if (moveIn || availableNow) {
               <button type="button" class="link-btn" (click)="clearMoveIn()">
@@ -200,6 +219,16 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
             <span>On or after this date, I need a room</span>
             <input type="date" [(ngModel)]="moveIn" [min]="today"
                    (ngModelChange)="onMoveInChange()"/>
+            <!-- The native date box renders in the BROWSER's locale, not the
+                 page's. index.html already says lang="en-ZA" and it changes
+                 nothing: a browser set to en-US shows mm/dd/yyyy, so somebody
+                 typing 25/11 is refused and somebody reading 11/12 cannot tell
+                 which number is the day. The order cannot be set from here at
+                 all, so the chosen day is echoed back in words, where the
+                 month is a name and cannot be mistaken for the day. -->
+            @if (moveIn) {
+              <span class="filter-date-echo">{{ dateInWords(moveIn) }}</span>
+            }
           </label>
 
           @if (moveIn) {
@@ -212,6 +241,9 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                 <span>…up to</span>
                 <input type="date" [(ngModel)]="moveInTo" [min]="moveIn"
                        (ngModelChange)="onMoveInChange()"/>
+                @if (moveInTo) {
+                  <span class="filter-date-echo">{{ dateInWords(moveInTo) }}</span>
+                }
               </label>
             }
             <p class="filter-note">
@@ -335,13 +367,19 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
           <div class="filter-alert-cta">
             @if (searchSaved()) {
               <p class="field-hint">
-                ✅ Alert saved. Manage it in
+                <app-icon name="check-circle"/> Alert saved. Manage it in
                 <a routerLink="/tenant/dashboard">your dashboard</a>.
               </p>
             } @else {
               <button type="button" class="btn btn-outline"
                       [disabled]="savingSearch()" (click)="saveCurrentSearch()">
-                {{ savingSearch() ? 'Saving…' : '🔔 Alert me about rooms like this' }}
+                <!-- ⚠️ The icon is beside the interpolation, not inside it:
+                     a string in a ternary cannot hold an element, and the
+                     bell belongs to the resting state only — showing it
+                     next to "Saving…" says the alert already exists. -->
+                @if (savingSearch()) { Saving… } @else {
+                  <app-icon name="bell"/> Alert me about rooms like this
+                }
               </button>
               @if (saveSearchError()) {
                 <p class="field-error" role="alert">{{ saveSearchError() }}</p>
@@ -375,7 +413,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                   class="quick-chip"
                   [class.quick-chip--on]="availableNow"
                   (click)="toggleAvailableNow()">
-            ⚡ Available now
+            <app-icon name="zap"/> Available now
           </button>
           @if (availableNow) {
             <span class="quick-filters__note">Free now or within two weeks</span>
@@ -811,11 +849,25 @@ export class Home implements OnInit, OnDestroy {
    */
   moveInLabel(): string {
     const value = this.flexibleDates && this.moveInTo ? this.moveInTo : this.moveIn;
+    return this.dateInWords(value);
+  }
+
+  /**
+   * An ISO date as a South African would write it: 25 November 2026.
+   *
+   * The year is carried because this also labels the date inputs themselves,
+   * and a bound with no year is a bound somebody has to guess at in December.
+   * Midday Africa/Johannesburg so a phone in another timezone does not render
+   * the day before, and the raw value is returned rather than a blank if it
+   * ever fails to parse - a wrong-looking date is recoverable, a silently
+   * empty one is not.
+   */
+  dateInWords(value: string): string {
     if (!value) return '';
     const at = new Date(`${value}T12:00:00+02:00`);
     if (Number.isNaN(at.getTime())) return value;
     return at.toLocaleDateString('en-ZA', {
-      day: 'numeric', month: 'long', timeZone: 'Africa/Johannesburg',
+      day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Johannesburg',
     });
   }
 
@@ -845,6 +897,20 @@ export class Home implements OnInit, OnDestroy {
    * because a date was too tight is how a search gets abandoned rather than
    * widened.
    */
+  /**
+   * Empties the text search and re-runs the board.
+   *
+   * Through onSearchChange rather than setting the signal alone: the board
+   * is debounced and the suggestion list has its own state, so assigning
+   * the field would clear the BOX and leave the results as they were —
+   * which is the shape of defect this repo keeps producing.
+   */
+  clearSearch() {
+    this.searchTerm = '';
+    this.suggestOpen.set(false);
+    this.onSearchChange();
+  }
+
   clearMoveIn() {
     this.moveIn = '';
     this.moveInTo = '';

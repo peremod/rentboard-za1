@@ -5,6 +5,7 @@ import { RouterLink } from '@angular/router';
 import {
   ApplicationsService, UpcomingViewing, ViewingOutcome,
 } from '../../../core/services/applications.service';
+import { Icon } from '../icon/icon';
 
 /**
  * Viewings a tenant has been invited to — Phase 7l, brief item 26.
@@ -32,7 +33,7 @@ import {
 @Component({
   selector: 'app-viewing-invitations',
   standalone: true,
-  imports: [DatePipe, FormsModule, RouterLink],
+  imports: [Icon, DatePipe, FormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (viewings().length) {
@@ -51,7 +52,7 @@ import {
               <span class="muted">{{ v.application.room.locationDisplay }}</span>
               <!-- Where to meet, in the landlord's words. This is the one place
                    an address is deliberately shared, with this one person. -->
-              <span class="vi__place">📍 {{ v.meetingPlace }}</span>
+              <span class="vi__place"><app-icon name="map-pin"/> {{ v.meetingPlace }}</span>
               @if (v.note) { <span class="muted">{{ v.note }}</span> }
             </div>
 
@@ -114,7 +115,7 @@ import {
                     <div class="vi__outcomes">
                       @for (o of outcomes; track o.value) {
                         <button type="button" class="vi__outcome" (click)="pick(v, o.value)">
-                          {{ o.label }}
+                          <app-icon [name]="o.icon"/> {{ o.label }}
                         </button>
                       }
                     </div>
@@ -128,7 +129,7 @@ import {
                   }
                 </div>
               } @else {
-                <span class="vi__going">✅ You said you are coming</span>
+                <span class="vi__going"><app-icon name="check-circle"/> You said you are coming</span>
                 <button type="button" class="link-btn" [disabled]="busy() === v.id"
                         (click)="callOff(v)">Call it off</button>
               }
@@ -165,6 +166,10 @@ import {
     .vi__when { display: flex; align-items: baseline; gap: .5rem; }
     .vi__time { font-size: 1.05rem; font-weight: 700; color: var(--terra); }
     .vi__what { display: grid; gap: .15rem; font-size: .85rem; line-height: 1.6; }
+    /* The room's name is the link out of this card, and it was a 22px line.
+       justify-self:start so the inline-flex box is the width of the words
+       rather than the whole grid column. */
+    .vi__what a { display: inline-flex; align-items: center; min-height: 28px; justify-self: start; }
     .vi__place { font-weight: 600; }
     .vi__answer { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; }
     .vi__going { font-size: .85rem; font-weight: 600; color: var(--sage); }
@@ -185,7 +190,7 @@ import {
          these labels are sentences — without it they push the card wider
          than a 360px screen. */
       min-width: 0; max-width: 100%; white-space: normal; line-height: 1.3;
-      background: var(--card); color: var(--ink);
+      background: var(--white); color: var(--ink);
       border: 1.5px solid var(--border); border-radius: var(--r4);
       cursor: pointer;
     }
@@ -230,12 +235,12 @@ export class ViewingInvitations implements OnInit {
    * told from two ends), which is why the labels live per panel and only the
    * values are shared.
    */
-  readonly outcomes: ReadonlyArray<{ value: ViewingOutcome; label: string; closes: boolean }> = [
-    { value: 'happened', label: '✅ I went and saw it', closes: false },
-    { value: 'rearranged_privately', label: '🕓 We met at a different time', closes: false },
-    { value: 'no_answer', label: '✕ It did not happen', closes: false },
-    { value: 'fell_through_other_room', label: '🚪 I have taken another room', closes: true },
-    { value: 'fell_through_other_tenant', label: '🔒 The room went to somebody else', closes: true },
+  readonly outcomes: ReadonlyArray<{ value: ViewingOutcome; icon: string; label: string; closes: boolean }> = [
+    { value: 'happened', icon: 'check-circle', label: 'I went and saw it', closes: false },
+    { value: 'rearranged_privately', icon: 'clock', label: 'We met at a different time', closes: false },
+    { value: 'no_answer', icon: 'x', label: 'It did not happen', closes: false },
+    { value: 'fell_through_other_room', icon: 'door', label: 'I have taken another room', closes: true },
+    { value: 'fell_through_other_tenant', icon: 'lock', label: 'The room went to somebody else', closes: true },
   ];
 
   /**

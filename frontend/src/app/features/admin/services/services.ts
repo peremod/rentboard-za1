@@ -10,6 +10,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 import { ContractorLeadSummary } from '../../../core/services/service-directory.service';
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Curating the contractor directory.
@@ -25,12 +26,12 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-admin-services',
   standalone: true,
-  imports: [FormsModule, DatePipe, ZarCentsPipe, Loading],
+  imports: [Icon, FormsModule, DatePipe, ZarCentsPipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
       <div class="insight-banner">
-        💡
+        <app-icon name="lightbulb"/>
         <span>
           This list is curated — landlords cannot add to it. Anyone here is being passed
           on as checked, so add a name only if that is true. New entries stay off until
@@ -106,7 +107,7 @@ import { Loading } from '../../../shared/components/loading/loading';
               <ul class="svc-checks">
                 @for (c of checkRows(p); track c.key) {
                   <li [class.svc-checks--missing]="!c.on">
-                    {{ c.on ? '✓' : '—' }} {{ c.label }}
+                    @if (c.on) { <app-icon name="check"/> } @else { — } {{ c.label }}
                     @if (c.on) {
                       <span class="muted">{{ c.on | date: 'd MMM yyyy' }}</span>
                     } @else {
@@ -210,7 +211,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                     </td>
                     <td data-label="Agreed to pay:">
                       @if (row.agreedToLeadFees) {
-                        ✓ <span class="muted">{{ row.agreementNote }}</span>
+                        <app-icon name="check"/> <span class="muted">{{ row.agreementNote }}</span>
                       } @else if (agreeingId() === row.provider.id) {
                         <!-- Inline, following the suspend-reason pattern on the
                              admin dashboard rather than a new dialog type. They
@@ -276,7 +277,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                 <input type="text" [(ngModel)]="rateForm.note" name="rateNote"/>
               </label>
               @if (rateError()) { <p class="field-error" role="alert">{{ rateError() }}</p> }
-              @if (rateSaved()) { <p class="muted" role="status">✅ Saved. It applies from the date you gave.</p> }
+              @if (rateSaved()) { <p class="muted" role="status"><app-icon name="check-circle"/> Saved. It applies from the date you gave.</p> }
               <button type="submit" class="btn btn-sm btn-primary" [disabled]="savingRate()">
                 {{ savingRate() ? 'Saving…' : 'Set this rate' }}
               </button>

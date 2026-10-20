@@ -271,12 +271,40 @@ console.log('\n── 6. The filter on a phone ───────────
       `…at least 44px tall for a thumb (${Math.round(box?.height ?? 0)}px)`,
     );
 
-    await dateInput.fill(dayOffset(30));
+    const typed = dayOffset(30);
+    await dateInput.fill(typed);
     await page.waitForTimeout(2000);
     const body = await page.locator('body').textContent().then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
     check(
       /free on or before/i.test(body),
       'typing a date says in words what it will do',
+    );
+
+    /**
+     * ⚠️ The native date box renders in the BROWSER's locale, and nothing on
+     * the page can change that: index.html has said lang="en-ZA" the whole
+     * time and Chromium set to en-US still draws mm/dd/yyyy. Shipped that way
+     * in v1.146.0. So the screen has to say the date somewhere the order
+     * cannot be misread, and this is the check that it does.
+     *
+     * Expected text is built from the ISO string by SPLITTING IT, and the
+     * month from a literal table — not by re-running the component's own
+     * Date arithmetic, which would pass just as happily if that arithmetic
+     * were wrong in both places.
+     */
+    const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+      'August', 'September', 'October', 'November', 'December'];
+    const [isoY, isoM, isoD] = typed.split('-');
+    const wanted = `${Number(isoD)} ${MONTHS[Number(isoM) - 1]} ${isoY}`;
+    const echo = await page.locator('.filter-date-echo').first()
+      .textContent().then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
+    check(
+      echo === wanted,
+      `…and echoes it with the month as a word, so no digit can be read as the day (wanted "${wanted}", got "${echo}")`,
+    );
+    check(
+      !/^\s*\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\s*$/.test(echo) && /[A-Za-z]{3}/.test(echo),
+      '…and never as three numbers in an order that depends on the browser',
     );
 
     const spill = await page.evaluate(
@@ -339,7 +367,18 @@ console.log('\n── 7. What a card tells you ───────────
     'a room standing empty is marked available now',
   );
   check(
-    badges.some((b) => /^📅 From /.test(b)),
+    /**
+     * ⚠️ The date, not the picture beside it.
+     *
+     * This read /^📅 From / and went red the moment the calendar emoji
+     * became an app-icon — correctly, because the string it asserted had
+     * changed, but it was asserting the wrong half. A drive that pins the
+     * GLYPH fails on every icon change and says nothing about whether the
+     * badge still tells somebody when the room frees up, which is the only
+     * thing this check is for. The SVG carries no text, so the badge's
+     * textContent is now the date alone.
+     */
+    badges.some((b) => /^From \d/.test(b)),
     `…and one that is not says WHEN it will be (${badges.filter((b) => /From/.test(b))[0] ?? 'none'})`,
   );
   check(

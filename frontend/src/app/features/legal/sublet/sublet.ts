@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * The sub-letting disclaimer — Phase 6.
@@ -32,7 +33,7 @@ import { RouterLink } from '@angular/router';
 @Component({
   selector: 'app-sublet',
   standalone: true,
-  imports: [RouterLink],
+  imports: [Icon, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="legal-page">
@@ -41,7 +42,7 @@ import { RouterLink } from '@angular/router';
           <h1>Renting a room from a tenant (sub-letting)</h1>
           <p class="legal-meta">Last updated: 3 October 2026 · Republic of South Africa</p>
           <div class="disclaimer-banner">
-            ⚠️ Some rooms on Mastande are let by a <strong>tenant</strong>, not by the owner.
+            <app-icon name="alert"/>️ Some rooms on Mastande are let by a <strong>tenant</strong>, not by the owner.
             Mastande does <strong>not</strong> confirm or guarantee that such a person is
             legally allowed to sublet. If they are not, the person who loses the room and
             the money is <strong>you</strong>.

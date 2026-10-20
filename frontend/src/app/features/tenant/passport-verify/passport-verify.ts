@@ -7,6 +7,7 @@ import { RoomsService } from '../../../core/services/rooms.service';
 import { Room } from '../../../core/models/room.model';
 import { VerificationType } from '../../../core/models/verification.model';
 import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Renter's Passport — the tenant side of verification.
@@ -31,13 +32,13 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 @Component({
   selector: 'app-passport-verify',
   standalone: true,
-  imports: [DatePipe, FormsModule],
+  imports: [Icon, DatePipe, FormsModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
       @if (progress().complete) {
         <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
-          ✅
+          <app-icon name="check-circle"/>
           <span>
             <strong>Your Renter's Passport is active.</strong>
             Landlords see it on every application you send, so you do not have to
@@ -46,7 +47,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
         </div>
       } @else {
         <div class="insight-banner">
-          🛂
+          <app-icon name="id-card"/>
           <span>
             A Renter's Passport shows a landlord you are who you say you are and
             that money comes in every month — without a credit check, which most
@@ -60,14 +61,14 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
            what the other is, not a bare "1 of 2". -->
       <div class="passport-steps">
         <div class="passport-step" [class.done]="progress().identity">
-          <span class="passport-step__mark">{{ progress().identity ? '✓' : '1' }}</span>
+          <span class="passport-step__mark">@if (progress().identity) { <app-icon name="check"/> } @else { 1 }</span>
           <div>
             <strong>Who you are</strong>
             <p>Your ID book, card or passport.</p>
           </div>
         </div>
         <div class="passport-step" [class.done]="progress().income">
-          <span class="passport-step__mark">{{ progress().income ? '✓' : '2' }}</span>
+          <span class="passport-step__mark">@if (progress().income) { <app-icon name="check"/> } @else { 2 }</span>
           <div>
             <strong>That money comes in</strong>
             <p>Any one of the options below. One is enough.</p>
@@ -76,7 +77,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
       </div>
 
       <p class="passport-popia">
-        🔒 Everything you upload is stored privately and
+        <app-icon name="lock"/> Everything you upload is stored privately and
         <strong>deleted as soon as someone has looked at it</strong> — we keep the
         outcome, never the document. That is POPIA s.26, and it is the reason we
         never ask for your ID number.

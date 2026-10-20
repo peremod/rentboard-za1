@@ -7,6 +7,7 @@ import { StorefrontService } from '../../../core/services/storefront.service';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { MyStorefront } from '../../../core/models/storefront.model';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * The landlord's own view of their public page — Phase 5b.
@@ -29,12 +30,12 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-storefront-settings',
   standalone: true,
-  imports: [FormsModule, Loading],
+  imports: [Icon, FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
       <div class="insight-banner">
-        🪧
+        <app-icon name="signpost"/>
         <span>
           This is a page tenants can find on Google. It shows your name, your
           verified badge, and the rooms you have on the board — nothing about

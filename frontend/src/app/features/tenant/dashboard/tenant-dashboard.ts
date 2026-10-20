@@ -22,11 +22,12 @@ import { ViewingInvitations } from '../../../shared/components/viewing-invitatio
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { TenancyLifecycle } from '../../../shared/components/tenancy-lifecycle/tenancy-lifecycle';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 @Component({
   selector: 'app-tenant-dashboard',
   standalone: true,
-  imports: [RouterLink, DatePipe, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations, ScreenHint, TenancyLifecycle, Loading],
+  imports: [Icon, RouterLink, DatePipe, ZarCentsPipe, MessageThread, RoomCard, ReviewPrompt, DisputePanel, ReferralPanel, TenantInboxPanel, ViewingInvitations, ScreenHint, TenancyLifecycle, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="tenant-dashboard" heading="Where you stand, on everything you applied for">
@@ -83,7 +84,7 @@ import { Loading } from '../../../shared/components/loading/loading';
           </p>
           @for (app of currentHomes(); track app.id) {
             <div class="app-card">
-              <div class="app-thumb portal-thumb" aria-hidden="true">🔑</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="key"/></div>
               <div class="app-info">
                 <div class="app-room">{{ app.room?.title }}</div>
                 @if (app.room) {
@@ -98,7 +99,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                 <a class="btn btn-sm btn-primary" routerLink="/tenant/rent">Rent and paperwork</a>
                 <button type="button" class="btn btn-sm btn-outline" (click)="toggle(app.id)"
                         [attr.aria-expanded]="openId() === app.id">
-                  {{ openId() === app.id ? 'Hide messages' : '💬 Messages' }}
+                  {{ openId() === app.id ? 'Hide messages' : 'Messages' }}
                 </button>
               </div>
               @if (openId() === app.id) {
@@ -148,7 +149,7 @@ import { Loading } from '../../../shared/components/loading/loading';
         } @else {
           @for (app of activeApplications(); track app.id) {
             <div class="app-card" [class.app-card--closed]="app.status === 'rejected'">
-              <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="home"/></div>
 
               <div class="app-info">
                 <div class="app-room">{{ app.room?.title }}</div>
@@ -164,13 +165,18 @@ import { Loading } from '../../../shared/components/loading/loading';
                 </span>
                 <button type="button" class="btn btn-sm btn-outline" (click)="toggle(app.id)"
                         [attr.aria-expanded]="openId() === app.id">
-                  {{ openId() === app.id ? 'Hide messages' : '💬 Messages' }}
+                  {{ openId() === app.id ? 'Hide messages' : 'Messages' }}
                 </button>
                 @if (app.room) {
                   <a class="btn btn-sm btn-ghost-light" [routerLink]="['/rooms', app.room.id]">View room</a>
                 }
                 @if (canWithdraw(app)) {
-                  <button type="button" class="btn btn-sm btn-ghost-light"
+                  <!-- ⚠️ btn-ghost-danger. Withdrawing an application ends it
+                       — the landlord loses the applicant and the tenant
+                       cannot un-withdraw — and it rendered as the same
+                       button as "View room" beside it. Third instance of
+                       the same pair found by one check. -->
+                  <button type="button" class="btn btn-sm btn-ghost-danger"
                           [disabled]="withdrawing() === app.id" (click)="withdraw(app)">
                     {{ withdrawing() === app.id ? 'Withdrawing…' : 'Withdraw' }}
                   </button>
@@ -202,7 +208,7 @@ import { Loading } from '../../../shared/components/loading/loading';
           </p>
           @for (app of availableAgain(); track app.id) {
             <div class="app-card">
-              <div class="app-thumb portal-thumb" aria-hidden="true">🔁</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="repeat"/></div>
               <div class="app-info">
                 <div class="app-room">{{ app.room?.title }}</div>
                 @if (app.room) {
@@ -233,7 +239,7 @@ import { Loading } from '../../../shared/components/loading/loading';
           <p class="muted">Finished — nothing more to do on these.</p>
           @for (app of closedApplications(); track app.id) {
             <div class="app-card app-card--closed">
-              <div class="app-thumb portal-thumb" aria-hidden="true">🏠</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="home"/></div>
               <div class="app-info">
                 <div class="app-room">{{ app.room?.title }}</div>
                 @if (app.room) {
@@ -277,7 +283,7 @@ import { Loading } from '../../../shared/components/loading/loading';
         } @else {
           @for (search of alerts.searches(); track search.id) {
             <div class="app-card" [class.app-card--closed]="!search.isActive">
-              <div class="app-thumb portal-thumb" aria-hidden="true">🔔</div>
+              <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="bell"/></div>
               <div class="app-info">
                 <div class="app-room">{{ search.name }}</div>
                 <div class="app-location">{{ describe(search) }}</div>
@@ -345,7 +351,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                        applicant looks for. -->
                   @if (room.subletCheckedAt) {
                     <span class="sublet-row__checked">
-                      ✓ Lease and consent checked
+                      <app-icon name="check"/> Lease and consent checked
                     </span>
                   } @else {
                     <a class="sublet-row__todo" routerLink="/tenant/passport">
@@ -372,7 +378,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 
         @if (savedRooms.count() === 0) {
           <p class="muted">
-            No saved rooms yet. Tap the ♡ on any room to keep it here while you decide.
+            No saved rooms yet. Tap the <app-icon name="heart"/> on any room to keep it here while you decide.
           </p>
         } @else if (loadingSaved()) {
           <app-loading>Loading saved rooms…</app-loading>
@@ -869,11 +875,11 @@ export class TenantDashboard implements OnInit {
   /** Human-readable status, matching the spec's pill labels. */
   statusLabel(status: string): string {
     const labels: Record<string, string> = {
-      pending: '⏳ Pending',
-      viewed: '👀 Viewed',
-      shortlisted: '⭐ Shortlisted',
-      accepted: '✓ Accepted',
-      rejected: '✕ Not this time',
+      pending: 'Pending',
+      viewed: 'Viewed',
+      shortlisted: 'Shortlisted',
+      accepted: 'Accepted',
+      rejected: 'Not this time',
       withdrawn: 'Withdrawn',
     };
     return labels[status] ?? status;

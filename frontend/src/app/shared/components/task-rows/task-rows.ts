@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { Icon } from '../icon/icon';
 
 /**
  * One row of a "needs you" list: unlike things, ranked by the API.
@@ -42,13 +43,20 @@ export interface TaskRow {
 @Component({
   selector: 'app-task-rows',
   standalone: true,
-  imports: [RouterLink],
+  imports: [Icon, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <ul class="inbox-list">
       @for (item of items(); track item.kind + item.entityId) {
         <li class="inbox-row" [class.inbox-row--urgent]="isOverdue(item)">
-          <span class="inbox-icon" aria-hidden="true">{{ icons()[item.kind] ?? '•' }}</span>
+          <!-- ⚠️ A NAME now, not a glyph, and the fallback is an icon too.
+               Both inboxes hand this component a map, and both maps held
+               emoji — so one component rendered a different picture per
+               handset for every row in the product's two busiest lists.
+               'dot' rather than the bullet character for an unknown kind,
+               because a row whose kind nobody mapped should still line up
+               with the rows above it. -->
+          <app-icon class="inbox-icon" [name]="icons()[item.kind] || 'dot'"/>
           <span class="inbox-body">
             <span class="inbox-title">{{ item.title }}</span>
             @if (item.roomTitle) {

@@ -4,6 +4,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ReportsService } from '../../../core/services/reports.service';
 import { Loading } from '../../../shared/components/loading/loading';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /** Reasons that mean someone may be about to lose money. Surfaced first. */
 const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_real_listing'];
@@ -11,12 +12,12 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
 @Component({
   selector: 'app-admin-reports',
   standalone: true,
-  imports: [RouterLink, DatePipe, FormsModule, Loading],
+  imports: [Icon, RouterLink, DatePipe, FormsModule, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
 
       <div class="insight-banner">
-        🚩
+        <app-icon name="flag"/>
         <span>
           A single report is weak evidence. The prior-report counts below are
           the signal — a landlord with several reports across different rooms
@@ -35,7 +36,7 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
         @for (r of reports(); track r.id) {
           <div class="app-card" [class.report--urgent]="isUrgent(r.reason)">
             <div class="app-thumb portal-thumb" aria-hidden="true">
-              {{ isUrgent(r.reason) ? '🔴' : '🚩' }}
+              <app-icon [name]="isUrgent(r.reason) ? 'dot' : 'flag'"/>
             </div>
 
             <div class="app-info">
