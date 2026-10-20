@@ -1843,6 +1843,39 @@ of the 475 is the Angular runtime, and the first clean runs of
 tenancy-lifecycle (297) and the smoke suite (512) in this sequence."
 
 echo
+
+tag_if_missing "v1.157.0" "f71486f1c899963aded045232d3dc814d7c24f4a" "2026-10-20T17:45:49+00:00" "v1.157.0 - the responsive and accessibility pass
+
+The a11y gate ran at 412px only, and four defects were living at the other
+three widths. Driven at 360 / 390 / 768 / 1280 instead, which is what
+CLAUDE.md asks for and what no check in the repository was doing.
+
+Found by measuring rather than reading: .portal-user-role at alpha .45 was
+3.72:1 and failed on desktop only; .rating--none inherited the gold of
+.rating, so a room with no rating looked rated; filter checkboxes were under
+the touch target once their label was measured instead of the 18px box."
+
+echo
+
+tag_if_missing "v1.158.0" "f32a5cf655512768917fcd1c396be9b94a226da8" "2026-10-20T17:58:55+00:00" "v1.158.0 - keep production warm, and verify the deploys nobody was checking
+
+Render's free tier sleeps after ~15 minutes and takes 30-60s to wake, which
+on production is a person with a cheap Android waiting a minute for a room
+board. A */10 cron pings /health/live, a new endpoint that touches no
+database - pointing it at /health would hold the Neon compute open around
+the clock as a side effect of keeping the web service awake.
+
+setGlobalPrefix's exclude matches exact paths, not prefixes, so with 'health'
+alone /health/live returned 404 and the route was served at
+/api/health/live. The cron would have been pointed at a 404, which still
+wakes the service, so it would have 'worked' while asserting nothing.
+
+And verify-deployment.yml ran on develop only, carrying the instruction to
+add master in the same change that added a production service. OUTSTANDING 59
+added one and never came back, so three releases went to production with
+nothing verifying them."
+
+echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
 # not have shown: "Created 0, skipped 19" was indistinguishable from a complete
