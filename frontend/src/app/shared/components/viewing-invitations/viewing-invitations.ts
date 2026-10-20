@@ -115,7 +115,7 @@ import { Icon } from '../icon/icon';
                     <div class="vi__outcomes">
                       @for (o of outcomes; track o.value) {
                         <button type="button" class="vi__outcome" (click)="pick(v, o.value)">
-                          {{ o.label }}
+                          <app-icon [name]="o.icon"/> {{ o.label }}
                         </button>
                       }
                     </div>
@@ -231,12 +231,12 @@ export class ViewingInvitations implements OnInit {
    * told from two ends), which is why the labels live per panel and only the
    * values are shared.
    */
-  readonly outcomes: ReadonlyArray<{ value: ViewingOutcome; label: string; closes: boolean }> = [
-    { value: 'happened', label: '✅ I went and saw it', closes: false },
-    { value: 'rearranged_privately', label: '🕓 We met at a different time', closes: false },
-    { value: 'no_answer', label: '✕ It did not happen', closes: false },
-    { value: 'fell_through_other_room', label: '🚪 I have taken another room', closes: true },
-    { value: 'fell_through_other_tenant', label: '🔒 The room went to somebody else', closes: true },
+  readonly outcomes: ReadonlyArray<{ value: ViewingOutcome; icon: string; label: string; closes: boolean }> = [
+    { value: 'happened', icon: 'check-circle', label: 'I went and saw it', closes: false },
+    { value: 'rearranged_privately', icon: 'clock', label: 'We met at a different time', closes: false },
+    { value: 'no_answer', icon: 'x', label: 'It did not happen', closes: false },
+    { value: 'fell_through_other_room', icon: 'door', label: 'I have taken another room', closes: true },
+    { value: 'fell_through_other_tenant', icon: 'lock', label: 'The room went to somebody else', closes: true },
   ];
 
   /**

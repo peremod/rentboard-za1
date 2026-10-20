@@ -203,7 +203,7 @@ import { Icon } from '../../../shared/components/icon/icon';
                 @if (room.status === 'active') {
                   <button type="button" class="btn btn-sm btn-sage"
                           [disabled]="marking() === room.id" (click)="markLet(room)">
-                    {{ marking() === room.id ? 'Saving…' : 'Mark as Let ✓' }}
+                    @if (marking() === room.id) { Saving… } @else { Mark as Let <app-icon name="check"/> }
                   </button>
                   <button type="button" class="btn btn-sm btn-ghost-light"
                           [disabled]="pausing() === room.id" (click)="pause(room)">
@@ -330,7 +330,7 @@ import { Icon } from '../../../shared/components/icon/icon';
               <div class="portal-row-actions">
                 <button type="button" class="btn btn-sm btn-primary"
                         [disabled]="relisting() === room.id" (click)="relist(room.id)">
-                  {{ relisting() === room.id ? 'Relisting…' : '🔁 Relist' }}
+                  @if (relisting() === room.id) { Relisting… } @else { <app-icon name="repeat"/> Relist }
                 </button>
               </div>
             </div>

@@ -226,7 +226,7 @@ import { Icon } from '../../../shared/components/icon/icon';
                           <div class="viewing__outcomes">
                             @for (o of outcomes; track o.value) {
                               <button type="button" class="viewing__outcome"
-                                      (click)="pickOutcome(app.id, o.value)">{{ o.label }}</button>
+                                      (click)="pickOutcome(app.id, o.value)"><app-icon [name]="o.icon"/> {{ o.label }}</button>
                             }
                           </div>
                           <!-- The reschedule option. It works because invite()
@@ -284,7 +284,7 @@ import { Icon } from '../../../shared/components/icon/icon';
 
                 <div class="applicant-card__refs">
                   <button type="button" class="refs-toggle" (click)="toggleRefs(app)">
-                    {{ openRefs() === app.id ? 'Hide references' : '📄 References' }}
+                    {{ openRefs() === app.id ? 'Hide references' : 'References' }}
                   </button>
 
                   @if (openRefs() === app.id) {
@@ -586,13 +586,13 @@ export class Applicants implements OnInit {
   viewingLabel(v: RoomViewing): string {
     // ⚠️ An elapsed viewing is NOT "they are coming". That sentence was on
     // this screen about Saturdays weeks gone, which is the bug Phase 8n fixes.
-    if (this.elapsed(v)) return '⏰ The agreed time has passed';
+    if (this.elapsed(v)) return 'The agreed time has passed';
     if (v.outcome) return this.outcomeLabel(v.outcome);
     return {
-      proposed: '📅 Invited, waiting for an answer',
-      accepted: '✅ They are coming',
-      declined: '✕ They cannot make it',
-      cancelled: '✕ Called off',
+      proposed: 'Invited, waiting for an answer',
+      accepted: 'They are coming',
+      declined: 'They cannot make it',
+      cancelled: 'Called off',
     }[v.status];
   }
 
@@ -608,12 +608,12 @@ export class Applicants implements OnInit {
    * only the values are shared, never the wording, because "they did not come"
    * and "I could not go" are one outcome told from two ends.
    */
-  readonly outcomes: ReadonlyArray<{ value: ViewingOutcome; label: string; closes: boolean }> = [
-    { value: 'happened', label: '✅ They came and saw it', closes: false },
-    { value: 'rearranged_privately', label: '🕓 We met at a different time', closes: false },
-    { value: 'no_answer', label: '✕ They did not turn up', closes: false },
-    { value: 'fell_through_other_room', label: '🚪 They have taken another room', closes: true },
-    { value: 'fell_through_other_tenant', label: '🔒 I have let it to somebody else', closes: true },
+  readonly outcomes: ReadonlyArray<{ value: ViewingOutcome; icon: string; label: string; closes: boolean }> = [
+    { value: 'happened', icon: 'check-circle', label: 'They came and saw it', closes: false },
+    { value: 'rearranged_privately', icon: 'clock', label: 'We met at a different time', closes: false },
+    { value: 'no_answer', icon: 'x', label: 'They did not turn up', closes: false },
+    { value: 'fell_through_other_room', icon: 'door', label: 'They have taken another room', closes: true },
+    { value: 'fell_through_other_tenant', icon: 'lock', label: 'I have let it to somebody else', closes: true },
   ];
 
   private outcomeLabel(o: ViewingOutcome): string {

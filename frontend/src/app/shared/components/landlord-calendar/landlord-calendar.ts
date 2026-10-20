@@ -5,10 +5,10 @@ import { LandlordNotesService } from '../../../core/services/landlord-notes.serv
 import { CalendarEntry, CalendarKind } from '../../../core/models/landlord-note.model';
 
 const ICONS: Record<CalendarKind, string> = {
-  rent_due: '🧾',
-  lease_ends: '📅',
-  notice_expires: '📤',
-  room_free: '🔑',
+  rent_due: 'receipt',
+  lease_ends: 'calendar',
+  notice_expires: 'upload',
+  room_free: 'key',
 };
 
 const MONTHS = [

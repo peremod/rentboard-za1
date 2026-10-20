@@ -107,7 +107,7 @@ import { Icon } from '../../../shared/components/icon/icon';
               <ul class="svc-checks">
                 @for (c of checkRows(p); track c.key) {
                   <li [class.svc-checks--missing]="!c.on">
-                    {{ c.on ? '✓' : '—' }} {{ c.label }}
+                    @if (c.on) { <app-icon name="check"/> } @else { — } {{ c.label }}
                     @if (c.on) {
                       <span class="muted">{{ c.on | date: 'd MMM yyyy' }}</span>
                     } @else {

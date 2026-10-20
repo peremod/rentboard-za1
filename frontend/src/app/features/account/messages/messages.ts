@@ -8,6 +8,7 @@ import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { Loading } from '../../../shared/components/loading/loading';
 import { ErrorState } from '../../../shared/components/error-state/error-state';
 import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
+import { Icon } from '../../../shared/components/icon/icon';
 
 /**
  * Your messages — Phase 7c.
@@ -45,7 +46,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
 @Component({
   selector: 'app-messages',
   standalone: true,
-  imports: [MessageThread, DatePipe, ScreenHint, Loading, ErrorState],
+  imports: [Icon, MessageThread, DatePipe, ScreenHint, Loading, ErrorState],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <app-screen-hint key="messages" heading="Every conversation, in one place">
@@ -104,7 +105,7 @@ import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
                   <p class="msg-row__last">
                     <!-- Which door the last message came through. -->
                     <span class="chan chan--{{ t.lastMessage.channel }}">
-                      {{ t.lastMessage.channel === 'whatsapp' ? '💬 WhatsApp' : '📱 In the app' }}
+                      @if (t.lastMessage.channel === 'whatsapp') { <app-icon name="message"/> WhatsApp } @else { <app-icon name="smartphone"/> In the app }
                     </span>
                     <span class="preview">
                       {{ t.lastMessage.fromMe ? 'You: ' : '' }}{{ t.lastMessage.body }}

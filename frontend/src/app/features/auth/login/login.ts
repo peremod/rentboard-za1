@@ -78,7 +78,7 @@ import { Icon } from '../../../shared/components/icon/icon';
           <button type="button" class="auth__magic"
                   [disabled]="!emailForMagic() || sendingMagic()"
                   (click)="sendMagicLink()">
-            {{ sendingMagic() ? 'Sending…' : '✉️ Email me a sign-in link instead' }}
+            @if (sendingMagic()) { Sending… } @else { <app-icon name="mail"/> Email me a sign-in link instead }
           </button>
           <p class="auth__fine">
             No password needed. The link works once and expires in 15 minutes.

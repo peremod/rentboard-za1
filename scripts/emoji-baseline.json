@@ -1,26 +1,3 @@
 {
-  "features/account/messages/messages.ts": 2,
-  "features/account/tenancies/tenancies.ts": 2,
-  "features/admin/dashboard/admin-dashboard.ts": 2,
-  "features/admin/reports/admin-reports.ts": 2,
-  "features/admin/services/services.ts": 1,
-  "features/admin/user-detail/admin-user-detail.ts": 2,
-  "features/auth/login/login.ts": 1,
-  "features/landlord/applicants/applicants.ts": 10,
-  "features/landlord/applicants-inbox/applicants-inbox.ts": 2,
-  "features/landlord/create-room/create-room.ts": 1,
-  "features/landlord/dashboard/landlord-dashboard.ts": 2,
-  "features/landlord/verification/landlord-verification.ts": 5,
-  "features/tenant/dashboard/tenant-dashboard.ts": 6,
-  "features/tenant/passport-verify/passport-verify.ts": 2,
-  "features/tenant/rent/rent.ts": 1,
-  "shared/components/app-dialog/app-dialog.ts": 3,
-  "shared/components/cookie-consent/cookie-consent.ts": 1,
-  "shared/components/landlord-calendar/landlord-calendar.ts": 4,
-  "shared/components/landlord-inbox/landlord-inbox.ts": 7,
-  "shared/components/referral-panel/referral-panel.ts": 5,
-  "shared/components/review-list/review-list.ts": 2,
-  "shared/components/tenant-inbox/tenant-inbox.ts": 8,
-  "shared/components/viewing-invitations/viewing-invitations.ts": 5,
-  "shared/components/walkthrough/walkthrough.ts": 17
+  "shared/components/cookie-consent/cookie-consent.ts": 1
 }

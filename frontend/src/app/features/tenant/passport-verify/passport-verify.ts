@@ -61,14 +61,14 @@ import { Icon } from '../../../shared/components/icon/icon';
            what the other is, not a bare "1 of 2". -->
       <div class="passport-steps">
         <div class="passport-step" [class.done]="progress().identity">
-          <span class="passport-step__mark">{{ progress().identity ? '✓' : '1' }}</span>
+          <span class="passport-step__mark">@if (progress().identity) { <app-icon name="check"/> } @else { 1 }</span>
           <div>
             <strong>Who you are</strong>
             <p>Your ID book, card or passport.</p>
           </div>
         </div>
         <div class="passport-step" [class.done]="progress().income">
-          <span class="passport-step__mark">{{ progress().income ? '✓' : '2' }}</span>
+          <span class="passport-step__mark">@if (progress().income) { <app-icon name="check"/> } @else { 2 }</span>
           <div>
             <strong>That money comes in</strong>
             <p>Any one of the options below. One is enough.</p>

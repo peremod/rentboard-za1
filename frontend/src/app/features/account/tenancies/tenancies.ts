@@ -6,6 +6,7 @@ import { ArchiveListRow, ArchiveRecord } from '../../../core/models/tenancy-arch
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { ScreenHint } from '../../../shared/components/screen-hint/screen-hint';
 import { Loading } from '../../../shared/components/loading/loading';
+import { StarRating } from '../../../shared/components/star-rating/star-rating';
 
 /**
  * Lettings that are over — Phase F.
@@ -50,7 +51,7 @@ import { Loading } from '../../../shared/components/loading/loading';
 @Component({
   selector: 'app-account-tenancies',
   standalone: true,
-  imports: [DatePipe, RouterLink, ZarCentsPipe, ScreenHint, Loading, NgTemplateOutlet],
+  imports: [StarRating, DatePipe, RouterLink, ZarCentsPipe, ScreenHint, Loading, NgTemplateOutlet],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <app-screen-hint key="account-tenancies" heading="Everywhere you have let or rented">
@@ -233,7 +234,7 @@ import { Loading } from '../../../shared/components/loading/loading';
                             <li class="arc-review">
                               <span class="arc-review__type">{{ reviewLabel(v.type) }}</span>
                               <span class="arc-review__stars" [attr.aria-label]="v.rating + ' out of 5'">
-                                {{ stars(v.rating) }}
+                                <app-star-rating [value]="v.rating"/>
                               </span>
                               <span class="arc-review__by">
                                 {{ v.author?.fullName || 'A former user' }},
@@ -599,9 +600,6 @@ export class AccountTenancies implements OnInit {
     }[reason] ?? reason;
   }
 
-  protected stars(rating: number): string {
-    return '★'.repeat(Math.max(0, Math.min(5, rating))) + '☆'.repeat(Math.max(0, 5 - rating));
-  }
 
   /** So a reader knows what a download costs them on mobile data. */
   protected kb(bytes: number): string {

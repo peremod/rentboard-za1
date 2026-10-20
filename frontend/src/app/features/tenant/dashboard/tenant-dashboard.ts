@@ -99,7 +99,7 @@ import { Icon } from '../../../shared/components/icon/icon';
                 <a class="btn btn-sm btn-primary" routerLink="/tenant/rent">Rent and paperwork</a>
                 <button type="button" class="btn btn-sm btn-outline" (click)="toggle(app.id)"
                         [attr.aria-expanded]="openId() === app.id">
-                  {{ openId() === app.id ? 'Hide messages' : '💬 Messages' }}
+                  {{ openId() === app.id ? 'Hide messages' : 'Messages' }}
                 </button>
               </div>
               @if (openId() === app.id) {
@@ -165,7 +165,7 @@ import { Icon } from '../../../shared/components/icon/icon';
                 </span>
                 <button type="button" class="btn btn-sm btn-outline" (click)="toggle(app.id)"
                         [attr.aria-expanded]="openId() === app.id">
-                  {{ openId() === app.id ? 'Hide messages' : '💬 Messages' }}
+                  {{ openId() === app.id ? 'Hide messages' : 'Messages' }}
                 </button>
                 @if (app.room) {
                   <a class="btn btn-sm btn-ghost-light" [routerLink]="['/rooms', app.room.id]">View room</a>
@@ -870,11 +870,11 @@ export class TenantDashboard implements OnInit {
   /** Human-readable status, matching the spec's pill labels. */
   statusLabel(status: string): string {
     const labels: Record<string, string> = {
-      pending: '⏳ Pending',
-      viewed: '👀 Viewed',
-      shortlisted: '⭐ Shortlisted',
-      accepted: '✓ Accepted',
-      rejected: '✕ Not this time',
+      pending: 'Pending',
+      viewed: 'Viewed',
+      shortlisted: 'Shortlisted',
+      accepted: 'Accepted',
+      rejected: 'Not this time',
       withdrawn: 'Withdrawn',
     };
     return labels[status] ?? status;

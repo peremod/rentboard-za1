@@ -12,15 +12,15 @@ import {
 
 /** A glyph per kind. Never the only signal — every row also says it in words. */
 const ICONS: Record<InboxKind, string> = {
-  rent_disputed: '✋',
-  notice_given: '📤',
-  lease_ending: '📅',
-  application_waiting: '👤',
-  rent_unmarked: '🧾',
-  unread_message: '💬',
+  rent_disputed: 'hand',
+  notice_given: 'upload',
+  lease_ending: 'calendar',
+  application_waiting: 'user',
+  rent_unmarked: 'receipt',
+  unread_message: 'message',
   // A door standing open. Not a warning triangle: nothing is broken, the room
   // is simply empty and nobody can see it.
-  room_vacant: '🚪',
+  room_vacant: 'door',
 };
 
 /**

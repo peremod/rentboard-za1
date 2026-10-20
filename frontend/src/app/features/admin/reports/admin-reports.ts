@@ -36,7 +36,7 @@ const URGENT = ['upfront_payment_demanded', 'agent_posing_as_landlord', 'not_a_r
         @for (r of reports(); track r.id) {
           <div class="app-card" [class.report--urgent]="isUrgent(r.reason)">
             <div class="app-thumb portal-thumb" aria-hidden="true">
-              {{ isUrgent(r.reason) ? '🔴' : '🚩' }}
+              <app-icon [name]="isUrgent(r.reason) ? 'dot' : 'flag'"/>
             </div>
 
             <div class="app-info">

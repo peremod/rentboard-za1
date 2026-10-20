@@ -8,6 +8,7 @@ import { DeletionPreview } from '../../../core/services/account-lifecycle.servic
 import { ZarCentsPipe } from '../../../shared/pipes/zar-cents.pipe';
 import { Loading } from '../../../shared/components/loading/loading';
 import { Icon } from '../../../shared/components/icon/icon';
+import { StarRating } from '../../../shared/components/star-rating/star-rating';
 
 /**
  * One account, everything about it.
@@ -23,7 +24,7 @@ import { Icon } from '../../../shared/components/icon/icon';
 @Component({
   selector: 'app-admin-user-detail',
   standalone: true,
-  imports: [Icon, DatePipe, FormsModule, RouterLink, ZarCentsPipe, Loading],
+  imports: [StarRating, Icon, DatePipe, FormsModule, RouterLink, ZarCentsPipe, Loading],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
       <a routerLink="/admin/dashboard" class="muted">← Back to accounts</a>
@@ -191,7 +192,7 @@ import { Icon } from '../../../shared/components/icon/icon';
               <div class="app-card" [class.app-card--closed]="r.isHidden">
                 <div class="app-thumb portal-thumb" aria-hidden="true"><app-icon name="star" filled/></div>
                 <div class="app-info">
-                  <div class="app-room">{{ stars(r.rating) }} <span class="muted">({{ r.type }})</span></div>
+                  <div class="app-room"><app-star-rating [value]="r.rating"/> <span class="muted">({{ r.type }})</span></div>
                   <p class="cover-note">"{{ r.comment }}"</p>
                   @if (r.isHidden) { <div class="field-error">Hidden by moderation.</div> }
                 </div>
@@ -414,9 +415,6 @@ export class AdminUserDetailPage implements OnInit {
     });
   }
 
-  stars(rating: number) {
-    return '★'.repeat(rating) + '☆'.repeat(5 - rating);
-  }
 
   verificationClass(s: string) {
     return { approved: 'accepted', rejected: 'rejected', pending: 'pending', pending_payment: 'viewed' }[s] ?? 'pending';

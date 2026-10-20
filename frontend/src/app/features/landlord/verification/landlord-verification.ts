@@ -153,19 +153,19 @@ export class LandlordVerification implements OnInit {
       value: 'identity',
       label: 'Identity document',
       hint: 'SA ID card, ID book or passport. This is the one that earns the verified badge.',
-      icon: '🪪',
+      icon: 'id-card',
     },
     {
       value: 'proof_of_address',
       label: 'Proof of address',
       hint: 'A municipal bill or bank statement from the last three months.',
-      icon: '📬',
+      icon: 'mail',
     },
     {
       value: 'proof_of_ownership',
       label: 'Proof of ownership or mandate',
       hint: 'Title deed, or written permission from the owner if you let on their behalf.',
-      icon: '📜',
+      icon: 'file-text',
     },
   ];
 
@@ -237,7 +237,7 @@ export class LandlordVerification implements OnInit {
   }
 
   statusLabel(status: string) {
-    return { pending: '⏳ Awaiting review', approved: '✓ Approved', rejected: '✕ Not accepted' }[status] ?? status;
+    return { pending: 'Awaiting review', approved: 'Approved', rejected: 'Not accepted' }[status] ?? status;
   }
 
   async onFile(event: Event, type: VerificationType) {

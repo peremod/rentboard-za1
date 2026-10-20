@@ -366,7 +366,7 @@ export class TenantRent implements OnInit {
   statusLabel(status: string): string {
     return {
       unpaid: 'Marked unpaid',
-      paid: '✓ Marked paid',
+      paid: 'Marked paid',
       partial: 'Marked part-paid',
       waived: 'Not being chased',
     }[status] ?? status;

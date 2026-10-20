@@ -175,7 +175,7 @@ import { Icon } from '../../../shared/components/icon/icon';
                          is forwarded to the landlord over WhatsApp, and a reply
                          typed there is threaded back into this application. -->
                     <span class="chan chan--{{ m.channel }}">
-                      {{ m.channel === 'whatsapp' ? '💬 WhatsApp' : '📱 In the app' }}
+                      @if (m.channel === 'whatsapp') { <app-icon name="message"/> WhatsApp } @else { <app-icon name="smartphone"/> In the app }
                     </span>
                     <span class="ai-row__preview">
                       {{ m.fromTenant ? '' : 'You: ' }}{{ m.body }}

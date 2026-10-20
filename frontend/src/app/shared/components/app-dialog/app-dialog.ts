@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, ElementRef, effect, inject, viewChild } from '@angular/core';
 import { DialogService } from '../../../core/services/dialog.service';
+import { Icon } from '../icon/icon';
 
 /**
  * Renders whatever dialog the service currently holds. Mounted once, globally.
@@ -10,6 +11,7 @@ import { DialogService } from '../../../core/services/dialog.service';
 @Component({
   selector: 'app-dialog',
   standalone: true,
+  imports: [Icon],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (dialogs.current(); as d) {
@@ -17,7 +19,7 @@ import { DialogService } from '../../../core/services/dialog.service';
            [attr.aria-labelledby]="'dlg-title-' + d.id"
            (keydown.escape)="dialogs.respond(false)">
         <div class="dlg__panel">
-          <div class="dlg__icon" aria-hidden="true">{{ icon(d.tone) }}</div>
+          <app-icon class="dlg__icon" [name]="icon(d.tone)"/>
           <h2 class="dlg__title" [id]="'dlg-title-' + d.id">{{ d.title }}</h2>
           <p class="dlg__message">{{ d.message }}</p>
 
@@ -59,7 +61,16 @@ export class AppDialog {
     });
   }
 
+  /**
+   * The shape for a tone. ⚠️ Names, not glyphs: this is the dialog EVERY
+   * confirmation in the app goes through, so one emoji here was one
+   * device-drawn picture on every destructive action in the product.
+   * 'alert' for both error and warning on purpose — the tone is carried by
+   * the colour the dialog already sets, and two near-identical triangles
+   * would say less than one.
+   */
   icon(tone: string) {
-    return { success: '✅', error: '⚠️', warning: '⚠️', info: 'ℹ️' }[tone] ?? 'ℹ️';
+    return { success: 'check-circle', error: 'alert', warning: 'alert', info: 'lightbulb' }[tone]
+      ?? 'lightbulb';
   }
 }

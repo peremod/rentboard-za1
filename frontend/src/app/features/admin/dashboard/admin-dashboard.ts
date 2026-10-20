@@ -262,7 +262,7 @@ import { Icon } from '../../../shared/components/icon/icon';
           @for (u of users(); track u.id) {
             <div class="app-card" [class.app-card--closed]="!u.isActive">
               <div class="app-thumb portal-thumb" aria-hidden="true">
-                {{ u.role === 'LANDLORD' ? '🔑' : '🏠' }}
+                <app-icon [name]="u.role === 'LANDLORD' ? 'key' : 'home'"/>
               </div>
               <div class="app-info">
                 <div class="app-room">

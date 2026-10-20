@@ -345,7 +345,7 @@ import { Icon } from '../../../shared/components/icon/icon';
             } @else {
               <button type="button" class="btn btn-primary"
                       [disabled]="photos().length === 0 || publishing()" (click)="publish()">
-                {{ publishing() ? 'Publishing…' : 'Publish listing 🎉' }}
+                @if (publishing()) { Publishing… } @else { Publish listing }
               </button>
             }
           </div>
