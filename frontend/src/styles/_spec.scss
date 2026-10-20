@@ -321,6 +321,10 @@ img{display:block;max-width:100%}
   border:1.5px solid var(--border);border-radius:var(--r4);
   background:var(--white);color:var(--ink);
 }
+/* The chosen date, in words, under the box that cannot say which number is
+   the day. Weight rather than colour: this is a confirmation of what was
+   typed, not a warning about it. */
+.filter-date-echo{font-size:.75rem;font-weight:600;color:var(--slate)}
 .filter-note{margin:.25rem 0 0;font-size:.75rem;line-height:1.5;color:var(--slate)}
 .filter-pill-wrap{display:flex;flex-wrap:wrap;gap:.4rem}
 /* ⚠️ 22px before Phase 7q — the board's own filters, and the smallest tap

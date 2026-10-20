@@ -200,6 +200,16 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
             <span>On or after this date, I need a room</span>
             <input type="date" [(ngModel)]="moveIn" [min]="today"
                    (ngModelChange)="onMoveInChange()"/>
+            <!-- The native date box renders in the BROWSER's locale, not the
+                 page's. index.html already says lang="en-ZA" and it changes
+                 nothing: a browser set to en-US shows mm/dd/yyyy, so somebody
+                 typing 25/11 is refused and somebody reading 11/12 cannot tell
+                 which number is the day. The order cannot be set from here at
+                 all, so the chosen day is echoed back in words, where the
+                 month is a name and cannot be mistaken for the day. -->
+            @if (moveIn) {
+              <span class="filter-date-echo">{{ dateInWords(moveIn) }}</span>
+            }
           </label>
 
           @if (moveIn) {
@@ -212,6 +222,9 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                 <span>…up to</span>
                 <input type="date" [(ngModel)]="moveInTo" [min]="moveIn"
                        (ngModelChange)="onMoveInChange()"/>
+                @if (moveInTo) {
+                  <span class="filter-date-echo">{{ dateInWords(moveInTo) }}</span>
+                }
               </label>
             }
             <p class="filter-note">
@@ -811,11 +824,25 @@ export class Home implements OnInit, OnDestroy {
    */
   moveInLabel(): string {
     const value = this.flexibleDates && this.moveInTo ? this.moveInTo : this.moveIn;
+    return this.dateInWords(value);
+  }
+
+  /**
+   * An ISO date as a South African would write it: 25 November 2026.
+   *
+   * The year is carried because this also labels the date inputs themselves,
+   * and a bound with no year is a bound somebody has to guess at in December.
+   * Midday Africa/Johannesburg so a phone in another timezone does not render
+   * the day before, and the raw value is returned rather than a blank if it
+   * ever fails to parse - a wrong-looking date is recoverable, a silently
+   * empty one is not.
+   */
+  dateInWords(value: string): string {
     if (!value) return '';
     const at = new Date(`${value}T12:00:00+02:00`);
     if (Number.isNaN(at.getTime())) return value;
     return at.toLocaleDateString('en-ZA', {
-      day: 'numeric', month: 'long', timeZone: 'Africa/Johannesburg',
+      day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Johannesburg',
     });
   }
 
