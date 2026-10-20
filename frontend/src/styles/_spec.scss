@@ -231,6 +231,24 @@ img{display:block;max-width:100%}
 }
 .btn-danger:hover:not(:disabled){background:#BE3333}
 .btn-danger:disabled{opacity:.5;cursor:not-allowed}
+/**
+ * ⚠️ A destructive action that is NOT the primary action on its row.
+ *
+ * 🔴 Delete on an active listing was `.btn-ghost-light` — byte-for-byte the
+ * same computed style as Edit, View and Pause beside it: same background,
+ * same colour, same border, measured. Four buttons in a row, one of which
+ * deletes the listing, and nothing told them apart but the word.
+ *
+ * Solid `.btn-danger` would be wrong here — it would make Delete the
+ * loudest thing on a row whose primary action is seeing the applicants.
+ * So: the danger colour, at the weight of a secondary action, filling in
+ * only on hover, which is the point at which it matters. #D63B3B is
+ * 4.62:1 on white, over the 4.5:1 small text needs.
+ */
+.btn-ghost-danger{
+  background:transparent;color:#D63B3B;border:1.5px solid rgba(214,59,59,.4);
+}
+.btn-ghost-danger:hover:not(:disabled){background:#D63B3B;color:var(--white);border-color:#D63B3B}
 
 .btn-primary{background:var(--terra);color:var(--white)}
 /* Darkens on hover. --terra2 is the brand accent for text on dark; as a
@@ -836,7 +854,13 @@ img{display:block;max-width:100%}
 .app-info{flex:1}
 .app-room{font-size:.85rem;font-weight:600;color:var(--ink);margin-bottom:.15rem}
 .app-location{font-size:.75rem;color:var(--slate)}
-.app-rent{font-family:var(--font-mono);font-size:.85rem;color:var(--terra)}
+/* ⚠️ Ink, not --terra. This is a LEDGER figure — a column of rents down a
+   list of rooms or applications, which is why it keeps the mono face for
+   alignment — but it was painted in the primary-action colour, so every
+   rent on the dashboard read as something to press, beside buttons that
+   actually were. Same fault the board card had and the same fix: a price
+   wins on weight, not on the colour that means "act on me". */
+.app-rent{font-family:var(--font-mono);font-size:.85rem;color:var(--ink)}
 .app-status{
   padding:.28rem .7rem;border-radius:var(--r-full);font-size:.72rem;font-weight:700;
   white-space:nowrap;

@@ -7,7 +7,10 @@ export type TenantInboxKind =
   | 'lease_ending'
   | 'notice_given'
   | 'passport_expired'
-  | 'passport_expiring';
+  | 'passport_expiring'
+  // Same gap as the landlord union — see the note there. The server has
+  // sent this since v1.144.0.
+  | 'survey_open';
 
 /**
  * One thing waiting on the tenant — Phase 7d.

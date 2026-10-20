@@ -511,6 +511,64 @@ async function auditPage(page, path, { close = true } = {}) {
    * A native arrow (`appearance` left alone) is fine; what is not fine is
    * suppressing it and supplying nothing.
    */
+  /**
+   * ── An action that takes something away looks different ───────────────
+   *
+   * 🔴 Delete on an active listing rendered as `.btn-ghost-light` — the
+   * same computed background, colour and border as Edit, View and Pause
+   * sitting beside it on the same row. Four identical buttons, one of
+   * which deletes the listing, told apart only by the word on them.
+   *
+   * ⚠️ "Takes something away", not "destructive", and the wording was
+   * corrected rather than the word list narrowed. The check's first run
+   * flagged "Remove from shortlist" beside "Invite to view", and that is
+   * NOT irreversible — one click puts it back. Narrowing the pattern until
+   * the gate went green would have been tuning to a result; the honest
+   * reading is that the finding is real for a different reason. One of
+   * those buttons undoes a state and the other schedules a viewing with a
+   * person, and they were the same button to look at.
+   *
+   * ⚠️ Measured by COMPUTED STYLE against the controls it actually sits
+   * with, not by looking for a class name: a check that asserted
+   * `.btn-danger` would pass on a danger class that had been overridden to
+   * look like everything else, which is the fault this file keeps finding.
+   */
+  const lookalikes = await page.evaluate(() => {
+    const subtractive = /^(delete|remove|discard|close account|revoke|cancel my|withdraw)/i;
+    const rows = new Map();
+    for (const el of document.querySelectorAll('button, a[href]')) {
+      if (el.offsetParent === null) continue;
+      const parent = el.parentElement;
+      if (!parent) continue;
+      if (!rows.has(parent)) rows.set(parent, []);
+      rows.get(parent).push(el);
+    }
+    const out = [];
+    for (const [, group] of rows) {
+      if (group.length < 2) continue;
+      for (const el of group) {
+        const text = (el.textContent || '').trim();
+        if (!subtractive.test(text)) continue;
+        const c = getComputedStyle(el);
+        const mine = `${c.backgroundColor}|${c.color}|${c.borderTopColor}`;
+        const twin = group.find((o) => {
+          if (o === el) return false;
+          const oc = getComputedStyle(o);
+          return `${oc.backgroundColor}|${oc.color}|${oc.borderTopColor}` === mine;
+        });
+        if (twin) out.push({ text: text.slice(0, 24), twin: (twin.textContent || '').trim().slice(0, 24) });
+      }
+    }
+    return out;
+  });
+
+  if (lookalikes.length) {
+    for (const l of lookalikes) {
+      console.log(`    ❌ "${l.text}" is styled identically to "${l.twin}" beside it`);
+    }
+    failures.push(`${path}: ${lookalikes.length} control(s) that take something away look like a neighbour that does not`);
+  }
+
   const blindSelects = await page.locator('select').evaluateAll((els) => els
     .filter((el) => el.offsetParent !== null)
     .map((el) => {

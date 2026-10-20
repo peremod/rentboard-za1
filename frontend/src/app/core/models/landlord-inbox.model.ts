@@ -6,6 +6,21 @@ export type InboxKind =
   | 'rent_disputed'
   | 'unread_message'
   /**
+   * ⚠️ The server has sent this since v1.144.0 and this union did not know.
+   *
+   * Surveys moved into onboarding and `LandlordInboxService` gained
+   * `survey_open`; the BACKEND union was extended and this one was not. So
+   * `Record<InboxKind, string>` in landlord-inbox — a map that is
+   * exhaustive BY CONSTRUCTION, written that way precisely so a kind
+   * cannot arrive without an icon — compiled complete while the one kind
+   * it was missing was being rendered every day. The row fell through to
+   * the unknown-kind fallback and showed a bare dot.
+   *
+   * The type that was meant to be the guarantee was the thing that was
+   * wrong, which is why nothing caught it.
+   */
+  | 'survey_open'
+  /**
    * A room marked let with nobody in it — a letting ended and it was never put
    * back on the board.
    *

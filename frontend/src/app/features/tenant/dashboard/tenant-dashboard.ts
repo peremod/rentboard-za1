@@ -171,7 +171,12 @@ import { Icon } from '../../../shared/components/icon/icon';
                   <a class="btn btn-sm btn-ghost-light" [routerLink]="['/rooms', app.room.id]">View room</a>
                 }
                 @if (canWithdraw(app)) {
-                  <button type="button" class="btn btn-sm btn-ghost-light"
+                  <!-- ⚠️ btn-ghost-danger. Withdrawing an application ends it
+                       — the landlord loses the applicant and the tenant
+                       cannot un-withdraw — and it rendered as the same
+                       button as "View room" beside it. Third instance of
+                       the same pair found by one check. -->
+                  <button type="button" class="btn btn-sm btn-ghost-danger"
                           [disabled]="withdrawing() === app.id" (click)="withdraw(app)">
                     {{ withdrawing() === app.id ? 'Withdrawing…' : 'Withdraw' }}
                   </button>

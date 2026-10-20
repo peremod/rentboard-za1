@@ -21,6 +21,8 @@ const ICONS: Record<InboxKind, string> = {
   // A door standing open. Not a warning triangle: nothing is broken, the room
   // is simply empty and nobody can see it.
   room_vacant: 'door',
+  // A short list of questions, not a task about a room.
+  survey_open: 'clipboard',
 };
 
 /**

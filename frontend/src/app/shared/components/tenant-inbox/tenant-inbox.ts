@@ -13,6 +13,7 @@ const ICONS: Record<TenantInboxKind, string> = {
   rent_unrecorded: 'receipt',
   passport_expired: 'id-card',
   passport_expiring: 'id-card',
+  survey_open: 'clipboard',
 };
 
 /**

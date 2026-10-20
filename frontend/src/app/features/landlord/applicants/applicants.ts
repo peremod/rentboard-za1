@@ -174,7 +174,8 @@ import { Icon } from '../../../shared/components/icon/icon';
                     @if (app.status !== 'shortlisted') {
                       <button type="button" (click)="shortlist(app)"><app-icon name="star" filled/> Shortlist</button>
                     } @else {
-                      <button type="button" (click)="unshortlist(app)">Remove from shortlist</button>
+                      <button type="button" class="unshortlist"
+                              (click)="unshortlist(app)">Remove from shortlist</button>
                     }
                     <button type="button" (click)="startInvite(app)"><app-icon name="calendar"/> Invite to view</button>
                     <button type="button" class="accept" (click)="accept(app)"><app-icon name="check"/> Accept</button>
@@ -418,6 +419,13 @@ import { Icon } from '../../../shared/components/icon/icon';
     }
     .viewing-form .field-hint { font-weight: 400; line-height: 1.6; }
     .viewing-form__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .9rem; }
+    /* ⚠️ Undoing a shortlist is not inviting someone to a viewing, and the
+       two rendered as the same button. Reversible, so not the danger
+       treatment Delete gets — slate on a slate hairline, which reads as
+       "step back" beside three actions that step forward. */
+    .applicant-card__actions .unshortlist {
+      color: var(--slate); border-color: var(--border-strong); background: var(--cream2);
+    }
     .applicant-card__actions .accept { background: var(--sage); color: var(--white); border: none; }
     .applicant-card__actions .reject { background: var(--danger); color: var(--white); border: none; }
 

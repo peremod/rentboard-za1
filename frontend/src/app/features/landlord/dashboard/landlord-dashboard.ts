@@ -211,7 +211,11 @@ import { Icon } from '../../../shared/components/icon/icon';
                   </button>
                 }
                 @if (room.status !== 'draft') {
-                  <button type="button" class="btn btn-sm btn-ghost-light"
+                  <!-- ⚠️ btn-ghost-danger, not btn-ghost-light. It was the
+                       latter, which is byte-for-byte what Edit, View and
+                       Pause render as on the same row — one of four
+                       identical buttons deletes the listing. -->
+                  <button type="button" class="btn btn-sm btn-ghost-danger"
                           [disabled]="removing() === room.id" (click)="removeListing(room)">
                     @if (removing() === room.id) {
                       Working…
