@@ -492,6 +492,47 @@ async function auditPage(page, path, { close = true } = {}) {
     failures.push(`${path}: <${c.tag}> ${locate(c)} aria-label hides its own visible text`);
   }
 
+  /**
+   * ── A select still looks like a select ────────────────────────────────
+   *
+   * 🔴 styles.scss sets `appearance:none` on every select — which removes
+   * the NATIVE arrow — and draws one back with a `background-image`. Three
+   * class rules then set `background:` — the SHORTHAND — which resets
+   * background-image to none. So the replacement was cancelled while the
+   * suppression stayed, and all eleven selects on the board rendered as
+   * plain text boxes with nothing to say they opened a list.
+   *
+   * ⚠️ Measured on the composited page rather than read from the
+   * stylesheet, because the defect IS the cascade: both rules are correct
+   * in isolation and the file says nothing about the pair. The same shape
+   * as `.hint__close` and the nav sheet's buttons — a property set by one
+   * rule and quietly undone by another that was not thinking about it.
+   *
+   * A native arrow (`appearance` left alone) is fine; what is not fine is
+   * suppressing it and supplying nothing.
+   */
+  const blindSelects = await page.locator('select').evaluateAll((els) => els
+    .filter((el) => el.offsetParent !== null)
+    .map((el) => {
+      const c = getComputedStyle(el);
+      return {
+        cls: (el.getAttribute('class') || '').split(' ')[0] || 'select',
+        suppressed: c.appearance === 'none' || c['-webkit-appearance'] === 'none',
+        image: c.backgroundImage,
+      };
+    })
+    .filter((s) => s.suppressed && (!s.image || s.image === 'none')));
+
+  if (blindSelects.length) {
+    for (const b of blindSelects) {
+      console.log(`    ❌ <select class="${b.cls}"> suppresses the native arrow and draws no replacement`);
+    }
+    failures.push(`${path}: ${blindSelects.length} select(s) with no opener affordance`);
+  } else {
+    const selects = await page.locator('select').count();
+    if (selects) console.log(`  ✅ all ${selects} select(s) show they open a list`);
+  }
+
   // ── Colour contrast, measured by axe against the composited page ────────
   //
   // Only the `color-contrast` rule, deliberately. Turning on axe's full

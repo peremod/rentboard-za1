@@ -90,16 +90,28 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
     <div class="search-wrap">
       <div class="search-bar">
         <div class="search-input-wrap">
-          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" aria-hidden="true">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-          </svg>
+          <!-- The one hand-rolled SVG left on this page. Same shape as
+               app-icon's search icon, drawn a second time. -->
+          <app-icon class="search-icon" name="search"/>
           <input class="search-input" type="text" [placeholder]="'search.placeholder' | translate"
                  [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()"
                  (focus)="suggestOpen.set(true)" (blur)="closeSuggestions()"
                  autocomplete="off" role="combobox"
                  [attr.aria-expanded]="suggestOpen() && suggestions().length > 0"
                  aria-autocomplete="list"/>
+
+          <!-- ⚠️ There was no way to empty this box but backspace.
+               Every other filter on the board has a clear — the date has
+               "Clear the date", the panel has "Clear all filters" — and the
+               one a person types into, which is the hardest to empty on a
+               phone, had none. mousedown rather than click for the same
+               reason as the suggestions above: blur fires first. -->
+          @if (searchTerm) {
+            <button type="button" class="search-clear" aria-label="Clear the search"
+                    (mousedown)="clearSearch()">
+              <app-icon name="x"/>
+            </button>
+          }
 
           @if (suggestOpen() && suggestions().length > 0) {
             <ul class="search-suggest" role="listbox">
@@ -119,25 +131,31 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
             </ul>
           }
         </div>
-        <select class="search-select" [attr.aria-label]="'search.label_province' | translate"
-                [(ngModel)]="province" (ngModelChange)="onFilterChange()">
-          <option value="">{{ 'search.all_provinces' | translate }}</option>
-          @for (p of provinces; track p) { <option [value]="p">{{ p }}</option> }
-        </select>
-        <select class="search-select" [attr.aria-label]="'search.label_room_type' | translate"
-                [(ngModel)]="roomType" (ngModelChange)="onFilterChange()">
-          <option value="">{{ 'search.all_room_types' | translate }}</option>
-          <option value="shared_house">Shared house</option>
-          <option value="en_suite">En-suite</option>
-          <option value="studio">Studio</option>
-          <option value="private">Private room</option>
-        </select>
-        <select class="search-select" [attr.aria-label]="'search.label_max_rent' | translate"
-                [(ngModel)]="maxRentCents" (ngModelChange)="onFilterChange()">
-          @for (p of priceOptions; track p.value) {
-            <option [value]="p.value">{{ p.label }}</option>
-          }
-        </select>
+        <!-- ⚠️ A wrapper that is display:contents on a desktop and a
+             two-column grid on a phone. The three selects were four
+             full-width rows with the text box; contents means the
+             desktop row is unchanged and the element adds no box. -->
+        <div class="search-selects">
+          <select class="search-select" [attr.aria-label]="'search.label_province' | translate"
+                  [(ngModel)]="province" (ngModelChange)="onFilterChange()">
+            <option value="">{{ 'search.all_provinces' | translate }}</option>
+            @for (p of provinces; track p) { <option [value]="p">{{ p }}</option> }
+          </select>
+          <select class="search-select" [attr.aria-label]="'search.label_room_type' | translate"
+                  [(ngModel)]="roomType" (ngModelChange)="onFilterChange()">
+            <option value="">{{ 'search.all_room_types' | translate }}</option>
+            <option value="shared_house">Shared house</option>
+            <option value="en_suite">En-suite</option>
+            <option value="studio">Studio</option>
+            <option value="private">Private room</option>
+          </select>
+          <select class="search-select" [attr.aria-label]="'search.label_max_rent' | translate"
+                  [(ngModel)]="maxRentCents" (ngModelChange)="onFilterChange()">
+            @for (p of priceOptions; track p.value) {
+              <option [value]="p.value">{{ p.label }}</option>
+            }
+          </select>
+        </div>
       </div>
     </div>
 
@@ -879,6 +897,20 @@ export class Home implements OnInit, OnDestroy {
    * because a date was too tight is how a search gets abandoned rather than
    * widened.
    */
+  /**
+   * Empties the text search and re-runs the board.
+   *
+   * Through onSearchChange rather than setting the signal alone: the board
+   * is debounced and the suggestion list has its own state, so assigning
+   * the field would clear the BOX and leave the results as they were —
+   * which is the shape of defect this repo keeps producing.
+   */
+  clearSearch() {
+    this.searchTerm = '';
+    this.suggestOpen.set(false);
+    this.onSearchChange();
+  }
+
   clearMoveIn() {
     this.moveIn = '';
     this.moveInTo = '';

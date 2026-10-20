@@ -302,7 +302,15 @@ img{display:block;max-width:100%}
 .hero-stat span{font-size:.82rem;color:rgba(250,247,240,.5)}
 
 /* ═══ SEARCH BAR ═══ */
-.search-wrap{background:var(--cream2);border-bottom:1px solid var(--border);padding:1rem 1.5rem}
+/* ⚠️ White, not --cream2. The page ground became --cream2 in v1.147.0, so
+   this band was the same colour as everything below it and read as part of
+   the board rather than as the thing you search with. White plus a shadow
+   puts it on the same plane as a card: the one strip of chrome between the
+   hero and the results. */
+.search-wrap{
+  background:var(--white);border-bottom:1px solid var(--border);
+  box-shadow:var(--shadow-sm);padding:1rem 1.5rem;position:relative;z-index:2;
+}
 .search-bar{
   max-width:1200px;margin:0 auto;
   display:flex;gap:.65rem;flex-wrap:wrap;align-items:center;
@@ -322,10 +330,39 @@ img{display:block;max-width:100%}
   transition:border-color .15s;
 }
 .search-input:focus{outline:none;border-color:var(--terra)}
+/* The clear sits inside the box, on the right, and keeps its 44px target
+   (WCAG 2.5.8) without making the input taller — the box is 44px already,
+   so the button fills it rather than adding to it. */
+.search-clear{
+  position:absolute;right:.25rem;top:50%;transform:translateY(-50%);
+  display:flex;align-items:center;justify-content:center;
+  min-width:44px;min-height:44px;padding:0;
+  background:none;border:none;border-radius:var(--r-full);
+  color:var(--slate);font-size:1rem;cursor:pointer;
+}
+.search-clear:hover{background:var(--cream2);color:var(--ink);transform:translateY(-50%);box-shadow:none}
+/* Room for it, so a long suburb name does not run under the button. */
+/* 3rem = 48px, and the clear button occupies 4px..48px from the right, so
+   this is the first scale value that clears it completely. 2.5rem let a long
+   suburb name run under the button. */
+.search-input{padding-right:3rem}
+/* ⚠️ `background-color`, NOT the `background` shorthand.
+   styles.scss sets `appearance:none` on every select and draws the chevron
+   back with a `background-image`. The shorthand resets background-image to
+   none, so these three class rules cancelled it — and because appearance
+   was still none, the NATIVE arrow was gone too. Measured: all 11 selects
+   on the board had `appearance:none` and `background-image:none`, so every
+   dropdown in the product looked like a text input and gave no sign it
+   opened. `padding-right` for the same reason: the shorthand `padding`
+   below overrode the room the chevron needs. */
+/* No box on a desktop — the three selects stay direct children of the flex
+   row and keep its gap. _responsive.scss makes this a grid at <=768px. */
+.search-selects{display:contents}
 .search-select{
-  padding:.6rem .85rem;border:1.5px solid var(--border-strong);
+  padding:.6rem .85rem;padding-right:2.5rem;
+  border:1.5px solid var(--border-strong);
   border-radius:var(--r8);font-family:var(--font-body);font-size:.88rem;
-  background:var(--white);color:var(--ink);cursor:pointer;
+  background-color:var(--white);color:var(--ink);cursor:pointer;
   min-width:160px;
 }
 .search-select:focus{outline:none;border-color:var(--terra)}
@@ -349,9 +386,10 @@ img{display:block;max-width:100%}
 .filter-group:last-child{border:none;margin-bottom:0;padding-bottom:0}
 .filter-label{font-size:.8rem;font-weight:600;color:var(--ink2);margin-bottom:.5rem;display:block}
 .filter-select{
-  width:100%;padding:.5rem .75rem;border:1.5px solid var(--border-strong);
+  width:100%;padding:.5rem .75rem;padding-right:2.5rem;
+  border:1.5px solid var(--border-strong);
   border-radius:var(--r4);font-family:var(--font-body);font-size:.85rem;
-  background:var(--white);color:var(--ink);
+  background-color:var(--white);color:var(--ink);
 }
 .filter-check{
   display:flex;align-items:center;gap:.5rem;
@@ -412,8 +450,9 @@ img{display:block;max-width:100%}
 .results-count{font-size:.88rem;color:var(--slate);font-weight:500}
 .results-count strong{color:var(--ink);font-weight:700}
 .sort-select{
-  padding:.4rem .75rem;border:1.5px solid var(--border-strong);border-radius:var(--r4);
-  font-size:.82rem;font-family:var(--font-body);background:var(--white);color:var(--ink);cursor:pointer;
+  padding:.4rem .75rem;padding-right:2.5rem;
+  border:1.5px solid var(--border-strong);border-radius:var(--r4);
+  font-size:.82rem;font-family:var(--font-body);background-color:var(--white);color:var(--ink);cursor:pointer;
 }
 
 /* ═══ ROOM GRID ═══ */

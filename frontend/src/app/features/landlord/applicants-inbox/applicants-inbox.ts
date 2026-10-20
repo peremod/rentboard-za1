@@ -214,9 +214,16 @@ import { Icon } from '../../../shared/components/icon/icon';
       margin: 1rem 0; padding-bottom: 1rem; border-bottom: 1px solid var(--border);
     }
     .ai-filters label { display: flex; flex-direction: column; gap: .2rem; font-size: .72rem; color: var(--slate); }
+    /* background-COLOR, not the shorthand: styles.scss sets appearance:none
+       on every select and draws the arrow back with a background-image, and
+       the shorthand resets that image to none — so this rule removed the one
+       thing saying these four open a list. Fourth instance of the same pair.
+       --border-strong because a control boundary needs 3:1 (WCAG 1.4.11) and
+       the hairline is 1.3:1 on white. */
     .ai-filters select {
-      font: inherit; font-size: .85rem; padding: .4rem .5rem;
-      border: 1px solid var(--border); border-radius: var(--r4); background: var(--white); min-width: 9rem;
+      font: inherit; font-size: .85rem; padding: .4rem .5rem; padding-right: 2.5rem;
+      border: 1px solid var(--border-strong); border-radius: var(--r4);
+      background-color: var(--white); min-width: 9rem;
     }
     .ai-empty { color: var(--slate); line-height: 1.6; max-width: 34rem; }
     .ai-list { list-style: none; padding: 0; margin: 1rem 0 0; }

@@ -324,8 +324,16 @@
   .trust-item { white-space: nowrap; flex-shrink: 0; }
 
   // Search
-  .search-bar { flex-direction: column; }
-  .search-input-wrap, .search-select { width: 100%; min-width: 0; }
+  /* ⚠️ Four full-width rows before a single room was four rows of chrome
+     at the top of the busiest page in the product, on the device it is
+     built for. The text box stays full width because it is the primary
+     thing; the three selects share a two-column grid, so the band is three
+     rows instead of four and the selects are ~170px at 390px — wide enough
+     for "All room types" without truncating. */
+  .search-bar { flex-direction: column; align-items: stretch; }
+  .search-input-wrap { width: 100%; min-width: 0; }
+  .search-selects { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+  .search-select { width: 100%; min-width: 0; }
 
   // NOTE: results-header layout is defined once, further down, in the
   // 'Results header on mobile' block. It used to stack here too, and that rule
