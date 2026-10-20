@@ -9,16 +9,29 @@
 # signal back — it waits for the deploy and asserts the environment came up
 # configured as staging.
 #
-# There is NO PRODUCTION SERVICE defined here yet. The free tier is not a
-# production target (see below), so production currently has no backend deploy
-# path at all.
+# ⚠️ THIS PARAGRAPH WAS FALSE FOR SEVERAL RELEASES. It said "there is NO
+# PRODUCTION SERVICE defined here yet" and "production currently has no
+# backend deploy path at all" while `rentboard-api` sat 170 lines below it
+# with `branch: master`, added by §59. A header that contradicts its own file
+# is worse than no header: somebody reading the top of this file would
+# conclude production is not deployed from here, and stop looking.
 #
-# Set it up: Render dashboard → New → Blueprint → point at this repo.
+# Both services are defined: `mastande-api` (staging, `develop`) and
+# `rentboard-api` (production, `master`).
 #
-# THE FREE TIER SLEEPS after roughly 15 minutes of no traffic, and the next
-# request takes 30–60 seconds to wake it. That is survivable for staging and a
-# poor experience for real users, so treat this as a staging target rather than
-# a production one.
+# Set up a new one: Render dashboard → New → Blueprint → point at this repo.
+#
+# 🔴 BOTH SERVICES ARE ON THE FREE PLAN — confirmed by the owner on
+# 20 October 2026 — AND THE FREE TIER SLEEPS after roughly 15 minutes of no
+# traffic, with the next request taking 30–60 seconds to wake it.
+#
+# On staging that is survivable. ON PRODUCTION IT IS A REAL COST: the first
+# person to open umastande.co.za after a quiet quarter-hour waits up to a
+# minute for a room board to appear, on a cheap Android, on mobile data. This
+# product is built for somebody with four back rooms and a R200 phone, and
+# that person closes the tab. It is a plan decision rather than a defect, and
+# it is recorded here so it is a decision somebody MADE rather than one that
+# happened.
 #
 # Free-tier terms change. Check Render's current pricing page before relying on
 # any of the limits described here.
@@ -185,7 +198,7 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
-    plan: free                 # ⚠️ CONFIRM against the dashboard — see above
+    plan: free                 # ✅ Confirmed by the owner, 20 October 2026.
     region: frankfurt
     branch: master             # production. Was `develop`, which is the bug.
     healthCheckPath: /health

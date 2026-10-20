@@ -4067,11 +4067,38 @@ subject the repository does not describe.
 
 ⚠️ **Not yet synced, and the first sync is the dangerous one.** The service
 already exists, Render matches a Blueprint service on its `name`, and two
-fields are guesses this repository has no record of: `plan` is written `free`
-to match staging and **must be confirmed against the dashboard — declaring
-`free` on a paid instance downgrades it**. `JWT_SECRET` is `sync: false` here
-rather than `generateValue: true` as on staging, deliberately: a regenerated
-secret invalidates every live session and refresh token, because it signs them.
+fields were guesses this repository had no record of.
+
+### ✅ `plan: free` confirmed by the owner, 20 October 2026
+
+Both services are on the free plan. The downgrade risk is gone — `free` in
+the blueprint matches what is running, so a sync cannot change the instance
+class. The remaining field is not a guess: `JWT_SECRET` is `sync: false`
+rather than `generateValue: true` **deliberately**, because a regenerated
+secret invalidates every live session and refresh token, as it signs them.
+
+🔴 **What the confirmation makes concrete rather than hypothetical: the free
+tier sleeps, and production is on it.** After roughly fifteen minutes of no
+traffic the next request takes 30–60 seconds to wake the service. The
+blueprint header called that "a poor experience for real users" while
+arguing production should therefore not be on Render at all — and production
+has been on Render, on the free plan, since §59 added it.
+
+So the first person to open `umastande.co.za` after a quiet quarter-hour
+waits up to a minute for a room board, on a cheap Android, on mobile data.
+That is the person this product exists for, and they close the tab. **It is
+a plan decision, not a defect**, and it is recorded here so it is one
+somebody made rather than one that happened. Options, in increasing cost: a
+keep-warm ping against `/health` every ten minutes (a cron, free, and
+explicitly against the spirit of the free tier); Render's cheapest paid
+instance; or a different host for the API.
+
+⚠️ **The blueprint header was also false for several releases**, saying
+"there is NO PRODUCTION SERVICE defined here yet" while `rentboard-api` sat
+170 lines below it with `branch: master`. A header that contradicts its own
+file is worse than none: somebody reading the top of `render.yaml` would
+conclude production is not deployed from here and stop looking. Corrected in
+v1.157.0.
 
 ## 60. Three files, three different answers, none of them where staging is
 
