@@ -5092,6 +5092,124 @@ drawer "opener" was matched by the word *filter*, which also finds "Clear all
 filters" **inside** the panel — so the drive clicked a button that cannot
 close the sheet and timed out against an overlay that was never going away.
 
+## 75. The two repository variables the deploy verifier reads
+
+**Status: not done as of 20 October.** This was reported as done and it is not,
+which is worth stating plainly because the thing that reported otherwise was a
+green tick.
+
+Neither value can be set or even read from a coding session: `gh variable list`
+returns `HTTP 403: Access to this GitHub Actions path is not permitted through
+this proxy`, and the GitHub MCP server exposes no variables API. The only
+evidence available from here is a workflow log, which is how both faults below
+were found.
+
+### What to set
+
+Settings → Secrets and variables → Actions → Variables:
+
+| Variable | Value | Branch it verifies |
+|---|---|---|
+| `STAGING_API_HOST` | `mastande-api.onrender.com` | `develop` |
+| `PRODUCTION_API_HOST` | `api.umastande.co.za` | `master` |
+
+That mapping comes from `render.yaml` and nowhere else: `mastande-api` carries
+`branch: develop` and `APP_ENV=staging` (line 51); `rentboard-api` carries
+`branch: master` and `APP_ENV=production` (line 197). Host only — no scheme, no
+trailing slash; the workflow prefixes `https://`.
+
+### Confirmed still unset at 18:11 UTC on 20 October
+
+Runs 90 (`master`) and 91 (`develop`), dispatched after the fix landed. Both
+logs print the variables GitHub actually holds:
+
+```
+PRODUCTION_API_HOST:
+STAGING_API_HOST: rentboard-api.onrender.com
+```
+
+Run 91 then reached the live service and the new assertion did its job:
+
+```
+Verifying staging at https://rentboard-api.onrender.com
+{"status":"ok","db":"connected","version":"1.158.0","env":"production",...}
+✅ serving 1.158.0, which is the version in this commit
+❌ STAGING_API_HOST points at a production service, but this run is
+   verifying staging.
+```
+
+The service says `"env":"production"` itself. That is the whole fault, in the
+service's own words, and the check now stops there instead of carrying on to
+blame `APP_ENV`.
+
+### The two faults this replaced
+
+**`PRODUCTION_API_HOST` was never set, and the check went green anyway.** Run
+88 on `master` is `success` in the Actions list. Its log reads:
+
+```
+TARGET_BRANCH: master
+PRODUCTION_API_HOST:
+⏭️  No PRODUCTION_API_HOST repository variable is set.
+```
+
+The skip path was `exit 0`, so every push to `master` since §59 reported a pass
+while verifying nothing — the green tick *was* the unset variable. It is `exit
+1` now. An unset variable can no longer look like a verified deployment.
+
+**`STAGING_API_HOST` held the production host.** It was
+`rentboard-api.onrender.com`. Run 89 on `develop` failed with:
+
+```
+❌ STAGING IS CRAWLABLE. Check APP_ENV — it must be 'staging', not 'production'.
+```
+
+`APP_ENV` was correct. The check had fetched **production's** `robots.txt` —
+`Sitemap: https://www.umastande.co.za/sitemap.xml`, crawlable, exactly as
+production should be — and blamed a variable that was right. A check that
+misdiagnoses costs more than one that stays quiet, because somebody then goes
+and changes `APP_ENV` on a working service.
+
+The verifier now reads `env` from `/health` and asserts the service identifies
+as the environment the branch claims, before anything judges how it behaves. A
+wrong host says so and names the variable.
+
+**And the comment telling you what to set it to gave the production host.** It
+read "to the host staging actually serves from — today
+`rentboard-api.onrender.com`". That was true before the 13 October rename, when
+one service served everything, and nothing came back to it afterwards; the
+file's own header said the same thing three paragraphs higher. Both now carry
+the table above and are marked as history. The wrong value was set because the
+repository asked for it.
+
+### How to tell it worked
+
+Actions → Verify deployment → Run workflow, once on `develop` and once on
+`master`. Each log should contain:
+
+```
+✅ serving <version>, which is the version in this commit
+✅ the service identifies as staging        (or production)
+✅ database is connected
+✅ staging is healthy, current, and refuses all crawlers
+```
+
+The second line is the new one and it is the one to look for. If a run says
+`points at a production service, but this run is verifying staging`, the
+variable still holds the wrong host.
+
+### What breaks if it is skipped
+
+Nothing visible, which is the problem. Render deploys out-of-band, so GitHub
+reports nothing about a deploy on its own; this workflow is the only signal
+there is. Unset, `master` now goes red rather than falsely green — and a
+production deploy that failed, or came up labelled `staging` and therefore
+invisible to every search engine, would otherwise be indistinguishable from a
+healthy one from inside GitHub.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash
