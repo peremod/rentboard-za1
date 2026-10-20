@@ -1825,6 +1825,23 @@ below 900px the element is not rendered at all.
 A gate that runs at a single viewport measures a single viewport.
 scripts/a11y-widths.sh makes the sweep the default and CI calls it."
 
+tag_if_missing "v1.156.0" "57183d7b9ed9f234f1f6e847ed119dcbdb0fe288" "2026-10-20T17:20:00+00:00" "v1.156.0 - staging pointing at production now refuses to start
+
+OUTSTANDING 61 concluded that nothing in this repository could detect a
+staging deployment whose FRONTEND_URL is the production site, because the
+variable is sync:false and the blueprint never sees its value. True of the
+blueprint, not of the running process, which can read its own environment.
+
+environment.ts already had a cross-environment contamination check and it
+covered SITE_URL alone, while the live staging API ran with FRONTEND_URL set
+to production - the guard written for one variable and not the one next
+door. An error rather than a warning, because the failure mode is a
+staging-minted JWT handed to the live site in a URL fragment.
+
+Also: the bundle budget raised to 500kb warning after measuring that 280kb
+of the 475 is the Angular runtime, and the first clean runs of
+tenancy-lifecycle (297) and the smoke suite (512) in this sequence."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
