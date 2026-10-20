@@ -34,13 +34,13 @@
   ],
 
   "staging": {
-    "endpoint": null,
+    "endpoint": "postgresql://neondb_owner:npg_B5nZPMX1rLJA@ep-flat-flower-b1my1tch-pooler.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
     "service": "mastande-api",
     "branch": "develop"
   },
 
   "production": {
-    "endpoint": null,
+    "endpoint": "postgresql://neondb_owner:npg_VzKBtR0hJNl9@ep-royal-hill-b1vy1vmt-pooler.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
     "service": "rentboard-api",
     "branch": "master"
   }
