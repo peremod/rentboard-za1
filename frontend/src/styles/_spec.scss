@@ -480,6 +480,23 @@ img{display:block;max-width:100%}
 // look like one — the count's <strong> below is what carries the emphasis.
 .results-count{font-size:.88rem;color:var(--slate);font-weight:500}
 .results-count strong{color:var(--ink);font-weight:700}
+
+/* How the typed phrase was read, shown under the count.
+   Each chip is a 44px target (WCAG 2.5.8) because every one of them is a
+   button that changes the result set — a 20px chip is a control only a mouse
+   can use, on the page this product is most used on. */
+.search-read{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin:.5rem 0 0;font-size:.85rem}
+.search-read__label{color:var(--slate);font-weight:500}
+.search-chip{display:inline-flex;align-items:center;gap:.25rem;min-height:44px;
+  padding:.25rem .75rem;border:1px solid var(--border-strong);border-radius:var(--r-full);
+  background:var(--white);color:var(--ink);font-size:.85rem;font-weight:600;cursor:pointer}
+.search-chip:hover{background:var(--cream2)}
+.search-chip app-icon{color:var(--slate)}
+/* A word the board matched on, not a control: no border emphasis, no pointer,
+   and no close affordance, because removing one word of a phrase is done by
+   editing the phrase. */
+.search-chip--word{border-color:var(--border);color:var(--ink2);font-weight:500;cursor:default}
+.search-chip--word:hover{background:var(--white)}
 .sort-select{
   padding:.4rem .75rem;padding-right:2.5rem;
   border:1.5px solid var(--border-strong);border-radius:var(--r4);
