@@ -27,9 +27,15 @@
 #      definitely-not-a-real-service-xyz123.onrender.com resolves. So the
 #      skip branch could never be taken and the job always fell through to
 #      the curl loop.
-#   3. It pointed at mastande-api.onrender.com. The service is called
-#      rentboard-api; the rename has not happened yet. So it was polling a
-#      host that does not serve this API.
+#   3. It pointed at mastande-api.onrender.com. The service was called
+#      rentboard-api; the rename had not happened yet. So it was polling a
+#      host that did not serve this API.
+#
+#      ⚠️ READ THIS AS HISTORY, NOT AS THE MAPPING. The rename LANDED on
+#      13 October and this paragraph outlived it: mastande-api is now the
+#      STAGING service and rentboard-api the PRODUCTION one. Taking the
+#      sentence above as current advice is how STAGING_API_HOST came to hold
+#      the production host — see the note on the env: block below.
 #   4. It asserted nothing about *which build* answered, so even a pass would
 #      not have told you a deploy had happened — only that something was up.
 #
@@ -73,16 +79,27 @@ jobs:
           # a staging-shaped check would have called that a pass.
           TARGET_BRANCH: ${{ github.ref_name }}
           PRODUCTION_API_HOST: ${{ vars.PRODUCTION_API_HOST }}
-          # Set this as a repository variable (Settings → Secrets and
-          # variables → Actions → Variables) to the host staging actually
-          # serves from — today `rentboard-api.onrender.com`, and the custom
-          # domain once it is attached.
-          #
-          # Unset is a deliberate "there is nothing to verify yet" rather
-          # than something inferred from DNS, which cannot be inferred: see
-          # fault 2 above. A configuration switch can be read; a wildcard
-          # cannot be interrogated.
           STAGING_API_HOST: ${{ vars.STAGING_API_HOST }}
+          #
+          # 🔴 THIS COMMENT USED TO GIVE THE WRONG VALUE, and the wrong value
+          # is what got set. It read: set STAGING_API_HOST "to the host
+          # staging actually serves from — today `rentboard-api.onrender.com`".
+          # `rentboard-api` is PRODUCTION (render.yaml line 197, `branch:
+          # master`); staging is `mastande-api` (line 51, `branch: develop`).
+          # The sentence was true when written — before the 13 October rename,
+          # when one service served everything — and nothing came back to it.
+          # Run 89 on 20 October duly failed with "STAGING IS CRAWLABLE",
+          # having fetched production's robots.txt.
+          #
+          # The correct values, from render.yaml, which is the only place the
+          # branch→service mapping is written down:
+          #
+          #   STAGING_API_HOST     mastande-api.onrender.com     (develop)
+          #   PRODUCTION_API_HOST  api.umastande.co.za           (master)
+          #                        — or rentboard-api.onrender.com
+          #
+          # Set both at Settings → Secrets and variables → Actions →
+          # Variables. Neither may be left unset: see the guard below.
         run: |
           set -euo pipefail
 
@@ -99,14 +116,32 @@ jobs:
             HOST_VAR="STAGING_API_HOST"
           fi
 
+          # 🔴 THIS WAS `exit 0` AND THAT IS HOW IT REPORTED SUCCESS WHILE
+          # VERIFYING NOTHING. Run 88 (master, 20 October) is green in the
+          # Actions list; its log says `PRODUCTION_API_HOST: ` and
+          # "⏭️  No PRODUCTION_API_HOST repository variable is set." A green
+          # tick was read as "production verified" when the variable had
+          # never been set — the skip path WAS the pass.
+          #
+          # The "nothing to verify yet" reading that justified exit 0 expired
+          # on 13 October. render.yaml now defines a service for BOTH
+          # branches, so for either value of $ENV_NAME there is a live
+          # deployment this workflow is supposed to be checking, and an unset
+          # variable is a configuration gap rather than an absence of subject.
+          # A missing variable must therefore be RED: the one thing it may
+          # not do is look like a pass.
           if [ -z "$HOST" ]; then
-            echo "⏭️  No $HOST_VAR repository variable is set."
+            echo "❌ No $HOST_VAR repository variable is set, so nothing was"
+            echo "   verified for $ENV_NAME — and this is a FAILURE rather"
+            echo "   than a skip precisely so it cannot be mistaken for one."
             echo
-            echo "    Nothing is being verified for $ENV_NAME. Set it to the"
-            echo "    host $ENV_NAME serves from (Settings → Secrets and"
-            echo "    variables → Actions → Variables) and this check starts"
-            echo "    enforcing on the next push."
-            exit 0
+            echo "   render.yaml defines a deployed service for both branches:"
+            echo "     STAGING_API_HOST     mastande-api.onrender.com"
+            echo "     PRODUCTION_API_HOST  api.umastande.co.za"
+            echo
+            echo "   Set it at Settings → Secrets and variables → Actions →"
+            echo "   Variables, then re-run this workflow."
+            exit 1
           fi
 
           API="https://$HOST"
@@ -156,6 +191,49 @@ jobs:
             echo "   dashboard before trusting anything else in this run."
             exit 1
           fi
+
+          # ⚠️ WHICH environment answered, before judging how it behaves.
+          #
+          # 🔴 Without this the check misdiagnoses a wrong host as a wrong
+          # APP_ENV. Measured on 20 October: STAGING_API_HOST was set to
+          # rentboard-api.onrender.com, which render.yaml defines as the
+          # PRODUCTION service (mastande-api is staging). The run failed with
+          # "STAGING IS CRAWLABLE. Check APP_ENV" — correct that something was
+          # wrong, and pointing at the wrong thing. APP_ENV was right; the
+          # host was production.
+          #
+          # /health already returns `env`, so the service can be asked who it
+          # thinks it is. A host that answers with the other environment is a
+          # variable fault, and says so.
+          CLAIMED=$(echo "$HEALTH" | sed -n 's/.*"env":"\([^"]*\)".*/\1/p')
+
+          # ⚠️ An ABSENT `env` is a failure, not a skip. The version
+          # assertion directly above has already established that the build
+          # from this commit is the one answering, and this commit's
+          # health.controller.ts returns `env` unconditionally — so if it is
+          # missing here, the parse is broken, and "skip when empty" would
+          # turn the whole assertion below into a check that cannot fail.
+          if [ -z "$CLAIMED" ]; then
+            echo "❌ /health did not report an \`env\` field, but the service"
+            echo "   is serving $DEPLOYED — this commit's build, which always"
+            echo "   returns one (backend/src/modules/health/health.controller.ts)."
+            echo "   So this is a parsing fault in THIS workflow, not a"
+            echo "   deployment fault. Failing rather than skipping: a skip"
+            echo "   here disables the environment-identity check silently."
+            exit 1
+          fi
+
+          if [ "$CLAIMED" != "$ENV_NAME" ]; then
+            echo "❌ $HOST_VAR points at a $CLAIMED service, but this run is"
+            echo "   verifying $ENV_NAME."
+            echo
+            echo "   The host is wrong, not the deployment. render.yaml:"
+            echo "   mastande-api serves staging (develop), rentboard-api"
+            echo "   serves production (master). Fix $HOST_VAR rather than"
+            echo "   APP_ENV — everything below this would misdiagnose."
+            exit 1
+          fi
+          echo "✅ the service identifies as $CLAIMED, which is what was asked for"
 
           # The database is the other half of a deploy. Render deploying new
           # code without `npm run migrate:staging` having been run is the

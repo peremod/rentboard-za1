@@ -141,6 +141,34 @@ for (const file of files) {
         const detail = (check.stderr || '').trim().split('\n').join('; ').replace(/^-: /g, '');
         problems.push(`${file}  ${jobName} → ${label}  shell syntax: ${detail}`);
       }
+
+      /**
+       * 🔴 A JSDoc block inside a `run:` script PARSES. `bash -n` accepts it,
+       * so the check above is structurally incapable of seeing it — measured
+       * 20 October, when a `/** … *\/` comment was written into
+       * verify-deployment.yml's script and `bash -n` returned 0.
+       *
+       * What it does at runtime: `/**` is a glob, which expands to the first
+       * entry in `/` — `/bin` here — and bash tries to EXECUTE it, exiting
+       * 126 with "Is a directory". Under `set -euo pipefail` that kills the
+       * step on that line. So the script is valid, the job starts, and it
+       * dies mid-way with an error naming neither the file nor the mistake.
+       *
+       * This repository's comment style in shell is `#`, and every line below
+       * is unambiguously a comment marker from another language rather than
+       * anything a shell script here would legitimately open a line with.
+       */
+      asBashSees(step.run)
+        .split('\n')
+        .forEach((line, n) => {
+          const first = line.trim().split(/\s/)[0];
+          if (['/**', '/*', '*/', '*', '//'].includes(first)) {
+            problems.push(
+              `${file}  ${jobName} → ${label}  line ${n + 1}: \`${first}\` is not a shell ` +
+                `comment — bash globs and executes it. Use #.`,
+            );
+          }
+        });
     });
   }
 }
@@ -162,5 +190,6 @@ if (problems.length) {
 }
 
 console.log(
-  `✅ ${files.length} workflow files, no duplicate keys, ${stepsChecked} run steps parse as shell.`,
+  `✅ ${files.length} workflow files, no duplicate keys, ${stepsChecked} run steps parse as ` +
+    `shell and open no line with a non-shell comment marker.`,
 );
