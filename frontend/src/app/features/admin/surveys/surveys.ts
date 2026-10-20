@@ -369,7 +369,7 @@ export class AdminSurveys implements OnInit {
           this.loading.set(false);
           this.error.set(
             e?.status === 404
-              ? 'That survey has not been seeded yet. Run prisma/seed-survey.ts --apply.'
+              ? 'That survey has not been seeded yet. Run: npm run seed:survey -- --apply'
               : 'Could not load the results. Try again.',
           );
         },

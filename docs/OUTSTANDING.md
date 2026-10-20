@@ -221,12 +221,14 @@ Then, **from the repository root**:
 ```bash
 export DATABASE_URL='<production, the -pooler endpoint>'
 export DIRECT_URL='<production, the NON-pooler endpoint>'
-bash scripts/migrate-remote.sh
+bash scripts/migrate-remote.sh --env production
 ```
 
 It prints which database it is about to migrate, shows the pending list, and
 asks before applying. It refuses if either variable is unset, if either resolves
-to localhost, or if `DIRECT_URL` is a `-pooler` host.
+to localhost, if `DIRECT_URL` is a `-pooler` host, if the two URLs are not the
+same database, or if the endpoint is not the one recorded for `--env` in
+`scripts/migrate-targets.json` — see §77.
 
 ⚠️ **Not `cd backend && npx prisma migrate deploy`.** That command has none of
 those guards. See § 5a.
@@ -358,9 +360,11 @@ cd ..
 npm run migrate:staging
 ```
 
-`migrate:staging` runs `scripts/migrate-remote.sh`, which refuses to run against
-localhost, with `DATABASE_URL` unset, without `DIRECT_URL`, or with `DIRECT_URL`
-pointing at a `-pooler` host. **The direct string is not optional** — migrating
+`migrate:staging` runs `scripts/migrate-remote.sh --env staging`, which refuses
+to run against localhost, with `DATABASE_URL` unset, without `DIRECT_URL`, with
+`DIRECT_URL` pointing at a `-pooler` host, with the two URLs naming different
+databases, or against an endpoint that is not the one recorded for staging
+(§77). **The direct string is not optional** — migrating
 through the pooled one fails with an advisory-lock error that reads like a
 permissions problem and is not one.
 
@@ -5206,6 +5210,165 @@ there is. Unset, `master` now goes red rather than falsely green — and a
 production deploy that failed, or came up labelled `staging` and therefore
 invisible to every search engine, would otherwise be indistinguishable from a
 healthy one from inside GitHub.
+
+---
+
+
+## 76. A stale Prisma client blames the file that uses it
+
+**Hit on 20 October, immediately after staging was migrated.** The survey seed
+failed with six TypeScript errors, every one of them pointing into
+`prisma/seed-survey.ts`:
+
+```
+prisma/seed-survey.ts:100:14 - error TS2353: Object literal may only specify
+  known properties, and 'slug_version' does not exist in type 'SurveyWhereUniqueInput'.
+prisma/seed-survey.ts:140:39 - error TS2339: Property '_count' does not exist
+  on type '{ id: string; slug: string; title: string; … }'
+```
+
+Nothing was wrong with the seed script, the schema, or the database.
+`node_modules/.prisma/client` was generated from a schema older than
+16 October, so it had never heard of `Survey.version` or the
+`@@unique([slug, version])` that `slug_version` is the client's name for.
+
+### The fix, if you hit it
+
+```bash
+cd backend && npx prisma generate
+```
+
+Then re-run whatever failed. One command, no migration, no reinstall.
+
+### Why it happens, and why it will happen again
+
+`prisma migrate deploy` does **not** regenerate the client — only
+`migrate dev` does. `postinstall` regenerates it, but only on install. So the
+ordinary sequence of `git pull` → migrate → run leaves the client exactly one
+step behind the schema, and every error names a caller.
+
+**Note what the type in the error message actually lists.** It prints the
+Survey model the *client* knows — `{ id, slug, title, intro, questions,
+audience, active, createdAt, updatedAt }`, with no `version` and no relations
+at all. That object is the evidence, and it says the client is old rather than
+the code being wrong. Worth reading rather than scrolling past, because six
+errors in one file read as a broken file.
+
+### What now prevents it
+
+`npm run seed:survey` and `npm run seed:house-ads` run `prisma generate`
+first, so the documented path cannot meet a stale client. Use those rather
+than `npx ts-node prisma/seed-survey.ts`; pass `--apply` as
+`npm run seed:survey -- --apply`, which is verified to forward (`Mode: WRITE`).
+
+`scripts/prisma-client-check.mjs` is the diagnosis for everything else — the
+API build, `db:seed`, the drives. It compares every model, field, enum and
+enum value in `schema.prisma` against the generated client's own DMMF and
+names what is missing:
+
+```
+❌ The generated Prisma client is STALE.
+   schema.prisma declares these, and the client does not:
+     · Survey.version
+     · SurveyResponse.completedAt
+     · SurveySource.onboarding
+   Fix it with one command:
+     cd backend && npx prisma generate
+```
+
+Run it with `cd backend && npm run prisma:check`.
+
+⚠️ **It cannot be a guard inside the seed script, and that is the whole
+design constraint.** The seed script does not *compile*, so ts-node rejects it
+before a line of it runs — a check written at the top of the file can never
+execute, because the thing it would report is what stops it running. It has to
+be a separate process that does not import the generated types at all, which
+is why it reads the DMMF (plain runtime JSON, present whatever state the types
+are in) rather than the client's types.
+
+Falsified by reproducing the exact state: generated the client from the
+pre-16-October schema, restored the current schema, and confirmed the checker
+reports `Survey.version` and ten others including an enum value. Confirmed the
+same stale client reproduces all six original errors at identical lines,
+columns and codes (`[2353, 2353, 2339, 2339, 2339, 2353]`).
+
+---
+
+
+## 77. Record the two database endpoints in migrate-targets.json
+
+**One assertion, twice, and then the migrate script can check itself.**
+`scripts/migrate-targets.json` ships with both endpoints `null`, and
+`scripts/migrate-remote.sh` **refuses** on `null` rather than skipping — an
+unrecorded environment is the state in which there is no check, so it must not
+also be the state in which the script quietly proceeds.
+
+### What to do
+
+```bash
+bash scripts/migrate-remote.sh --env staging
+```
+
+It prints the endpoint it was handed and refuses. **Do not paste that value in
+on the strength of that message.** Get it from the environment's own service in
+the Render dashboard — Environment → `DATABASE_URL`, on `mastande-api` for
+staging and `rentboard-api` for production — and record it:
+
+```json
+"staging":    { "endpoint": "ep-…", "service": "mastande-api",  "branch": "develop" },
+"production": { "endpoint": "ep-…", "service": "rentboard-api", "branch": "master"  }
+```
+
+An endpoint is the first label of the hostname with any `-pooler` removed, so
+one value covers both URLs of the same database:
+
+```
+ep-x-y-123-pooler.c-5.eu-central-1.aws.neon.tech  ->  ep-x-y-123
+ep-x-y-123.c-5.eu-central-1.aws.neon.tech         ->  ep-x-y-123
+```
+
+Commit it. Every run after that is checked.
+
+⚠️ **Recording the value is the one step nothing can check for you.** Nothing
+in a Neon hostname says which environment it is — that is the fact being
+written down. Take it from the dashboard rather than from whichever shell you
+last exported, because a wrong value recorded confidently is worse than a
+`null` that refuses.
+
+A hostname is not a credential. The password lives in the connection string
+you export and is never printed, logged or stored.
+
+### Why, and what it already caught
+
+Before this the script could tell a remote database from a local one, and a
+pooled host from a direct one, but **not staging's Neon branch from
+production's**. Both are `ep-*.neon.tech`; both passed every check. So the one
+command in this repository that WRITES printed `✅ Applied to ep-…` without
+ever saying which environment that was. §5a is the hour of downtime that shape
+of mistake already cost.
+
+🔴 **And it printed a host it was not writing to.** `Apply these to $WHERE?`
+and `✅ Applied to $WHERE` both came from `DATABASE_URL` — the *pooled* url —
+while `prisma migrate deploy` connects through `directUrl`, i.e. `DIRECT_URL`.
+Hand it one environment's pooled url and another's direct url and it would
+name the first, migrate the second, and report success. Nothing checked the two
+were even the same database. They are now required to be, and every line it
+prints names the connection the migration actually uses.
+
+All six paths driven with fake endpoints before the real ones were recorded:
+no `--env` refuses; `--env dev` refuses; an unrecorded endpoint refuses and
+prints what to do; **asking for staging while handing it production's database
+refuses with "🔴 THAT IS THE production DATABASE"**; a mixed pooled/direct pair
+refuses naming both endpoints and what it would have claimed; and a recorded,
+matching pair reaches the prompt, which now reads
+`Apply these to <direct host> (staging)? [y/N]`.
+
+⚠️ One defect found by driving it rather than reading it: `TARGETS` was built
+with a relative `$(dirname "$0")` **after** the script's own `cd` into
+`backend/`, so the lookup died with a `MODULE_NOT_FOUND` stack trace instead of
+the message it was written to print. It failed safe — exit 1, nothing migrated
+— but a guard that reports itself as a crash is one nobody trusts next time.
+`SCRIPT_DIR` is resolved absolutely before the `cd` now.
 
 ---
 

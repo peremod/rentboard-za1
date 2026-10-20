@@ -128,15 +128,20 @@ git diff --stat origin/develop HEAD     # expect no output
 
 ### 2b. Migrate production FIRST, before pushing master
 
-Same script, pointed at production. There is no `migrate:prod` npm script —
-`scripts/migrate-remote.sh` is environment-agnostic and reads whatever you
-export, which is why it prints the target and asks.
+Same script, pointed at production, with `--env production`. There is no
+`migrate:prod` npm script.
+
+⚠️ This used to read "`migrate-remote.sh` is environment-agnostic and reads
+whatever you export, which is why it prints the target and asks". That was
+true and it was the gap: printing a host is not checking one, and nothing in
+a Neon hostname says which environment it is. `--env` is now required and is
+verified against `scripts/migrate-targets.json`.
 
 ```bash
 export NEON_POOLED="postgresql://…-pooler….neon.tech/…?sslmode=require"   # PRODUCTION
 export NEON_DIRECT="postgresql://….neon.tech/…?sslmode=require"           # PRODUCTION
 
-bash scripts/migrate-remote.sh
+bash scripts/migrate-remote.sh --env production
 ```
 
 **Read the `Database:` line it prints before answering yes.** It shows host and

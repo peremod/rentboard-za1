@@ -1,0 +1,47 @@
+{
+  "_readme": [
+    "Which database each environment's migrations are allowed to reach.",
+    "",
+    "scripts/migrate-remote.sh takes --env staging|production and refuses unless",
+    "the connection it was handed matches the endpoint recorded here. Before this",
+    "file existed the script could tell a remote database from a local one and a",
+    "pooled host from a direct one, but NOT staging's Neon branch from",
+    "production's: both are ep-*.neon.tech and both passed every check. So the",
+    "one command that writes said '✅ Applied to ep-…' without ever saying which",
+    "environment that was. docs/OUTSTANDING.md §5a is the hour of downtime that",
+    "shape of mistake already cost once.",
+    "",
+    "An 'endpoint' is the first label of the hostname with any '-pooler' removed,",
+    "so one value covers both the pooled and the direct URL of the same database:",
+    "",
+    "  ep-x-y-123-pooler.c-5.eu-central-1.aws.neon.tech  ->  ep-x-y-123",
+    "  ep-x-y-123.c-5.eu-central-1.aws.neon.tech         ->  ep-x-y-123",
+    "",
+    "A hostname is not a credential — the password lives in the connection string",
+    "the operator exports and is never printed, logged or stored here.",
+    "",
+    "⚠️ RECORDING A VALUE IS AN ASSERTION, AND IT IS THE ONE STEP NOTHING CAN",
+    "CHECK FOR YOU. Nothing here can tell on its own that a given Neon endpoint",
+    "is staging rather than production; that is the fact being written down. Get",
+    "it from the environment's own service in the Render dashboard (Environment ->",
+    "DATABASE_URL on mastande-api for staging, rentboard-api for production) and",
+    "paste the endpoint, rather than from whichever shell you last exported. Once",
+    "it is right, every run afterwards is checked.",
+    "",
+    "null means 'not recorded yet', and the script REFUSES on it rather than",
+    "skipping — an unrecorded environment is the state in which there is no check",
+    "at all, so it must not be the state in which the script quietly proceeds."
+  ],
+
+  "staging": {
+    "endpoint": null,
+    "service": "mastande-api",
+    "branch": "develop"
+  },
+
+  "production": {
+    "endpoint": null,
+    "service": "rentboard-api",
+    "branch": "master"
+  }
+}

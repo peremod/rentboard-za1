@@ -141,8 +141,12 @@ in this environment, say so by name rather than implying it was verified.
   localhost while reporting "All migrations have been successfully applied."
   That is how production stayed down for an extra hour on 5 October
   (`docs/OUTSTANDING.md` § 5a). Migrate a remote database with
-  `scripts/migrate-remote.sh`, which refuses in that state, never with
-  `npx prisma migrate deploy` directly.
+  `scripts/migrate-remote.sh --env staging|production`, which refuses in that
+  state, never with `npx prisma migrate deploy` directly. `--env` is required
+  and is checked against `scripts/migrate-targets.json` rather than taken on
+  trust — nothing in a Neon hostname says which environment it is, so the
+  script could tell remote from local and pooled from direct but not staging
+  from production (§77).
 - An inline `VAR=value cmd` prefix applies to **that one command**. In
   `VAR=x node a.mjs && cmd-b`, `cmd-b` does not see `VAR`.
 - `psql` rejects the whole URI over `?schema=public` — a Prisma-only parameter —

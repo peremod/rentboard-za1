@@ -1,6 +1,6 @@
 {
   "name": "mastande-za",
-  "version": "1.158.0",
+  "version": "1.159.0",
   "private": true,
   "description": "Mastande ZA — South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
   "scripts": {
@@ -28,7 +28,7 @@
     "e2e": "playwright install chromium --with-deps >/dev/null 2>&1 || playwright install chromium; playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:install": "playwright install chromium --with-deps",
-    "migrate:staging": "bash scripts/migrate-remote.sh"
+    "migrate:staging": "bash scripts/migrate-remote.sh --env staging"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.5.0",

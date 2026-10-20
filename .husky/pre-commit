@@ -3,6 +3,16 @@
 # scripts/workflow-lint.mjs.
 node scripts/workflow-lint.mjs
 
+# 🔴 Added 20 October, after `echo "   `prisma migrate deploy` migrates…"` was
+# written into scripts/migrate-remote.sh — on the refusal path whose next
+# sentence is "Nothing has been written". Backticks in a double-quoted bash
+# string RUN the command, so the guard against migrating the wrong database
+# would have migrated one. `bash -n` accepts it, exactly as it accepts a
+# JSDoc block in a workflow step. Third language, same reflex; this is the
+# shell member of the family that template-literal-lint.mjs covers for
+# Angular.
+node scripts/shell-backtick-lint.mjs
+
 # ⚠️ The three source-only gates run HERE as well as in CI, and the reason is
 # measured: 1.075s for all six together. They need no build, no API and no
 # browser, so there is no cost to catching their defects before the commit
