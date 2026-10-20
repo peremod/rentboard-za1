@@ -41,17 +41,20 @@ name: Verify deployment
 
 on:
   push:
-    # Only develop. render.yaml deploys that branch to staging, and it is the
-    # only environment Render currently serves — there is no production
-    # service yet. Add master here in the same change that adds one, or this
-    # asserts against an API that does not exist and cries wolf.
-    branches: [develop]
+    # ⚠️ BOTH branches now. This said "only develop… there is no production
+    # service yet. Add master here in the same change that adds one" — and
+    # §59 added `rentboard-api` with `branch: master` without coming back
+    # here, so THREE RELEASES WENT TO PRODUCTION WITH NOTHING VERIFYING THEM.
+    # The instruction was written down and not followed, which is the same
+    # family as the render.yaml header that went on denying production
+    # existed 170 lines above the service that defined it.
+    branches: [develop, master]
     paths: ['backend/**', 'render.yaml']
   workflow_dispatch:
 
 jobs:
   verify:
-    name: Staging configuration
+    name: Deployed configuration
     runs-on: ubuntu-latest
     # A ceiling, not an expectation. The work below is bounded to well under
     # this; the point is that nothing here can ever again occupy a runner for
@@ -60,8 +63,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Verify the staging deployment
+      - name: Verify the deployment
         env:
+          # ⚠️ The expectations INVERT between the two environments, which is
+          # why this is one job with a switch rather than two copies: staging
+          # must refuse every crawler and must not advertise production URLs;
+          # production must do the opposite. §59 records the reverse fault —
+          # production mislabelled `staging` would refuse every crawler, and
+          # a staging-shaped check would have called that a pass.
+          TARGET_BRANCH: ${{ github.ref_name }}
+          PRODUCTION_API_HOST: ${{ vars.PRODUCTION_API_HOST }}
           # Set this as a repository variable (Settings → Secrets and
           # variables → Actions → Variables) to the host staging actually
           # serves from — today `rentboard-api.onrender.com`, and the custom
@@ -75,17 +86,31 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -z "${STAGING_API_HOST:-}" ]; then
-            echo "⏭️  No STAGING_API_HOST repository variable is set."
+          # Which environment this run is about, decided by the branch that
+          # triggered it — the same mapping render.yaml uses, so the two
+          # cannot disagree about which host serves which branch.
+          if [ "${TARGET_BRANCH:-}" = "master" ]; then
+            ENV_NAME="production"
+            HOST="${PRODUCTION_API_HOST:-}"
+            HOST_VAR="PRODUCTION_API_HOST"
+          else
+            ENV_NAME="staging"
+            HOST="${STAGING_API_HOST:-}"
+            HOST_VAR="STAGING_API_HOST"
+          fi
+
+          if [ -z "$HOST" ]; then
+            echo "⏭️  No $HOST_VAR repository variable is set."
             echo
-            echo "    Nothing is being verified. Set it to the staging host"
-            echo "    (Settings → Secrets and variables → Actions → Variables)"
-            echo "    and this check starts enforcing on the next push."
+            echo "    Nothing is being verified for $ENV_NAME. Set it to the"
+            echo "    host $ENV_NAME serves from (Settings → Secrets and"
+            echo "    variables → Actions → Variables) and this check starts"
+            echo "    enforcing on the next push."
             exit 0
           fi
 
-          API="https://$STAGING_API_HOST"
-          echo "Verifying $API"
+          API="https://$HOST"
+          echo "Verifying $ENV_NAME at $API"
 
           # Every call is bounded. --connect-timeout covers a host that never
           # completes a handshake; --max-time covers one that connects and
@@ -108,7 +133,7 @@ jobs:
           if [ -z "$HEALTH" ]; then
             echo "❌ $API/health never answered within 8 minutes."
             echo "   Either the deploy failed, the service is suspended, or"
-            echo "   STAGING_API_HOST points at a host that does not serve"
+            echo "   $HOST_VAR points at a host that does not serve"
             echo "   this API. Note that any *.onrender.com name resolves"
             echo "   whether or not a service exists behind it, so a typo"
             echo "   here looks exactly like an outage."
@@ -125,7 +150,7 @@ jobs:
           if [ "$DEPLOYED" = "$EXPECTED" ]; then
             echo "✅ serving $DEPLOYED, which is the version in this commit"
           else
-            echo "❌ staging is serving $DEPLOYED but this commit is $EXPECTED."
+            echo "❌ $ENV_NAME is serving $DEPLOYED but this commit is $EXPECTED."
             echo "   The deploy has not landed yet, or it failed and Render is"
             echo "   still serving the previous build. Check the Render"
             echo "   dashboard before trusting anything else in this run."
@@ -147,11 +172,28 @@ jobs:
           ROBOTS=$(fetch -f "$API/robots.txt")
           echo "$ROBOTS"
 
-          echo "$ROBOTS" | grep -q "^Disallow: /$" \
-            || { echo "❌ STAGING IS CRAWLABLE. Check APP_ENV — it must be 'staging', not 'production'."; exit 1; }
+          # ⚠️ Here the two environments want OPPOSITE things, and asserting
+          # one shape against both is how the reverse fault hides. §59: a
+          # production service mislabelled `staging` refuses every crawler —
+          # catastrophic, and indistinguishable from a healthy staging box to
+          # any check that only knows how staging should look.
+          if [ "$ENV_NAME" = "production" ]; then
+            if echo "$ROBOTS" | grep -q "^Disallow: /$"; then
+              echo "❌ PRODUCTION IS REFUSING EVERY CRAWLER. Check APP_ENV —"
+              echo "   it must be 'production'. The site is live and invisible"
+              echo "   to search engines until this is fixed."
+              exit 1
+            fi
+            echo "$ROBOTS" | grep -q "umastande.co.za/sitemap" \
+              || { echo "❌ production is not advertising its sitemap — check SITE_URL"; exit 1; }
+            echo "✅ production is healthy, current, and crawlable"
+          else
+            echo "$ROBOTS" | grep -q "^Disallow: /$" \
+              || { echo "❌ STAGING IS CRAWLABLE. Check APP_ENV — it must be 'staging', not 'production'."; exit 1; }
 
-          if echo "$ROBOTS" | grep -q "//umastande.co.za/sitemap"; then
-            echo "❌ staging is advertising production URLs — check SITE_URL"
-            exit 1
+            if echo "$ROBOTS" | grep -q "//umastande.co.za/sitemap"; then
+              echo "❌ staging is advertising production URLs — check SITE_URL"
+              exit 1
+            fi
+            echo "✅ staging is healthy, current, and refuses all crawlers"
           fi
-          echo "✅ staging is healthy, current, and refuses all crawlers"

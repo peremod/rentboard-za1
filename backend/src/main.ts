@@ -52,7 +52,17 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'x-payfast-signature'],
   });
 
-  app.setGlobalPrefix('api', { exclude: ['health', 'robots.txt', 'sitemap.xml'] });
+  /**
+   * ⚠️ 'health/live' is listed SEPARATELY, because `exclude` matches exact
+   * paths and not prefixes. Measured: with 'health' alone, GET /health/live
+   * returned 404 and the route was actually served at /api/health/live —
+   * the keep-warm cron would have been pointed at a path that 404s, and a
+   * 404 still wakes the service, so it would have "worked" while asserting
+   * nothing. The two health endpoints belong at the same level.
+   */
+  app.setGlobalPrefix('api', {
+    exclude: ['health', 'health/live', 'robots.txt', 'sitemap.xml'],
+  });
 
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
