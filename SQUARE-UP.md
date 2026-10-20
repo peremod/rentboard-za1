@@ -82,11 +82,16 @@ actually reach. That section exists because the 5 October migration reported
 
 ```bash
 DATABASE_URL="$NEON_POOLED" DIRECT_URL="$NEON_DIRECT" \
-  bash scripts/migrate-remote.sh
+  bash scripts/migrate-remote.sh --env staging
 ```
 
 It prints the target and asks before doing anything. `CONFIRM=yes` skips the
 prompt — only once you have read the target.
+
+`--env` is required and is checked, not taken on trust: the endpoint must be
+the one recorded for that environment in `scripts/migrate-targets.json`, and
+if you hand it the other environment's database it says so by name. See
+docs/OUTSTANDING.md §77.
 
 **Never `npx prisma migrate deploy` directly.** `schema.prisma` declares
 `directUrl = env("DIRECT_URL")`, so exporting only `DATABASE_URL` leaves

@@ -221,12 +221,14 @@ Then, **from the repository root**:
 ```bash
 export DATABASE_URL='<production, the -pooler endpoint>'
 export DIRECT_URL='<production, the NON-pooler endpoint>'
-bash scripts/migrate-remote.sh
+bash scripts/migrate-remote.sh --env production
 ```
 
 It prints which database it is about to migrate, shows the pending list, and
 asks before applying. It refuses if either variable is unset, if either resolves
-to localhost, or if `DIRECT_URL` is a `-pooler` host.
+to localhost, if `DIRECT_URL` is a `-pooler` host, if the two URLs are not the
+same database, or if the endpoint is not the one recorded for `--env` in
+`scripts/migrate-targets.json` — see §77.
 
 ⚠️ **Not `cd backend && npx prisma migrate deploy`.** That command has none of
 those guards. See § 5a.
@@ -358,9 +360,11 @@ cd ..
 npm run migrate:staging
 ```
 
-`migrate:staging` runs `scripts/migrate-remote.sh`, which refuses to run against
-localhost, with `DATABASE_URL` unset, without `DIRECT_URL`, or with `DIRECT_URL`
-pointing at a `-pooler` host. **The direct string is not optional** — migrating
+`migrate:staging` runs `scripts/migrate-remote.sh --env staging`, which refuses
+to run against localhost, with `DATABASE_URL` unset, without `DIRECT_URL`, with
+`DIRECT_URL` pointing at a `-pooler` host, with the two URLs naming different
+databases, or against an endpoint that is not the one recorded for staging
+(§77). **The direct string is not optional** — migrating
 through the pooled one fails with an advisory-lock error that reads like a
 permissions problem and is not one.
 
@@ -5287,6 +5291,84 @@ pre-16-October schema, restored the current schema, and confirmed the checker
 reports `Survey.version` and ten others including an enum value. Confirmed the
 same stale client reproduces all six original errors at identical lines,
 columns and codes (`[2353, 2353, 2339, 2339, 2339, 2353]`).
+
+---
+
+
+## 77. Record the two database endpoints in migrate-targets.json
+
+**One assertion, twice, and then the migrate script can check itself.**
+`scripts/migrate-targets.json` ships with both endpoints `null`, and
+`scripts/migrate-remote.sh` **refuses** on `null` rather than skipping — an
+unrecorded environment is the state in which there is no check, so it must not
+also be the state in which the script quietly proceeds.
+
+### What to do
+
+```bash
+bash scripts/migrate-remote.sh --env staging
+```
+
+It prints the endpoint it was handed and refuses. **Do not paste that value in
+on the strength of that message.** Get it from the environment's own service in
+the Render dashboard — Environment → `DATABASE_URL`, on `mastande-api` for
+staging and `rentboard-api` for production — and record it:
+
+```json
+"staging":    { "endpoint": "ep-…", "service": "mastande-api",  "branch": "develop" },
+"production": { "endpoint": "ep-…", "service": "rentboard-api", "branch": "master"  }
+```
+
+An endpoint is the first label of the hostname with any `-pooler` removed, so
+one value covers both URLs of the same database:
+
+```
+ep-x-y-123-pooler.c-5.eu-central-1.aws.neon.tech  ->  ep-x-y-123
+ep-x-y-123.c-5.eu-central-1.aws.neon.tech         ->  ep-x-y-123
+```
+
+Commit it. Every run after that is checked.
+
+⚠️ **Recording the value is the one step nothing can check for you.** Nothing
+in a Neon hostname says which environment it is — that is the fact being
+written down. Take it from the dashboard rather than from whichever shell you
+last exported, because a wrong value recorded confidently is worse than a
+`null` that refuses.
+
+A hostname is not a credential. The password lives in the connection string
+you export and is never printed, logged or stored.
+
+### Why, and what it already caught
+
+Before this the script could tell a remote database from a local one, and a
+pooled host from a direct one, but **not staging's Neon branch from
+production's**. Both are `ep-*.neon.tech`; both passed every check. So the one
+command in this repository that WRITES printed `✅ Applied to ep-…` without
+ever saying which environment that was. §5a is the hour of downtime that shape
+of mistake already cost.
+
+🔴 **And it printed a host it was not writing to.** `Apply these to $WHERE?`
+and `✅ Applied to $WHERE` both came from `DATABASE_URL` — the *pooled* url —
+while `prisma migrate deploy` connects through `directUrl`, i.e. `DIRECT_URL`.
+Hand it one environment's pooled url and another's direct url and it would
+name the first, migrate the second, and report success. Nothing checked the two
+were even the same database. They are now required to be, and every line it
+prints names the connection the migration actually uses.
+
+All six paths driven with fake endpoints before the real ones were recorded:
+no `--env` refuses; `--env dev` refuses; an unrecorded endpoint refuses and
+prints what to do; **asking for staging while handing it production's database
+refuses with "🔴 THAT IS THE production DATABASE"**; a mixed pooled/direct pair
+refuses naming both endpoints and what it would have claimed; and a recorded,
+matching pair reaches the prompt, which now reads
+`Apply these to <direct host> (staging)? [y/N]`.
+
+⚠️ One defect found by driving it rather than reading it: `TARGETS` was built
+with a relative `$(dirname "$0")` **after** the script's own `cd` into
+`backend/`, so the lookup died with a `MODULE_NOT_FOUND` stack trace instead of
+the message it was written to print. It failed safe — exit 1, nothing migrated
+— but a guard that reports itself as a crash is one nobody trusts next time.
+`SCRIPT_DIR` is resolved absolutely before the `cd` now.
 
 ---
 
