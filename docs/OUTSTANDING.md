@@ -4145,6 +4145,33 @@ cover the other.
 value. A check would have to read the running service. Logged rather than
 built.
 
+### ✅ Detected as of v1.156.0 — the API now refuses to start
+
+That conclusion was true of the **blueprint** and not of the **running
+process**, which can read its own environment. `environment.ts` already had a
+"cross-environment contamination" check and it covered `SITE_URL` **alone** —
+the guard written for one variable, not the one next door, which is the same
+sentence this section opens with.
+
+It now covers both, as an **error** rather than a warning: a warning is a line
+in a log nobody reads on a box nobody is watching, and the failure mode is
+live tokens in a URL fragment. Measured against the three cases:
+
+| `APP_ENV=staging` with | result |
+|---|---|
+| `FRONTEND_URL=https://www.umastande.co.za` (the shipped state) | **refuses to start** |
+| `FRONTEND_URL=https://rentboard-za1.vercel.app` | boots |
+| `FRONTEND_URL=https://staging.umastande.co.za` | boots |
+
+⚠️ **Which means staging will not come up until the dashboard is fixed**, and
+that is the point: it was already broken — CORS returns `[frontend]`, so the
+real staging frontend could never call its own API — and this makes an
+invisible failure visible. Set `FRONTEND_URL` and `SITE_URL` on `mastande-api`
+to `https://rentboard-za1.vercel.app` **before** deploying this.
+
+**Still dashboard state**: the repository can now detect the mistake, but it
+cannot correct it.
+
 ## 62. The wordmark renamed the company, and the gate required the new name
 
 The logo read **MAstande** on every screen for three days. Reported from a live
