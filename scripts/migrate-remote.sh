@@ -108,9 +108,16 @@ DIRECT="${DIRECT_URL:-}"
 if [ -z "$TARGET" ]; then
   red "❌ DATABASE_URL is not set, or is empty."
   echo
-  echo "   This script will NOT fall back to backend/.env, because that is a"
-  echo "   local database and migrating it while believing you migrated"
-  echo "   staging is the mistake this script was written to stop."
+  echo "   This script will NOT fall back to backend/.env. Migrating whatever"
+  echo "   that happens to point at while believing you migrated staging is"
+  echo "   the mistake this script was written to stop."
+  echo
+  echo "   ⚠️ It does not say 'because .env is local'. It used to, and that is"
+  echo "   an assumption, not a fact: a .env holding a remote connection"
+  echo "   string is both legal and common, and then every command that DOES"
+  echo "   fall back to it — prisma migrate dev, db:seed, purge-test-data,"
+  echo "   the drives, smoke-test.sh — is pointed at that remote database"
+  echo "   while looking local. Check what yours holds."
   echo
   echo "   Export the real values first — see docs/DEPLOYMENT.md §Migrations:"
   echo
