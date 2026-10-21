@@ -135,6 +135,24 @@ jobs:
           lhci assert --config=lighthouserc.production.json --preset=lighthouse:recommended || true
           lhci assert --config=lighthouserc.production.json
 
+      # ⚠️ A second Lighthouse, on purpose, and only for the board.
+      #
+      # lhci 0.14 bundles Lighthouse 12.1, whose RootCauses gatherer throws on
+      # this page — `layout-shifts: score null mode error`, errorMessage
+      # `Cannot read properties of undefined (reading 'frame_sequence')` — so
+      # the audit that names WHAT shifted cannot run in the collection above.
+      # 12.8 produces it. One run, one URL, after the gate, so a red CLS comes
+      # with the elements that moved instead of a number nobody can act on.
+      - name: What shifted on the board
+        if: ${{ !cancelled() && steps.live.outputs.live == 'true' }}
+        run: |
+          npm install -g lighthouse@12.8.2
+          lighthouse https://www.umastande.co.za/ \
+            --quiet --output=json --output-path=./board-lhr.json \
+            --form-factor=mobile --screenEmulation.mobile --throttling-method=simulate \
+            --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage"
+          node scripts/lhr-summary.mjs ./board-lhr.json
+
       - name: Verify sitemap URLs all resolve
         # ⚠️ `!cancelled()`, because a step's default condition is success() and
         # this one spent run 13 SKIPPED — the audit above failed on the board's

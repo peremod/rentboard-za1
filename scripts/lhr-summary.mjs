@@ -19,26 +19,43 @@
  * per URL — the same aggregation the assertions use. An optimistic summary
  * beside a median gate would be two halves at different scopes.
  */
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-const dir = process.argv[2] ?? '.lighthouseci';
+const target = process.argv[2] ?? '.lighthouseci';
 
+/**
+ * A directory of lhci reports, or a single report from the standalone CLI.
+ *
+ * Both, because lhci 0.14 bundles Lighthouse 12.1, whose RootCauses gatherer
+ * throws on this site — `Cannot read properties of undefined (reading
+ * 'frame_sequence')` — so the audit that names what shifted cannot run there at
+ * all. 12.8 produces it. The production job therefore runs the standalone CLI
+ * once as a diagnostic beside the lhci collection, and one script reads either.
+ */
 let files;
 try {
-  files = readdirSync(dir).filter((f) => f.startsWith('lhr-') && f.endsWith('.json'));
+  if (statSync(target).isDirectory()) {
+    files = readdirSync(target)
+      .filter((f) => f.startsWith('lhr-') && f.endsWith('.json'))
+      .map((f) => join(target, f));
+  } else {
+    // The path as given. `join('.', '/abs/path')` drops the leading slash and
+    // the read fails on a path that exists — caught by running it.
+    files = [target];
+  }
 } catch {
-  console.log(`no ${dir}/ directory — nothing collected, so nothing to summarise`);
+  console.log(`no ${target} — nothing collected, so nothing to summarise`);
   process.exit(0);
 }
 if (!files.length) {
-  console.log(`${dir}/ holds no lhr-*.json — nothing to summarise`);
+  console.log(`${target}/ holds no lhr-*.json — nothing to summarise`);
   process.exit(0);
 }
 
 const byUrl = new Map();
 for (const f of files) {
-  const lhr = JSON.parse(readFileSync(join(dir, f), 'utf8'));
+  const lhr = JSON.parse(readFileSync(f, 'utf8'));
   const url = lhr.finalDisplayedUrl ?? lhr.finalUrl ?? lhr.requestedUrl;
   if (!byUrl.has(url)) byUrl.set(url, []);
   byUrl.get(url).push(lhr);
