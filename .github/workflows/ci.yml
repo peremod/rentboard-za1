@@ -402,6 +402,34 @@ jobs:
           PAYFAST_MERCHANT_KEY: 46f0cd694581a
           PAYFAST_SANDBOX: 'true'
 
+      # ── Integration tests ────────────────────────────────────────────
+      #
+      # A SEPARATE DATABASE from the one the smoke suite drives, and that is
+      # not tidiness: these truncate every table between tests, so sharing
+      # mastande_test would delete the smoke suite's fixtures underneath it
+      # and the failures would read as application bugs.
+      #
+      # test/support/test-app.ts refuses any database whose name lacks
+      # "test", and refuses a remote host outright. Proved by pointing it at
+      # a development database: it stopped before the first test and the 660
+      # rooms there were still 660 afterwards.
+      - name: Integration tests (create the database)
+        run: |
+          PGPASSWORD=test psql -h localhost -U postgres -c \
+            "CREATE DATABASE mastande_integration_test;" || true
+          cd backend && npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_integration_test
+          DIRECT_URL: postgresql://postgres:test@localhost:5432/mastande_integration_test
+
+      - name: Integration tests
+        run: npx vitest run --config vitest.integration.mts
+        env:
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_integration_test
+          DIRECT_URL: postgresql://postgres:test@localhost:5432/mastande_integration_test
+          JWT_SECRET: test-secret-minimum-32-characters-long-ok
+          NODE_ENV: test
+
       - name: API smoke test
         # With an admin token the suite runs its admin-only sections instead of
         # skipping them — the moderation queue, ad management and the KPI

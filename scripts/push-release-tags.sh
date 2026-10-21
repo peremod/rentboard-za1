@@ -1972,6 +1972,34 @@ eight match, all 44px at four widths, 41 checks. Falsified by injecting a
 hardcoded category for a type with no listings."
 
 echo
+
+tag_if_missing "v1.163.0" "b933cce2f5a332e0510f5ff15fe465ea531e2c58" "2026-10-21T07:26:44+00:00" "v1.163.0 - a room could be let and advertised at the same time
+
+undoAccept restored the application and the room inside a transaction and
+never touched the tenancy that accept had opened. The leftover was not an
+inert row. Measured end to end over HTTP: confirm-start on the orphan
+returned 200, the tenancy went active, the room stayed active and on the
+public board, and a different tenant could still apply to it. A second
+acceptance would have told two people they had the same back room.
+
+The tenancy is deleted inside that same transaction now, scoped to pending so
+a letting somebody has moved into can never be removed. Deleted rather than
+cancelled because the code decided it: createFromApplication is idempotent on
+applicationId, so a row left as cancelled would be handed straight back on
+re-acceptance, letting the room against a cancelled tenancy.
+
+The fix prevents new orphans and repairs none. OUTSTANDING 79a carries the
+SELECT that finds any already in production.
+
+Ships the suites that found it: 91 unit tests, 60 integration tests, both in
+CI on separate databases. The backend had none, and npm test was an echo and
+exit 0 that CI ran as a step named Test.
+
+Also open, not fixed: 79b, PropertyDto.province accepts any string while the
+room and filter DTOs accept only the nine real provinces, so a yard can be
+created somewhere the board can never find it."
+
+echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
 # not have shown: "Created 0, skipped 19" was indistinguishable from a complete

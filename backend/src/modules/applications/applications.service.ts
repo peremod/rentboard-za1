@@ -458,6 +458,40 @@ export class ApplicationsService {
         where: { id: application.roomId },
         data: { status: 'active', letAt: null },
       }),
+      /**
+       * 🔴 The tenancy `accept` opened. Without this the undo restored the
+       * application and the room and left it behind, and the result was not
+       * an orphan row — it was a live letting.
+       *
+       * Measured before the fix, every step over HTTP: confirm-start on the
+       * leftover tenancy returned 200, the tenancy went `active`, the room
+       * stayed `active` and on the public board, and a different tenant
+       * could still apply to it (201). A room let and advertised at once,
+       * and a second acceptance would have told two people they had the
+       * same back room. docs/OUTSTANDING.md §79a.
+       *
+       * ── Deleted rather than cancelled, and the reason is in the code
+       *
+       * `createFromApplication` is idempotent on applicationId: it returns
+       * any existing tenancy for that application rather than opening a new
+       * one. So a tenancy left here as `cancelled` would be handed straight
+       * back the next time the same applicant is accepted — the room would
+       * be let against a cancelled tenancy, which trades one inconsistency
+       * for another. `cancelled` also means "fell through before move-in"
+       * and feeds the review and rating rules; an acceptance reversed inside
+       * thirty minutes is not a letting that fell through. It is one that
+       * never happened, and undo exists to say so.
+       *
+       * ⚠️ Scoped to `pending`, so this path can never delete a letting
+       * somebody has moved into. Nothing can attach to a pending tenancy —
+       * rent needs a confirmed start, reviews need an end — so there is
+       * nothing to orphan. deleteMany rather than delete: no row is not an
+       * error here, it is the state after a failed open, which is exactly
+       * the case the fire-and-forget in `accept` can produce.
+       */
+      this.prisma.tenancy.deleteMany({
+        where: { applicationId, status: 'pending' },
+      }),
     ]);
 
     this.logger.log(
