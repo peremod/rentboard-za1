@@ -240,3 +240,89 @@ export async function signUp(
   if (!token) throw new Error(`no token in register response: ${JSON.stringify(res.body)}`);
   return { email, token, userId: res.body.user?.id ?? res.body.id };
 }
+
+/**
+ * A whole letting, built through the real API.
+ *
+ * ⚠️ Through the API and not through Prisma. Seeding rows directly would be
+ * faster and would prove nothing: the relationships this suite exists to
+ * check — a room belonging to a yard, a tenancy belonging to an application,
+ * a rent period belonging to a tenancy — are established by the endpoints,
+ * and a fixture that writes them by hand asserts its own idea of the schema
+ * rather than the application's.
+ */
+export async function createLetting(ctx: TestContext, rentCents = 350000) {
+  const landlord = await signUp(ctx, 'LANDLORD');
+  const tenant = await signUp(ctx, 'TENANT');
+  const auth = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+  const property = await ctx.http().post('/api/properties').set(auth(landlord.token)).send({
+    name: 'Ext 7 back rooms', city: 'Johannesburg', province: 'Gauteng', suburb: 'Tembisa',
+  }).expect(201);
+
+  const room = await ctx.http().post('/api/rooms').set(auth(landlord.token)).send({
+    title: 'Back room with its own entrance',
+    // ⚠️ Publishing enforces a minimum of 50 characters. A shorter one
+    // creates the room happily and then refuses to publish it, which reads
+    // as the publish endpoint being broken.
+    description:
+      'A private back room with its own entrance and a separate gate key. ' +
+      'Shared kitchen and outside tap. Close to the taxi rank and the clinic.',
+    roomType: 'shared_house',
+    rentCents,
+    province: 'Gauteng',
+    city: 'Johannesburg',
+    locationDisplay: 'Tembisa, Johannesburg',
+    availableFrom: '2026-06-01',
+    propertyId: property.body.id,
+  }).expect(201);
+
+  /**
+   * ⚠️ A cover photo first: publish refuses without one, with "A cover photo
+   * is required before publishing". The path is a placeholder string — the
+   * StorageService double means nothing is uploaded anywhere — but the room
+   * is a draft and invisible until it is set, so an application against it
+   * would fail for a reason that has nothing to do with applications.
+   */
+  await ctx.http().patch(`/api/rooms/${room.body.id}`).set(auth(landlord.token))
+    .send({ heroImagePath: '/integration-test-placeholder.jpg' }).expect(200);
+  // 200, not 201: publish transitions an existing room rather than creating
+  // one. Asserted exactly, so a change of contract is visible here.
+  await ctx.http().post(`/api/rooms/${room.body.id}/publish`)
+    .set(auth(landlord.token)).send({}).expect(200);
+
+  // `coverNote`, not `message`: the DTO runs with forbidNonWhitelisted, so an
+  // invented field is a 400 rather than a quietly ignored one.
+  const application = await ctx.http().post('/api/applications').set(auth(tenant.token)).send({
+    roomId: room.body.id,
+    coverNote: 'I would like to apply for this room, thank you.',
+  }).expect(201);
+
+  // 200 as well — accept moves an application, it does not create a resource.
+  await ctx.http().post(`/api/applications/${application.body.id}/accept`)
+    .set(auth(landlord.token)).send({}).expect(200);
+
+  /**
+   * ⚠️ POLLED, not assumed. `accept` opens the tenancy with a deliberate
+   * fire-and-forget — `createFromApplication(...).catch(...)`, never awaited,
+   * so that a failure to open one cannot fail the acceptance itself. The
+   * record therefore appears shortly AFTER the response. A fixture that read
+   * it immediately would pass or fail by timing.
+   */
+  let tenancy = null as any;
+  for (let i = 0; i < 50 && !tenancy; i++) {
+    tenancy = await ctx.prisma.tenancy.findUnique({
+      where: { applicationId: application.body.id },
+    });
+    if (!tenancy) await new Promise((r) => setTimeout(r, 40));
+  }
+  if (!tenancy) throw new Error('no tenancy was opened for the accepted application');
+
+  return {
+    landlord, tenant, auth,
+    propertyId: property.body.id as string,
+    roomId: room.body.id as string,
+    applicationId: application.body.id as string,
+    tenancy,
+  };
+}

@@ -5493,6 +5493,62 @@ Falsified by putting the real leaked value back and watching both guards fire.
 ---
 
 
+## 79. Two defects the integration tests found — product decisions, not fixes
+
+Both are recorded as passing tests that assert **what the code does**, with the
+reasoning beside them. Neither was fixed, because both are changes to business
+behaviour and that is not a test engineer's call to make alone.
+
+### 79a. 🔴 Undoing an acceptance leaves a live tenancy — a room can be let and advertised at once
+
+`ApplicationsService.undoAccept` runs a transaction that puts the application
+back to `shortlisted`, reinstates the applicants the acceptance rejected, and
+returns the room to the board. **It does not touch the tenancy**, which
+`accept` opened.
+
+Measured end to end, every step over HTTP:
+
+```
+undo-accept                    200
+confirm-start on the orphan    200     ← the move-in can still be confirmed
+tenancy status                 active
+room status                    active
+rooms on the public board      1       ← a taken room, publicly listed
+a different tenant applies     201     ← and they can apply to it
+```
+
+So after an undo the room is **let and advertised simultaneously**, and a
+second acceptance would open a second tenancy: two people told they have the
+same back room. For a product whose whole position is trust, that is the
+expensive kind of wrong.
+
+The fix is small — add the tenancy to that transaction, cancelling or deleting
+it alongside the application. The decision that goes with it is which: a
+cancelled tenancy leaves a record that a letting was opened and reversed,
+deleting it leaves none. `undoAccept` already has a 30-minute window, so the
+blast radius is bounded.
+
+Covered by `backend/test/failure-modes.int-spec.ts`, the test marked 🔴.
+
+### 79b. A yard may be created in a province that does not exist
+
+`PropertyDto.province` is `@IsString() @MinLength(2) @MaxLength(120)`.
+`CreateRoomDto.province` and `RoomFiltersDto.province` are both
+`@IsIn(SA_PROVINCES)`. Three handlings of one field, two of which agree.
+
+Not cosmetic: the board's province filter accepts only the nine real
+provinces, so a yard stored as "Atlantis" can never be reached by the filter
+that exists to find it, while looking saved.
+
+One decorator fixes it. The question that comes with it is what to do about
+records already stored outside the list — tightening the DTO would start
+refusing *updates* to those yards, so a data check comes first.
+
+Covered by `backend/test/properties.int-spec.ts`, the test marked 🔴.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash
