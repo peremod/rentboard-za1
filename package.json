@@ -31,7 +31,9 @@
     "migrate:staging": "bash scripts/migrate-remote.sh --env staging",
     "test:backend": "vitest run --config vitest.config.mts",
     "test:backend:watch": "vitest --config vitest.config.mts",
-    "test:backend:cov": "vitest run --config vitest.config.mts --coverage"
+    "test:backend:cov": "vitest run --config vitest.config.mts --coverage",
+    "test:int": "DATABASE_URL=postgresql://rentboard:rentboard@localhost:5432/mastande_integration_test DIRECT_URL=postgresql://rentboard:rentboard@localhost:5432/mastande_integration_test vitest run --config vitest.integration.mts",
+    "test:int:setup": "bash scripts/int-db-setup.sh"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.5.0",
