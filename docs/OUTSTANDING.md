@@ -6290,6 +6290,76 @@ the direction check among them.
 ---
 
 
+## 87. The first real measurement of production, and the gate that reported it green — 21 October 2026
+
+§86b fixed the weekly audit; run 11 is the first one it has ever completed.
+Three URLs, three runs each, mobile, simulated throttling, against
+`https://www.umastande.co.za`. Median run:
+
+| URL | Performance | LCP | TBT | CLS |
+|---|---|---|---|---|
+| `/pricing` | 0.98 | 1.1s | 180ms | 0.017 |
+| `/how-it-works` | 0.97 | 1.1s | 170ms | 0.050 |
+| **`/` (the board)** | **0.62** | **3.3s** | **310ms** | **0.953** |
+
+Accessibility, best practices and SEO are **1.0 on all three**. `is-crawlable`,
+`robots-txt`, `canonical`, `meta-description` and `errors-in-console` all pass
+on the live site, which is the first evidence any of that works in production
+rather than in a lab.
+
+### 87a. 🔴 CLS 0.953 on the board — nine times the budget, and the gate said green
+
+The job asserts `cumulative-layout-shift ≤ 0.1`. The median run measured
+**0.953**. It passed.
+
+`lhci` defaults to **`aggregationMethod: 'optimistic'`**, and for a
+`maxNumericValue` assertion optimistic takes the **best** of the three runs:
+`assertions.js` line 139, `aggregationMethod = 'optimistic'`. So one lucky run
+satisfied a budget the typical run missed by a factor of nine, and the other two
+were discarded. Every number in both config files was being read that way —
+LCP, TBT and CLS alike. Both now set `aggregationMethod: 'median'`.
+
+This is the defect family again, in the one place meant to catch it: a gate that
+asserted the right metric against the right bound and still could not fail,
+because it was reading the luckiest sample.
+
+### 87b. ⚠️ Why the budgets job cannot see this, and the board page is the one that matters
+
+The `budgets` job measures `/` at **CLS 0.026** — a board with no room cards in
+it. The bundle fetches rooms from `api.umastande.co.za`, which the runner's
+browser is not allowed to use cross-origin, so the page it audits is an empty
+board. A green CLS there is a statement about a page that renders nothing, and
+the live board is the page the whole listing business depends on.
+
+### 87c. ⚠️ The culprits are not in the published report
+
+`lhci upload --target=temporary-public-storage` sanitises what it publishes:
+`layout-shifts` came back with a null score and no details, so the shift could
+be seen and not explained. The full LHRs were on the runner and were thrown away
+with it. `scripts/lhr-summary.mjs` now prints the median run's metrics, every
+run's CLS, the LCP element and what shifted, into the job's own log, before the
+assert, so a failing run explains itself.
+
+### What is open
+
+- 🔴 **The board's CLS, unexplained.** 0.953 is a real defect on the busiest
+  public page and nothing here has identified what moves. It cannot be
+  diagnosed from this container — `www.umastande.co.za` and
+  `api.umastande.co.za` are both `connect_rejected` by the egress proxy — so
+  the next weekly or dispatched run, which now prints the culprits, is the
+  evidence to work from. Candidates worth checking first: the room cards
+  arriving after the API responds into space nothing reserved, the house ad
+  slot in the sidebar, and the two Google Fonts families.
+- ⚠️ **The weekly job will now go red** on that CLS, correctly, and stay red
+  until the board is fixed. That is the point of arming it.
+- ⚠️ **Performance 0.62 and LCP 3.3s on the board** pass the floors in
+  `lighthouserc.production.json` (LCP 4000ms) and fail the lab budgets in
+  `lighthouserc.json` (2500ms). Both are deliberate: the floor is what the live
+  site must not fall below, the budget is what the code should achieve.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash

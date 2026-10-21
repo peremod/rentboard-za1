@@ -469,12 +469,31 @@ would buy 0.04 by widening what that API accepts, so the budget names the gap
 instead. 0.96 rather than 0.95 keeps it able to fail — a second failing audit
 drops the score below the line.
 
-**No Core Web Vitals claim is made about production.** The weekly job has never
-completed an audit: `lhci collect` ran from the repo root, picked up
-`lighthouserc.json`'s `startServerCommand`, and died on `MODULE_NOT_FOUND`
-trying to boot a server out of a `dist/` that job never builds. Fixed by passing
-`--config` explicitly on every subcommand; until a run exists and is read,
-nothing here has been measured against the live site.
+**Production, measured once — 21 October 2026, run 11.** Until then the weekly
+job had never completed an audit: `lhci collect` ran from the repo root, picked
+up `lighthouserc.json`'s `startServerCommand`, and died on `MODULE_NOT_FOUND`
+booting a server out of a `dist/` that job never builds. With `--config` passed
+explicitly it ran, mobile, three runs per URL, median shown:
+
+| URL | Performance | LCP | TBT | CLS |
+|---|---|---|---|---|
+| `/pricing` | 0.98 | 1.1s | 180ms | 0.017 |
+| `/how-it-works` | 0.97 | 1.1s | 170ms | 0.050 |
+| **`/` (the board)** | **0.62** | **3.3s** | **310ms** | **0.953** |
+
+Accessibility, best practices and SEO are 1.0 on all three, and `is-crawlable`,
+`robots-txt`, `canonical`, `meta-description` and `errors-in-console` pass on
+the live site — the first evidence any of §3 works in production rather than in
+a lab.
+
+🔴 **The board's CLS is nine times the asserted bound, and the run reported
+green.** `lhci` defaults to `aggregationMethod: 'optimistic'`, which for a
+`maxNumericValue` assertion reads the BEST of the three runs, so one lucky run
+satisfied the budget and the other two were discarded. Both config files now set
+`median`, the weekly job will go red on this until the board is fixed, and
+`scripts/lhr-summary.mjs` prints what shifted into the job log because
+`lhci upload` sanitises the published report. The shift is not yet explained —
+see `docs/OUTSTANDING.md` §87.
 
 ---
 

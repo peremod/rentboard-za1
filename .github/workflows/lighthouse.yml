@@ -41,7 +41,19 @@ jobs:
         working-directory: frontend
         run: |
           npm install -g @lhci/cli@0.14.x
-          lhci autorun --config=../lighthouserc.json
+          lhci autorun --config=../lighthouserc.json || STATUS=$?
+          # Same summary as the production job, and for the same reason: the
+          # uploaded report has no shift details. `if: always()` would not help
+          # here — autorun exits non-zero on a failed assertion, so the status
+          # is held and re-raised after the numbers are printed.
+          #
+          # ⚠️ This job cannot see the board's real CLS. The bundle fetches
+          # rooms from api.umastande.co.za, which the runner's browser is not
+          # allowed to use cross-origin, so / renders an empty board: 0.026
+          # here against 0.953 on the live site. A green CLS in this job is a
+          # statement about a board with no cards in it.
+          node ../scripts/lhr-summary.mjs .lighthouseci
+          exit ${STATUS:-0}
         env:
           # Posts the run as a PR status check with a link to the full report.
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
@@ -113,9 +125,15 @@ jobs:
         run: |
           npm install -g @lhci/cli@0.14.x
           lhci collect --config=lighthouserc.production.json
+          # Printed BEFORE the assert, so it is in the log whether the gate
+          # passes or fails. `lhci upload` sanitises the report it publishes —
+          # run 11 measured CLS 0.953 on the board and the published report
+          # carried `layout-shifts` with a null score and no details, so the
+          # one number worth acting on could be seen and not explained.
+          node scripts/lhr-summary.mjs .lighthouseci
+          lhci upload --config=lighthouserc.production.json
           lhci assert --config=lighthouserc.production.json --preset=lighthouse:recommended || true
           lhci assert --config=lighthouserc.production.json
-          lhci upload --config=lighthouserc.production.json
 
       - name: Verify sitemap URLs all resolve
         if: steps.live.outputs.live == 'true'

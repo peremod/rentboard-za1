@@ -26,6 +26,8 @@
       }
     },
     "assert": {
+      "//aggregation": "aggregationMethod: median, and it is NOT a tuning knob. lhci defaults to \"optimistic\", which for a maxNumericValue assertion takes the BEST of the three runs — so a budget is satisfied by the luckiest run and the other two are discarded. That is how the weekly production audit reported green with a median CLS of 0.953 against a budget of 0.1 on 21 October: one lucky run passed, the median run was nine times the bound, and the gate said nothing. Median makes the number the gate reads the number a typical visitor gets.",
+      "aggregationMethod": "median",
       "//": [
         "EVERY KEY INSIDE \"assertions\" IS AN AUDIT ID. There were two \"//1\"/\"//2\" comment keys in here, and LHCI asserted on both — \"is not a known audit\", failing twice per URL on every run this file has ever done. Comments live out here now.",
         "The Core Web Vitals below are asserted directly rather than trusting the rolled-up performance score, which can stay green while one vital degrades.",
