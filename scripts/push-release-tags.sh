@@ -1911,6 +1911,37 @@ next sentence is 'Nothing has been written'. Both now linted, both falsified
 against the text that nearly shipped."
 
 echo
+
+tag_if_missing "v1.160.0" "091b6bb6f7835904d678fc5087378a3d64d4eb95" "2026-10-21T01:52:15+00:00" "v1.160.0 - the board's search returned nothing for every phrase people type
+
+search was ONE literal contains over title, description and locationDisplay,
+so the whole phrase had to appear verbatim in a single field. Measured on 383
+active rooms: 'Accommodation in Johannesburg' found 0, while 100 rooms are in
+Johannesburg. Every example phrase in the brief behaved the same way.
+
+And city was never searched at all. 'Johannesburg' returned 75 of those 100 -
+the 25 it dropped being the Soweto listings, whose locationDisplay does not
+name their city. suggestLocations(), the autocomplete that feeds this search,
+already matched on city and province: picking a suggestion ran a query that
+could not see the field the suggestion came from.
+
+A phrase is read as words now and mapped onto filters that already existed. A
+named place becomes the exact city filter, a named type the roomType filter,
+filler that describes all 383 listings equally is dropped, and what remains
+must all match. 0 to 100, 0 to 253, 0 to 353, 0 to 25, 0 to 24, 75 to 100 -
+and a nonsense phrase still returns 0, which is the number that makes the
+rest mean anything.
+
+Nothing in the board had ever touched the router, so opening a room and
+pressing back lost the search and every filter. The URL is the search state
+now, and the board shows how it read the phrase as removable chips.
+
+Driven in a real browser at 360/390/768/1280: 28 checks. Three of my own
+checks were wrong first - two falsifications read passes off builds that had
+never rebuilt or never compiled, and the chip assertion compared card counts
+on a board that pages at 12."
+
+echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
 # not have shown: "Created 0, skipped 19" was indistinguishable from a complete
