@@ -6375,9 +6375,57 @@ debugdata it reported as "1 item" was never shown either. Both are printed now.
 That is three iterations on one diagnostic, each blind in a different way, which
 is worth recording as plainly as the defect it is chasing.
 
+### 87f. 🔴 The cause is not a layout bug: production serves the board as an empty shell
+
+Runs 15 and 16 answered it, and the answer is not about CSS.
+
+    what shifted (mobile):  · 0.9162  Mastande / South Africa's dedicated room-letting notice board…
+    LCP element (mobile):   app-root > app-cookie-consent > div.cookie-notice > p.cookie-notice__body
+    the same board at desktop width: CLS 0.718
+    what the served HTML contains, before any JavaScript runs:
+      bytes:        7617
+      room links:   0
+      skeletons:    0
+      hero--splash: 0
+      trust-strip:  0
+
+**`https://www.umastande.co.za/` answers with 7.6 KB that contain no board.** No
+room links, no skeletons, no trust strip, no hero. That is `index.csr.html` —
+the client-side shell — and every pixel of the page is painted by JavaScript
+after load, which is why the footer moves nearly a full viewport and why the
+cookie notice is the largest thing painted early enough to be the LCP element.
+
+Both earlier candidates are dead. The phone splash is mobile-only (JS at ≤700px,
+CSS at ≤768px) and desktop still shifts 0.718, so it is not the cause; the fonts
+account for 0.0495 and 0.0002 of it. The cookie notice is `position: fixed` and
+cannot push anything.
+
+⚠️ **And the CLS is the smaller half of this.** `app.routes.ts` has
+`{ path: '', renderMode: RenderMode.Server }` — on master, not only on develop —
+precisely so the board is rendered per request rather than baked at deploy. It
+is not being rendered at all in production. Consequences beyond the shift:
+
+- Every crawler that does not run JavaScript sees a page with no rooms, no hero,
+  no trust strip and none of the `Organization`/`WebSite` JSON-LD that §86 and
+  the SEO phase shipped. All of that was verified against `localhost`, where
+  `server.ts` renders it — which is the "measured on the wrong build" trap again,
+  one layer out: the right build, the wrong deployment.
+- `BOARD_CACHE_CONTROL` and the `s-maxage=60` reasoning in `server.ts` describe
+  a render that is not happening.
+- The sitemap advertises `/` as the primary URL of the site.
+
+Not yet established: WHY the function does not answer. The Build Output API
+assembly in `tools/vercel-build.mjs` sends every non-file path to `/ssr`, and
+`handle: filesystem` should not match `/` because the static copy holds
+`index.csr.html` rather than `index.html`. The next run prints the response
+headers for `/` against `/pricing` as a control — `Cache-Control`, `age`,
+`x-vercel-*` and `x-matched-path` say whether a function or a file answered.
+
 ### What is open
 
-- 🔴 **The board's CLS, still unexplained.** 0.916 is a real defect on the
+- 🔴 **Why production does not server-render the board** (87f). This is the
+  defect; the CLS is a symptom of it.
+- 🔴 **The board's CLS, explained but not fixed.** 0.916 is a real defect on the
   busiest public page. It cannot be diagnosed from this container —
   `www.umastande.co.za` and `api.umastande.co.za` are both `connect_rejected`
   by the egress proxy — and it does not reproduce locally (87d), so each

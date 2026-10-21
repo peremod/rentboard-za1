@@ -186,6 +186,19 @@ jobs:
           echo "hero--splash: $(printf '%s' "$BODY" | grep -c 'hero--splash' || true)"
           echo "trust-strip:  $(printf '%s' "$BODY" | grep -c 'trust-strip' || true)"
 
+          # 3. WHO answered. `/` is RenderMode.Server, so server.ts should have
+          #    rendered it and stamped BOARD_CACHE_CONTROL
+          #    (`public, max-age=0, s-maxage=60, stale-while-revalidate=600`).
+          #    A different Cache-Control, or an x-matched-path pointing at a
+          #    file, means the SSR function did not answer and the static CSR
+          #    shell did — which is what the 7,617-byte body above suggests.
+          #    /pricing is the control: it is genuinely prerendered.
+          echo "── who answered, board vs a prerendered page"
+          for u in https://www.umastande.co.za/ https://www.umastande.co.za/pricing; do
+            echo "  $u"
+            curl -sI "$u" | grep -iE '^(HTTP|cache-control|age|x-vercel|x-matched-path|content-length|server|x-robots-tag)' | sed 's/^/    /'
+          done
+
       - name: Verify sitemap URLs all resolve
         # ⚠️ `!cancelled()`, because a step's default condition is success() and
         # this one spent run 13 SKIPPED — the audit above failed on the board's
