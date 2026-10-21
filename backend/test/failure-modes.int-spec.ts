@@ -119,65 +119,82 @@ describe('Failure modes', () => {
   });
 
   /**
-   * 🔴 DEFECT FOUND, RECORDED NOT FIXED — undoing an acceptance leaves the
-   * tenancy behind.
+   * Undoing an acceptance must take the tenancy with it — §79a, now fixed.
    *
-   * `undoAccept` runs a transaction that puts the application back to
-   * `shortlisted`, reinstates the applicants that acceptance rejected, and
-   * returns the room to the board. It does not touch the tenancy, which
-   * `accept` opened. So afterwards there is a `pending` tenancy pointing at
-   * an application that is no longer accepted, for a room that is back on
-   * the board and can be let to somebody else.
-   *
-   * The test below asserts what the code DOES, and then establishes how far
-   * the inconsistency goes, because "an extra row" and "two live tenancies
-   * for one room" are very different findings and only measurement tells
-   * them apart. Fixing it means adding the tenancy to that transaction —
-   * a one-line change to a business flow, which is not a test engineer's
-   * call to make alone.
+   * Before the fix the undo restored the application and the room and left
+   * the tenancy behind, and that leftover was not an inert row: confirm-start
+   * on it returned 200, the tenancy went active, the room stayed on the
+   * public board, and another tenant could apply. A room let and advertised
+   * at the same time.
    */
-  it('🔴 leaves the tenancy pending after an acceptance is undone (known defect)', async () => {
+  it('removes the tenancy when an acceptance is undone', async () => {
     const f = await createLetting(ctx);
     const undo = await ctx.http().post(`/api/applications/${f.applicationId}/undo-accept`)
       .set(f.auth(f.landlord.token)).send({});
     expect(undo.status).toBeLessThan(400);
 
-    // The application and the room were put back…
+    // The three records move together, or the undo is not an undo.
     const application = await ctx.prisma.application.findUnique({ where: { id: f.applicationId } });
     const room = await ctx.prisma.room.findUnique({ where: { id: f.roomId } });
     expect(application!.status).not.toBe('accepted');
     expect(room!.status).toBe('active');
+    expect(await ctx.prisma.tenancy.count({ where: { applicationId: f.applicationId } })).toBe(0);
+  });
 
-    // …and the tenancy was not.
-    const tenancy = await ctx.prisma.tenancy.findUnique({ where: { id: f.tenancy.id } });
-    expect(tenancy!.status).toBe('pending');
+  it('cannot confirm a move-in for an acceptance that was undone', async () => {
+    // The assertion that made §79a serious rather than cosmetic.
+    const f = await createLetting(ctx);
+    await ctx.http().post(`/api/applications/${f.applicationId}/undo-accept`)
+      .set(f.auth(f.landlord.token)).send({}).expect(200);
 
-    // How far does it go? If the move-in can still be confirmed, the room is
-    // simultaneously on the board and let — which is the serious reading.
     const confirm = await ctx.http().post(`/api/tenancies/${f.tenancy.id}/confirm-start`)
       .set(f.auth(f.landlord.token)).send({});
-    const after = await ctx.prisma.tenancy.findUnique({ where: { id: f.tenancy.id } });
-    const roomAfter = await ctx.prisma.room.findUnique({ where: { id: f.roomId } });
+    expect(confirm.status).toBeGreaterThanOrEqual(400);
+    expect(await ctx.prisma.tenancy.count()).toBe(0);
+  });
 
-    /**
-     * 🔴 Measured, and it is the serious reading: the move-in CAN still be
-     * confirmed. The room is then let and publicly advertised at the same
-     * time, and another tenant can apply to it.
-     */
-    expect(confirm.status).toBe(200);
-    expect(after!.status).toBe('active');
-    expect(roomAfter!.status).toBe('active');
+  /**
+   * ⚠️ The case that decided DELETE over CANCEL.
+   *
+   * `createFromApplication` returns any existing tenancy for an application
+   * rather than opening a new one. A tenancy left behind as `cancelled`
+   * would therefore be handed straight back here, and the room would be let
+   * against a cancelled record. This asserts the opposite: accepting again
+   * opens a fresh, pending tenancy.
+   */
+  it('opens a fresh pending tenancy when the same applicant is accepted again', async () => {
+    const f = await createLetting(ctx);
+    await ctx.http().post(`/api/applications/${f.applicationId}/undo-accept`)
+      .set(f.auth(f.landlord.token)).send({}).expect(200);
 
-    // On the public board, so a tenant searching sees a room that is taken.
-    const board = await ctx.http().get('/api/rooms');
-    expect(board.body.total).toBe(1);
+    await ctx.http().post(`/api/applications/${f.applicationId}/accept`)
+      .set(f.auth(f.landlord.token)).send({}).expect(200);
 
-    // And can apply to it. A second acceptance would open a second tenancy
-    // for one room — two people told they have the same back room.
-    const other = await signUp(ctx, 'TENANT');
-    const application2 = await ctx.http().post('/api/applications')
-      .set(f.auth(other.token))
-      .send({ roomId: f.roomId, coverNote: 'Is this still available?' });
-    expect(application2.status).toBe(201);
+    let reopened = null as any;
+    for (let i = 0; i < 50 && !reopened; i++) {
+      reopened = await ctx.prisma.tenancy.findUnique({
+        where: { applicationId: f.applicationId },
+      });
+      if (!reopened) await new Promise((r) => setTimeout(r, 40));
+    }
+    expect(reopened).toBeTruthy();
+    expect(reopened.status).toBe('pending');
+    expect(reopened.id).not.toBe(f.tenancy.id); // a new record, not the old one
+    expect(await ctx.prisma.tenancy.count()).toBe(1);
+  });
+
+  it('does not delete a tenancy somebody has already moved into', async () => {
+    // The delete is scoped to `pending`. A confirmed letting must survive any
+    // later undo attempt — and the undo should refuse outright by then.
+    const f = await createLetting(ctx);
+    await ctx.http().post(`/api/tenancies/${f.tenancy.id}/confirm-start`)
+      .set(f.auth(f.landlord.token)).send({});
+
+    await ctx.http().post(`/api/applications/${f.applicationId}/undo-accept`)
+      .set(f.auth(f.landlord.token)).send({});
+
+    const row = await ctx.prisma.tenancy.findUnique({ where: { id: f.tenancy.id } });
+    expect(row).toBeTruthy();
+    expect(row!.status).toBe('active');
   });
 });

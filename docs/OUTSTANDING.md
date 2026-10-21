@@ -5493,13 +5493,13 @@ Falsified by putting the real leaked value back and watching both guards fire.
 ---
 
 
-## 79. Two defects the integration tests found — product decisions, not fixes
+## 79. Two defects the integration tests found — 79a fixed, 79b open
 
 Both are recorded as passing tests that assert **what the code does**, with the
 reasoning beside them. Neither was fixed, because both are changes to business
 behaviour and that is not a test engineer's call to make alone.
 
-### 79a. 🔴 Undoing an acceptance leaves a live tenancy — a room can be let and advertised at once
+### 79a. ✅ FIXED — undoing an acceptance left a live tenancy
 
 `ApplicationsService.undoAccept` runs a transaction that puts the application
 back to `shortlisted`, reinstates the applicants the acceptance rejected, and
@@ -5522,13 +5522,26 @@ second acceptance would open a second tenancy: two people told they have the
 same back room. For a product whose whole position is trust, that is the
 expensive kind of wrong.
 
-The fix is small — add the tenancy to that transaction, cancelling or deleting
-it alongside the application. The decision that goes with it is which: a
-cancelled tenancy leaves a record that a letting was opened and reversed,
-deleting it leaves none. `undoAccept` already has a 30-minute window, so the
-blast radius is bounded.
+**Fixed 21 October.** The tenancy is now deleted inside that same
+transaction, scoped to `status: 'pending'` so the path can never remove a
+letting somebody has moved into.
 
-Covered by `backend/test/failure-modes.int-spec.ts`, the test marked 🔴.
+⚠️ **Deleted rather than cancelled, and the code decided it.**
+`createFromApplication` is idempotent on `applicationId` — it returns any
+existing tenancy rather than opening a new one. A row left behind as
+`cancelled` would therefore be handed straight back when the same applicant
+is accepted again, letting the room against a cancelled tenancy: one
+inconsistency traded for another. `cancelled` also means "fell through before
+move-in" and feeds the review and rating rules, and an acceptance reversed
+inside thirty minutes is not a letting that fell through — it is one that
+never happened.
+
+Four tests in `backend/test/failure-modes.int-spec.ts` cover it: the tenancy
+is gone after an undo, the move-in can no longer be confirmed, accepting the
+same applicant again opens a FRESH pending tenancy (the case that decided
+delete over cancel), and a confirmed letting survives a later undo attempt.
+Falsified by removing the fix — three of the four fail; the fourth guards the
+`pending` scoping rather than the fix, and correctly passes either way.
 
 ### 79b. A yard may be created in a province that does not exist
 
