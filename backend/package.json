@@ -13,8 +13,8 @@
     "start:prod": "node dist/main",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "echo \"No test framework installed and no spec files exist. Run npm run typecheck. See docs/OPERATIONS.md.\" && exit 0",
-    "test:e2e": "echo \"No test framework installed and no spec files exist. Run npm run typecheck. See docs/OPERATIONS.md.\" && exit 0",
+    "test": "npm --prefix .. run test:backend",
+    "test:e2e": "echo \"No backend e2e suite. API flows are covered by scripts/smoke-test.sh.\" && exit 0",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
@@ -24,7 +24,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.seed.json",
     "prisma:check": "node ../scripts/prisma-client-check.mjs",
     "seed:survey": "prisma generate && ts-node prisma/seed-survey.ts",
-    "seed:house-ads": "prisma generate && ts-node prisma/seed-house-ads.ts"
+    "seed:house-ads": "prisma generate && ts-node prisma/seed-house-ads.ts",
+    "test:cov": "npm --prefix .. run test:backend:cov"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.23",

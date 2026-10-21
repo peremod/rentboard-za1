@@ -351,8 +351,12 @@ jobs:
             || { echo "::error::a correct production config did not pass the guard"; tail -25 /tmp/env-ok.log; exit 1; }
           echo "✅ accepts a correct production config"
 
-      # The real backend gate. There are no unit tests — `npm test` is an
-      # honest stub — but scripts/smoke-test.sh has existed all along and
+      # The backend's INTEGRATION gate. There are unit tests now (vitest,
+      # 91 of them, run by the `Test` step above — which until 21 October was
+      # `echo … && exit 0`, so a step named Test showed a green tick over
+      # nothing), but they cover pure logic only: date and rent rules, the
+      # search parser, validation and permission helpers. Nothing that needs
+      # a database. scripts/smoke-test.sh is what covers the rest, and
       # nothing ever ran it. It drives the whole MVP against a live API:
       # auth, refresh-token rotation, the room and application lifecycle,
       # messaging, phone verification, and four IDOR checks that a second
