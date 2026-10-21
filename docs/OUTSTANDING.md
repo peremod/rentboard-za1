@@ -15,21 +15,40 @@ a number written here.
 
 ---
 
-## 1. Push the release tags
+## 1. Push the release tags — ✅ DONE 21 October 2026
 
-⚠️ **This section said "nineteen tags" and `Created 19 tag(s)` long after
-that stopped being true.** Measured on 21 October 2026: the script holds **76
-entries**, the remote holds **271 tags**, and exactly **two are missing** —
-`v1.160.0` and `v1.161.0`, both cut in this session. The rest were pushed at
-some point and the section never caught up, which made it read as a large
-outstanding job when it is a two-tag one.
+✅ **Nothing outstanding.** The operator ran the script from their own clone
+and the tags landed. Verified from the container by reading the remote rather
+than taking it on trust — and verified by TARGET, not just by presence, since
+a tag that exists but points at the wrong commit is worse than one missing:
 
-Pushing `refs/tags/*` is refused (HTTP 403) from the coding session, and that
-IS still true — re-measured, three attempts, while branch pushes in the same
-session succeeded. So the tag objects can be created in a container but never
-pushed from one, and a container is reclaimed, so they have to be made again
-from your clone. The script is idempotent and every entry names a fixed
-commit, so re-creating them produces the same tags.
+```
+v1.162.0 → 11e1f4fb35cb  ✅ chore(release): v1.162.0 to production
+v1.163.0 → b933cce2f5a3  ✅ chore(release): v1.163.0 to production
+v1.164.0 → 9f5dc0648982  ✅ chore(release): v1.164.0 to production
+```
+
+The remote now holds **276 tags** against the script's **80 entries**.
+
+### The history of this section, kept because it is the lesson
+
+⚠️ It said "nineteen tags" and `Created 19 tag(s)` long after that stopped
+being true. Measured on 21 October: the script held 76 entries, the remote 271
+tags, and exactly **two** were missing — a two-tag job reading as a large one,
+because a number written into prose goes stale and nothing tells you.
+
+⚠️ And it was missing `v1.162.0` entirely — released, deployed and superseded
+without ever being tagged. That is why the count was two rather than one, and
+it was only found by diffing the script's entries against the release commits
+rather than reading the section.
+
+**Pushing `refs/tags/*` cannot be done from a coding container.** Re-measured
+on 21 October, four attempts: `git push --dry-run` is ACCEPTED, which is the
+trap, while the real push dies with `send-pack: unexpected disconnect while
+reading sideband packet` and `git ls-remote` confirms nothing landed. Branch
+pushes in the same session succeed. ⚠️ The symptom has changed — this section
+used to record an HTTP 403 — so match on the outcome (the tag is not on the
+remote) rather than on the error text.
 
 ```bash
 cd /path/to/rentboard-za1
