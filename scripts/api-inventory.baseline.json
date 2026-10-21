@@ -1,0 +1,10 @@
+{
+  "counts": {
+    "total": 236,
+    "public": 39,
+    "optionalAuth": 2,
+    "admin": 62,
+    "throttled": 25,
+    "withBody": 81
+  }
+}
