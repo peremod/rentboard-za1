@@ -48,7 +48,6 @@ export default async function setup() {
     );
   }
 
-  // eslint-disable-next-line no-console
   console.log(`\n  integration tests → database "${name}" (every table is truncated between tests)\n`);
 
   // Teardown: vitest calls the returned function when the run ends. Releasing
