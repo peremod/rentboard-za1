@@ -5618,6 +5618,99 @@ only valid values.
 ---
 
 
+## 80. Phase 3 of the integration suite — private documents and account lifecycle
+
+73 further integration tests: viewing invitations (19), reviews and safety
+reports (18), private documents (17) and the account lifecycle (19). The
+suite now stands at **91 unit + 137 integration, all executed**, and every
+one of the new specs was falsified by reintroducing the defect it exists to
+catch — twelve mutations in all, each one caught by the test named beside it.
+
+### 80a. What the document specs assert, and why not a unit test
+
+CLAUDE.md states the POPIA position as "documents stay private, are deleted
+per the existing retention pattern, and **only outcomes persist**". No single
+function holds that promise: the path is stored by `VerificationService`,
+withheld by two different response shapes, signed with an expiry at the
+storage edge, cleared inside a transaction, queued in a second table, and
+drained after the commit. A unit test of any one of those passes while the
+promise is broken — and this repository has already shipped both broken
+halves. `documentPath` once went raw to the admin screen (a relative path
+with no endpoint, so no reviewer could open a document at all), and
+`documentDeletedAt` was a column that deleted nothing.
+
+So the assertions are on the **effect**, never on the wording of a response:
+a committed `file_deletions` row carrying the path and the request id, a
+`documentPath` that is null and a `documentWithdrawnAt` that is not, a signed
+URL that is not the stored path and that was asked for with a bounded
+expiry, and an immediate deletion pass rather than a wait for the hourly
+cron — because the screen says "as soon as someone has looked at it", not
+"within the hour".
+
+Falsified five ways, each against the real build: echoing `documentPath`
+back to the submitter, leaving the path in place on review, never queueing
+the deletion, leaving it to the cron, and handing the admin queue the raw
+path. All five were caught.
+
+`StorageService.enqueueDelete` is **kept real in the test double**, and that
+is deliberate: it is not a network call, it is the durable row that is the
+whole retention guarantee. Stubbed, the POPIA assertion becomes a test of
+the stub.
+
+### 80b. A fixture whose subject was already in the end state
+
+The first run of the account-lifecycle spec "failed" on deactivation not
+pausing a landlord's listing. It was the test that was wrong, and in a way
+this file has a name for: `createLetting` accepts the application, which
+moves the room to **`let`** — and a let room is already off the public board
+and is correctly **not** paused by deactivation, whose filter is
+`active`/`reserved`. The tenant lives there.
+
+So the fixture handed the test a room that could not demonstrate the thing
+under test, and a greener-looking version of the same test (asserting only
+"not on the board") would have passed without ever pausing anything. The
+pausing specs build a published, un-let room of their own.
+
+### 80c. My own check pointed at a column that does not exist
+
+Two report assertions read `row.resolvedAt`, and the `Report` model has no
+such field — the resolution state is `status` plus `reviewedAt`,
+`reviewedById` and `resolutionNote`. `expect(undefined).toBeNull()` failed
+loudly, which is the only reason it was caught; written as `toBeFalsy()`,
+the same mistake would have passed for ever against a report that arrived
+already dismissed. They now assert all four real columns, and the mutation
+that stamps a new report `dismissed` fails them.
+
+### 80d. The rate limiter is real enough to break the suite
+
+`DELETE /account` allows ten attempts per quarter hour, counted per IP in
+memory, and the deletion specs need more than ten accounts ended — so the
+suite arrives as one very busy person and the failure reads as a 429 in a
+test about erasure. `resetRateLimits(ctx)` clears the counters **between**
+cases, which is the test-time equivalent of the API restart CLAUDE.md
+already prescribes for the browser drives.
+
+⚠️ A reset like that is one step from switching a control off, which is the
+defect this repository keeps shipping. So one case asserts the limit still
+bites — eleven refused attempts inside a single test, where no reset
+intervenes, expecting ten 403s and a 429 — and it was falsified by raising
+the decorator's limit to 100000, which failed it. The limit is in full force
+for the duration of every test; only the carry-over between tests is
+cleared.
+
+### 80e. Correction to the record in commit `15fbacc`
+
+That commit message says workflow run 116 "was still polling when the
+15-minute ceiling reached it". It was not: it completed in about 8m20s,
+roughly 15.3 seconds per attempt, and printed its diagnostic. The conclusion
+drawn from it — that Render never started a deploy for `b94814c` — stands on
+runs 114 and 116 both reporting production on 1.162.0 with `uptime` rising
+2536 → 3084 across 51 continuous minutes, which is unaffected. Recorded here
+because a wrong fact in a commit message cannot be edited out of history.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash
