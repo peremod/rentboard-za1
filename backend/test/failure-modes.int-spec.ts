@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { createTestApp, resetDatabase, createLetting, signUp, TestContext } from './support/test-app';
+import { createTestApp, resetDatabase, createLetting, TestContext } from './support/test-app';
 
 /**
  * What happens when things go wrong: duplicates, rollbacks, and records that

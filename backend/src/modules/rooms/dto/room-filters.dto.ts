@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsEnum, IsBoolean, IsInt, Min, IsIn, IsDateString } from 'class-validator';
+import { IsOptional, IsString, IsEnum, IsBoolean, IsInt, Min, Max, IsIn, IsDateString } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -121,6 +121,28 @@ export class RoomFiltersDto {
   @IsOptional() @IsIn(['newest', 'price_asc', 'price_desc', 'featured'])
   sortBy?: 'newest' | 'price_asc' | 'price_desc' | 'featured';
 
-  @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number = 1;
-  @ApiPropertyOptional({ default: 12 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) limit?: number = 12;
+  /**
+   * ⚠️ BOTH ARE BOUNDED, and they were not — found by the API sweep on the
+   * busiest unauthenticated route in the product.
+   *
+   * `GET /api/rooms?page=999999999999&limit=999999999` returned a **500**.
+   * `rooms.service.ts` computes `skip = (page - 1) * limit`, which is about
+   * 1e21 for those numbers — far past what Postgres will accept for an
+   * OFFSET — so Prisma threw and the board answered Internal Server Error to
+   * an anonymous caller. Either parameter alone was fine, which is why
+   * nothing had ever hit it: it takes both to overflow.
+   *
+   * The unbounded `limit` was the second half of the same hole. There was no
+   * maximum at all, so one anonymous request could ask for every active row
+   * on the board. At 423 rooms that is merely a fat response; on a board that
+   * grows it is a full scan served to whoever asks for it.
+   *
+   * 100 and 100000: the board pages at 12 and nothing in this codebase or the
+   * frontend ever asks for more than that, so 100 is generous for a
+   * legitimate caller. The pair also bounds the product — skip cannot exceed
+   * 1e7, which is comfortably inside int4 — so the overflow cannot come back
+   * through some other combination.
+   */
+  @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100_000) page?: number = 1;
+  @ApiPropertyOptional({ default: 12 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number = 12;
 }

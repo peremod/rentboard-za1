@@ -9,7 +9,7 @@ import { RoomsService } from '../../core/services/rooms.service';
 import { AlertsService } from '../../core/services/alerts.service';
 import { WHATSAPP_ENABLED } from '../../core/config/feature-flags';
 import { AuthService } from '../../core/services/auth.service';
-import { BoardCategories, Room, SA_PROVINCES, SearchMeta } from '../../core/models/room.model';
+import { Room, SA_PROVINCES, SearchMeta } from '../../core/models/room.model';
 import { RoomCard } from '../../shared/components/room-card/room-card';
 import { Icon } from '../../shared/components/icon/icon';
 import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
@@ -391,7 +391,11 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
 
         <!-- Contextual placement: matches the province and room type being
              browsed, never the person browsing. -->
+        <!-- H2: the advert sits beside the board's own sections, and at phone
+             widths the filters H2 above it is not rendered at all — see the
+             note on AdSlot.headingLevel. -->
         <app-ad-slot placement="board_sidebar"
+                     [headingLevel]="2"
                      [province]="province || undefined"
                      [city]="searchTerm.trim() || undefined"
                      [roomType]="roomType || undefined"/>
@@ -471,19 +475,19 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                 @if (m.city) {
                   <button type="button" class="search-chip" (click)="dropCity()">
                     {{ m.city }}<app-icon name="x" aria-hidden="true"/>
-                    <span class="sr-only">Remove the location {{ m.city }}</span>
+                    <span class="visually-hidden">Remove the location {{ m.city }}</span>
                   </button>
                 }
                 @if (m.province && !m.city) {
                   <button type="button" class="search-chip" (click)="dropProvince()">
                     {{ m.province }}<app-icon name="x" aria-hidden="true"/>
-                    <span class="sr-only">Remove the province {{ m.province }}</span>
+                    <span class="visually-hidden">Remove the province {{ m.province }}</span>
                   </button>
                 }
                 @if (m.roomType) {
                   <button type="button" class="search-chip" (click)="dropRoomType()">
                     {{ roomTypeLabel(m.roomType) }}<app-icon name="x" aria-hidden="true"/>
-                    <span class="sr-only">Remove the room type</span>
+                    <span class="visually-hidden">Remove the room type</span>
                   </button>
                 }
                 @for (t of m.tokens; track t) {
@@ -493,35 +497,6 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
             }
           }
 
-          <!-- Browse shortcuts — the screenshot's category links, built from
-               what the board actually holds.
-               ⚠️ Every one carries its count, and the server never returns a
-               category with a count of zero, so a shortcut on screen always
-               leads to rooms. Hardcoding "Student accommodation" here would
-               be the same defect as an autocomplete suggesting a town with no
-               listings: a promise the board cannot keep.
-               routerLink with queryParams rather than a click handler, so a
-               shortcut is a real link — middle-clickable, shareable, and part
-               of the history like every other search. -->
-          @if (categories(); as cat) {
-            <nav class="browse" aria-label="Browse by category">
-              @if (cat.availableNow) {
-                <a class="browse__link" routerLink="/" [queryParams]="{ now: '1' }">
-                  Available now <span class="browse__count">{{ cat.availableNow }}</span>
-                </a>
-              }
-              @for (t of cat.roomTypes; track t.type) {
-                <a class="browse__link" routerLink="/" [queryParams]="{ type: t.type }">
-                  {{ t.label }} <span class="browse__count">{{ t.count }}</span>
-                </a>
-              }
-              @for (p of cat.places; track p.city) {
-                <a class="browse__link" routerLink="/" [queryParams]="{ q: p.city }">
-                  Rooms in {{ p.city }} <span class="browse__count">{{ p.count }}</span>
-                </a>
-              }
-            </nav>
-          }
         </div>
 
         @if (loading() && rooms().length === 0) {
@@ -579,7 +554,10 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                    gives a different advertiser rather than the same ad six
                    times down the page. -->
               @if (showsAdAfter(i)) {
+                <!-- H3: this one always follows the results-count H2, because
+                     a card had to render for it to appear at all. -->
                 <app-ad-slot placement="board_inline"
+                             [headingLevel]="3"
                              [slotIndex]="adSlotNumber(i)"
                              [province]="province || undefined"
                              [city]="searchTerm.trim() || undefined"
@@ -618,8 +596,6 @@ export class Home implements OnInit, OnDestroy {
   rooms = signal<Room[]>([]);
   /** How the server read the typed phrase. Null when nothing was typed. */
   searchMeta = signal<SearchMeta | null>(null);
-  /** Browse shortcuts. Null until loaded; never rendered empty. */
-  categories = signal<BoardCategories | null>(null);
   total = signal(0);
   loading = signal(true);
   loadingMore = signal(false);
@@ -792,25 +768,6 @@ export class Home implements OnInit, OnDestroy {
      * handlers only navigate, this reads the result, and back/forward arrive
      * through exactly the same path as a click.
      */
-    // ⚠️ DECIDED, not incidental — confirmed by the owner on 21 October 2026:
-    // the shortcuts stay NAVIGATION and describe the whole board, never the
-    // current search.
-    //
-    // So this call is independent of the result fetch and is made once. A
-    // category row that shrank as somebody narrowed their search would be a
-    // second set of filters wearing navigation's clothes, and the counts
-    // would stop meaning what they say.
-    //
-    // The known cost, accepted: on a narrowed board "Rooms in Pretoria 253"
-    // is still offered even when the active filters would return far fewer,
-    // because the shortcut is an invitation to start a different search
-    // rather than a prediction about this one. Passing the current filters
-    // into getCategories() is the one-line change that would reverse this —
-    // which is exactly why it is written down here.
-    this.roomsService.getCategories().subscribe({
-      next: (c) => this.categories.set(c.total > 0 ? c : null),
-      error: () => this.categories.set(null),
-    });
 
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       this.hydrateFromUrl(params);

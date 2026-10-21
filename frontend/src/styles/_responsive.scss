@@ -549,6 +549,23 @@
   // whose cells are sentences — it turned each one into a single line
   // hundreds of characters wide, on the phones most of this market uses.
   .legal-table { display: block; overflow-x: auto; }
+
+  /**
+   * ⚠️ The same treatment, and /admin/analytics needed it: a six-column
+   * growth table (Role · Today · Week · Month · Year · Total) measured 358px
+   * inside a 328px box at 360px, so the PAGE scrolled sideways by 14px —
+   * the first thing CLAUDE.md says to check for on a phone. `display: block`
+   * so the table itself takes the scroll, which is how `.legal-table` and
+   * `.rate-table` already handle a wide table here; the figures stay
+   * readable by swiping the table rather than the whole screen.
+   *
+   * Nothing in CI could see it. The spill depends on how long the numbers
+   * are, and a freshly seeded database has short ones — it appeared on a
+   * development database with 890 accounts. ⚠️ And nothing LOCAL could see
+   * it either until the sweep ran with admin credentials: without them it
+   * prints "SKIP the admin screens" and reports clean.
+   */
+  .growth-table { display: block; overflow-x: auto; }
   .legal-table td, .legal-table th { white-space: normal; min-width: 11rem; }
   // The first column is short labels, so it does not need the prose width.
   .legal-table td:first-child, .legal-table th:first-child { min-width: 7rem; }

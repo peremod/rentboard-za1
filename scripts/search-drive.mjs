@@ -143,38 +143,25 @@ async function main() {
 
   await ctx.close();
 
-  // ── 7. Every browse shortcut keeps its promise ─────────────────────────
+  // ── 7. The browse shortcuts are GONE, and stay gone ────────────────────
   //
-  // ⚠️ THE assertion for this feature. A shortcut row is a set of promises
-  // ("Rooms in Pretoria 253"), and the only way a promise like that fails
-  // quietly is by being hardcoded or stale. So each one is clicked and the
-  // resulting total is compared to the number it advertised — not merely
-  // checked for being non-zero, because a shortcut that shows 253 and
-  // delivers 6 is wrong in a way ">0" cannot see.
-  console.log('\n\u2500\u2500 Browse shortcuts keep their promise \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
+  // ⚠️ This used to be the assertion that every shortcut kept its promise —
+  // each one clicked, the total compared to the number it advertised. The row
+  // was removed on 21 October 2026 at the owner's request: "I don't like it
+  // anymore, it must no longer appear anywhere on any screen."
+  //
+  // So the check is inverted rather than deleted. A removal that nothing
+  // asserts is a removal that comes back the next time somebody restores a
+  // component from an older branch — and this row rendered on the board's
+  // busiest screen, above the first room card.
+  console.log('\n\u2500\u2500 The browse shortcuts stay removed \u2500\u2500\u2500\u2500\u2500\u2500\u2500');
   ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   page = await ctx.newPage();
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   await settle(page);
 
-  const shortcuts = page.locator('.browse__link');
-  const count = await shortcuts.count();
-  check(count > 0, `the board offers browse shortcuts (${count})`);
-
-  const promises = [];
-  for (let i = 0; i < count; i++) {
-    const el = shortcuts.nth(i);
-    const label = (await el.innerText()).replace(/\s+/g, ' ').trim();
-    const promised = Number((await el.locator('.browse__count').innerText()).replace(/[^\d]/g, ''));
-    promises.push({ label, promised, href: await el.getAttribute('href') });
-  }
-
-  for (const { label, promised, href } of promises) {
-    await page.goto(`${BASE}${href}`, { waitUntil: 'networkidle' });
-    await settle(page);
-    const got = await totalShown(page);
-    check(got === promised, `"${label}" -> ${got} rooms`, `promised ${promised}`);
-  }
+  const shortcuts = await page.locator('.browse__link, .browse, nav[aria-label="Browse by category"]').count();
+  check(shortcuts === 0, 'no browse shortcut row on the board', `found ${shortcuts} element(s)`);
 
   await ctx.close();
 
@@ -199,11 +186,11 @@ async function main() {
     const chipCount = await p.locator('.search-chip').count();
     check(chipCount > 0, `${width}px: the search read is shown (${chipCount} chip(s))`);
 
-    const smallLinks = await p.evaluate(() =>
-      [...document.querySelectorAll('.browse__link')]
-        .map((el) => Math.round(el.getBoundingClientRect().height))
-        .filter((h) => h > 0 && h < 44));
-    check(smallLinks.length === 0, `${width}px: every browse shortcut meets 44px`, `heights ${JSON.stringify(smallLinks)}`);
+    // Removed, at every width — "anywhere on any screen" includes the ones a
+    // desktop check never looks at.
+    const leftovers = await p.evaluate(() =>
+      document.querySelectorAll('.browse__link, .browse, nav[aria-label="Browse by category"]').length);
+    check(leftovers === 0, `${width}px: no browse shortcut row`, `found ${leftovers} element(s)`);
     await c.close();
   }
 

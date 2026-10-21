@@ -7,6 +7,7 @@ import { NotificationsService } from '../../src/modules/notifications/notificati
 import { StorageService } from '../../src/modules/storage/storage.service';
 import { WhatsappService } from '../../src/modules/whatsapp/whatsapp.service';
 import { PayfastService } from '../../src/modules/payments/payfast.service';
+import { ThrottlerStorage } from '@nestjs/throttler';
 
 /**
  * Integration harness: the real app, the real guards, a real database, and
@@ -63,6 +64,12 @@ export function assertTestDatabase(url = process.env.DATABASE_URL ?? ''): string
 export interface Outbox {
   emails: { to: string; template: string }[];
   uploads: { path: string }[];
+  /** Paths queued for deletion, and the reason recorded against each. */
+  deletionsQueued: { path: string; reason: string }[];
+  /** One entry per immediate deletion pass the app asked for. */
+  deletionPasses: number[];
+  /** Paths a short-lived download URL was minted for. */
+  signedUrls: { path: string; validForSeconds: number }[];
   whatsapps: { to: string }[];
   payments: { reference: string }[];
 }
@@ -113,6 +120,44 @@ function makeDoubles(outbox: Outbox) {
         },
         delete: async () => undefined,
         authParams: () => ({ token: 't', expire: 0, signature: 's' }),
+        /**
+         * The real one signs an ImageKit URL. Recorded rather than faked away
+         * because the admin queue minting a short-lived URL — instead of
+         * handing out the raw path, which it used to do — is the control, and
+         * a double that returned a bare string would let a test pass whether
+         * or not the expiry was ever asked for.
+         */
+        signedUrl: (path: string, validForSeconds = 300) => {
+          outbox.signedUrls.push({ path: String(path), validForSeconds: Number(validForSeconds) });
+          return {
+            url: `https://test.invalid/signed/${path}`,
+            expiresAt: new Date(Date.now() + validForSeconds * 1000),
+          };
+        },
+        /**
+         * ⚠️ Kept REAL, deliberately. `enqueueDelete` is not a network call —
+         * it writes the durable `file_deletions` row that is the whole reason
+         * a document survives a storage outage and still gets deleted. Stub it
+         * and the POPIA assertion becomes a test of the stub.
+         */
+        enqueueDelete: async (tx: any, path: string, reason: string, verificationRequestId?: string) => {
+          if (!path) return null;
+          outbox.deletionsQueued.push({ path: String(path), reason: String(reason) });
+          return tx.fileDeletion.create({
+            data: { path, reason, verificationRequestId: verificationRequestId ?? null },
+          });
+        },
+        /**
+         * The outbound half, so no bytes are touched. The queue row stays
+         * pending, which is what a test should see: this double proves the
+         * pass was ASKED for, not that a provider answered.
+         */
+        drainNow: async () => {
+          outbox.deletionPasses.push(Date.now());
+          return null;
+        },
+        drain: async () => null,
+        deleteByPath: async () => 'already_gone',
       },
     },
     {
@@ -171,7 +216,10 @@ function makeDoubles(outbox: Outbox) {
 export async function createTestApp(): Promise<TestContext> {
   assertTestDatabase();
 
-  const outbox: Outbox = { emails: [], uploads: [], whatsapps: [], payments: [] };
+  const outbox: Outbox = {
+    emails: [], uploads: [], whatsapps: [], payments: [],
+    deletionsQueued: [], deletionPasses: [], signedUrls: [],
+  };
 
   let builder = Test.createTestingModule({ imports: [AppModule] });
   for (const { token, value } of makeDoubles(outbox)) {
@@ -251,6 +299,44 @@ export async function signUp(
  * and a fixture that writes them by hand asserts its own idea of the schema
  * rather than the application's.
  */
+/**
+ * An admin, made the only way the app can make one: a normal registration,
+ * then the role set in the database.
+ *
+ * There is no self-service route to ADMIN and there must not be. The JWT
+ * strategy reloads the user on every request, so the token minted at
+ * registration starts carrying ADMIN the moment the row changes — no second
+ * login, and nothing in the app has to be loosened for the test.
+ */
+/**
+ * Clear the in-memory rate-limit counters.
+ *
+ * ⚠️ NOT a way of switching throttling off, and the distinction matters.
+ *
+ * The limits are real (v1.86.0) and counted per IP in memory, so a whole
+ * suite arrives at the API as one very busy person: /account takes ten
+ * deletions per quarter hour, and the deletion specs alone need more than ten
+ * accounts ended. The failure shows up as a 429 in a test about erasure,
+ * which reads as an erasure bug — exactly the confusion CLAUDE.md records for
+ * the browser drives, where the advice is to restart the API to clear the
+ * counters. This is that restart, without the restart.
+ *
+ * It is called BETWEEN cases, never inside one, so the limit is in full force
+ * for the duration of every test — including the one that asserts it bites.
+ */
+export async function resetRateLimits(ctx: TestContext): Promise<void> {
+  const storage = ctx.app.get<{ storage?: Map<string, unknown> }>(ThrottlerStorage, {
+    strict: false,
+  });
+  storage?.storage?.clear();
+}
+
+export async function signUpAdmin(ctx: TestContext) {
+  const admin = await signUp(ctx, 'TENANT');
+  await ctx.prisma.user.update({ where: { id: admin.userId }, data: { role: 'ADMIN' } });
+  return admin;
+}
+
 export async function createLetting(ctx: TestContext, rentCents = 350000) {
   const landlord = await signUp(ctx, 'LANDLORD');
   const tenant = await signUp(ctx, 'TENANT');

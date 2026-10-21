@@ -610,9 +610,46 @@ async function auditPage(page, path, { close = true } = {}) {
       if (el.offsetParent === null) continue;
       const type = (el.getAttribute('type') || '').toLowerCase();
       if (type === 'hidden') continue;
-      // A link inside running text is not a tap target in the 2.5.8 sense.
-      const inProse = el.tagName === 'A' && /^(P|LI|SPAN|LABEL)$/.test(el.parentElement?.tagName || '')
-        && (el.parentElement.textContent || '').trim().length > (el.textContent || '').trim().length + 12;
+      /**
+       * A link inside running text is not a tap target in the 2.5.8 sense.
+       *
+       * ⚠️ This used to require the parent to be a P, LI, SPAN or LABEL,
+       * and that made the check STRICTER THAN THE CRITERION IT CITES —
+       * the same defect family as everything else in this file, turned on
+       * the file itself. 2.5.8 exempts a target "in a sentence or whose
+       * size is otherwise constrained by the line-height of non-target
+       * text"; it says nothing about the parent's tag name. So
+       * `<div>Listing: <a>Bright en-suite room…</a> · Sandton · active</div>`
+       * on /admin/reports, and "<a>Drive Tenant</a> (tenant) reported
+       * <a>Drive Landlord</a> (landlord)" on /admin/disputes, were
+       * reported as AA failures while being exactly what the exemption
+       * describes.
+       *
+       * Asked properly now, in two parts that together mean "in a
+       * sentence" without naming any tag:
+       *
+       *   · the link renders INLINE — a block, flex or grid link is a
+       *     region of its own however much text sits around it, which is
+       *     what keeps a card-title link measured;
+       *   · and it has non-whitespace TEXT immediately beside it in the
+       *     same parent. A column of links in a div has element siblings
+       *     and no adjacent words, so the footer's 17px link list — the
+       *     first finding this sweep ever made — still fails.
+       *
+       * The length test stays as a floor: a parent whose only text is the
+       * link's own is not a sentence.
+       */
+      const inProse = el.tagName === 'A' && (() => {
+        const parent = el.parentElement;
+        if (!parent) return false;
+        if (!/^inline/.test(getComputedStyle(el).display)) return false;
+        const hasAdjacentWords = [...parent.childNodes].some(
+          (n) => n.nodeType === 3 && (n.textContent || '').trim().length > 0,
+        );
+        if (!hasAdjacentWords) return false;
+        return (parent.textContent || '').trim().length
+          > (el.textContent || '').trim().length + 12;
+      })();
       if (inProse) continue;
       /**
        * ⚠️ A checkbox or radio inside a <label> is not the target — the

@@ -33,7 +33,9 @@ import { getImageUrl } from '../../utils/imagekit.utils';
                  width="600" height="400" loading="lazy" decoding="async"/>
           }
           <div class="ad-slot__body">
-            @if (headingLevel() === 3) {
+            @if (headingLevel() === 2) {
+              <h2 class="ad-slot__headline">{{ advert.headline }}</h2>
+            } @else if (headingLevel() === 3) {
               <h3 class="ad-slot__headline">{{ advert.headline }}</h3>
             } @else {
               <h4 class="ad-slot__headline">{{ advert.headline }}</h4>
@@ -92,9 +94,22 @@ export class AdSlot implements OnInit {
 
    * the same fix as the survey card, and the same mistake underneath.
 
-   */
 
-  readonly headingLevel = input<3 | 4>(4);
+   * ⚠️ 2 is allowed, and the BOARD is why — the same mistake again, one page
+   * over. The accessibility sweep found `/` going **H1 → H4 ("New to
+   * Mastande?")**: the board's own H2s are the filters title and the results
+   * count, and at phone widths the filters drawer is closed and the count is
+   * not rendered until results arrive, so the first heading after the hero
+   * H1 was the advert's. Level 3 would not have fixed it; H1 → H3 skips a
+   * level just the same.
+   *
+   * ⚠️ And nothing local could see it. House ads live in the DATABASE, so a
+   * development database with none renders no slot and the page audits
+   * clean — a check whose subject came from whatever happened to be seeded,
+   * which is §56 in this repository's own list. It failed only where the ads
+   * exist, which is CI and production.
+   */
+  readonly headingLevel = input<2 | 3 | 4>(4);
 
 
   readonly placement = input.required<AdPlacement>();

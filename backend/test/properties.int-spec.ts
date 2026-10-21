@@ -113,41 +113,84 @@ describe('Properties — create and update', () => {
   });
 
   /**
-   * 🔴 DEFECT, RECORDED NOT FIXED — a yard may be created in a province that
-   * does not exist.
+   * §79b, fixed: a yard must be in one of the nine real provinces.
    *
-   * `PropertyDto.province` is `@IsString() @MinLength(2) @MaxLength(120)`,
-   * while `CreateRoomDto.province` and `RoomFiltersDto.province` are both
-   * `@IsIn(SA_PROVINCES)`. Three handlings of one field, two of which agree.
-   *
-   * The consequence is not cosmetic: the board's province filter only accepts
-   * the nine real provinces, so a yard stored as "Atlantis" can never be
-   * reached by the filter that exists to find it. It is findable by nothing
-   * and visible in nothing, while looking saved.
-   *
-   * This test asserts what the code DOES, because changing a validation rule
-   * to make a test pass is not a test engineer's call to make. The fix is one
-   * decorator, and the question that goes with it is what to do about any
-   * yard already stored with a province outside the list — making the DTO
-   * strict would start refusing updates to those records.
+   * It used to be `@IsString()` here while CreateRoomDto and RoomFiltersDto
+   * were both `@IsIn(SA_PROVINCES)`. The board's province filter accepts only
+   * the real nine, so a yard stored as "Atlantis" could never be reached by
+   * the filter that exists to find it, while looking perfectly saved.
    */
-  it('🔴 accepts a province that does not exist, unlike rooms (known defect)', async () => {
+  it('refuses a province that does not exist', async () => {
     const landlord = await signUp(ctx, 'LANDLORD');
     const res = await ctx.http().post('/api/properties')
       .set('Authorization', `Bearer ${landlord.token}`)
       .send({ ...yard, province: 'Atlantis' });
 
-    expect(res.status).toBe(201);
-    const row = await ctx.prisma.property.findFirst();
-    expect(row!.province).toBe('Atlantis');
+    expect(res.status).toBe(400);
+    expect(await ctx.prisma.property.count()).toBe(0);
+  });
 
-    // The same value on the room side is refused — the inconsistency itself.
+  it('accepts every one of the nine real provinces', async () => {
+    // Exhaustive over the list the rest of the system validates against, so
+    // the fix cannot have narrowed it to a subset by accident.
+    const provinces = [
+      'Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal', 'Limpopo',
+      'Mpumalanga', 'Northern Cape', 'North West', 'Western Cape',
+    ];
+    const landlord = await signUp(ctx, 'LANDLORD');
+    for (const province of provinces) {
+      const res = await ctx.http().post('/api/properties')
+        .set('Authorization', `Bearer ${landlord.token}`)
+        .send({ ...yard, name: `Yard in ${province}`, province });
+      expect({ province, status: res.status }).toEqual({ province, status: 201 });
+    }
+    expect(await ctx.prisma.property.count()).toBe(provinces.length);
+  });
+
+  it('agrees with the room side, which always refused it', async () => {
+    // The inconsistency itself: one field, three DTOs, now all the same.
+    const landlord = await signUp(ctx, 'LANDLORD');
+    const property = await ctx.http().post('/api/properties')
+      .set('Authorization', `Bearer ${landlord.token}`).send(yard).expect(201);
+
     const roomRes = await ctx.http().post('/api/rooms')
       .set('Authorization', `Bearer ${landlord.token}`)
       .send({ title: 'A room', roomType: 'shared_house', rentCents: 150000,
               province: 'Atlantis', city: 'Nowhere', locationDisplay: 'Nowhere',
-              availableFrom: '2026-12-01', propertyId: row!.id });
+              availableFrom: '2026-12-01', propertyId: property.body.id });
     expect(roomRes.status).toBe(400);
+  });
+
+  it('refuses an invalid province on UPDATE too, leaving the record alone', async () => {
+    // The update DTO is separate from the create one here — not a PartialType
+    // — so it had to be fixed independently, and a test that only covered
+    // create would have missed half of it.
+    const landlord = await signUp(ctx, 'LANDLORD');
+    const created = await ctx.http().post('/api/properties')
+      .set('Authorization', `Bearer ${landlord.token}`).send(yard).expect(201);
+
+    const res = await ctx.http().patch(`/api/properties/${created.body.id}`)
+      .set('Authorization', `Bearer ${landlord.token}`).send({ province: 'Atlantis' });
+    expect(res.status).toBe(400);
+
+    const row = await ctx.prisma.property.findUnique({ where: { id: created.body.id } });
+    expect(row!.province).toBe('Gauteng');
+  });
+
+  it('still allows an edit that does not mention the province', async () => {
+    // The ordinary case must not become harder: most edits are house rules
+    // or a suburb, and they carry no province at all.
+    const landlord = await signUp(ctx, 'LANDLORD');
+    const created = await ctx.http().post('/api/properties')
+      .set('Authorization', `Bearer ${landlord.token}`).send(yard).expect(201);
+
+    await ctx.http().patch(`/api/properties/${created.body.id}`)
+      .set('Authorization', `Bearer ${landlord.token}`)
+      .send({ houseRules: 'Gate locked at 20:00.' }).expect(200);
+
+    const row = await ctx.prisma.property.findUnique({ where: { id: created.body.id } });
+    expect(row!.houseRules).toBe('Gate locked at 20:00.');
+    expect(row!.province).toBe('Gauteng');
   });
 
   // ── Update, and who may do it ───────────────────────────────────────────

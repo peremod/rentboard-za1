@@ -220,6 +220,18 @@ jobs:
         # production build produced twenty errors.
         run: node scripts/template-literal-lint.mjs
 
+      # ⚠️ env-parity needs ROOT dependencies, and this job installs only
+      # `frontend`. The script grew a js-yaml import when it started parsing
+      # render.yaml per service (checklist row 103) — before that it was
+      # builtins only, like every other audit in this job — and from that
+      # commit on the step died with ERR_MODULE_NOT_FOUND instead of running.
+      # It read as a broken environment check; it was a missing install.
+      - name: Install (root, for env-parity)
+        if: ${{ !cancelled() }}
+        # --ignore-scripts: the root `prepare` runs husky, which has no work to
+        # do on a runner and exits 127 when the git hooks path is absent.
+        run: npm ci --ignore-scripts
+
       - name: Environment parity
         if: ${{ !cancelled() }}
         # Each environment file must define the same keys. A key present in
@@ -276,6 +288,20 @@ jobs:
       - name: Typecheck
         working-directory: backend
         run: npm run typecheck
+      # ⚠️ The test runner lives at the ROOT, and this job installs `backend`.
+      #
+      # `backend`'s `npm test` is `npm --prefix .. run test:backend`, which is
+      # vitest from the root node_modules — so the step failed with a bare
+      # `vitest: not found` and read as the suite being broken. It is the same
+      # defect as env-parity in the frontend job: a script that needs a
+      # dependency the job it runs in never installs. The integration step
+      # below needs the same install, and had never once run because this one
+      # failed first and everything after it was skipped.
+      - name: Install (root, for the test runner)
+        # --ignore-scripts: the root `prepare` runs husky, which has no work on
+        # a runner and exits 127 where the git hooks path is absent.
+        run: npm ci --ignore-scripts
+
       - name: Test
         working-directory: backend
         run: npm test

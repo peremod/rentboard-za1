@@ -1,8 +1,9 @@
 import {
   IsOptional, IsString, MaxLength, MinLength, IsArray, IsUUID, ArrayMaxSize,
-  IsEnum, IsInt, Min, Max,
+  IsEnum, IsInt, Min, Max, IsIn,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { SA_PROVINCES } from '../../rooms/dto/room-filters.dto';
 import { HousemateProfile } from '@prisma/client';
 
 /**
@@ -66,8 +67,23 @@ export class CreatePropertyDto extends SharedLivingDto {
   @IsString() @MinLength(2) @MaxLength(120)
   city!: string;
 
-  @ApiProperty({ example: 'Gauteng' })
-  @IsString() @MinLength(2) @MaxLength(120)
+  /**
+   * One of the nine, and not any string — §79b.
+   *
+   * This was `@IsString() @MinLength(2) @MaxLength(120)` while
+   * CreateRoomDto.province and RoomFiltersDto.province were both
+   * `@IsIn(SA_PROVINCES)`: three handlings of one field, two of which
+   * agreed. A yard could be created in "Atlantis", and the board's province
+   * filter accepts only the real nine — so such a yard could never be
+   * reached by the filter that exists to find it, while looking saved.
+   *
+   * ⚠️ Tightening this cannot break the landlord's form: the province
+   * control is a `<select>` bound to SA_PROVINCES, so the UI has never been
+   * able to submit anything else. Only a direct API call could, which is
+   * exactly what this now refuses.
+   */
+  @ApiProperty({ enum: SA_PROVINCES, example: 'Gauteng' })
+  @IsIn(SA_PROVINCES)
   province!: string;
 }
 
@@ -85,7 +101,13 @@ export class UpdatePropertyDto extends SharedLivingDto {
   @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(2) @MaxLength(120)
   city?: string;
 
-  @ApiPropertyOptional() @IsOptional() @IsString() @MinLength(2) @MaxLength(120)
+  /**
+   * Same list as on create — see the note there. Optional, so an edit that
+   * does not mention the province is unaffected; one that does must name a
+   * real province.
+   */
+  @ApiPropertyOptional({ enum: SA_PROVINCES })
+  @IsOptional() @IsIn(SA_PROVINCES)
   province?: string;
 }
 

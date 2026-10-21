@@ -5493,7 +5493,7 @@ Falsified by putting the real leaked value back and watching both guards fire.
 ---
 
 
-## 79. Two defects the integration tests found — 79a fixed, 79b open
+## 79. Two defects the integration tests found — both fixed
 
 Both are recorded as passing tests that assert **what the code does**, with the
 reasoning beside them. Neither was fixed, because both are changes to business
@@ -5570,7 +5570,7 @@ reachable from here (`connect_rejected` by the egress policy), so this is a
 query for somebody with the Neon console, not a number this document can
 state.
 
-### 79b. A yard may be created in a province that does not exist
+### 79b. ✅ FIXED — a yard could be created in a province that does not exist
 
 `PropertyDto.province` is `@IsString() @MinLength(2) @MaxLength(120)`.
 `CreateRoomDto.province` and `RoomFiltersDto.province` are both
@@ -5580,11 +5580,554 @@ Not cosmetic: the board's province filter accepts only the nine real
 provinces, so a yard stored as "Atlantis" can never be reached by the filter
 that exists to find it, while looking saved.
 
-One decorator fixes it. The question that comes with it is what to do about
-records already stored outside the list — tightening the DTO would start
-refusing *updates* to those yards, so a data check comes first.
+**Fixed 21 October.** Both `CreatePropertyDto.province` and
+`UpdatePropertyDto.province` are `@IsIn(SA_PROVINCES)` now. They are separate
+classes rather than a `PartialType`, so each had to be changed — and each is
+falsified separately: reverting create fails one test, reverting update fails
+a different one.
 
-Covered by `backend/test/properties.int-spec.ts`, the test marked 🔴.
+⚠️ **The risk I flagged turned out to be much smaller than it looked, and
+measuring it is what showed that.** I expected tightening this to start
+refusing edits to yards already stored outside the list. It cannot break the
+landlord's form: the province control is a `<select>` bound to
+`SA_PROVINCES`, so the UI has never been able to submit anything else. Only a
+direct API call could, which is exactly what this now refuses. An edit that
+does not mention the province is unaffected, and there is a test for that
+because it is the ordinary case.
+
+Five tests in `backend/test/properties.int-spec.ts`: an invalid province
+refused on create, **all nine real provinces accepted** (so the fix cannot
+have narrowed the list by accident), the room side agreeing, an invalid
+province refused on update with the record left alone, and an ordinary edit
+still working.
+
+⚠️ **Prevents new ones; repairs none.** Any yard already stored outside the
+list keeps its province until somebody edits it. To find them:
+
+```sql
+SELECT id, name, province FROM properties
+WHERE province NOT IN (
+  'Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo',
+  'Mpumalanga','Northern Cape','North West','Western Cape');
+```
+
+Any row that comes back is a yard the board's province filter cannot find.
+Editing it through the landlord's form repairs it, because the select offers
+only valid values.
+
+---
+
+
+## 80. Phase 3 of the integration suite — private documents and account lifecycle
+
+73 further integration tests: viewing invitations (19), reviews and safety
+reports (18), private documents (17) and the account lifecycle (19). The
+suite now stands at **91 unit + 137 integration, all executed**, and every
+one of the new specs was falsified by reintroducing the defect it exists to
+catch — twelve mutations in all, each one caught by the test named beside it.
+
+### 80a. What the document specs assert, and why not a unit test
+
+CLAUDE.md states the POPIA position as "documents stay private, are deleted
+per the existing retention pattern, and **only outcomes persist**". No single
+function holds that promise: the path is stored by `VerificationService`,
+withheld by two different response shapes, signed with an expiry at the
+storage edge, cleared inside a transaction, queued in a second table, and
+drained after the commit. A unit test of any one of those passes while the
+promise is broken — and this repository has already shipped both broken
+halves. `documentPath` once went raw to the admin screen (a relative path
+with no endpoint, so no reviewer could open a document at all), and
+`documentDeletedAt` was a column that deleted nothing.
+
+So the assertions are on the **effect**, never on the wording of a response:
+a committed `file_deletions` row carrying the path and the request id, a
+`documentPath` that is null and a `documentWithdrawnAt` that is not, a signed
+URL that is not the stored path and that was asked for with a bounded
+expiry, and an immediate deletion pass rather than a wait for the hourly
+cron — because the screen says "as soon as someone has looked at it", not
+"within the hour".
+
+Falsified five ways, each against the real build: echoing `documentPath`
+back to the submitter, leaving the path in place on review, never queueing
+the deletion, leaving it to the cron, and handing the admin queue the raw
+path. All five were caught.
+
+`StorageService.enqueueDelete` is **kept real in the test double**, and that
+is deliberate: it is not a network call, it is the durable row that is the
+whole retention guarantee. Stubbed, the POPIA assertion becomes a test of
+the stub.
+
+### 80b. A fixture whose subject was already in the end state
+
+The first run of the account-lifecycle spec "failed" on deactivation not
+pausing a landlord's listing. It was the test that was wrong, and in a way
+this file has a name for: `createLetting` accepts the application, which
+moves the room to **`let`** — and a let room is already off the public board
+and is correctly **not** paused by deactivation, whose filter is
+`active`/`reserved`. The tenant lives there.
+
+So the fixture handed the test a room that could not demonstrate the thing
+under test, and a greener-looking version of the same test (asserting only
+"not on the board") would have passed without ever pausing anything. The
+pausing specs build a published, un-let room of their own.
+
+### 80c. My own check pointed at a column that does not exist
+
+Two report assertions read `row.resolvedAt`, and the `Report` model has no
+such field — the resolution state is `status` plus `reviewedAt`,
+`reviewedById` and `resolutionNote`. `expect(undefined).toBeNull()` failed
+loudly, which is the only reason it was caught; written as `toBeFalsy()`,
+the same mistake would have passed for ever against a report that arrived
+already dismissed. They now assert all four real columns, and the mutation
+that stamps a new report `dismissed` fails them.
+
+### 80d. The rate limiter is real enough to break the suite
+
+`DELETE /account` allows ten attempts per quarter hour, counted per IP in
+memory, and the deletion specs need more than ten accounts ended — so the
+suite arrives as one very busy person and the failure reads as a 429 in a
+test about erasure. `resetRateLimits(ctx)` clears the counters **between**
+cases, which is the test-time equivalent of the API restart CLAUDE.md
+already prescribes for the browser drives.
+
+⚠️ A reset like that is one step from switching a control off, which is the
+defect this repository keeps shipping. So one case asserts the limit still
+bites — eleven refused attempts inside a single test, where no reset
+intervenes, expecting ten 403s and a 429 — and it was falsified by raising
+the decorator's limit to 100000, which failed it. The limit is in full force
+for the duration of every test; only the carry-over between tests is
+cleared.
+
+### 80e. Correction to the record in commit `15fbacc`
+
+That commit message says workflow run 116 "was still polling when the
+15-minute ceiling reached it". It was not: it completed in about 8m20s,
+roughly 15.3 seconds per attempt, and printed its diagnostic. The conclusion
+drawn from it — that Render never started a deploy for `b94814c` — stands on
+runs 114 and 116 both reporting production on 1.162.0 with `uptime` rising
+2536 → 3084 across 51 continuous minutes, which is unaffected. Recorded here
+because a wrong fact in a commit message cannot be edited out of history.
+
+---
+
+
+## 81. 🔴 v1.163.0 never deployed, and CI had said so for four runs
+
+**Found 21 October, by reading CI instead of guessing at Render.** Both
+services — staging `mastande-api` and production `rentboard-api` — were
+serving **1.162.0** while `master` carried 1.163.0. I had reported the
+release as shipped and gone looking for an explanation in the Render
+dashboard. The explanation was in this repository, in a red CI run I had not
+opened.
+
+### What actually broke
+
+`backend/package-lock.json` and `package-lock.json` were regenerated with
+`--legacy-peer-deps` (the workaround for an npm `edgesOut` crash while
+installing the test tooling). That flag **omits the peer tree**, so the
+lockfiles shipped without `react`, `react-dom` and `scheduler` — peers of
+`@react-email/render`, a production dependency of the backend — and without
+`typescript@7.0.2` at the root.
+
+`npm ci` refuses an out-of-sync lockfile. So:
+
+```
+> [builder 4/8] RUN npm ci
+npm error `npm ci` can only install packages when your package.json and
+npm error package-lock.json … are in sync.
+npm error Missing: react@19.3.1 from lock file
+…
+Dockerfile:37
+ERROR: failed to build … exit code: 1
+```
+
+Render builds that Dockerfile. A failed build leaves the previous image
+serving, which is **exactly** the failure the Dockerfile's own comment
+records from v1.62.0 — `postinstall: prisma generate` broke the production
+stage and "Render went on serving v1.61.0 through five releases". Same
+mechanism, two lockfiles instead of one script.
+
+Four CI jobs were red on every run from v1.163.0 onwards:
+
+| Job | Step that failed | Cause |
+|---|---|---|
+| Backend image builds and boots | `Build the production image` | backend lockfile, `Dockerfile:37` |
+| Backend — Typecheck, Test, Build | `Install` | backend lockfile |
+| E2E — browser journeys | `Install (root, for Playwright)` | root lockfile |
+| Frontend — Typecheck, Test, Build | `Environment parity`, `CSS coverage` | two separate defects, below |
+
+### ⚠️ The gate worked. I did not read it.
+
+This is not a missing check — the docker job added in v1.67.0 exists for
+precisely this, and it caught the breakage on the first run that contained
+it. Every conclusion I drew about the stuck deploy ("Render never started a
+deploy", "check the dashboard Events") was reasoning about a remote system
+whose answer was sitting in a workflow run I could have opened at any point.
+**Reading CI is part of pushing, not a separate task**, and a release is not
+shipped because a push succeeded.
+
+Fixed by regenerating both lockfiles with plain `npm install
+--package-lock-only`. The diffs add nothing but the four missing packages.
+Falsified both directions, in a staged copy of the Docker build context:
+the shipped lockfile exits 1 on `npm ci` and on `npm ci --omit=dev
+--ignore-scripts`, the regenerated one exits 0 on both.
+
+### 81a. env-parity needed a dependency its CI job never installed
+
+`Environment parity` runs in the frontend job, which installs `frontend`
+only. The script was builtins-only like every other audit there until §77
+had it parse `render.yaml` per service — at which point it imported
+`js-yaml`, a ROOT devDependency, and from that commit on the step died with:
+
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'js-yaml'
+  imported from .../scripts/env-parity.mjs
+```
+
+It reads as a broken environment check and was a missing install. The job
+now installs the root dependencies (`--ignore-scripts`, because the root
+`prepare` runs husky and exits 127 on a runner with no hooks path) before
+the step. Reproduced in a clean `git archive` checkout with no root
+`node_modules`: ERR_MODULE_NOT_FOUND and exit 1 before, exit 0 after.
+
+⚠️ A script that grows a dependency silently changes which jobs can run it.
+Nothing in the workflow stated that the audits in that job are
+builtins-only, and nothing checked it.
+
+### 81b. `.sr-only` had no rule, so screen-reader text rendered on screen
+
+The search chips added in checklist row 104 use `class="sr-only"`. A rule for
+it exists only inside the scoped `styles` of `star-rating.ts` and
+`surveys.ts`, so in `home.ts` it has **no rule at all** — and "Remove the
+location Johannesburg", "Remove the province Gauteng" and "Remove the room
+type" rendered as visible text beside every chip on the board.
+
+This repository already has the global class for it, `.visually-hidden`,
+whose comment records the same bug shipping once before: welcome-survey wrote
+`class="visually-hidden"` before any rule defined it, "so the prompt appeared
+twice on every free-text step. The class did the exact opposite of what it
+says." `home.ts` now uses `.visually-hidden` — one vocabulary, one rule.
+
+`scripts/css-coverage-audit.mjs` caught it (`1 NEW class(es) … styled
+nowhere`), which is the gate doing its job in a run nobody opened. It reports
+0 new after the fix.
+
+### 81c. Two concurrent integration runs silently destroyed each other
+
+Found while re-verifying this fix: a background run and a foreground run of
+the same suite produced **40 failures across four files** — missing
+applications, missing tenancies, 404s on rows that had just been created.
+Every one read as a product bug. Run alone, the same commit was 137 passed.
+
+The suite truncates every table between cases, so two runs sharing one
+database delete each other's fixtures mid-test. `fileParallelism: false`
+does not cover it: that serialises files within one vitest process and says
+nothing about a second process.
+
+`global-setup.ts` now takes a session-level Postgres advisory lock with
+`pg_try_advisory_lock` and refuses by name when it cannot get it. Session
+level, so a crashed run cannot wedge the suite. Driven: the holder passes
+21/21 while a second run refuses with "Another integration run already holds
+mastande_integration_test", and the next run after it passes 17/17.
+
+---
+
+
+## 82. CI had been red since before the test work, and three things were hiding in it
+
+Reading CI properly (§81) showed the lockfiles were not the only thing in
+there. Job by job, back through the runs:
+
+| Runs | What was failing | Whose |
+|---|---|---|
+| 248–250 | `E2E — app journeys`, `CSS coverage`, `Environment parity` | all three pre-date the test work |
+| 251 | + backend `Test`, root `Install (for Playwright)` | the unit-suite commit |
+| 254 onwards | + **`Build the production image`** | the lockfiles — the one that stopped deploys |
+
+So the docker job, the only one that gates a deploy, was green until 254 and
+red from then on, which is exactly when releases stopped landing. The other
+three had been red for days with nobody reading them, which is how a gate
+stops being a gate.
+
+### 82a. Three e2e specs failed on a redirect that changed five days earlier
+
+`e2e/helpers.ts` asserted that creating an account lands on
+`/{role}/dashboard`. Since `5061bc3` (16 October, "surveys for both roles,
+asked at sign-up instead of on the dashboard") it lands on **`/welcome`** —
+deliberately, and the component says why: the account exists and the session
+is set by the time that screen appears, so skipping, refreshing or closing
+the tab there costs nothing.
+
+Every spec that registers a user goes through that helper, so
+`account-settings`, `application-lifecycle` and `listing-wizard` all failed
+with `unexpected value "http://localhost:4200/welcome"` — a stale test, not
+a broken app.
+
+Fixed by walking the journey a person walks: assert `/welcome`, press "I
+will do this later", then assert the dashboard. **Not** by widening the
+pattern to accept either destination, which is the tempting one-character
+fix and would leave a helper that no longer notices if the redirect broke.
+
+Reproduced and fixed locally against the real app (API on :3000, a
+development build served on :4200): 3 failed → 3 passed. Falsified by
+pointing the register component at `/` instead of `/welcome`, rebuilding,
+and proving the bugged build was the one answering — the spec failed with
+`unexpected value "http://localhost:4200/"`. The mobile board suite passes
+alongside it, 3 of 3.
+
+### 82b. An unused import was an ERROR, not a warning
+
+`signUp` was imported into `failure-modes.int-spec.ts` and never used.
+`@typescript-eslint/no-unused-vars` reports that as an error, and the lint
+step deliberately runs without `--fix` so CI reports on the code that was
+pushed. 1 error 45 warnings → 0 errors 44 warnings; the remaining warnings
+are pre-existing `no-explicit-any` in fixtures and are not gating.
+
+The same pass removed an `eslint-disable-next-line no-console` in
+`global-setup.ts` that had nothing to disable — the rule does not fire
+there, so the directive was itself reported. A control with no subject, in
+the file whose whole job is to refuse before the suite can do damage.
+
+---
+
+
+## 83. Five accessibility findings, and why none of them could be seen locally
+
+The sweep is `scripts/a11y-widths.sh` — 33 pages at 360 / 390 / 768 / 1280.
+Run with the house ads seeded and with admin credentials, it found five
+things. **Every one was invisible for a DATA reason**, which is §56 in this
+list under a different hat: a check whose subject comes from whatever
+happened to be in the database.
+
+| Finding | Why nothing saw it |
+|---|---|
+| `/` went H1 → H4 | house ads live in the database; a dev database with no campaigns renders no slot |
+| `/admin/services` label 380×22 | a local sweep without `ADMIN_EMAIL` prints "SKIP the admin screens" and reports clean |
+| `/admin/analytics` scrolled sideways 14px at 360px | the spill depends on how long the numbers are; a freshly seeded database has short ones |
+| `/admin/reports` link reported under 24px | the page has no rows until something is reported |
+| `/admin/disputes` links reported under 24px | same — and these two turned out not to be failures at all, see 83c |
+
+The first two are recorded in checklist row 110 and §83a–b; the rest follow.
+
+### 83a. The board skipped a heading level
+
+`AdSlot.headingLevel` exists for exactly this and carries a comment about the
+identical bug being fixed on the room page — the board was simply never given
+a level, so the slot defaulted to H4 under the hero's H1. The board's own H2s
+are the filters title and the results count, and at phone widths the drawer
+is closed and the count is not rendered until results arrive.
+
+**Level 3 would not have fixed it**: H1 → H3 skips a level just the same. The
+input takes `2 | 3 | 4` now. The sidebar slot declares 2 — it sits beside the
+board's sections and the filters H2 above it is not rendered at mobile — and
+the inline slot declares 3, because a card has to render for it to appear at
+all, so the results-count H2 is always above it.
+
+### 83b. An admin label was 380×22 with no clear air
+
+The audit measures the **label** as the target, which is right: clicking the
+words toggles the box. `.provider-form__check` was 22px tall with 0px to the
+submit button below it. `min-height: 1.5rem` now. The 18×18 checkbox inside
+it was never the thing to measure, and I spent a probe finding that out.
+
+### 83c. ⚠️ The check was stricter than the criterion it cites
+
+`/admin/reports` and `/admin/disputes` were reported as AA failures for links
+that 2.5.8 **exempts**: "Listing: `<a>`Bright en-suite room…`</a>` · Sandton ·
+active", and "`<a>`Drive Tenant`</a>` (tenant) reported `<a>`Drive
+Landlord`</a>` (landlord)". The criterion exempts a target "in a sentence or
+whose size is otherwise constrained by the line-height of non-target text".
+It says nothing about the parent's tag name — but the exemption tested
+`/^(P|LI|SPAN|LABEL)$/` on the parent, so a `div` holding a sentence failed.
+
+The same defect family as everything else in that file, turned on the file
+itself. It now asks the real question without naming a tag: the link must
+render **inline**, and must have non-whitespace **text immediately beside it**
+in the same parent. The length floor stays — a parent whose only text is the
+link's own is not a sentence.
+
+Widening an exemption weakens a gate, so it was positively controlled against
+constructed cases rather than trusted:
+
+| case | verdict |
+|---|---|
+| `Listing: <a>…</a> · Sandton · active` | EXEMPT |
+| `<a>Drive Tenant</a> (tenant) reported <a>…</a>` | EXEMPT |
+| footer link column, block links | **MEASURED** |
+| card-title block link with text around it | **MEASURED** |
+| lone inline `<a>Edit</a>`, no adjacent words | **MEASURED** |
+
+The footer's 17px link list — the first finding this sweep ever made — still
+fails, which is the result that makes the change safe.
+
+⚠️ **And it was not only a widening.** The new predicate also MEASURES things
+the tag whitelist used to excuse, which is the other direction of the same
+defect — and it immediately found one: `p.applicants__back` on the landlord
+applicants screen holds two navigation links, "← Back to dashboard" and "All
+applicants across your rooms", at **20px tall with 16px of clear air**. The
+old rule exempted them for one reason only, that they sit in a `<p>`. The row
+is `display: flex`; nothing about it is running text. They are real AA
+failures that had been hidden, and they now carry
+`min-height: 1.5rem`.
+
+So the rule was wrong in both directions at once: too strict on
+/admin/reports and /admin/disputes, too lax here, and for the same underlying
+reason — it asked about a tag name instead of about words.
+
+### 83d. /admin/analytics scrolled the page sideways on a phone
+
+14px at 360px, from a six-column growth table (Role · Today · Week · Month ·
+Year · Total) measuring 358px inside a 328px box. Horizontal page scroll on a
+phone is the first thing CLAUDE.md says to check for.
+
+Fixed with this codebase's own pattern for a wide table — `display: block;
+overflow-x: auto`, as `.legal-table` and `.rate-table` already do — so the
+table takes the scroll and the figures stay readable by swiping the table
+rather than the whole screen. Measured after: page scroll **0** at all four
+widths, the table carrying its own 30px scroll at 360px.
+
+⚠️ **I got this one wrong first.** I hypothesised the `.stat-row` grid and the
+automatic-minimum-size trap, added `min-width: 0` to `.stat-box`, rebuilt, and
+re-measured: still 14px. The change was reverted rather than shipped with a
+comment that misstated the cause, and a probe then named the table outright.
+A fix that does not move the number is not a fix, however plausible its story.
+
+---
+
+
+## 84. The browse shortcuts are removed — 21 October 2026, by the owner
+
+> "remove this which is circled in red I don't like it anymore it must no
+> longer appear anywhere on any screen"
+
+The category row built in checklist row 105 — "Available now 2", "Private
+room 1", "En-suite room 1", "Rooms in Pretoria 1", "Rooms in Tshwane 1" — is
+gone from the board and from the codebase's frontend.
+
+Removed: the template block in `home.ts`, the `categories` signal, the
+`getCategories()` call and the decision comment beside it, `getCategories()`
+in `rooms.service.ts`, the `BoardCategories` interface in `room.model.ts`,
+and the `.browse` / `.browse__link` / `.browse__count` rules in `_spec.scss`.
+Nothing else in the app referenced any of it — the board was the only screen
+that rendered the row.
+
+⚠️ **The drive's assertion is inverted, not deleted.** `scripts/search-drive.mjs`
+§7 used to click every shortcut and compare the result count to the number it
+advertised; it now asserts the row is absent, on the board and at all four
+widths. A removal that nothing asserts is a removal that comes back the next
+time somebody restores a component from an older branch, and this row sat on
+the busiest screen in the product, above the first room card.
+
+Driven both ways: with the row removed the drive is 33 passed, 0 failed; with
+`home.ts` and `_spec.scss` restored from git and rebuilt, the same drive is
+28 passed, **5 failed** — "no browse shortcut row on the board — found 9
+element(s)", and the same at 360, 390, 768 and 1280.
+
+Verified in a browser at all four widths after removal: no shortcut element
+of any kind, 12 cards rendering, "423 rooms found", no horizontal page
+scroll, and the heading order still H1 → H2 → … with no skipped level.
+Production build clean.
+
+### What was deliberately NOT removed
+
+**`GET /rooms/categories` and `RoomsService.categories()` stay.** The
+instruction was about what appears on screen, and tearing out a backend route
+is a change to the API contract rather than a UI removal — `CLAUDE.md`'s
+standing position on paused work is to keep the code and switch the surface
+off, not to delete it. The endpoint now has no consumer, and
+`scripts/smoke-test.sh` still asserts it answers 200 and never advertises a
+category with a count of zero, so it cannot rot unnoticed. **Say the word and
+it goes too**, along with its smoke check and the aggregation behind it.
+
+---
+
+
+## 85. The API sweeps, and the 500 they found on the busiest public route
+
+Steps 1–5 of the API testing brief. `scripts/api-inventory.mjs` reads the
+inventory out of the 35 controllers — **236 routes**, 41 unauthenticated, 2
+optional-auth, 61 admin-only, 25 rate-limited, 81 with a body DTO — and
+`backend/test/api-contract.int-spec.ts` sweeps that inventory rather than a
+hand-written list of routes, because "a row-shaped check only ever finds what
+somebody thought to list" and 236 of them is well past what anybody keeps in
+step by hand.
+
+### 85a. 🔴 `GET /api/rooms?page=999999999999&limit=999999999` → 500
+
+On the busiest unauthenticated route in the product. `rooms.service.ts`
+computes `skip = (page - 1) * limit`, about **1e21** for those numbers, far
+past what Postgres will take for an OFFSET — so Prisma threw and the board
+answered Internal Server Error to an anonymous caller.
+
+**Either parameter alone was fine**, which is why nothing had ever hit it: a
+large page with the default limit returns an empty list, and a large limit on
+page 1 returns the board. It takes both.
+
+The unbounded `limit` was the second half of the same hole: no maximum at
+all, so one anonymous request could ask for every active row. At 423 rooms
+that is a fat response; on a board that grows it is a full scan served to
+whoever asks.
+
+`@Max(100)` on `limit` and `@Max(100_000)` on `page`. The board pages at 12
+and nothing in this codebase or the frontend ever asks for more, so 100 is
+generous; the pair also bounds the product, so `skip` cannot exceed 1e7 and
+the overflow cannot return through another combination. Measured against the
+running API: 500 → **400 "limit must not be greater than 100"**, with the
+boundaries exact — 100 and page 100000 pass, 101 and page 100001 are refused,
+and `?page=1&limit=12` is untouched. Falsified: removing both `@Max`
+decorators brings the 500 back and fails two tests.
+
+### 85b. ⚠️ The inventory was wrong in the one direction that hides routes
+
+Its first run reported `POST /admin/recoveries/confirm` behind
+`JwtAuthGuard + AdminGuard` and `GET /landlord/storefront/:slug` behind
+`JwtAuthGuard + LandlordGuard`. **Both are public.**
+
+`lost-number.controller.ts` declares two controllers —
+`@Controller('admin/recoveries')` and then `@Controller('auth/lost-number')` —
+and so does `storefront.controller.ts`. The parser read only the first
+`@Controller` and the first class-level `@UseGuards` per file, so the second
+controller's routes inherited the first one's prefix **and its guards**. The
+real routes, `POST /auth/lost-number/confirm` and `GET /storefronts/:slug`,
+were never swept at all, and two open routes sat in the inventory as
+protected.
+
+A list wrong this way cannot be caught by anything downstream of it — every
+sweep would have reported those routes as correctly refusing a caller while
+calling a path that does not exist. The sweep found it on its first run,
+because *a guarded route answering 404 to everybody is not a thing that
+happens*. Public is 41, not 39; admin is 61, not 62.
+
+It also parsed `@UseGuards(AuthGuard('google'))` as `AuthGuard('google'` —
+`[^)]*` stops at the first `)`. Decorator arguments are read with balanced
+parentheses now.
+
+### 85c. Two of my own test defects, both the familiar shapes
+
+**Ten supertest requests built eagerly** raced each other onto `listen(0)` and
+one lost, failing with "Cannot read properties of null (reading 'address')" —
+which reads as the API crashing on hostile input when it is the harness
+racing itself. The probes are thunks now, created and awaited in turn.
+
+**The OAuth callback** is excluded from the unauthenticated sweep *with a
+reason in the code*, not quietly: `AuthGuard('google')` exists to answer an
+unauthenticated caller — that is the return leg of the sign-in — and it
+redirects. It has its own test asserting the redirect mints no token and sets
+no cookie.
+
+### What the sweeps assert
+
+| Sweep | Scope |
+|---|---|
+| unauthenticated | all 194 identity-guarded routes must answer 401/403 |
+| privilege escalation | all 61 admin routes refuse a TENANT **and** a LANDLORD |
+| the control for both | a real admin gets *past* the guard on the same routes — otherwise "everything 403s" would pass with a broken token or misspelt paths |
+| malformed id | no `:id` route may answer 5xx to `not-a-uuid` |
+| unsupported method | 404/405, never a crash |
+| hostile input | malformed JSON, wrong content type, SQL strings, arrays and nulls where objects belong, absurd query values — all < 500 |
+| leakage | no V8 frame, `node_modules` path, PrismaClient reference, connection string, raw SQL, JWT secret or internal file path in **any** response collected above |
+| oversized body | 2MB → 400/413, and nothing written |
+| unexpected field | `forbidNonWhitelisted` enforced, with a control proving the same body minus the field succeeds |
 
 ---
 
