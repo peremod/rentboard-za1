@@ -10,6 +10,7 @@ import { UserRole } from '@prisma/client';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { RelistDto } from './dto/relist.dto';
 import { sanitizeText } from '../../common/utils/sanitize.util';
+import { parseSearchPhrase, KnownPlace } from './search-phrase';
 
 /**
  * There is no room limit: unlimited listings is the product, not a pause.
@@ -206,11 +207,47 @@ export class RoomsService {
       ...(householdSocial && { householdSocial }),
     };
 
+    /**
+     * What the typed phrase actually asked for.
+     *
+     * ⚠️ An EXPLICIT filter always wins over one read out of the phrase. If
+     * somebody typed "rooms in Pretoria" and then set the province select to
+     * Western Cape, the select is the later, more deliberate act; silently
+     * preferring the phrase would make a control they can see do nothing,
+     * which is the defect this repository keeps finding rather than one to
+     * add.
+     */
+    const parsed = search ? parseSearchPhrase(search, await this.knownPlaces()) : null;
+    const effectiveCity = city ?? parsed?.city;
+    const effectiveProvince = province ?? parsed?.province;
+    const effectiveRoomType = roomType ?? parsed?.roomType;
+
+    /**
+     * Every remaining word must match SOMETHING — AND of ORs, not one OR.
+     *
+     * "affordable student" should mean both words, not either: an OR here
+     * returns every listing containing "student" even when nothing about it
+     * is affordable, which reads as the search ignoring half of what was
+     * typed. `city` and `province` are in the OR because they were missing
+     * from the old one — that omission is why a search for "Johannesburg"
+     * returned 75 of the 100 rooms whose city IS Johannesburg, the 25 it
+     * dropped being the Soweto listings.
+     */
+    const tokenClauses = (parsed?.tokens ?? []).map((t) => ({
+      OR: [
+        { title: { contains: t, mode: 'insensitive' } },
+        { description: { contains: t, mode: 'insensitive' } },
+        { locationDisplay: { contains: t, mode: 'insensitive' } },
+        { city: { contains: t, mode: 'insensitive' } },
+        { province: { contains: t, mode: 'insensitive' } },
+      ],
+    }));
+
     const where: any = {
       status: 'active',
-      ...(roomType && { roomType }),
-      ...(province && { province }),
-      ...(city && { city: { contains: city, mode: 'insensitive' } }),
+      ...(effectiveRoomType && { roomType: effectiveRoomType }),
+      ...(effectiveProvince && { province: effectiveProvince }),
+      ...(effectiveCity && { city: { contains: effectiveCity, mode: 'insensitive' } }),
       ...(billsIncluded && { billsIncluded: true }),
       ...(couplesAllowed && { couplesAllowed: true }),
       ...(dssAccepted && { dssAccepted: true }),
@@ -235,13 +272,7 @@ export class RoomsService {
        * A date search is stricter and exact, because it was asked for.
        */
       ...(this.availabilityClause(availableNow, moveIn, moveInTo)),
-      ...(search && {
-        OR: [
-          { title: { contains: search, mode: 'insensitive' } },
-          { description: { contains: search, mode: 'insensitive' } },
-          { locationDisplay: { contains: search, mode: 'insensitive' } },
-        ],
-      }),
+      ...(tokenClauses.length > 0 && { AND: tokenClauses }),
     };
 
     const orderBy: any[] = [
@@ -299,7 +330,55 @@ export class RoomsService {
         .then((rows) => rows.length),
     ]);
 
-    return { data, total, page, limit, hasMore: skip + data.length < total, verifiedLandlords };
+    /**
+     * What to offer when a phrase was understood but matched nothing.
+     *
+     * "Affordable student accommodation in Gauteng" parses to province
+     * Gauteng plus the words "affordable" and "student", and every word has
+     * to match, so it returns 0 against a board holding 383 Gauteng rooms.
+     * The AND is right — an OR would return every Gauteng room and call it a
+     * match for "affordable" — but a dead end is the wrong thing to show when
+     * the location half of the question was understood perfectly well.
+     *
+     * So when the strict query is empty and the phrase named a place or a
+     * room type, the looser count comes back too and the UI can say what
+     * dropping the describing words would find. Only computed on an empty
+     * result, so an ordinary search still costs what it did.
+     *
+     * ⚠️ A COUNT, never substituted rows. Quietly widening the search and
+     * presenting the result as a match for what was typed is how a board
+     * teaches people its search is lying to them.
+     */
+    let broaden: { total: number; droppedTokens: string[] } | undefined;
+    if (total === 0 && parsed && tokenClauses.length > 0 && (effectiveCity || effectiveProvince || effectiveRoomType)) {
+      const { AND: _dropped, ...withoutTokens } = where;
+      broaden = {
+        total: await this.prisma.room.count({ where: withoutTokens }),
+        droppedTokens: parsed.tokens,
+      };
+    }
+
+    return {
+      data, total, page, limit,
+      hasMore: skip + data.length < total,
+      verifiedLandlords,
+      /**
+       * How the phrase was read, so the results page can say so. A person who
+       * typed "rooms to rent in Springs" and sees "Springs" as a removable
+       * chip can tell what the board did with their words; a page that just
+       * shows results leaves them guessing whether it understood.
+       */
+      ...(parsed && {
+        search: {
+          phrase: search,
+          city: effectiveCity ?? null,
+          province: effectiveProvince ?? null,
+          roomType: effectiveRoomType ?? null,
+          tokens: parsed.tokens,
+          ...(broaden && { broaden }),
+        },
+      }),
+    };
   }
 
   /**
@@ -973,6 +1052,39 @@ export class RoomsService {
         imagePaths: paths.slice(1),
       },
     });
+  }
+
+  /**
+   * The places that actually have live listings, for reading a phrase.
+   *
+   * Drawn from the board rather than a gazetteer, for the same reason
+   * suggestLocations() is: a static list of South African towns would let
+   * "rooms in Bloemfontein" be parsed as a city filter and return nothing,
+   * when treating "bloemfontein" as an ordinary word at least matches a
+   * description that mentions it.
+   *
+   * ⚠️ Cached for five minutes, in memory, per instance. The cost of that is
+   * exact and worth stating: a city whose FIRST listing was published less
+   * than five minutes ago is not yet recognised as a place, so a search
+   * naming it falls back to token matching — which still finds it through
+   * `city` in the token OR. It degrades to the old behaviour rather than to
+   * nothing, which is why a stale cache here is acceptable and a stale cache
+   * on, say, listing status would not be.
+   */
+  private placesCache: { at: number; places: KnownPlace[] } | null = null;
+
+  private async knownPlaces(): Promise<KnownPlace[]> {
+    const FIVE_MINUTES = 5 * 60 * 1000;
+    if (this.placesCache && Date.now() - this.placesCache.at < FIVE_MINUTES) {
+      return this.placesCache.places;
+    }
+    const rows = await this.prisma.room.groupBy({
+      by: ['city', 'province'],
+      where: { status: 'active' },
+    });
+    const places = rows.map((r) => ({ city: r.city, province: r.province }));
+    this.placesCache = { at: Date.now(), places };
+    return places;
   }
 
   /**

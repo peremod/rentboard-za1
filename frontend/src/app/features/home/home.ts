@@ -3,12 +3,13 @@ import {
   afterNextRender, inject, signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RoomsService } from '../../core/services/rooms.service';
 import { AlertsService } from '../../core/services/alerts.service';
 import { WHATSAPP_ENABLED } from '../../core/config/feature-flags';
 import { AuthService } from '../../core/services/auth.service';
-import { Room, SA_PROVINCES } from '../../core/models/room.model';
+import { Room, SA_PROVINCES, SearchMeta } from '../../core/models/room.model';
 import { RoomCard } from '../../shared/components/room-card/room-card';
 import { Icon } from '../../shared/components/icon/icon';
 import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
@@ -455,6 +456,42 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
             @if (loading() && rooms().length === 0) { Loading rooms… }
             @else { {{ 'found_rooms' | translate:{count: total()} }} }
           </h2>
+
+          <!-- ⚠️ How the phrase was read, under the count and above the rooms.
+               A board that silently turns "rooms to rent in Springs" into a
+               city filter is doing the right thing invisibly: somebody who
+               gets five results cannot tell whether it understood "Springs"
+               or matched five descriptions by luck. Each chip is a button
+               that removes that part, so the interpretation is both legible
+               and reversible. -->
+          @if (searchMeta(); as m) {
+            @if (m.city || m.province || m.roomType || m.tokens.length) {
+              <p class="search-read">
+                <span class="search-read__label">Searching for</span>
+                @if (m.city) {
+                  <button type="button" class="search-chip" (click)="dropCity()">
+                    {{ m.city }}<app-icon name="x" aria-hidden="true"/>
+                    <span class="sr-only">Remove the location {{ m.city }}</span>
+                  </button>
+                }
+                @if (m.province && !m.city) {
+                  <button type="button" class="search-chip" (click)="dropProvince()">
+                    {{ m.province }}<app-icon name="x" aria-hidden="true"/>
+                    <span class="sr-only">Remove the province {{ m.province }}</span>
+                  </button>
+                }
+                @if (m.roomType) {
+                  <button type="button" class="search-chip" (click)="dropRoomType()">
+                    {{ roomTypeLabel(m.roomType) }}<app-icon name="x" aria-hidden="true"/>
+                    <span class="sr-only">Remove the room type</span>
+                  </button>
+                }
+                @for (t of m.tokens; track t) {
+                  <span class="search-chip search-chip--word">{{ t }}</span>
+                }
+              </p>
+            }
+          }
         </div>
 
         @if (loading() && rooms().length === 0) {
@@ -482,6 +519,21 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                 Search without a date
               </button>
               <p class="muted">Your other filters stay as they are.</p>
+            } @else if (searchMeta()?.broaden; as b) {
+              <!-- The phrase WAS understood; it is the describing words that
+                   matched nothing. Offering the number rather than silently
+                   dropping them: a board that widens a search by itself and
+                   presents the result as a match is how people learn its
+                   search cannot be trusted. -->
+              <p>
+                Nothing matches
+                @for (t of b.droppedTokens; track t) { <strong>{{ t }}</strong> }
+                here.
+              </p>
+              <button type="button" class="btn btn-primary" (click)="dropWords()">
+                Show all {{ b.total }} {{ b.total === 1 ? 'room' : 'rooms' }} instead
+              </button>
+              <p class="muted">Your location and filters stay as they are.</p>
             } @else {
               <p>Try widening your search, or clear the filters to see everything available.</p>
             }
@@ -526,12 +578,16 @@ export class Home implements OnInit, OnDestroy {
   protected readonly whatsappEnabled = WHATSAPP_ENABLED;
 
   private roomsService = inject(RoomsService);
+  private router = inject(Router);
+  private route = inject(ActivatedRoute);
   private alerts = inject(AlertsService);
   auth = inject(AuthService);
   private destroyRef = inject(DestroyRef);
   private injector = inject(Injector);
 
   rooms = signal<Room[]>([]);
+  /** How the server read the typed phrase. Null when nothing was typed. */
+  searchMeta = signal<SearchMeta | null>(null);
   total = signal(0);
   loading = signal(true);
   loadingMore = signal(false);
@@ -686,7 +742,29 @@ export class Home implements OnInit, OnDestroy {
   private searchDebounce: ReturnType<typeof setTimeout> | undefined;
 
   ngOnInit() {
-    this.fetchRooms();
+    /**
+     * The URL is the search state, and the only thing that triggers a fetch.
+     *
+     * ⚠️ Before this, nothing in this component touched the router: it
+     * imported RouterLink and nothing else. So opening a room and pressing
+     * back lost the search and every filter, a search could not be shared or
+     * bookmarked, and the browser's own back and forward buttons did nothing
+     * on a page whose entire purpose is narrowing a list. The field comment
+     * beside moveIn already said these filters were treated the same way by
+     * "the drawer, the URL and the saved-search description" — two of those
+     * three were true.
+     *
+     * One subscription rather than a fetch here plus a fetch in every change
+     * handler: a handler that both navigates AND fetches runs two requests
+     * per keystroke and races them, and whichever returns last wins. Here the
+     * handlers only navigate, this reads the result, and back/forward arrive
+     * through exactly the same path as a click.
+     */
+    this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      this.hydrateFromUrl(params);
+      this.page = 1;
+      this.fetchRooms();
+    });
 
     // A landlord already knows they can list; lead with the tenant message
     // for everyone else, and for signed-out visitors.
@@ -1021,7 +1099,7 @@ export class Home implements OnInit, OnDestroy {
     this.searchSaved.set(false);
 
     clearTimeout(this.searchDebounce);
-    this.searchDebounce = setTimeout(() => { this.page = 1; this.fetchRooms(); }, 400);
+    this.searchDebounce = setTimeout(() => { this.page = 1; this.syncUrl(true); }, 400);
   }
 
   /** The urgent search: rooms free now or very soon. */
@@ -1044,11 +1122,121 @@ export class Home implements OnInit, OnDestroy {
     this.onFilterChange();
   }
 
+  /**
+   * Which filters travel in the URL, and under what name.
+   *
+   * ⚠️ Shared by the reader and the writer deliberately. Two lists would
+   * drift, and the way they drift is silent: a filter written under one name
+   * and read under another is simply dropped on the way back, so the board
+   * reloads narrower or wider than the URL says it is. One table, both
+   * directions.
+   *
+   * `q` rather than `search` because it is the shortest thing a person might
+   * type or share, and this URL is meant to be shareable.
+   */
+  private static readonly URL_FIELDS = [
+    ['q', 'searchTerm'], ['province', 'province'], ['type', 'roomType'],
+    ['maxRent', 'maxRentCents'], ['moveIn', 'moveIn'], ['moveInTo', 'moveInTo'],
+    ['sort', 'sortBy'], ['lister', 'listerType'],
+    ['profile', 'housemateProfile'], ['schedule', 'householdSchedule'],
+    ['tidiness', 'householdCleanliness'], ['social', 'householdSocial'],
+  ] as const;
+
+  private static readonly URL_FLAGS = [
+    ['now', 'availableNow'], ['bills', 'billsIncluded'], ['couples', 'couplesAllowed'],
+    ['dss', 'dssAccepted'], ['guarantor', 'guarantorAccepted'], ['pets', 'petsAllowed'],
+    ['flexible', 'flexibleDates'],
+  ] as const;
+
+  /** URL -> component state. Anything absent falls back to its empty value. */
+  private hydrateFromUrl(params: { get(key: string): string | null }) {
+    for (const [param, field] of Home.URL_FIELDS) {
+      (this as any)[field] = params.get(param) ?? '';
+    }
+    for (const [param, field] of Home.URL_FLAGS) {
+      (this as any)[field] = params.get(param) === '1';
+    }
+    // sortBy has a real default; '' would send an empty sort to the API.
+    if (!this.sortBy) this.sortBy = 'newest';
+  }
+
+  /**
+   * Component state -> URL. Navigating is what causes the fetch; see ngOnInit.
+   *
+   * `replace` is true while somebody is typing, so a seven-letter suburb does
+   * not leave seven entries in their history and make the back button feel
+   * broken. A deliberate act — picking a filter, choosing a suggestion —
+   * pushes an entry, because that is a step somebody may want to go back from.
+   */
+  private syncUrl(replace = false) {
+    const queryParams: Record<string, string | null> = {};
+    for (const [param, field] of Home.URL_FIELDS) {
+      const v = String((this as any)[field] ?? '').trim();
+      queryParams[param] = v && !(param === 'sort' && v === 'newest') ? v : null;
+    }
+    for (const [param, field] of Home.URL_FLAGS) {
+      queryParams[param] = (this as any)[field] ? '1' : null;
+    }
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams,
+      queryParamsHandling: 'merge',
+      replaceUrl: replace,
+    });
+  }
+
+  /**
+   * Removing one part of what the phrase was read as.
+   *
+   * ⚠️ Each of these edits the TYPED PHRASE, not a hidden filter beside it.
+   * The phrase is what the box shows and what the URL carries, so dropping a
+   * chip while leaving the words in the box would put the two out of step —
+   * the board would stop filtering by Springs while still saying "rooms to
+   * rent in Springs", which is the kind of disagreement nobody reports and
+   * everybody distrusts.
+   */
+  private dropFromPhrase(part: string | null | undefined) {
+    if (!part) return;
+    const pattern = new RegExp(`\\b${part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'ig');
+    this.searchTerm = this.searchTerm.replace(pattern, ' ').replace(/\s+/g, ' ').trim();
+    this.onFilterChange();
+  }
+
+  dropCity() { this.dropFromPhrase(this.searchMeta()?.city); }
+  dropProvince() { this.dropFromPhrase(this.searchMeta()?.province); }
+
+  /** The type word is whichever synonym was typed, so clear by room type. */
+  dropRoomType() {
+    const typed = this.searchTerm;
+    for (const w of ['en-suite', 'ensuite', 'en suite', 'studio', 'bachelor', 'shared', 'sharing', 'private', 'backroom']) {
+      const re = new RegExp(`\\b${w}\\b`, 'ig');
+      if (re.test(typed)) { this.searchTerm = this.searchTerm.replace(re, ' ').replace(/\s+/g, ' ').trim(); }
+    }
+    this.roomType = '';
+    this.onFilterChange();
+  }
+
+  /** Keep the place and the filters; drop only the describing words. */
+  dropWords() {
+    const m = this.searchMeta();
+    if (!m) return;
+    for (const t of m.broaden?.droppedTokens ?? []) this.dropFromPhrase(t);
+  }
+
+  roomTypeLabel(type: string) {
+    return ({
+      shared_house: 'Shared house',
+      en_suite: 'En-suite',
+      studio: 'Studio',
+      private: 'Private room',
+    } as Record<string, string>)[type] ?? type;
+  }
+
   onFilterChange() {
     // The saved confirmation belongs to the old filter set.
     this.searchSaved.set(false);
     this.page = 1;
-    this.fetchRooms();
+    this.syncUrl();
   }
 
   private fetchRooms(append = false) {
@@ -1082,6 +1270,7 @@ export class Home implements OnInit, OnDestroy {
     next: (res) => {
       this.rooms.update((prev) => (append ? [...prev, ...res.data] : res.data));
       this.total.set(res.total);
+      this.searchMeta.set(res.search ?? null);
       this.landlordCount.set(res.verifiedLandlords ?? 0);
       this.hasMore.set(res.hasMore);
       this.loading.set(false);

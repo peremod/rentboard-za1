@@ -363,6 +363,55 @@ if [[ -n "$ROOM_ID" ]]; then
   req GET "/api/rooms?province=Gauteng&maxRentCents=600000"
   check "filtered search" 200 "$STATUS" "$BODY"
 
+  # ── Keyword search reads a PHRASE, not a substring ──────────────────────
+  #
+  # Until 20 October `search` was one literal `contains` over title,
+  # description and locationDisplay, so every natural phrase returned nothing:
+  # "Accommodation in Johannesburg" found 0 against a board holding 100
+  # Johannesburg rooms. These assert the phrase is read as words and that a
+  # named place becomes the exact city filter.
+  #
+  # ⚠️ The nonsense phrase is the half that makes the rest mean something. A
+  # search that returned everything would pass every assertion above it and
+  # be worse than the bug being fixed.
+  req GET "/api/rooms?search=Accommodation%20in%20Johannesburg&limit=1"
+  check "phrase search returns 200" 200 "$STATUS" "$BODY"
+  PHRASE_CITY=$(echo "$BODY" | jq -r '.search.city // "null"')
+  PHRASE_TOTAL=$(echo "$BODY" | jq -r '.total // 0')
+  if [ "$PHRASE_CITY" = "Johannesburg" ]; then
+    pass "phrase search reads 'in Johannesburg' as the city filter"
+  else
+    fail "phrase search did not read a city from the phrase (got: $PHRASE_CITY)"
+  fi
+  grey "        'Accommodation in Johannesburg' matched $PHRASE_TOTAL room(s)"
+
+  req GET "/api/rooms?search=Shared%20accommodation%20near%20me&limit=1"
+  PHRASE_TYPE=$(echo "$BODY" | jq -r '.search.roomType // "null"')
+  if [ "$PHRASE_TYPE" = "shared_house" ]; then
+    pass "phrase search reads 'shared' as a room type and drops 'near me'"
+  else
+    fail "phrase search did not read a room type (got: $PHRASE_TYPE)"
+  fi
+
+  req GET "/api/rooms?search=Zzzzqqq%20nonexistent%20place&limit=1"
+  NONSENSE=$(echo "$BODY" | jq -r '.total // -1')
+  if [ "$NONSENSE" = "0" ]; then
+    pass "a nonsense phrase still matches nothing — the search can fail"
+  else
+    fail "a nonsense phrase returned $NONSENSE rooms; the search matches anything"
+  fi
+
+  # An explicit filter is a later, more deliberate act than the typed phrase,
+  # so it must win. Silently preferring the phrase makes a visible control do
+  # nothing.
+  req GET "/api/rooms?search=studio%20in%20Pretoria&city=Sandton&limit=1"
+  PRECEDENCE=$(echo "$BODY" | jq -r '.search.city // "null"')
+  if [ "$PRECEDENCE" = "Sandton" ]; then
+    pass "an explicit city filter overrides the city named in the phrase"
+  else
+    fail "the phrase overrode an explicit filter (effective city: $PRECEDENCE)"
+  fi
+
   req GET /api/rooms/my-rooms "" "$LTOKEN"
   check "landlord my-rooms" 200 "$STATUS" "$BODY"
 else

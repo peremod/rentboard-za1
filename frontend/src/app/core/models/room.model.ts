@@ -159,12 +159,36 @@ export interface RoomFilters {
   limit?: number;
 }
 
+/**
+ * How the server read the typed phrase.
+ *
+ * Returned so the results page can SAY what it did with the words rather than
+ * leaving somebody to infer it from the rooms. Somebody who types "rooms to
+ * rent in Springs" and sees a removable "Springs" chip knows the board
+ * understood the location; the same person looking at an unexplained list
+ * cannot tell whether it understood anything.
+ */
+export interface SearchMeta {
+  phrase: string;
+  city: string | null;
+  province: string | null;
+  roomType: string | null;
+  tokens: string[];
+  /**
+   * Present only when the phrase was understood and still matched nothing:
+   * how many rooms dropping the describing words would find. A COUNT, never
+   * rows — see the note in rooms.service.ts (backend).
+   */
+  broaden?: { total: number; droppedTokens: string[] };
+}
+
 export interface PaginatedRooms {
   data: Room[];
   total: number;
   page: number;
   limit: number;
   hasMore: boolean;
+  search?: SearchMeta;
   /**
    * Landlords who have passed an identity check AND have a room matching this
    * search. Counted on the server across the whole result set, not the page —
