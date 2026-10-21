@@ -179,14 +179,33 @@ jobs:
           # has a row about exactly that happening. So the loop waits for the
           # VERSION, not merely for an answer, and the existing failure
           # message below now means what it says.
+          #
+          # ⚠️ BOUNDED ON ELAPSED TIME, not on a count of attempts, and the
+          # difference is not pedantry. This was `for i in $(seq 1 32)` with a
+          # 15s sleep, described in the comment above as "eight minutes" — but
+          # each attempt ALSO carries a --max-time 25 fetch, so against a slow
+          # or sleeping service the real ceiling was up to ~21 minutes. That
+          # overruns this job's own timeout-minutes: 15, and a job killed by
+          # the platform prints no message at all: the operator gets "the job
+          # was cancelled" instead of the diagnostic this loop exists to
+          # produce. Measured on 21 October, run 116, which was still polling
+          # when the 15-minute ceiling reached it.
+          #
+          # A deadline means eight minutes is eight minutes however slow each
+          # probe is, and the failure below is always the one that prints.
+          DEADLINE=$(( $(date +%s) + 8 * 60 ))
           HEALTH=""
-          for i in $(seq 1 32); do
+          attempt=0
+          while :; do
+            attempt=$((attempt + 1))
             if HEALTH=$(fetch -f "$API/health" 2>/dev/null); then
               case "$HEALTH" in
                 *"\"version\":\"$EXPECTED\""*) break ;;
               esac
-              echo "   …serving $(echo "$HEALTH" | sed -n 's/.*\"version\":\"\([^\"]*\)\".*/\1/p'), waiting for $EXPECTED (attempt $i/32)"
+              LEFT=$(( DEADLINE - $(date +%s) ))
+              echo "   …serving $(echo "$HEALTH" | sed -n 's/.*\"version\":\"\([^\"]*\)\".*/\1/p'), waiting for $EXPECTED (attempt $attempt, ${LEFT}s left)"
             fi
+            [ "$(date +%s)" -ge "$DEADLINE" ] && break
             sleep 15
           done
 
