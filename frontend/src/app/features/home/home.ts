@@ -792,10 +792,21 @@ export class Home implements OnInit, OnDestroy {
      * handlers only navigate, this reads the result, and back/forward arrive
      * through exactly the same path as a click.
      */
-    // Independent of the result fetch: the shortcuts describe the whole
-    // board, not the current search, so they must not change as somebody
-    // narrows it — a category row that shrinks with the results is a second
-    // set of filters pretending to be navigation.
+    // ⚠️ DECIDED, not incidental — confirmed by the owner on 21 October 2026:
+    // the shortcuts stay NAVIGATION and describe the whole board, never the
+    // current search.
+    //
+    // So this call is independent of the result fetch and is made once. A
+    // category row that shrank as somebody narrowed their search would be a
+    // second set of filters wearing navigation's clothes, and the counts
+    // would stop meaning what they say.
+    //
+    // The known cost, accepted: on a narrowed board "Rooms in Pretoria 253"
+    // is still offered even when the active filters would return far fewer,
+    // because the shortcut is an invitation to start a different search
+    // rather than a prediction about this one. Passing the current filters
+    // into getCategories() is the one-line change that would reverse this —
+    // which is exactly why it is written down here.
     this.roomsService.getCategories().subscribe({
       next: (c) => this.categories.set(c.total > 0 ? c : null),
       error: () => this.categories.set(null),
