@@ -6177,6 +6177,119 @@ no cookie.
 ---
 
 
+## 86. The SEO budget that failed every run, the audit that never ran, and the drive nothing executed — 21 October 2026
+
+Three defects behind one red check, found by reading a CI log rather than by
+anything in this repository.
+
+### 86a. 🔴 `categories:seo` 0.66 on all four URLs, every run since the job was written
+
+The Lighthouse `budgets` job builds the **production** bundle, serves it on
+`localhost:4000` and audits it. A production bundle's site is
+`www.umastande.co.za`, so `isCanonicalHost()` in `frontend/src/server.ts`
+answered `localhost` the way it answers any hostname that is not this site —
+`Disallow: /`, no sitemap, which is exactly right for a Vercel preview and for
+`rentboard-za1.vercel.app`. Lighthouse then read that robots.txt and correctly
+reported every audited URL as blocked from indexing.
+
+    ✘  categories.seo failure for minScore assertion
+          expected: >=1          found: 0.66     all values: 0.66, 0.66, 0.66
+    ✘  is-crawlable failure for minScore assertion
+          Page is blocked from indexing
+          expected: >=0.9        found: 0        all values: 0, 0, 0
+
+Four URLs, three runs each, run 10 and every run before it. **Not a bug in the
+server** — the server was right about what it was serving. The job never said
+which of the two things it was auditing.
+
+Reproduced here before changing anything, by serving the bundle and reading the
+file: `User-agent: *` / `Disallow: /`, and a local Lighthouse run giving
+`seo 0.66`, `is-crawlable 0`, `best-practices 0.96` — the runner's numbers
+exactly. `SITE_CANONICAL_HOSTS` (documented in `docs/DEPLOYMENT.md`) lets the
+job state that localhost is the site for this run; measured after:
+**seo 1.00, is-crawlable 1, robots-txt 1**. Falsified by removing it again:
+back to `Disallow: /`.
+
+It widens nothing. The variable adds hostnames and never removes one, no
+deployment sets it, and the `X-Robots-Tag` header on private prefixes and the
+page's own `robots` meta tag are untouched — a copy still cannot be indexed
+whatever its robots.txt invites.
+
+### 86b. 🔴 The weekly production audit has never audited production
+
+`lhci collect --url=https://umastande.co.za/ …` runs from the repo root, and
+lhci auto-discovers `lighthouserc.json` from the working directory. That file
+budgets a **local** build, so collect read its `startServerCommand` and tried
+to boot a server the job never builds:
+
+    Error: Cannot find module '…/dist/mastande-frontend/server/server.mjs'
+    code: 'MODULE_NOT_FOUND'
+
+Eleven seconds in, nothing collected, every weekly run since the domain started
+answering. The thresholds and URLs now live in `lighthouserc.production.json`
+and every subcommand passes `--config` explicitly, so a local-build setting
+cannot leak into a remote audit. Also moved off the apex: `environment.prod.ts`
+documents it as a 301 to www, so the old URLs were measuring a redirect hop
+through a host that is not ours.
+
+⚠️ **No Core Web Vitals claim about production follows from any of this.**
+Nothing has measured the live site. The job can run now; it has not run yet.
+
+### 86c. ⚠️ A correction: "the Lighthouse gate could not fail" was wrong
+
+`PRE-LAUNCH-CHECKLIST.md` row 115 said that, and it was true of only one of the
+two jobs in that workflow. The weekly `production` job did end with
+`lhci assert … || true` and discarded every score. The `budgets` job asserted
+strictly, ran on every frontend PR, **and was failing** — for weeks, visibly,
+on the numbers in 86a. "The gate cannot fail" and "the gate fails every run and
+nobody reads it" are opposite defects, and I reported the first while looking at
+the second. Row 115 is corrected rather than quietly edited.
+
+### 86d. ⚠️ `scripts/seo-drive.mjs` had never been run by anything
+
+Written ten days earlier, reported 38/38, and wired into no job — so the
+checklist row claiming its coverage was claiming a drive no gate executed. It
+was also verified only against a **development** build, which is the one build
+where two of its own defects are invisible:
+
+- the Organization logo check did `org.logo.url.replace(BASE, '')`, which
+  matches only when `siteUrl` is localhost. On a production bundle the fetch
+  became `http://localhost:4000https://www.umastande.co.za/icon-512.png` and
+  the whole drive **crashed** on an invalid URL.
+- the room section took a room id from `localhost:3000` and then asked the
+  server under test to render it. On a production bundle those are two
+  different databases, so there was no room, no markup — and five negatives
+  ("no rating is attached", "the street address is not published") scored full
+  marks against an **empty object**. Markup absent read as markup correct.
+
+Now: the id comes from the board the server under test actually renders, so the
+two halves share one scope on any build; "this board serves no rooms" is a
+stated skip; `the room page carries listing markup at all` is asserted before
+any negative is; and the logo is fetched by path. A new section reads
+`robots.txt` itself — the file at the centre of 86a, which this drive had never
+once fetched — and asserts its DIRECTION, derived from what the page says about
+itself rather than hardcoded, so both branches are covered.
+
+Both builds run it in CI now: 44/44 on development, 40/40 on production (room
+section skipped, as stated). Falsified by serving the bundle without
+`SITE_CANONICAL_HOSTS` while telling the drive it was there: **8 failures**,
+the direction check among them.
+
+### What is still open
+
+- The weekly production audit needs to run once and be read. Until then
+  `lighthouserc.production.json` holds four unmeasured floors.
+- `best-practices` is 0.96 and not 1.0 on the local run, from one audit
+  (`errors-in-console`) caused by the bundle's cross-origin fetches to the real
+  API. The budget names it rather than loosening the production API's CORS
+  policy for a cosmetic 0.04.
+- `/rooms/:id` is still not in the audited URL list. It is the page the whole
+  listing business depends on being indexed, and auditing it needs a bundle
+  whose API is reachable from the runner.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash

@@ -50,6 +50,17 @@ jobs:
           # prerendered and would be served without it, but /rooms/:id would
           # not, and that is exactly the page to add to this list next.
           NG_ALLOWED_HOSTS: localhost
+          # And it must be told that localhost IS the site for this run, not a
+          # copy of it. Without this the server does the right thing for a
+          # copy — robots.txt answers `Disallow: /` — and Lighthouse then
+          # scores all four URLs blocked from indexing: is-crawlable 0,
+          # categories:seo 0.66 against a budget of 1.0. That is what this job
+          # reported on every run from the day it was written until 21 October,
+          # including run 10. Reproduced locally by serving the bundle and
+          # reading robots.txt, and the fix measured the same way: seo 0.66 →
+          # 1.00, is-crawlable 0 → 1. It widens nothing — the X-Robots-Tag
+          # header and the meta tag still keep a copy out of any index.
+          SITE_CANONICAL_HOSTS: localhost
 
   production:
     name: Weekly production audit
@@ -68,59 +79,43 @@ jobs:
       - name: Is the site live yet?
         id: live
         run: |
-          if curl -sfI --connect-timeout 10 --max-time 20 https://umastande.co.za/ >/dev/null 2>&1; then
+          if curl -sfI --connect-timeout 10 --max-time 20 https://www.umastande.co.za/ >/dev/null 2>&1; then
             echo "live=true" >> "$GITHUB_OUTPUT"
           else
             echo "live=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::https://umastande.co.za does not answer yet — skipping the production audit. This is expected until the domain is registered and pointed at Vercel."
+            echo "::notice::https://www.umastande.co.za does not answer yet — skipping the production audit. This is expected until the domain is registered and pointed at Vercel."
           fi
 
       - name: Audit production
         if: steps.live.outputs.live == 'true'
+        # ⚠️ --config on EVERY subcommand, and not optional. lhci discovers
+        # lighthouserc.json from the working directory, which is the repo root
+        # here — so `lhci collect --url=…` read that file's startServerCommand
+        # and tried to boot a server out of a dist/ this job never builds. Run
+        # 10 died on `Cannot find module …/dist/mastande-frontend/server/
+        # server.mjs`, MODULE_NOT_FOUND, 11 seconds in, having collected
+        # nothing. Every weekly run since the domain started answering has
+        # ended there.
+        #
+        # URLs and thresholds live in lighthouserc.production.json. They used
+        # to be written here as inline flags while lighthouserc.json carried
+        # different numbers for the same four metrics — two sources of truth
+        # for one budget.
+        #
+        # ⚠️ `|| true` used to end the preset line below AND it was the only
+        # assert in this job, which made the whole audit a collection exercise:
+        # three runs of Lighthouse, every score discarded, a green tick
+        # whatever happened. The preset stays non-blocking on purpose — it
+        # asserts dozens of audits and a brand-new failure in any one of them
+        # would block a release for something nobody chose to care about, so it
+        # is printed for a human to read. The blocking assert is the one after
+        # it, which has no `|| true`.
         run: |
           npm install -g @lhci/cli@0.14.x
-          lhci collect \
-            --url=https://umastande.co.za/ \
-            --url=https://umastande.co.za/pricing \
-            --url=https://umastande.co.za/how-it-works \
-            --numberOfRuns=3
-          # ⚠️ `|| true` used to end this line, which made the whole audit a
-          # collection exercise: three runs of Lighthouse, every score
-          # discarded, and a green tick whatever happened. Performance and SEO
-          # could regress for months without a single red build — a check that
-          # cannot fail, in the workflow whose job is to catch regressions.
-          #
-          # The recommended preset stays NON-blocking, because it asserts
-          # dozens of audits and a brand-new failure in any one of them would
-          # block a release for something nobody chose to care about. It is
-          # printed for a human to read.
-          lhci assert --preset=lighthouse:recommended || true
-
-          # These do block, and they are deliberately few. Each is a number
-          # this product has a real stake in, on the slow Android phone it is
-          # built for, and each is set at the level the site should not fall
-          # BELOW rather than at an aspiration:
-          #
-          #   · SEO 0.9      — metadata, crawlability, tap targets. A drop here
-          #                    is almost always an accident.
-          #   · LCP 4000ms   — the board's hero and first room card. Google's
-          #                    "poor" threshold is 4s; this fails only when a
-          #                    real person would call the page slow.
-          #   · CLS 0.1      — the "good" bound. Layout shift on a listing
-          #                    card is how somebody taps the wrong room.
-          #   · TBT 600ms    — a proxy for INP, which Lighthouse cannot
-          #                    measure in a lab run (it needs real
-          #                    interactions). Named as a proxy rather than
-          #                    reported as INP, because they are not the same
-          #                    metric and saying otherwise would be a claim
-          #                    this workflow cannot support.
-          lhci assert \
-            --assertions.categories:seo="error,minScore=0.9" \
-            --assertions.largest-contentful-paint="error,maxNumericValue=4000" \
-            --assertions.cumulative-layout-shift="error,maxNumericValue=0.1" \
-            --assertions.total-blocking-time="error,maxNumericValue=600"
-
-          lhci upload --target=temporary-public-storage
+          lhci collect --config=lighthouserc.production.json
+          lhci assert --config=lighthouserc.production.json --preset=lighthouse:recommended || true
+          lhci assert --config=lighthouserc.production.json
+          lhci upload --config=lighthouserc.production.json
 
       - name: Verify sitemap URLs all resolve
         if: steps.live.outputs.live == 'true'
@@ -128,7 +123,7 @@ jobs:
         # ourselves. Cheap to check, invisible if we do not.
         run: |
           set -o pipefail
-          BAD=$(curl -sf https://umastande.co.za/sitemap.xml \
+          BAD=$(curl -sf https://www.umastande.co.za/sitemap.xml \
             | grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g' \
             | xargs -P 8 -I {} sh -c 'code=$(curl -s -o /dev/null -w "%{http_code}" "{}"); [ "$code" = "200" ] || echo "$code {}"')
           if [ -n "$BAD" ]; then

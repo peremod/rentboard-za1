@@ -432,8 +432,24 @@ served before the engine sees them. A site that is half 400 and half fine is
 worse than one that is plainly broken. `NG_ALLOWED_HOSTS` still adds hosts by
 hand for anything the platform does not name, such as a custom staging domain.
 
-**`GOOGLE_SITE_VERIFICATION`** — optional, and the only other variable the
-frontend server reads. Set it to the exact filename Google Search Console
+**`SITE_CANONICAL_HOSTS`** — optional, comma-separated hostnames, and **not for
+a deployment**. It tells the server that a hostname outside its environment file
+is this site rather than a copy of it. Leave it unset everywhere: production and
+staging already know their own domains, and a preview deployment is a copy and
+should keep answering `Disallow: /`.
+
+It exists for one caller. The Lighthouse `budgets` job serves the **production**
+bundle on `localhost:4000` and audits it; `localhost` is not
+`www.umastande.co.za`, so `isCanonicalHost()` correctly treated it as a copy,
+robots.txt said `Disallow: /`, and Lighthouse scored all four audited URLs
+blocked from indexing — `is-crawlable` 0 and `categories:seo` 0.66 against a
+budget of 1.0, on every run from the day that job was written until 21 October
+2026. Setting it is how a local audit asks the same question the live site
+answers. It adds hostnames and never removes one, and it changes nothing else:
+the `X-Robots-Tag` header and the page's own `robots` meta tag still keep a copy
+out of an index whatever its robots.txt invites.
+
+**`GOOGLE_SITE_VERIFICATION`** — optional. Set it to the exact filename Google Search Console
 offers for HTML-file verification (`google<hash>.html`); `server.ts` then
 serves that path with the body Google expects, derived from the name. No
 rebuild, no committed file. Used instead of the DNS TXT method because zone

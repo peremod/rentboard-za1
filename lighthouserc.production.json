@@ -1,0 +1,45 @@
+{
+  "//": "The WEEKLY audit of the live site — .github/workflows/lighthouse.yml, job `production`. Separate from lighthouserc.json on purpose: that file budgets a locally-served production BUILD and asserts what the code should achieve in a lab; this one asserts what the deployed SITE must not fall below on a real network. The numbers used to be written twice — strictly in lighthouserc.json and loosely inline in the workflow — which is two sources of truth for one metric and the shape of defect this repository keeps shipping. The workflow now carries no thresholds and no URLs; they are all here.",
+  "//module-not-found": "This file also exists because lhci auto-discovers lighthouserc.json from the working directory. The production job ran `lhci collect --url=...` from the repo root, so it picked up that file's `startServerCommand` and tried to boot a server from a dist/ directory that this job never builds: `Cannot find module .../dist/mastande-frontend/server/server.mjs`, MODULE_NOT_FOUND, run 10 on 19 October. Every weekly run since the domain started answering died there, before collecting anything. The job passes --config explicitly now, so the local-build settings cannot leak into a remote audit.",
+  "ci": {
+    "collect": {
+      "//": "www, not the apex. environment.prod.ts documents the apex as a 301 to www; auditing the apex measures the redirect hop and the LCP of whatever the old host serves while it is still in the chain.",
+      "url": [
+        "https://www.umastande.co.za/",
+        "https://www.umastande.co.za/pricing",
+        "https://www.umastande.co.za/how-it-works"
+      ],
+      "numberOfRuns": 3,
+      "settings": {
+        "//": "Same device as the budgets run, so a weekly number can be compared against a PR number. Desktop scores flatter and would hide exactly the regressions that matter to a South African audience on a phone.",
+        "formFactor": "mobile",
+        "throttlingMethod": "simulate",
+        "screenEmulation": {
+          "mobile": true,
+          "width": 412,
+          "height": 823,
+          "deviceScaleFactor": 1.75
+        }
+      }
+    },
+    "assert": {
+      "//": [
+        "Deliberately few. Each is a number this product has a real stake in, on the slow Android phone it is built for, and each is set at the level the site should not fall BELOW rather than at an aspiration — a weekly audit that fails on an aspiration gets muted.",
+        "categories:seo 0.9 — metadata, crawlability, tap targets. A drop here is almost always an accident.",
+        "largest-contentful-paint 4000ms — the board's hero and first room card. Google's 'poor' threshold is 4s; this fails only when a real person would call the page slow.",
+        "cumulative-layout-shift 0.1 — the 'good' bound. Layout shift on a listing card is how somebody taps the wrong room.",
+        "total-blocking-time 600ms — a PROXY for INP, which Lighthouse cannot measure in a lab run because it needs real interactions. Named as a proxy rather than reported as INP: they are not the same metric, and saying otherwise would be a claim this workflow cannot support.",
+        "NOTHING HERE HAS BEEN MEASURED AGAINST THE LIVE SITE. As of 21 October 2026 this job has never completed an audit: the MODULE_NOT_FOUND above killed it before collection. No Core Web Vitals claim about production follows from this file until a run of it exists and is read."
+      ],
+      "assertions": {
+        "categories:seo": ["error", { "minScore": 0.9 }],
+        "largest-contentful-paint": ["error", { "maxNumericValue": 4000 }],
+        "cumulative-layout-shift": ["error", { "maxNumericValue": 0.1 }],
+        "total-blocking-time": ["error", { "maxNumericValue": 600 }]
+      }
+    },
+    "upload": {
+      "target": "temporary-public-storage"
+    }
+  }
+}

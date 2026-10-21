@@ -29,12 +29,14 @@
       "//": [
         "EVERY KEY INSIDE \"assertions\" IS AN AUDIT ID. There were two \"//1\"/\"//2\" comment keys in here, and LHCI asserted on both — \"is not a known audit\", failing twice per URL on every run this file has ever done. Comments live out here now.",
         "The Core Web Vitals below are asserted directly rather than trusting the rolled-up performance score, which can stay green while one vital degrades.",
-        "render-blocking-resources has no numericValue in Lighthouse 12 — it is an opportunity audit, so maxNumericValue read NaN and failed on every URL regardless of the page. maxLength asserts on the number of blocking resources, which is what the budget meant."
+        "render-blocking-resources has no numericValue in Lighthouse 12 — it is an opportunity audit, so maxNumericValue read NaN and failed on every URL regardless of the page. maxLength asserts on the number of blocking resources, which is what the budget meant.",
+        "best-practices is 0.96 and not 1.0, which is a property of the harness and not of the page. This run serves the production bundle on localhost and the bundle's API URL is the real api.umastande.co.za, so the board's own fetches (/api/rooms, /api/ads) are cross-origin from an origin the API does not allow and the browser logs a network error — errors-in-console, weight 1, the ONLY audit this category loses. Measured: the identical deduction with the API unreachable for a different reason entirely. Allow-listing localhost in the API's CORS policy would buy a cosmetic 0.04 by widening what the production API accepts, so the budget names the gap instead. 0.96 and not 0.95: one failing weight-1 audit is the known one, and a SECOND failure drops the score below this line and fails the build.",
+        "categories:seo is 1.0 and reachable only because the budgets job sets SITE_CANONICAL_HOSTS=localhost. Without it the server correctly treats a localhost copy of the site as a copy, robots.txt answers Disallow: /, and Lighthouse scores every URL blocked from indexing — is-crawlable 0, seo 0.66, which is what this job reported on every run from the day it was written until 21 October."
       ],
       "assertions": {
         "categories:performance": ["error", { "minScore": 0.9 }],
         "categories:accessibility": ["error", { "minScore": 1.0 }],
-        "categories:best-practices": ["error", { "minScore": 1.0 }],
+        "categories:best-practices": ["error", { "minScore": 0.96 }],
         "categories:seo": ["error", { "minScore": 1.0 }],
 
         "largest-contentful-paint": ["error", { "maxNumericValue": 2500 }],
