@@ -199,6 +199,28 @@ jobs:
             curl -sI "$u" | grep -iE '^(HTTP|cache-control|age|x-vercel|x-matched-path|content-length|server|x-robots-tag)' | sed 's/^/    /'
           done
 
+          # 4. WHICH BUILD. Run 17 showed `/` and `/pricing` both answering
+          #    with `cache-control: public, max-age=0, must-revalidate` and
+          #    `x-vercel-cache: HIT` — Vercel's STATIC default, not the
+          #    `s-maxage=60, stale-while-revalidate=600` that server.ts stamps
+          #    on a board it rendered. So no function answered either page, and
+          #    the 7,618-byte body is not this build's index.csr.html (5,835
+          #    bytes) either. Both point at a deployment that is not this
+          #    repository's current output, so: name what is actually deployed.
+          #
+          #    The icon links went into index.html on 21 October and reached
+          #    master in that day's merge. Their absence dates the deployment.
+          echo "── which build is deployed"
+          for marker in icon-48 apple-touch-icon ld-site 'rel="canonical"' mastande-status trust-strip; do
+            echo "  $marker: $(printf '%s' "$BODY" | grep -c "$marker" || true)"
+          done
+          echo "  scripts:"
+          printf '%s' "$BODY" | grep -o 'src="[^"]*\.js"' | sed 's/^/    /' | head -8
+          echo "  does index.csr.html exist as a static file?"
+          curl -sI https://www.umastande.co.za/index.csr.html | grep -iE '^(HTTP|content-length|cache-control)' | sed 's/^/    /'
+          echo "  what answers a path no route and no file matches?"
+          curl -sI https://www.umastande.co.za/zzz-no-such-path-xyz | grep -iE '^(HTTP|content-length|cache-control|x-vercel)' | sed 's/^/    /'
+
       - name: Verify sitemap URLs all resolve
         # ⚠️ `!cancelled()`, because a step's default condition is success() and
         # this one spent run 13 SKIPPED — the audit above failed on the board's
