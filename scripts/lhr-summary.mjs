@@ -76,9 +76,31 @@ for (const [url, runs] of byUrl) {
   }
 
   // The point of the whole script.
-  const shifts = median.audits?.['layout-shifts']?.details?.items ?? [];
+  //
+  // ⚠️ Two audit ids, because Lighthouse moved this. `layout-shifts` is the
+  // legacy table; `cls-culprits-insight` is the insight audit that replaced it.
+  // Run 12 printed "no items reported" from the first one alone while the same
+  // run measured CLS 0.916 — a diagnostic that could not see its subject, which
+  // is the defect this script exists to avoid. So: both ids, and when a page is
+  // over the 0.1 bound with neither producing items, every audit whose id looks
+  // related is listed with what it DID produce, rather than printing silence
+  // and leaving the next reader to guess.
+  const shifts = median.audits?.['layout-shifts']?.details?.items
+    ?? median.audits?.['cls-culprits-insight']?.details?.items
+    ?? [];
   if (!shifts.length) {
-    console.log('   layout-shifts: no items reported');
+    console.log('   layout-shifts / cls-culprits-insight: no items reported');
+    if (num(median, 'cumulative-layout-shift') > 0.1) {
+      console.log('   ⚠️  over the bound with no culprits — what the run did produce:');
+      for (const [id, a] of Object.entries(median.audits ?? {})) {
+        if (!/shift|layout|cls/i.test(id)) continue;
+        const d = a.details;
+        console.log(
+          `     · ${id}: score ${a.score} mode ${a.scoreDisplayMode ?? '?'}` +
+          ` details ${d ? `${d.type}/${(d.items ?? []).length} item(s)` : 'none'}`,
+        );
+      }
+    }
   } else {
     console.log('   what shifted:');
     for (const item of shifts.slice(0, 5)) {
