@@ -6414,17 +6414,67 @@ is not being rendered at all in production. Consequences beyond the shift:
   a render that is not happening.
 - The sitemap advertises `/` as the primary URL of the site.
 
-Not yet established: WHY the function does not answer. The Build Output API
-assembly in `tools/vercel-build.mjs` sends every non-file path to `/ssr`, and
-`handle: filesystem` should not match `/` because the static copy holds
-`index.csr.html` rather than `index.html`. The next run prints the response
-headers for `/` against `/pricing` as a control — `Cache-Control`, `age`,
-`x-vercel-*` and `x-matched-path` say whether a function or a file answered.
+### 87g. 🔴 The cause: the CSR shell is in the static output, so `/` never reaches the function
+
+Runs 17 and 18, against the live site:
+
+    /                  200  cache-control: public, max-age=0, must-revalidate
+                            x-vercel-cache: HIT   content-length: 7618
+    /index.csr.html    200  content-length: 7618      ← the same document, by name
+    /pricing           200  content-length: 33190     cache-control: identical
+    /zzz-no-such-path  404  content-length: 27027     x-vercel-cache: MISS
+    icon-48: 1   apple-touch-icon: 1   ld-site: 0   canonical: 0   trust-strip: 0
+    scripts: main-NQO6TBEY.js
+
+Three things fall out of that. `public, max-age=0, must-revalidate` is Vercel's
+**static** default, not the `s-maxage=60, stale-while-revalidate=600` that
+`server.ts` stamps on a board it rendered. `/` returns exactly the same bytes as
+`/index.csr.html`. And an unmatched path answers **404 with a 27 KB
+server-rendered body**, so the function is healthy and rendering — it simply
+never gets `/`.
+
+`handle: filesystem` in `tools/vercel-build.mjs` serves anything in `static/`,
+and the static copy contains `index.csr.html`. That takes `/` before
+`dest: /ssr` sees it. The comment above that copy said the HTML there "is not
+served from disk — the function answers every page — but leaving it costs
+nothing". It cost the home page, and it said so in this file for as long as the
+bug was in production.
+
+**Fixed** by removing the shell from `static/` while keeping it inside the
+function, where the Angular engine reads it as the template for every page it
+renders — remove the wrong copy and there are no pages at all, so the build now
+asserts both directions and refuses rather than assembling a broken output.
+Falsified by reintroducing the defect in the code (not by planting a file in the
+output, which the script wipes first — the first falsification attempt proved
+nothing and said "NO FAILURE"):
+
+    ✘ static/index.csr.html exists. `handle: filesystem` will serve it for `/`…
+    exit=1
+
+⚠️ **Not yet deployed.** The fix reaches production when master is deployed, and
+the prediction to check against then is specific: `/` answers with
+`s-maxage=60, stale-while-revalidate=600`, its body carries room links, the
+trust strip, a canonical and `ld-site`, and the board's CLS falls from 0.95.
+
+### 87h. ⚠️ A correction: "the deployment is not this build's output" was wrong
+
+§87f said production's 7,618-byte shell could not be this repository's current
+build, because the local `index.csr.html` was 5,835 bytes and referenced
+`main.js`. That was **my own measurement on the wrong build** — the last thing
+built in this container was `ng build --configuration development`, for the SEO
+drive, and a development build does not hash its filenames.
+
+Rebuilt with `npm run build:prod`: **7,618 bytes, `src="main-NQO6TBEY.js"`** —
+identical to what production serves, down to the byte and the hash. Production
+is running exactly this build. Everything else in §87f stands; that one
+inference does not, and it is the same defect this section is about, committed
+by me three findings after writing it up about somebody else's check.
 
 ### What is open
 
-- 🔴 **Why production does not server-render the board** (87f). This is the
-  defect; the CLS is a symptom of it.
+- ⚠️ **The board's render is fixed in the repository and not yet in production**
+  (87g). It takes effect on the next deployment of master, and the prediction to
+  verify is in that section.
 - 🔴 **The board's CLS, explained but not fixed.** 0.916 is a real defect on the
   busiest public page. It cannot be diagnosed from this container —
   `www.umastande.co.za` and `api.umastande.co.za` are both `connect_rejected`

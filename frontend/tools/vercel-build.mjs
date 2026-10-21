@@ -56,10 +56,47 @@ for (const [label, path] of [['browser bundle', browser], ['server bundle', serv
 await rm(out, { recursive: true, force: true });
 await mkdir(fn, { recursive: true });
 
-// Static: the browser bundle, for the hashed assets. The HTML in here is not
-// served from disk — the function answers every page — but leaving it costs
-// nothing and keeps the directory a faithful copy of the build.
+// Static: the browser bundle, for the hashed assets.
 await cp(browser, join(out, 'static'), { recursive: true });
+
+/**
+ * 🔴 And then the CSR shell comes straight back out of it.
+ *
+ * This step used to end with "The HTML in here is not served from disk — the
+ * function answers every page — but leaving it costs nothing and keeps the
+ * directory a faithful copy of the build." It cost the home page.
+ *
+ * `index.csr.html` is Angular's client-side shell: a 7.6 KB document with no
+ * board, no hero, no trust strip, no canonical and none of the site JSON-LD.
+ * `handle: filesystem` in the routes below resolves `/` against it, so the
+ * request never reaches `dest: /ssr` and the board — `RenderMode.Server`
+ * precisely so a room let last week stops being advertised — has never been
+ * server-rendered in production.
+ *
+ * Measured against the live site rather than reasoned about:
+ *
+ *   /                  200, 7,618 bytes, 0 room links, 0 skeletons,
+ *                      0 trust-strip, 0 canonical, 0 ld-site
+ *   /index.csr.html    200, 7,618 bytes — the same document, by name
+ *   cache-control      public, max-age=0, must-revalidate  (Vercel's static
+ *                      default, NOT the s-maxage=60 server.ts stamps on a
+ *                      board it rendered)
+ *   an unmatched path  404, 27,027 bytes, x-vercel-cache: MISS — the function
+ *                      is healthy and rendering; it simply never gets `/`
+ *
+ * The cost was not only the markup. Every pixel of that page is painted by
+ * JavaScript after load, which is where the board's CLS of 0.95 on a phone and
+ * 0.72 on a desktop comes from: the footer moves nearly a full viewport, and
+ * the cookie notice ends up being the Largest Contentful Paint element.
+ *
+ * So the shell is removed from the static output. It stays inside the
+ * function's own browser copy, where the Angular engine reads it as the
+ * template for the pages it renders — removing it there would break every
+ * render. Prerendered HTML stays in static on purpose: those pages are
+ * identical whichever side serves them, and serving them from the edge keeps
+ * them off the function.
+ */
+await rm(join(out, 'static', 'index.csr.html'), { force: true });
 
 // The function gets both halves, in the same relative layout the build uses,
 // because server.ts resolves the browser folder as `../browser` from its own
@@ -147,6 +184,45 @@ await writeFile(
   ) + '\n',
 );
 
+/**
+ * And then prove it, because the comment that said the shell was harmless was
+ * in this file for as long as the bug was in production.
+ *
+ * `handle: filesystem` serves anything in `static/`, so a shell there takes
+ * `/` before `dest: /ssr` ever sees it, and the symptom is a page that loads
+ * and looks right in a browser — the client fills it in — while every crawler
+ * and every first paint gets nothing. Nothing in this repository could see
+ * that: the drives read a server that always renders, because locally
+ * `server.ts` IS the server.
+ *
+ * Both directions are asserted. A shell in `static/` is the bug; a shell
+ * missing from the function is worse, because the Angular engine reads it as
+ * the template for every page it renders, so removing the wrong copy would
+ * replace an unrendered home page with no pages at all.
+ */
+const shellInStatic = await exists(join(out, 'static', 'index.csr.html'));
+const shellInFunction = await exists(join(fn, 'browser', 'index.csr.html'));
+
+if (shellInStatic) {
+  console.error(
+    '✘ static/index.csr.html exists. `handle: filesystem` will serve it for `/`,\n' +
+    '  the board will never reach the SSR function, and production will answer\n' +
+    '  the home page with an empty client shell — no rooms, no hero, no\n' +
+    '  canonical, no JSON-LD. That was live until 21 October 2026.',
+  );
+  process.exit(1);
+}
+if (!shellInFunction) {
+  console.error(
+    '✘ functions/ssr.func/browser/index.csr.html is missing. The Angular engine\n' +
+    '  reads it as the template for every page it renders, so this would break\n' +
+    '  every route rather than just the board.',
+  );
+  process.exit(1);
+}
+
 console.log(`✅ .vercel/output assembled`);
 console.log(`   static/           ${browser.replace(frontend + '/', '')}`);
 console.log(`   functions/ssr.func  server.mjs + browser/, entry index.mjs`);
+console.log(`   ✅ no CSR shell in static/ — '/' reaches the SSR function`);
+console.log(`   ✅ the shell IS in the function, where the engine needs it`);
