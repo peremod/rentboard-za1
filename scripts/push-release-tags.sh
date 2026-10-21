@@ -1999,6 +1999,41 @@ Also open, not fixed: 79b, PropertyDto.province accepts any string while the
 room and filter DTOs accept only the nine real provinces, so a yard can be
 created somewhere the board can never find it."
 
+tag_if_missing "v1.162.0" "11e1f4fb35cb12a625c821986eb96aa40fd82885" "2026-10-21T06:51:50+00:00" "v1.162.0 - the integration harness, and the first defect it found
+
+The real Nest app, the real guards, an isolated migrated database and test
+doubles at the four places this system talks to the outside. Authorisation
+here is GUARDS, which only run inside Nest's request pipeline, so a test that
+calls a service method directly proves nothing about who may call it — every
+request goes over HTTP.
+
+⚠️ Missing from this script until 21 October. It was released, deployed and
+superseded without ever being tagged, which is why checklist row 1 counted two
+absent tags rather than one."
+
+tag_if_missing "v1.164.0" "9f5dc0648982632959546829e5772593eaccd024" "2026-10-21T16:27:54+00:00" "v1.164.0 - the release that unblocked production after a day on 1.162.0
+
+🔴 Both lockfiles had been regenerated with --legacy-peer-deps, which omits
+the peer tree: they shipped without react, react-dom and scheduler — peers of
+@react-email/render, a production dependency of the backend — and the root
+without typescript. npm ci refuses an out-of-sync lockfile, so Render's image
+build died at Dockerfile:37 and a failed build leaves the previous image
+serving. That is the same failure the Dockerfile's own comment records from
+v1.62.0, where a bad postinstall kept v1.61.0 live through five releases.
+
+CI had been saying so for four runs. The gate worked; nobody read it.
+
+Also in this release: 79a, a room could be let and advertised at the same
+time; 79b, a yard could be created in a province the board's filter cannot
+search; a 500 on GET /api/rooms when page and limit were both enormous, from
+an OFFSET of about 1e21 on the busiest unauthenticated route in the product;
+six accessibility defects, every one invisible locally for a data reason; the
+browse shortcuts removed at the owner's request; and the test suites that
+found most of it — 91 unit, 207 integration.
+
+Verified in production rather than assumed: the deploy verifier read
+{\"version\":\"1.164.0\",\"env\":\"production\"} with uptime 82."
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
