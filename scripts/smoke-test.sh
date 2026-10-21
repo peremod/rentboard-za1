@@ -363,6 +363,38 @@ if [[ -n "$ROOM_ID" ]]; then
   req GET "/api/rooms?province=Gauteng&maxRentCents=600000"
   check "filtered search" 200 "$STATUS" "$BODY"
 
+  # ── Pagination is BOUNDED, and the board answers 400 rather than 500 ─────
+  #
+  # 🔴 Found by the API contract sweep on 21 October:
+  # GET /api/rooms?page=999999999999&limit=999999999 returned a 500 to an
+  # anonymous caller on the busiest route in the product. The service computes
+  # skip = (page - 1) * limit, about 1e21 for those numbers, far past what
+  # Postgres takes for an OFFSET, so Prisma threw.
+  #
+  # ⚠️ EITHER PARAMETER ALONE WAS FINE, which is why nothing had ever hit it —
+  # a large page with the default limit returns an empty list and a large limit
+  # on page 1 returns the board. It takes both, so both are checked.
+  #
+  # The limit had no maximum at all either: one anonymous request could ask for
+  # every active row. @Max(100) and @Max(100_000) bound the pair, which also
+  # bounds the product so skip cannot exceed 1e7.
+  req GET "/api/rooms?page=999999999999&limit=999999999"
+  check "enormous page and limit refused, not a 500" 400 "$STATUS" "$BODY"
+
+  req GET "/api/rooms?limit=101"
+  check "limit past the ceiling refused" 400 "$STATUS" "$BODY"
+
+  req GET "/api/rooms?page=100001"
+  check "page past the ceiling refused" 400 "$STATUS" "$BODY"
+
+  # ⚠️ And the other side of the boundary. Without these the three above would
+  # pass just as well against a board that refused everything.
+  req GET "/api/rooms?limit=100"
+  check "the ceiling itself is allowed" 200 "$STATUS" "$BODY"
+
+  req GET "/api/rooms?page=1&limit=12"
+  check "ordinary pagination unaffected" 200 "$STATUS" "$BODY"
+
   # ── Keyword search reads a PHRASE, not a substring ──────────────────────
   #
   # Until 20 October `search` was one literal `contains` over title,
