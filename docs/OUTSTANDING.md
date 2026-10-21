@@ -17,10 +17,19 @@ a number written here.
 
 ## 1. Push the release tags
 
-Nineteen tags exist only in a container that no longer exists. Every tagged
-commit IS on the remote — only the tag objects are missing. Pushing
-`refs/tags/*` is refused (HTTP 403) from the coding session, so this runs from
-your own clone.
+⚠️ **This section said "nineteen tags" and `Created 19 tag(s)` long after
+that stopped being true.** Measured on 21 October 2026: the script holds **76
+entries**, the remote holds **271 tags**, and exactly **two are missing** —
+`v1.160.0` and `v1.161.0`, both cut in this session. The rest were pushed at
+some point and the section never caught up, which made it read as a large
+outstanding job when it is a two-tag one.
+
+Pushing `refs/tags/*` is refused (HTTP 403) from the coding session, and that
+IS still true — re-measured, three attempts, while branch pushes in the same
+session succeeded. So the tag objects can be created in a container but never
+pushed from one, and a container is reclaimed, so they have to be made again
+from your clone. The script is idempotent and every entry names a fixed
+commit, so re-creating them produces the same tags.
 
 ```bash
 cd /path/to/rentboard-za1
@@ -28,16 +37,19 @@ git fetch origin
 bash scripts/push-release-tags.sh
 ```
 
-**Worked when:** it prints `Created 19 tag(s), skipped 0` then pushes without
-error. Safe to re-run — a tag already on the remote is skipped, never moved.
+**Worked when:** it prints `Created 2 tag(s), skipped 74 — of 76 entries in
+this file` and pushes without error. The three numbers must add up; the script
+says so itself if they do not, because "Created 0, skipped 19" used to be
+indistinguishable from a run that stopped early.
 
 ```bash
 # Verify
-git ls-remote --tags origin | grep -E 'v1[.](7[5-9]|8[0-7])[.]'
+git ls-remote --tags origin | grep -E 'v1[.]16[01][.]'
 ```
 
-**If skipped:** v1.75.2–v1.83.0 have no tags, so there is no way to say which
-commit a given release was, and `git describe` is useless.
+**If skipped:** the two newest releases have no tag, so `git describe` cannot
+name the commit that shipped the board's keyword search or its browse
+shortcuts — the two changes most likely to need pointing at.
 
 > **Note:** v1.84.0 is NOT in the script. Phase 5 is unfinished — **5c
 > (share/flyer generator) is the only part left**, and it needs device testing

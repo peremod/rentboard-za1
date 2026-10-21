@@ -5,6 +5,7 @@ import { WhatsappService } from '../whatsapp/whatsapp.service';
 import { sanitizeText } from '../../common/utils/sanitize.util';
 import { normaliseSaMobile } from '../../common/utils/phone.util';
 import { MarkRentDto, DisputeRentDto, RentSettingsDto } from './dto/rent.dto';
+import { assertRentWindow, monthStart } from './rent-period';
 
 /**
  * Rent tracking — a record, not a payment system.
@@ -34,20 +35,6 @@ export class RentService {
     private whatsapp: WhatsappService,
   ) {}
 
-  /**
-   * First of the month, midnight UTC.
-   *
-   * Normalised because the unique constraint is on [tenancyId, periodStart]:
-   * two rows for "September" differing by a timezone offset would defeat it,
-   * and a landlord would end up with two Septembers disagreeing about whether
-   * rent arrived.
-   */
-  private monthStart(date: string | Date): Date {
-    const d = new Date(date);
-    if (Number.isNaN(d.getTime())) throw new BadRequestException('That is not a valid date.');
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-  }
-
   private async assertLandlord(tenancyId: string, landlordId: string) {
     const tenancy = await this.prisma.tenancy.findUnique({
       where: { id: tenancyId },
@@ -66,69 +53,6 @@ export class RentService {
   }
 
   /**
-   * Whether a month may be written against this tenancy at all.
-   *
-   * ── Why this is a window and not a status check
-   *
-   * `mark()` refused `cancelled` and nothing else. So on a tenancy that had
-   * ENDED a landlord could still mark months, and on any tenancy they could
-   * mark a month before the tenant moved in, a month after they moved out, or
-   * next March — `upsert` would happily create the row, with `amountCents`
-   * snapshotted from a tenancy that was not running.
-   *
-   * The invariant is not "the tenancy is active". It is **a rent period
-   * belongs to the months the tenancy actually covered**, which is true of a
-   * finished letting as much as a live one. That distinction matters, because
-   * refusing every write on an `ended` tenancy would break the most ordinary
-   * thing there is: a tenant moves out on the 30th owing that month, and the
-   * landlord records it on the 5th. Freezing the ledger at the moment of
-   * move-out would make the record wrong in the one case it is most needed.
-   *
-   * So: the months of the letting stay writable; everything outside them does
-   * not.
-   */
-  private assertRentWindow(
-    tenancy: { status: string; startDate: Date | null; endDate: Date | null },
-    periodStart: Date,
-  ) {
-    if (tenancy.status === 'cancelled') {
-      throw new BadRequestException('That tenancy was cancelled — there is no rent to record.');
-    }
-    // `pending` means nobody has confirmed the move-in, so there is no month
-    // to be in arrears on. The tenant's rent screen has always said exactly
-    // this — "Your move-in is not confirmed yet, so there is no rent record" —
-    // while the API accepted the write anyway.
-    if (tenancy.status === 'pending' || !tenancy.startDate) {
-      throw new BadRequestException(
-        'This tenancy has not started yet. Confirm the move-in first, then the rent record opens.',
-      );
-    }
-
-    const firstMonth = this.monthStart(tenancy.startDate);
-    if (periodStart < firstMonth) {
-      throw new BadRequestException(
-        'That month is before the tenant moved in, so it is not part of this tenancy.',
-      );
-    }
-
-    // Not the future. Rent is due at the start of a month, so the CURRENT
-    // month is fair game; the one after it has not begun.
-    const thisMonth = this.monthStart(new Date());
-    if (periodStart > thisMonth) {
-      throw new BadRequestException('That month has not started yet.');
-    }
-
-    if (tenancy.endDate) {
-      const lastMonth = this.monthStart(tenancy.endDate);
-      if (periodStart > lastMonth) {
-        throw new BadRequestException(
-          'That month is after the tenancy ended, so it is not part of this tenancy.',
-        );
-      }
-    }
-  }
-
-  /**
    * The landlord's toggle. Creates the month on first use.
    *
    * A finished letting is still correctable — see assertRentWindow for why
@@ -136,8 +60,8 @@ export class RentService {
    */
   async mark(tenancyId: string, dto: MarkRentDto, landlordId: string) {
     const tenancy = await this.assertLandlord(tenancyId, landlordId);
-    const periodStart = this.monthStart(dto.periodStart);
-    this.assertRentWindow(tenancy, periodStart);
+    const periodStart = monthStart(dto.periodStart);
+    assertRentWindow(tenancy, periodStart);
 
     return this.prisma.rentPeriod.upsert({
       where: { tenancyId_periodStart: { tenancyId, periodStart } },
@@ -296,7 +220,7 @@ export class RentService {
       return { sent: 0, skipped: 0, considered: 0 };
     }
     const now = new Date();
-    const thisMonth = this.monthStart(now);
+    const thisMonth = monthStart(now);
 
     const candidates = await this.prisma.rentPeriod.findMany({
       where: {
