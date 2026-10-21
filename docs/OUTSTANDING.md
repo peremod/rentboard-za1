@@ -5960,6 +5960,20 @@ constructed cases rather than trusted:
 The footer's 17px link list — the first finding this sweep ever made — still
 fails, which is the result that makes the change safe.
 
+⚠️ **And it was not only a widening.** The new predicate also MEASURES things
+the tag whitelist used to excuse, which is the other direction of the same
+defect — and it immediately found one: `p.applicants__back` on the landlord
+applicants screen holds two navigation links, "← Back to dashboard" and "All
+applicants across your rooms", at **20px tall with 16px of clear air**. The
+old rule exempted them for one reason only, that they sit in a `<p>`. The row
+is `display: flex`; nothing about it is running text. They are real AA
+failures that had been hidden, and they now carry
+`min-height: 1.5rem`.
+
+So the rule was wrong in both directions at once: too strict on
+/admin/reports and /admin/disputes, too lax here, and for the same underlying
+reason — it asked about a tag name instead of about words.
+
 ### 83d. /admin/analytics scrolled the page sideways on a phone
 
 14px at 360px, from a six-column growth table (Role · Today · Week · Month ·

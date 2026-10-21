@@ -317,6 +317,15 @@ import { Icon } from '../../../shared/components/icon/icon';
   styles: [`
     .applicants { max-width: 640px; margin: 2rem auto; padding: 0 1.25rem; font-family: sans-serif; }
     .applicants__back { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: space-between; font-size: .85rem; }
+    /* ⚠️ 24px, because these two are TARGETS and not a sentence.
+       They were 20px tall with 16px of clear air — an AA failure under 2.5.8
+       — and the sweep had been excusing them for one reason only: they sit in
+       a <p>, and the prose exemption used to test the parent's TAG NAME. This
+       row is a flex row; nothing about it is running text. The exemption
+       asks whether there are words beside the link now, so these two became
+       visible the moment that was fixed: one over-strict rule had been hiding
+       a genuine failure, which is the other direction of the same defect. */
+    .applicants__back a { display: inline-flex; align-items: center; min-height: 1.5rem; }
     h1 { font-size: 1.3rem; margin: .5rem 0 1.5rem; }
     .muted { color: var(--slate); }
     .applicant-card { border: 1px solid var(--border); border-radius: var(--r8); margin-bottom: .75rem; overflow: hidden; }
