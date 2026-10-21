@@ -5493,7 +5493,33 @@ Falsified by putting the real leaked value back and watching both guards fire.
 ---
 
 
-## 79. Two defects the integration tests found — both fixed
+## 79. Two defects the integration tests found — both fixed, residue VERIFIED CLEAR
+
+✅ **CLOSED 21 October 2026.** Both defects fixed, both fixes deployed to
+production in v1.164.0, and both residues measured against the production
+database rather than assumed away.
+
+The residue check was run in the Neon SQL editor against `neondb` on the
+production endpoint `ep-royal-hill-b1vy1vmt`:
+
+```
+control_users 4 · control_rooms 2 · control_properties 1 · control_tenancies 2
+orphaned_tenancies 0 · bad_province_yards 0 · db neondb
+```
+
+⚠️ **The controls are the point, and the first attempt had none.** Run as two
+bare `SELECT`s, both came back "Statement executed successfully" — which is
+what Neon shows for a query returning no rows, and also what you would see on
+a branch holding no data at all. A zero-row grid and a query that never
+reached the real tables are indistinguishable. The rewritten check returns one
+row of counts, including four totals that must be non-zero for the findings to
+mean anything, and `current_database()` so the answer carries its own label.
+
+**What the controls also say:** production holds 4 users, 2 rooms and 1
+property. The §79a exposure — two people told they have the same back room —
+was therefore almost certainly never realised on a live letting. The fix was
+still right, and far better shipped before the board fills up than after.
+
 
 Both are recorded as passing tests that assert **what the code does**, with the
 reasoning beside them. Neither was fixed, because both are changes to business
