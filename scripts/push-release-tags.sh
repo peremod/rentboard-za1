@@ -1942,6 +1942,36 @@ never rebuilt or never compiled, and the chip assertion compared card counts
 on a board that pages at 12."
 
 echo
+
+tag_if_missing "v1.161.0" "05333068c4436d491fbc357df877c14c28871148" "2026-10-21T06:06:08+00:00" "v1.161.0 - browse shortcuts that cannot promise a room the board does not have
+
+The category row the brief asked for, with the constraint that decides the
+design: only categories the listings actually support. So they are derived,
+never written down. GET /rooms/categories groups live active rooms by type
+and by city, counts what is free within the fortnight, and returns nothing
+with a count of zero.
+
+Each shortcut carries its count, which makes it a promise with the evidence
+attached, and a category disappears when its last room is let rather than
+becoming a dead link nobody notices. The constraint is visible in the output
+rather than asserted in a comment: no private-room shortcut, because the
+board holds no private rooms, and no hardcoded student accommodation for the
+same reason.
+
+They are links rather than click handlers, so a shortcut is middle-clickable,
+shareable and part of the history - which only works because the URL became
+the search state one release ago. A place shortcut goes through ?q=, so it
+runs the same phrase parsing somebody typing Pretoria would get.
+
+The route is declared above @Get(':id'): Nest matches in declaration order,
+so a literal path after a parameterised one is never reached.
+
+The drive asserts each shortcut delivers THE NUMBER IT ADVERTISES, not merely
+something - 253 promised and 6 delivered is wrong in a way >0 cannot see. All
+eight match, all 44px at four widths, 41 checks. Falsified by injecting a
+hardcoded category for a type with no listings."
+
+echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
 # not have shown: "Created 0, skipped 19" was indistinguishable from a complete
