@@ -5833,6 +5833,64 @@ mastande_integration_test", and the next run after it passes 17/17.
 ---
 
 
+## 82. CI had been red since before the test work, and three things were hiding in it
+
+Reading CI properly (§81) showed the lockfiles were not the only thing in
+there. Job by job, back through the runs:
+
+| Runs | What was failing | Whose |
+|---|---|---|
+| 248–250 | `E2E — app journeys`, `CSS coverage`, `Environment parity` | all three pre-date the test work |
+| 251 | + backend `Test`, root `Install (for Playwright)` | the unit-suite commit |
+| 254 onwards | + **`Build the production image`** | the lockfiles — the one that stopped deploys |
+
+So the docker job, the only one that gates a deploy, was green until 254 and
+red from then on, which is exactly when releases stopped landing. The other
+three had been red for days with nobody reading them, which is how a gate
+stops being a gate.
+
+### 82a. Three e2e specs failed on a redirect that changed five days earlier
+
+`e2e/helpers.ts` asserted that creating an account lands on
+`/{role}/dashboard`. Since `5061bc3` (16 October, "surveys for both roles,
+asked at sign-up instead of on the dashboard") it lands on **`/welcome`** —
+deliberately, and the component says why: the account exists and the session
+is set by the time that screen appears, so skipping, refreshing or closing
+the tab there costs nothing.
+
+Every spec that registers a user goes through that helper, so
+`account-settings`, `application-lifecycle` and `listing-wizard` all failed
+with `unexpected value "http://localhost:4200/welcome"` — a stale test, not
+a broken app.
+
+Fixed by walking the journey a person walks: assert `/welcome`, press "I
+will do this later", then assert the dashboard. **Not** by widening the
+pattern to accept either destination, which is the tempting one-character
+fix and would leave a helper that no longer notices if the redirect broke.
+
+Reproduced and fixed locally against the real app (API on :3000, a
+development build served on :4200): 3 failed → 3 passed. Falsified by
+pointing the register component at `/` instead of `/welcome`, rebuilding,
+and proving the bugged build was the one answering — the spec failed with
+`unexpected value "http://localhost:4200/"`. The mobile board suite passes
+alongside it, 3 of 3.
+
+### 82b. An unused import was an ERROR, not a warning
+
+`signUp` was imported into `failure-modes.int-spec.ts` and never used.
+`@typescript-eslint/no-unused-vars` reports that as an error, and the lint
+step deliberately runs without `--fix` so CI reports on the code that was
+pushed. 1 error 45 warnings → 0 errors 44 warnings; the remaining warnings
+are pre-existing `no-explicit-any` in fixtures and are not gating.
+
+The same pass removed an `eslint-disable-next-line no-console` in
+`global-setup.ts` that had nothing to disable — the rule does not fire
+there, so the directive was itself reported. A control with no subject, in
+the file whose whole job is to refuse before the suite can do damage.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash

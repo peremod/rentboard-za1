@@ -14,6 +14,22 @@ export async function register(page: Page, role: 'tenant' | 'landlord', email: s
   await page.getByLabel('Email address').fill(email);
   await page.getByLabel('Password', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: /create account/i }).click();
+
+  /**
+   * ⚠️ Registration lands on /welcome, not the dashboard, and has since
+   * 5061bc3 (16 October) — "surveys for both roles, asked at sign-up instead
+   * of on the dashboard". The account exists and the session is set by the
+   * time that screen appears, which is exactly why skipping it costs nothing.
+   *
+   * This helper asserted the dashboard directly, so all three specs that use
+   * it have been failing in CI for five days with
+   * `unexpected value "http://localhost:4200/welcome"` — a stale test, not a
+   * broken app. Fixed by walking the journey a person actually walks rather
+   * than by widening the pattern to accept both: a helper that tolerates
+   * either destination would stop noticing if the redirect broke.
+   */
+  await expect(page).toHaveURL(/\/welcome/);
+  await page.getByRole('button', { name: /i will do this later/i }).click();
   await expect(page).toHaveURL(new RegExp(`/${role}/dashboard`));
 }
 
