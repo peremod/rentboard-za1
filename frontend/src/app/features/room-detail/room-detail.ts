@@ -703,35 +703,80 @@ export class RoomDetail implements OnInit {
       alternates: false,
     });
 
+    /**
+     * ⚠️ NOT a Product, and the rating is gone. Both were wrong.
+     *
+     * It was `@type: 'Product'` with `offers.price` and `priceValidUntil`. A
+     * room let by the month is not a product for sale: Google's product rich
+     * results target retail, `priceValidUntil` means "this price expires",
+     * and what was being passed to it was `availableFrom` — the date the room
+     * becomes available, which is close to its opposite.
+     *
+     * `RealEstateListing` is what this page is: a listing ABOUT a place. The
+     * place itself is the `mainEntity`, and `businessFunction: LeaseOut` is
+     * the property that says plainly this is a letting and not a sale.
+     *
+     * 🔴 And the `aggregateRating` had to go. It was the LANDLORD's rating —
+     * correct on screen, where it sits in a block labelled as the landlord's
+     * — attached in markup to the ROOM. A room with no reviews of its own
+     * inheriting a landlord's 4.8 is misattribution, and mismatched rating
+     * markup is a documented manual-action risk. The storefront still carries
+     * the same rating, where the subject of the page IS the landlord and the
+     * figure is displayed beside it.
+     *
+     * ⚠️ Google publishes no rich result for rental listings. This earns no
+     * enhanced appearance and is not expected to — it is here so the page
+     * describes itself truthfully to anything that reads it.
+     */
+    const placeType = { shared_house: 'Room', en_suite: 'Room', studio: 'Apartment', private: 'Room' }[r.roomType];
+
     this.seo.setJsonLd('room', {
       '@context': 'https://schema.org',
-      '@type': 'Product',
+      '@type': 'RealEstateListing',
       name: r.title,
       description: r.description ?? description,
+      url: `${environment.siteUrl}/rooms/${r.id}`,
       image: hero ? [hero] : undefined,
-      category: this.roomTypeLabel(r.roomType),
+      datePosted: r.publishedAt ?? undefined,
+      inLanguage: 'en-ZA',
+      mainEntity: {
+        '@type': placeType,
+        name: r.title,
+        address: {
+          '@type': 'PostalAddress',
+          // Suburb and city only. The street address is never published — a
+          // room's exact address reaches an applicant after the landlord
+          // chooses to share it, and putting it in markup would publish it to
+          // everyone the moment the room is listed.
+          addressLocality: r.city,
+          addressRegion: r.province,
+          addressCountry: 'ZA',
+        },
+        ...(r.amenities?.length ? {
+          amenityFeature: r.amenities.map((a) => ({
+            '@type': 'LocationFeatureSpecification', name: a, value: true,
+          })),
+        } : {}),
+      },
       offers: {
         '@type': 'Offer',
         price: (r.rentCents / 100).toFixed(2),
         priceCurrency: 'ZAR',
+        // Per month, stated rather than implied.
+        unitText: 'MON',
+        businessFunction: 'http://purl.org/goodrelations/v1#LeaseOut',
         availability:
           r.status === 'active' ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
         url: `${environment.siteUrl}/rooms/${r.id}`,
-        priceValidUntil: r.availableFrom,
+        // The date the room becomes available — the property that actually
+        // means that, in place of the priceValidUntil this used to misuse.
+        availabilityStarts: r.availableFrom,
         areaServed: {
           '@type': 'City',
           name: r.city,
           containedInPlace: { '@type': 'AdministrativeArea', name: r.province },
         },
       },
-      aggregateRating:
-        r.landlord?.landlordProfile?.rating && r.landlord.landlordProfile.ratingCount
-          ? {
-              '@type': 'AggregateRating',
-              ratingValue: r.landlord.landlordProfile.rating,
-              reviewCount: r.landlord.landlordProfile.ratingCount,
-            }
-          : undefined,
     });
   }
 

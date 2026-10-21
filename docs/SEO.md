@@ -46,6 +46,32 @@ Pages marked `noIndex` emit no canonical at all. A `noindex` page claiming a can
 
 ## 3. Structured data
 
+### Site identity — Organization and WebSite
+
+`core/seo/site-identity.ts`, emitted once from the root as a single `@graph`,
+so it is on every server-rendered page exactly once. The two entities
+reference each other by `@id`: the site is **published by** the company, which
+is what makes them one description rather than two unrelated blobs.
+
+⚠️ **It buys no sitelinks, no knowledge panel and no search box.** None can be
+requested and no markup produces one on demand; Google chooses them from site
+structure and brand demand. This supplies the facts correctly so the site is
+eligible to be understood. That is the entire claim.
+
+⚠️ **What is deliberately absent**: address, telephone, founding date,
+`sameAs`, `aggregateRating`. There is no public address or phone on this site
+and no social account linked from it, so every one of those would be
+invented — and markup stating facts a visitor cannot verify on the page is
+what the guidelines forbid. `legalName` is the registered company, which the
+legal pages already state on screen.
+
+The `SearchAction` target is `/?q={search_term_string}`, which is the board's
+real search parameter (`home.ts` maps `q` to `searchTerm`). The drive asserts
+that URL answers 200 — a SearchAction describing a search the site does not
+honour is a lie that happens to validate.
+
+
+
 `SeoService.setJsonLd(id, data)` writes a keyed `<script type="application/ld+json">`. Keyed so a page can replace its own block without disturbing another.
 
 Room pages emit `Product` + `Offer`, not a real-estate type. A room let is priced, has an availability date, and carries landlord reviews — that shape is what earns a rich result. `aggregateRating` is included only when the landlord actually has ratings; a fabricated or empty rating block is a manual-action risk.
@@ -53,6 +79,50 @@ Room pages emit `Product` + `Offer`, not a real-estate type. A room let is price
 Validate at [search.google.com/test/rich-results](https://search.google.com/test/rich-results) against a production room URL.
 
 ---
+
+### Room listings — RealEstateListing, not Product
+
+It was `@type: 'Product'` with `offers.price` and `priceValidUntil`. A room
+let by the month is not retail stock: Google's product rich results target
+retail, and `priceValidUntil` means "this price expires" while what was passed
+to it was `availableFrom` — close to the opposite. It is a `RealEstateListing`
+about a `Room`/`Apartment` now, with `businessFunction: LeaseOut` saying
+plainly that this is a letting, and `availabilityStarts` carrying the date.
+
+🔴 **The `aggregateRating` was removed, and that one was a risk.** It was the
+LANDLORD's rating — correct on screen, where it sits in a block labelled as
+theirs — attached in markup to the ROOM. A room with no reviews of its own
+inheriting a landlord's 4.8 is misattribution, and mismatched rating markup is
+a documented manual-action risk. The storefront still carries the same figure,
+where the subject of the page IS the landlord and the number is displayed
+beside it.
+
+⚠️ **Google publishes no rich result for rental listings.** This earns no
+enhanced appearance and is not expected to. It is here so the page describes
+itself truthfully to anything that reads it — semantic value, stated
+separately from search appearance, because they are not the same thing.
+
+The street address is never in the markup. A room's exact address reaches an
+applicant after the landlord chooses to share it; publishing it in JSON-LD
+would hand it to everyone the moment the room is listed.
+
+### Private routes carry `X-Robots-Tag`, set by the server
+
+🔴 The private trees render client-side, which is right — private data must
+never reach cacheable HTML. But it meant a crawler asking for
+`/tenant/dashboard` got the CSR shell: **200 OK, ~6KB, and no robots
+directive of any kind.** The `noIndex` in the route data is applied by
+SeoService after hydration, which a crawler that does not execute JavaScript
+never sees. Measured with curl, not assumed.
+
+robots.txt does not close that. It stops a well-behaved crawler FETCHING the
+URL; it does not stop the URL being indexed from a link elsewhere — Google's
+"Indexed, though blocked by robots.txt" state — and a Disallow also means the
+crawler never reads a noindex it is not allowed to fetch.
+
+`server.ts` sets `X-Robots-Tag: noindex, nofollow` on every private prefix,
+locale-prefixed ones included. It is defence in depth, **not** the defence:
+the guards are what keep the data private.
 
 ## 4. Per-environment behaviour
 
@@ -324,6 +394,9 @@ curl -s https://umastande.co.za/sitemap.xml \
   | grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g' \
   | xargs -P4 -I{} sh -c 'printf "%s %s\n" "$(curl -s -o /dev/null -w %{http_code} {})" "{}"' \
   | grep -v '^200' || echo "every sitemap URL returns 200"
+
+# Structured data, icons and private-route headers, read from the SERVED HTML
+BASE=http://localhost:4200 node scripts/seo-drive.mjs
 
 # Routes, guards, internal links, locale sync, environment parity
 npm run audit          # routes, guards, links, i18n parity, env parity
