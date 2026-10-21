@@ -293,7 +293,17 @@ import { Icon } from '../../../shared/components/icon/icon';
       .provider-form input[type='text'],
       .provider-form input[type='tel'],
       .provider-form select { width: 100%; }
-      .provider-form__check { display: flex; align-items: center; gap: 0.5rem; }
+      /* ⚠️ min-height, and 24px is not a guess — WCAG 2.5.8 AA.
+         The LABEL is the tap target here, because clicking the words toggles
+         the box, and it was 380×22 with 0px of clear air to the submit button
+         below it. The 18px checkbox inside it was never the thing to measure;
+         the accessibility sweep gets that right and this screen was simply
+         failing. Found only once the sweep ran with admin credentials — a
+         local run without them skips every admin screen and reports clean. */
+      .provider-form__check {
+        display: flex; align-items: center; gap: 0.5rem;
+        min-height: 1.5rem;
+      }
       .provider-form__check span { margin: 0; }
       .provider { border-top: 1px solid var(--border); padding: 0.75rem 0; }
       .provider--off { opacity: 0.72; }

@@ -288,6 +288,20 @@ jobs:
       - name: Typecheck
         working-directory: backend
         run: npm run typecheck
+      # ⚠️ The test runner lives at the ROOT, and this job installs `backend`.
+      #
+      # `backend`'s `npm test` is `npm --prefix .. run test:backend`, which is
+      # vitest from the root node_modules — so the step failed with a bare
+      # `vitest: not found` and read as the suite being broken. It is the same
+      # defect as env-parity in the frontend job: a script that needs a
+      # dependency the job it runs in never installs. The integration step
+      # below needs the same install, and had never once run because this one
+      # failed first and everything after it was skipped.
+      - name: Install (root, for the test runner)
+        # --ignore-scripts: the root `prepare` runs husky, which has no work on
+        # a runner and exits 127 where the git hooks path is absent.
+        run: npm ci --ignore-scripts
+
       - name: Test
         working-directory: backend
         run: npm test

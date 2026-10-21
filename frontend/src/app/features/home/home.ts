@@ -391,7 +391,11 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
 
         <!-- Contextual placement: matches the province and room type being
              browsed, never the person browsing. -->
+        <!-- H2: the advert sits beside the board's own sections, and at phone
+             widths the filters H2 above it is not rendered at all — see the
+             note on AdSlot.headingLevel. -->
         <app-ad-slot placement="board_sidebar"
+                     [headingLevel]="2"
                      [province]="province || undefined"
                      [city]="searchTerm.trim() || undefined"
                      [roomType]="roomType || undefined"/>
@@ -579,7 +583,10 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                    gives a different advertiser rather than the same ad six
                    times down the page. -->
               @if (showsAdAfter(i)) {
+                <!-- H3: this one always follows the results-count H2, because
+                     a card had to render for it to appear at all. -->
                 <app-ad-slot placement="board_inline"
+                             [headingLevel]="3"
                              [slotIndex]="adSlotNumber(i)"
                              [province]="province || undefined"
                              [city]="searchTerm.trim() || undefined"
