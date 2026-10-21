@@ -6340,16 +6340,55 @@ with it. `scripts/lhr-summary.mjs` now prints the median run's metrics, every
 run's CLS, the LCP element and what shifted, into the job's own log, before the
 assert, so a failing run explains itself.
 
+### 87d. ⚠️ Three more measurements, and the shift does not reproduce locally
+
+Runs 12 and 13 (dispatched, same commit family):
+
+| Run | `/` CLS, all three runs | `/` perf | `/pricing` | `/how-it-works` |
+|---|---|---|---|---|
+| 12 | 0.916, 0.953, 0.916 | 0.62 | 0.99 / CLS 0.017 | 0.99 / CLS 0.050 |
+| 13 | 0.916, 0.916, 0.916 | 0.57 | **1.00** / CLS 0.004 | **1.00** / CLS 0.027 |
+
+Run 13's three values are identical to sixteen decimal places, which says this
+is one deterministic shift of a fixed size and not a race between loads. The
+two other pages are now perfect scores. Only the board.
+
+And it does **not** reproduce here. A development build served on `localhost`
+with the local API and two seeded rooms measures **CLS 0** on the same page —
+the API answers in about a millisecond, so whatever difference in height exists
+between what the server renders and what the client settles on never becomes a
+visible move. The shift needs production conditions, which makes the weekly job
+the only thing in this project that can see it.
+
+### 87e. ⚠️ The culprit audit is erroring, and two print-outs could not say so
+
+Run 12's summary said `layout-shifts: no items reported`. Run 13's, after
+reading both audit ids, said:
+
+    · cumulative-layout-shift: score 0.03 mode numeric details debugdata/1 item(s)
+    · layout-shifts: score null mode error details none
+
+`mode error` means the audit **threw**. The reason is in `errorMessage`, which
+the print-out did not read — so the second version of a diagnostic added to
+explain a failure again stopped one field short of the explanation, and the
+debugdata it reported as "1 item" was never shown either. Both are printed now.
+That is three iterations on one diagnostic, each blind in a different way, which
+is worth recording as plainly as the defect it is chasing.
+
 ### What is open
 
-- 🔴 **The board's CLS, unexplained.** 0.953 is a real defect on the busiest
-  public page and nothing here has identified what moves. It cannot be
-  diagnosed from this container — `www.umastande.co.za` and
-  `api.umastande.co.za` are both `connect_rejected` by the egress proxy — so
-  the next weekly or dispatched run, which now prints the culprits, is the
-  evidence to work from. Candidates worth checking first: the room cards
-  arriving after the API responds into space nothing reserved, the house ad
-  slot in the sidebar, and the two Google Fonts families.
+- 🔴 **The board's CLS, still unexplained.** 0.916 is a real defect on the
+  busiest public page. It cannot be diagnosed from this container —
+  `www.umastande.co.za` and `api.umastande.co.za` are both `connect_rejected`
+  by the egress proxy — and it does not reproduce locally (87d), so each
+  iteration costs a CI run. The next run prints why `layout-shifts` errored and
+  what the CLS debugdata holds. Candidates worth checking first: a difference in
+  height between the server-rendered board and the client's first settled
+  render, the house ad slot in the sidebar, and the two Google Fonts families.
+- ⚠️ **The sitemap check was skipped in run 13** because the audit step above it
+  failed — a step's default condition is `success()`, so a soft 404 in a
+  submitted sitemap would have gone unnoticed for as long as a performance
+  number stayed red. Now `!cancelled()`.
 - ⚠️ **The weekly job will now go red** on that CLS, correctly, and stay red
   until the board is fixed. That is the point of arming it.
 - ⚠️ **Performance 0.62 and LCP 3.3s on the board** pass the floors in

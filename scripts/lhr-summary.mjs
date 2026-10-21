@@ -99,6 +99,16 @@ for (const [url, runs] of byUrl) {
           `     · ${id}: score ${a.score} mode ${a.scoreDisplayMode ?? '?'}` +
           ` details ${d ? `${d.type}/${(d.items ?? []).length} item(s)` : 'none'}`,
         );
+        // ⚠️ Run 13 printed `layout-shifts: score null mode error details none`
+        // and stopped there. `mode error` means the audit THREW, and the reason
+        // is in errorMessage — the one field that says why the explanation is
+        // missing, and the one the print-out left out. Same for the debugdata
+        // the CLS audit itself carries, which run 13 reported as "1 item" and
+        // did not show.
+        if (a.errorMessage) console.log(`       errorMessage: ${a.errorMessage}`);
+        for (const item of (d?.items ?? []).slice(0, 3)) {
+          console.log(`       ${JSON.stringify(item).slice(0, 600)}`);
+        }
       }
     }
   } else {

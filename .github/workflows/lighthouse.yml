@@ -136,7 +136,13 @@ jobs:
           lhci assert --config=lighthouserc.production.json
 
       - name: Verify sitemap URLs all resolve
-        if: steps.live.outputs.live == 'true'
+        # ⚠️ `!cancelled()`, because a step's default condition is success() and
+        # this one spent run 13 SKIPPED — the audit above failed on the board's
+        # CLS, and a sitemap check that stops running whenever an unrelated
+        # metric regresses is a check held hostage by another. A soft 404 in a
+        # submitted sitemap is exactly what nobody would notice while a
+        # performance number is red.
+        if: ${{ !cancelled() && steps.live.outputs.live == 'true' }}
         # A sitemap entry that 404s is a soft-404 signal we are submitting
         # ourselves. Cheap to check, invisible if we do not.
         run: |
