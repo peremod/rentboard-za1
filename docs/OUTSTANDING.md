@@ -5891,6 +5891,96 @@ the file whose whole job is to refuse before the suite can do damage.
 ---
 
 
+## 83. Five accessibility findings, and why none of them could be seen locally
+
+The sweep is `scripts/a11y-widths.sh` — 33 pages at 360 / 390 / 768 / 1280.
+Run with the house ads seeded and with admin credentials, it found five
+things. **Every one was invisible for a DATA reason**, which is §56 in this
+list under a different hat: a check whose subject comes from whatever
+happened to be in the database.
+
+| Finding | Why nothing saw it |
+|---|---|
+| `/` went H1 → H4 | house ads live in the database; a dev database with no campaigns renders no slot |
+| `/admin/services` label 380×22 | a local sweep without `ADMIN_EMAIL` prints "SKIP the admin screens" and reports clean |
+| `/admin/analytics` scrolled sideways 14px at 360px | the spill depends on how long the numbers are; a freshly seeded database has short ones |
+| `/admin/reports` link reported under 24px | the page has no rows until something is reported |
+| `/admin/disputes` links reported under 24px | same — and these two turned out not to be failures at all, see 83c |
+
+The first two are recorded in checklist row 110 and §83a–b; the rest follow.
+
+### 83a. The board skipped a heading level
+
+`AdSlot.headingLevel` exists for exactly this and carries a comment about the
+identical bug being fixed on the room page — the board was simply never given
+a level, so the slot defaulted to H4 under the hero's H1. The board's own H2s
+are the filters title and the results count, and at phone widths the drawer
+is closed and the count is not rendered until results arrive.
+
+**Level 3 would not have fixed it**: H1 → H3 skips a level just the same. The
+input takes `2 | 3 | 4` now. The sidebar slot declares 2 — it sits beside the
+board's sections and the filters H2 above it is not rendered at mobile — and
+the inline slot declares 3, because a card has to render for it to appear at
+all, so the results-count H2 is always above it.
+
+### 83b. An admin label was 380×22 with no clear air
+
+The audit measures the **label** as the target, which is right: clicking the
+words toggles the box. `.provider-form__check` was 22px tall with 0px to the
+submit button below it. `min-height: 1.5rem` now. The 18×18 checkbox inside
+it was never the thing to measure, and I spent a probe finding that out.
+
+### 83c. ⚠️ The check was stricter than the criterion it cites
+
+`/admin/reports` and `/admin/disputes` were reported as AA failures for links
+that 2.5.8 **exempts**: "Listing: `<a>`Bright en-suite room…`</a>` · Sandton ·
+active", and "`<a>`Drive Tenant`</a>` (tenant) reported `<a>`Drive
+Landlord`</a>` (landlord)". The criterion exempts a target "in a sentence or
+whose size is otherwise constrained by the line-height of non-target text".
+It says nothing about the parent's tag name — but the exemption tested
+`/^(P|LI|SPAN|LABEL)$/` on the parent, so a `div` holding a sentence failed.
+
+The same defect family as everything else in that file, turned on the file
+itself. It now asks the real question without naming a tag: the link must
+render **inline**, and must have non-whitespace **text immediately beside it**
+in the same parent. The length floor stays — a parent whose only text is the
+link's own is not a sentence.
+
+Widening an exemption weakens a gate, so it was positively controlled against
+constructed cases rather than trusted:
+
+| case | verdict |
+|---|---|
+| `Listing: <a>…</a> · Sandton · active` | EXEMPT |
+| `<a>Drive Tenant</a> (tenant) reported <a>…</a>` | EXEMPT |
+| footer link column, block links | **MEASURED** |
+| card-title block link with text around it | **MEASURED** |
+| lone inline `<a>Edit</a>`, no adjacent words | **MEASURED** |
+
+The footer's 17px link list — the first finding this sweep ever made — still
+fails, which is the result that makes the change safe.
+
+### 83d. /admin/analytics scrolled the page sideways on a phone
+
+14px at 360px, from a six-column growth table (Role · Today · Week · Month ·
+Year · Total) measuring 358px inside a 328px box. Horizontal page scroll on a
+phone is the first thing CLAUDE.md says to check for.
+
+Fixed with this codebase's own pattern for a wide table — `display: block;
+overflow-x: auto`, as `.legal-table` and `.rate-table` already do — so the
+table takes the scroll and the figures stay readable by swiping the table
+rather than the whole screen. Measured after: page scroll **0** at all four
+widths, the table carrying its own 30px scroll at 360px.
+
+⚠️ **I got this one wrong first.** I hypothesised the `.stat-row` grid and the
+automatic-minimum-size trap, added `min-width: 0` to `.stat-box`, rebuilt, and
+re-measured: still 14px. The change was reverted rather than shipped with a
+comment that misstated the cause, and a probe then named the table outright.
+A fix that does not move the number is not a fix, however plausible its story.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash
