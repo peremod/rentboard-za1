@@ -9,7 +9,7 @@ import { RoomsService } from '../../core/services/rooms.service';
 import { AlertsService } from '../../core/services/alerts.service';
 import { WHATSAPP_ENABLED } from '../../core/config/feature-flags';
 import { AuthService } from '../../core/services/auth.service';
-import { Room, SA_PROVINCES, SearchMeta } from '../../core/models/room.model';
+import { BoardCategories, Room, SA_PROVINCES, SearchMeta } from '../../core/models/room.model';
 import { RoomCard } from '../../shared/components/room-card/room-card';
 import { Icon } from '../../shared/components/icon/icon';
 import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
@@ -492,6 +492,36 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
               </p>
             }
           }
+
+          <!-- Browse shortcuts — the screenshot's category links, built from
+               what the board actually holds.
+               ⚠️ Every one carries its count, and the server never returns a
+               category with a count of zero, so a shortcut on screen always
+               leads to rooms. Hardcoding "Student accommodation" here would
+               be the same defect as an autocomplete suggesting a town with no
+               listings: a promise the board cannot keep.
+               routerLink with queryParams rather than a click handler, so a
+               shortcut is a real link — middle-clickable, shareable, and part
+               of the history like every other search. -->
+          @if (categories(); as cat) {
+            <nav class="browse" aria-label="Browse by category">
+              @if (cat.availableNow) {
+                <a class="browse__link" routerLink="/" [queryParams]="{ now: '1' }">
+                  Available now <span class="browse__count">{{ cat.availableNow }}</span>
+                </a>
+              }
+              @for (t of cat.roomTypes; track t.type) {
+                <a class="browse__link" routerLink="/" [queryParams]="{ type: t.type }">
+                  {{ t.label }} <span class="browse__count">{{ t.count }}</span>
+                </a>
+              }
+              @for (p of cat.places; track p.city) {
+                <a class="browse__link" routerLink="/" [queryParams]="{ q: p.city }">
+                  Rooms in {{ p.city }} <span class="browse__count">{{ p.count }}</span>
+                </a>
+              }
+            </nav>
+          }
         </div>
 
         @if (loading() && rooms().length === 0) {
@@ -588,6 +618,8 @@ export class Home implements OnInit, OnDestroy {
   rooms = signal<Room[]>([]);
   /** How the server read the typed phrase. Null when nothing was typed. */
   searchMeta = signal<SearchMeta | null>(null);
+  /** Browse shortcuts. Null until loaded; never rendered empty. */
+  categories = signal<BoardCategories | null>(null);
   total = signal(0);
   loading = signal(true);
   loadingMore = signal(false);
@@ -760,6 +792,15 @@ export class Home implements OnInit, OnDestroy {
      * handlers only navigate, this reads the result, and back/forward arrive
      * through exactly the same path as a click.
      */
+    // Independent of the result fetch: the shortcuts describe the whole
+    // board, not the current search, so they must not change as somebody
+    // narrows it — a category row that shrinks with the results is a second
+    // set of filters pretending to be navigation.
+    this.roomsService.getCategories().subscribe({
+      next: (c) => this.categories.set(c.total > 0 ? c : null),
+      error: () => this.categories.set(null),
+    });
+
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       this.hydrateFromUrl(params);
       this.page = 1;
