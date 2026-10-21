@@ -153,15 +153,40 @@ jobs:
           # the job rather than failing it.
           fetch() { curl -sS --connect-timeout 10 --max-time 25 "$@"; }
 
+          # What this commit expects to be serving. Read before the loop,
+          # because the loop now waits for it.
+          EXPECTED=$(node -p "require('./backend/package.json').version")
+
           # Render's free tier sleeps after ~15 minutes idle and takes 30-60s
           # to wake, and this races the deploy Render starts when the push
           # lands. Eight minutes of polling covers a cold build plus a wake.
           # Each attempt is individually bounded, so a hung request costs one
           # attempt rather than the job.
+          #
+          # 🔴 THE LOOP USED TO BREAK AS SOON AS /health ANSWERED, which is
+          # not the same thing as the deploy having landed. The comment above
+          # has always said eight minutes "covers a cold build", and it did
+          # not: a free-tier service wakes in seconds and builds in minutes,
+          # so the fetch succeeded almost immediately, the version assertion
+          # below ran once against the PREVIOUS build, and the push went red.
+          # Measured on v1.160.0 (run 102): production answered in 40s with
+          # version 1.159.0 and uptime 31, and the job failed 47 seconds after
+          # the push with "production is serving 1.159.0 but this commit is
+          # 1.160.0" — while the deploy was still building and landed fine.
+          #
+          # A check that goes red on every successful release is worse than no
+          # check: it is the one people learn to ignore, and this repository
+          # has a row about exactly that happening. So the loop waits for the
+          # VERSION, not merely for an answer, and the existing failure
+          # message below now means what it says.
           HEALTH=""
           for i in $(seq 1 32); do
-            if HEALTH=$(fetch -f "$API/health" 2>/dev/null); then break; fi
-            HEALTH=""
+            if HEALTH=$(fetch -f "$API/health" 2>/dev/null); then
+              case "$HEALTH" in
+                *"\"version\":\"$EXPECTED\""*) break ;;
+              esac
+              echo "   …serving $(echo "$HEALTH" | sed -n 's/.*\"version\":\"\([^\"]*\)\".*/\1/p'), waiting for $EXPECTED (attempt $i/32)"
+            fi
             sleep 15
           done
 
@@ -181,7 +206,6 @@ jobs:
           # run says only "something answered", which is true of a build from
           # three weeks ago.
           DEPLOYED=$(echo "$HEALTH" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
-          EXPECTED=$(node -p "require('./backend/package.json').version")
           if [ "$DEPLOYED" = "$EXPECTED" ]; then
             echo "✅ serving $DEPLOYED, which is the version in this commit"
           else
