@@ -182,21 +182,6 @@ export interface SearchMeta {
   broaden?: { total: number; droppedTokens: string[] };
 }
 
-/**
- * Browse shortcuts, built from live listings only.
- *
- * Every entry carries the count that makes it a true promise, and the server
- * never returns one with a count of zero — so a shortcut on screen always
- * leads to rooms. A category disappears when its last room is let rather than
- * becoming a dead link nobody notices.
- */
-export interface BoardCategories {
-  roomTypes: { type: string; label: string; count: number }[];
-  places: { city: string; province: string; count: number }[];
-  availableNow?: number;
-  total: number;
-}
-
 export interface PaginatedRooms {
   data: Room[];
   total: number;

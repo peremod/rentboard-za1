@@ -5995,6 +5995,53 @@ A fix that does not move the number is not a fix, however plausible its story.
 ---
 
 
+## 84. The browse shortcuts are removed — 21 October 2026, by the owner
+
+> "remove this which is circled in red I don't like it anymore it must no
+> longer appear anywhere on any screen"
+
+The category row built in checklist row 105 — "Available now 2", "Private
+room 1", "En-suite room 1", "Rooms in Pretoria 1", "Rooms in Tshwane 1" — is
+gone from the board and from the codebase's frontend.
+
+Removed: the template block in `home.ts`, the `categories` signal, the
+`getCategories()` call and the decision comment beside it, `getCategories()`
+in `rooms.service.ts`, the `BoardCategories` interface in `room.model.ts`,
+and the `.browse` / `.browse__link` / `.browse__count` rules in `_spec.scss`.
+Nothing else in the app referenced any of it — the board was the only screen
+that rendered the row.
+
+⚠️ **The drive's assertion is inverted, not deleted.** `scripts/search-drive.mjs`
+§7 used to click every shortcut and compare the result count to the number it
+advertised; it now asserts the row is absent, on the board and at all four
+widths. A removal that nothing asserts is a removal that comes back the next
+time somebody restores a component from an older branch, and this row sat on
+the busiest screen in the product, above the first room card.
+
+Driven both ways: with the row removed the drive is 33 passed, 0 failed; with
+`home.ts` and `_spec.scss` restored from git and rebuilt, the same drive is
+28 passed, **5 failed** — "no browse shortcut row on the board — found 9
+element(s)", and the same at 360, 390, 768 and 1280.
+
+Verified in a browser at all four widths after removal: no shortcut element
+of any kind, 12 cards rendering, "423 rooms found", no horizontal page
+scroll, and the heading order still H1 → H2 → … with no skipped level.
+Production build clean.
+
+### What was deliberately NOT removed
+
+**`GET /rooms/categories` and `RoomsService.categories()` stay.** The
+instruction was about what appears on screen, and tearing out a backend route
+is a change to the API contract rather than a UI removal — `CLAUDE.md`'s
+standing position on paused work is to keep the code and switch the surface
+off, not to delete it. The endpoint now has no consumer, and
+`scripts/smoke-test.sh` still asserts it answers 200 and never advertises a
+category with a count of zero, so it cannot rot unnoticed. **Say the word and
+it goes too**, along with its smoke check and the aggregation behind it.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash
