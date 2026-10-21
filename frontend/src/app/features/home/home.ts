@@ -471,19 +471,19 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                 @if (m.city) {
                   <button type="button" class="search-chip" (click)="dropCity()">
                     {{ m.city }}<app-icon name="x" aria-hidden="true"/>
-                    <span class="sr-only">Remove the location {{ m.city }}</span>
+                    <span class="visually-hidden">Remove the location {{ m.city }}</span>
                   </button>
                 }
                 @if (m.province && !m.city) {
                   <button type="button" class="search-chip" (click)="dropProvince()">
                     {{ m.province }}<app-icon name="x" aria-hidden="true"/>
-                    <span class="sr-only">Remove the province {{ m.province }}</span>
+                    <span class="visually-hidden">Remove the province {{ m.province }}</span>
                   </button>
                 }
                 @if (m.roomType) {
                   <button type="button" class="search-chip" (click)="dropRoomType()">
                     {{ roomTypeLabel(m.roomType) }}<app-icon name="x" aria-hidden="true"/>
-                    <span class="sr-only">Remove the room type</span>
+                    <span class="visually-hidden">Remove the room type</span>
                   </button>
                 }
                 @for (t of m.tokens; track t) {

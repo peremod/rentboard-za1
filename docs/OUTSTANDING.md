@@ -5711,6 +5711,128 @@ because a wrong fact in a commit message cannot be edited out of history.
 ---
 
 
+## 81. 🔴 v1.163.0 never deployed, and CI had said so for four runs
+
+**Found 21 October, by reading CI instead of guessing at Render.** Both
+services — staging `mastande-api` and production `rentboard-api` — were
+serving **1.162.0** while `master` carried 1.163.0. I had reported the
+release as shipped and gone looking for an explanation in the Render
+dashboard. The explanation was in this repository, in a red CI run I had not
+opened.
+
+### What actually broke
+
+`backend/package-lock.json` and `package-lock.json` were regenerated with
+`--legacy-peer-deps` (the workaround for an npm `edgesOut` crash while
+installing the test tooling). That flag **omits the peer tree**, so the
+lockfiles shipped without `react`, `react-dom` and `scheduler` — peers of
+`@react-email/render`, a production dependency of the backend — and without
+`typescript@7.0.2` at the root.
+
+`npm ci` refuses an out-of-sync lockfile. So:
+
+```
+> [builder 4/8] RUN npm ci
+npm error `npm ci` can only install packages when your package.json and
+npm error package-lock.json … are in sync.
+npm error Missing: react@19.3.1 from lock file
+…
+Dockerfile:37
+ERROR: failed to build … exit code: 1
+```
+
+Render builds that Dockerfile. A failed build leaves the previous image
+serving, which is **exactly** the failure the Dockerfile's own comment
+records from v1.62.0 — `postinstall: prisma generate` broke the production
+stage and "Render went on serving v1.61.0 through five releases". Same
+mechanism, two lockfiles instead of one script.
+
+Four CI jobs were red on every run from v1.163.0 onwards:
+
+| Job | Step that failed | Cause |
+|---|---|---|
+| Backend image builds and boots | `Build the production image` | backend lockfile, `Dockerfile:37` |
+| Backend — Typecheck, Test, Build | `Install` | backend lockfile |
+| E2E — browser journeys | `Install (root, for Playwright)` | root lockfile |
+| Frontend — Typecheck, Test, Build | `Environment parity`, `CSS coverage` | two separate defects, below |
+
+### ⚠️ The gate worked. I did not read it.
+
+This is not a missing check — the docker job added in v1.67.0 exists for
+precisely this, and it caught the breakage on the first run that contained
+it. Every conclusion I drew about the stuck deploy ("Render never started a
+deploy", "check the dashboard Events") was reasoning about a remote system
+whose answer was sitting in a workflow run I could have opened at any point.
+**Reading CI is part of pushing, not a separate task**, and a release is not
+shipped because a push succeeded.
+
+Fixed by regenerating both lockfiles with plain `npm install
+--package-lock-only`. The diffs add nothing but the four missing packages.
+Falsified both directions, in a staged copy of the Docker build context:
+the shipped lockfile exits 1 on `npm ci` and on `npm ci --omit=dev
+--ignore-scripts`, the regenerated one exits 0 on both.
+
+### 81a. env-parity needed a dependency its CI job never installed
+
+`Environment parity` runs in the frontend job, which installs `frontend`
+only. The script was builtins-only like every other audit there until §77
+had it parse `render.yaml` per service — at which point it imported
+`js-yaml`, a ROOT devDependency, and from that commit on the step died with:
+
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'js-yaml'
+  imported from .../scripts/env-parity.mjs
+```
+
+It reads as a broken environment check and was a missing install. The job
+now installs the root dependencies (`--ignore-scripts`, because the root
+`prepare` runs husky and exits 127 on a runner with no hooks path) before
+the step. Reproduced in a clean `git archive` checkout with no root
+`node_modules`: ERR_MODULE_NOT_FOUND and exit 1 before, exit 0 after.
+
+⚠️ A script that grows a dependency silently changes which jobs can run it.
+Nothing in the workflow stated that the audits in that job are
+builtins-only, and nothing checked it.
+
+### 81b. `.sr-only` had no rule, so screen-reader text rendered on screen
+
+The search chips added in checklist row 104 use `class="sr-only"`. A rule for
+it exists only inside the scoped `styles` of `star-rating.ts` and
+`surveys.ts`, so in `home.ts` it has **no rule at all** — and "Remove the
+location Johannesburg", "Remove the province Gauteng" and "Remove the room
+type" rendered as visible text beside every chip on the board.
+
+This repository already has the global class for it, `.visually-hidden`,
+whose comment records the same bug shipping once before: welcome-survey wrote
+`class="visually-hidden"` before any rule defined it, "so the prompt appeared
+twice on every free-text step. The class did the exact opposite of what it
+says." `home.ts` now uses `.visually-hidden` — one vocabulary, one rule.
+
+`scripts/css-coverage-audit.mjs` caught it (`1 NEW class(es) … styled
+nowhere`), which is the gate doing its job in a run nobody opened. It reports
+0 new after the fix.
+
+### 81c. Two concurrent integration runs silently destroyed each other
+
+Found while re-verifying this fix: a background run and a foreground run of
+the same suite produced **40 failures across four files** — missing
+applications, missing tenancies, 404s on rows that had just been created.
+Every one read as a product bug. Run alone, the same commit was 137 passed.
+
+The suite truncates every table between cases, so two runs sharing one
+database delete each other's fixtures mid-test. `fileParallelism: false`
+does not cover it: that serialises files within one vitest process and says
+nothing about a second process.
+
+`global-setup.ts` now takes a session-level Postgres advisory lock with
+`pg_try_advisory_lock` and refuses by name when it cannot get it. Session
+level, so a crashed run cannot wedge the suite. Driven: the holder passes
+21/21 while a second run refuses with "Another integration run already holds
+mastande_integration_test", and the next run after it passes 17/17.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash
