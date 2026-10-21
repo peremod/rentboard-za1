@@ -2,7 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, shareReplay } from 'rxjs';
 import { environment } from '@env/environment';
-import { Room, RoomFilters, PaginatedRooms, RelistPayload } from '../models/room.model';
+import { Room, RoomFilters, PaginatedRooms, RelistPayload, BoardCategories } from '../models/room.model';
 
 /**
  * RoomsService — Angular data layer for the Rooms API added in this pass.
@@ -19,6 +19,14 @@ export class RoomsService {
   private cache = new Map<string, Observable<PaginatedRooms>>();
 
   readonly filters = signal<RoomFilters>({ sortBy: 'newest', page: 1, limit: 12 });
+
+  /**
+   * Browse shortcuts. Cached by the browser for two minutes via the response
+   * header, so the board's busiest page does not re-aggregate on every visit.
+   */
+  getCategories(): Observable<BoardCategories> {
+    return this.http.get<BoardCategories>(`${this.api}/rooms/categories`).pipe(shareReplay(1));
+  }
 
   getRooms(filters: RoomFilters): Observable<PaginatedRooms> {
     const key = JSON.stringify(filters);

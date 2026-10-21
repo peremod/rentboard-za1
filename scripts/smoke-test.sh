@@ -412,6 +412,27 @@ if [[ -n "$ROOM_ID" ]]; then
     fail "the phrase overrode an explicit filter (effective city: $PRECEDENCE)"
   fi
 
+  # ── Browse shortcuts are promises, so every one must be keepable ────────
+  #
+  # The endpoint must never return a category with a count of zero: a
+  # shortcut reading "Studio 0" invites somebody onto an empty board, and a
+  # hardcoded one that the listings cannot support is the same defect as an
+  # autocomplete suggesting a town with nothing let in it.
+  #
+  # ⚠️ The route is declared ABOVE @Get(':id') in the controller. Declared
+  # after it, Nest would match "categories" as a room id and this check would
+  # see a 404 — which is also what it would see if the route were deleted, so
+  # the status assertion is doing real work.
+  req GET /api/rooms/categories
+  check "browse shortcuts endpoint" 200 "$STATUS" "$BODY"
+  ZERO=$(echo "$BODY" | jq '[(.roomTypes[]?.count), (.places[]?.count)] | map(select(. <= 0)) | length')
+  CATS=$(echo "$BODY" | jq '[(.roomTypes[]?), (.places[]?)] | length')
+  if [ "${ZERO:-1}" = "0" ]; then
+    pass "every browse shortcut has at least one room behind it ($CATS offered)"
+  else
+    fail "$ZERO browse shortcut(s) advertise zero rooms"
+  fi
+
   req GET /api/rooms/my-rooms "" "$LTOKEN"
   check "landlord my-rooms" 200 "$STATUS" "$BODY"
 else

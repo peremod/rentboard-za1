@@ -143,7 +143,42 @@ async function main() {
 
   await ctx.close();
 
-  // ── 7. Responsive and tap targets ──────────────────────────────────────
+  // ── 7. Every browse shortcut keeps its promise ─────────────────────────
+  //
+  // ⚠️ THE assertion for this feature. A shortcut row is a set of promises
+  // ("Rooms in Pretoria 253"), and the only way a promise like that fails
+  // quietly is by being hardcoded or stale. So each one is clicked and the
+  // resulting total is compared to the number it advertised — not merely
+  // checked for being non-zero, because a shortcut that shows 253 and
+  // delivers 6 is wrong in a way ">0" cannot see.
+  console.log('\n\u2500\u2500 Browse shortcuts keep their promise \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500');
+  ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  page = await ctx.newPage();
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await settle(page);
+
+  const shortcuts = page.locator('.browse__link');
+  const count = await shortcuts.count();
+  check(count > 0, `the board offers browse shortcuts (${count})`);
+
+  const promises = [];
+  for (let i = 0; i < count; i++) {
+    const el = shortcuts.nth(i);
+    const label = (await el.innerText()).replace(/\s+/g, ' ').trim();
+    const promised = Number((await el.locator('.browse__count').innerText()).replace(/[^\d]/g, ''));
+    promises.push({ label, promised, href: await el.getAttribute('href') });
+  }
+
+  for (const { label, promised, href } of promises) {
+    await page.goto(`${BASE}${href}`, { waitUntil: 'networkidle' });
+    await settle(page);
+    const got = await totalShown(page);
+    check(got === promised, `"${label}" -> ${got} rooms`, `promised ${promised}`);
+  }
+
+  await ctx.close();
+
+  // ── 8. Responsive and tap targets ──────────────────────────────────────
   console.log('\n── Widths 360 / 390 / 768 / 1280 ──────────────');
   for (const width of WIDTHS) {
     const c = await browser.newContext({ viewport: { width, height: 800 } });
@@ -163,6 +198,12 @@ async function main() {
 
     const chipCount = await p.locator('.search-chip').count();
     check(chipCount > 0, `${width}px: the search read is shown (${chipCount} chip(s))`);
+
+    const smallLinks = await p.evaluate(() =>
+      [...document.querySelectorAll('.browse__link')]
+        .map((el) => Math.round(el.getBoundingClientRect().height))
+        .filter((h) => h > 0 && h < 44));
+    check(smallLinks.length === 0, `${width}px: every browse shortcut meets 44px`, `heights ${JSON.stringify(smallLinks)}`);
     await c.close();
   }
 

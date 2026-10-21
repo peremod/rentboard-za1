@@ -51,6 +51,20 @@ export class RoomsController {
     return this.roomsService.suggestLocations(q ?? '', limit ? Math.min(+limit, 10) : 8);
   }
 
+  /**
+   * ⚠️ ABOVE @Get(':id'), and that is not a style choice. Nest matches routes
+   * in declaration order, so a literal path declared after a parameterised
+   * one is never reached — /rooms/categories would arrive at findOne() as an
+   * id of "categories" and come back 404. @Get('suggest') sits above it for
+   * the same reason.
+   */
+  @Get('categories')
+  @Header('Cache-Control', 'public, max-age=120')
+  @ApiOperation({ summary: 'Browse shortcuts, built from live listings only' })
+  categories() {
+    return this.roomsService.categories();
+  }
+
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
   @Header('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=60')

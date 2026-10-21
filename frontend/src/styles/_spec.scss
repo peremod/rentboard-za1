@@ -497,6 +497,21 @@ img{display:block;max-width:100%}
    editing the phrase. */
 .search-chip--word{border-color:var(--border);color:var(--ink2);font-weight:500;cursor:default}
 .search-chip--word:hover{background:var(--white)}
+
+/* Browse shortcuts. A horizontal row that wraps rather than scrolls: a
+   scrolling strip hides half its own contents on the width most of this
+   board is read at, and nothing tells you the rest is there. 44px targets
+   because every one is a link that changes the whole page. */
+.browse{display:flex;flex-wrap:wrap;gap:.5rem;margin:.75rem 0 0}
+.browse__link{display:inline-flex;align-items:center;gap:.5rem;min-height:44px;
+  padding:.25rem .75rem;border:1px solid var(--border);border-radius:var(--r-full);
+  background:var(--cream2);color:var(--ink2);font-size:.85rem;font-weight:600;text-decoration:none}
+.browse__link:hover{background:var(--white);border-color:var(--border-strong);color:var(--ink)}
+.browse__link:focus-visible{outline:2px solid var(--sage);outline-offset:2px}
+/* The count is the thing that makes the shortcut a promise rather than a
+   guess, so it is legible rather than decorative — var(--slate) on --cream2
+   is the same pairing the results count uses. */
+.browse__count{color:var(--slate);font-weight:500}
 .sort-select{
   padding:.4rem .75rem;padding-right:2.5rem;
   border:1.5px solid var(--border-strong);border-radius:var(--r4);

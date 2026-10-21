@@ -1088,6 +1088,82 @@ export class RoomsService {
   }
 
   /**
+   * What the board can actually be browsed BY — shortcuts built from live
+   * listings rather than from a list somebody typed.
+   *
+   * ⚠️ Every entry here is a promise that clicking it shows rooms, so each
+   * one carries the count that makes it true and anything with a count of
+   * zero is never returned. A hardcoded "Student accommodation" shortcut
+   * that lands on an empty board is the same defect as the location
+   * autocomplete suggesting a town with no listings — which is why
+   * suggestLocations() is drawn from the board too, and says so.
+   *
+   * ⚠️ It also means the shortcuts CHANGE as the board does, and that is the
+   * point: a category disappears when its last room is let, instead of
+   * becoming a dead link nobody notices.
+   *
+   * Cached for two minutes, per instance. Three aggregates on every visit to
+   * the busiest page in the site is a real cost, and a shortcut row that is
+   * two minutes stale shows a count one or two out — which is visible and
+   * harmless — rather than a room that is gone, which is neither.
+   */
+  private categoriesCache: { at: number; value: unknown } | null = null;
+
+  async categories() {
+    const TWO_MINUTES = 2 * 60 * 1000;
+    if (this.categoriesCache && Date.now() - this.categoriesCache.at < TWO_MINUTES) {
+      return this.categoriesCache.value;
+    }
+
+    const LABELS: Record<string, string> = {
+      shared_house: 'Shared house',
+      en_suite: 'En-suite room',
+      studio: 'Studio',
+      private: 'Private room',
+    };
+
+    const [types, places, availableNow, total] = await Promise.all([
+      this.prisma.room.groupBy({
+        by: ['roomType'],
+        where: { status: 'active' },
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+      }),
+      this.prisma.room.groupBy({
+        by: ['city', 'province'],
+        where: { status: 'active' },
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 6,
+      }),
+      this.prisma.room.count({
+        where: { status: 'active', ...this.availabilityClause(true, undefined, undefined) },
+      }),
+      this.prisma.room.count({ where: { status: 'active' } }),
+    ]);
+
+    const value = {
+      roomTypes: types
+        .filter((t) => t._count.id > 0)
+        .map((t) => ({
+          type: t.roomType,
+          label: LABELS[t.roomType] ?? t.roomType,
+          count: t._count.id,
+        })),
+      places: places
+        .filter((p) => p._count.id > 0)
+        .map((p) => ({ city: p.city, province: p.province, count: p._count.id })),
+      // Omitted rather than shown as zero: a shortcut reading "Available now
+      // (0)" is an invitation to an empty board.
+      ...(availableNow > 0 && { availableNow }),
+      total,
+    };
+
+    this.categoriesCache = { at: Date.now(), value };
+    return value;
+  }
+
+  /**
    * Location suggestions for the search box.
    *
    * Drawn from cities that actually have live listings, not a static gazetteer:
