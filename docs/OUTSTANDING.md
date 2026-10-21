@@ -5543,6 +5543,33 @@ delete over cancel), and a confirmed letting survives a later undo attempt.
 Falsified by removing the fix — three of the four fail; the fourth guards the
 `pending` scoping rather than the fix, and correctly passes either way.
 
+### ⚠️ The fix prevents new orphans. It does not repair existing ones.
+
+Any tenancy already left behind by an undo before v1.163.0 is still there,
+still `pending`, still confirmable. The fix changes `undoAccept` from that
+release onward and touches no existing row.
+
+Run this against production to find them — it is a SELECT and safe:
+
+```sql
+SELECT t.id, t."roomId", t."applicationId", t."createdAt"
+FROM   tenancies t
+JOIN   applications a ON a.id = t."applicationId"
+WHERE  t.status = 'pending'
+AND    a.status <> 'accepted';
+```
+
+Each row is a room that may be let and advertised at once. If any come back,
+the repair is to delete those tenancy rows — the same thing the fix now does
+at the moment of the undo — but look at them first: a `pending` tenancy whose
+application is `withdrawn` or `rejected` for some other reason is the same
+shape and may have a different cause.
+
+⚠️ There is no way to count them from a coding session: production is not
+reachable from here (`connect_rejected` by the egress policy), so this is a
+query for somebody with the Neon console, not a number this document can
+state.
+
 ### 79b. A yard may be created in a province that does not exist
 
 `PropertyDto.province` is `@IsString() @MinLength(2) @MaxLength(120)`.
