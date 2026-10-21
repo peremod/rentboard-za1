@@ -5493,7 +5493,7 @@ Falsified by putting the real leaked value back and watching both guards fire.
 ---
 
 
-## 79. Two defects the integration tests found — 79a fixed, 79b open
+## 79. Two defects the integration tests found — both fixed
 
 Both are recorded as passing tests that assert **what the code does**, with the
 reasoning beside them. Neither was fixed, because both are changes to business
@@ -5570,7 +5570,7 @@ reachable from here (`connect_rejected` by the egress policy), so this is a
 query for somebody with the Neon console, not a number this document can
 state.
 
-### 79b. A yard may be created in a province that does not exist
+### 79b. ✅ FIXED — a yard could be created in a province that does not exist
 
 `PropertyDto.province` is `@IsString() @MinLength(2) @MaxLength(120)`.
 `CreateRoomDto.province` and `RoomFiltersDto.province` are both
@@ -5580,11 +5580,40 @@ Not cosmetic: the board's province filter accepts only the nine real
 provinces, so a yard stored as "Atlantis" can never be reached by the filter
 that exists to find it, while looking saved.
 
-One decorator fixes it. The question that comes with it is what to do about
-records already stored outside the list — tightening the DTO would start
-refusing *updates* to those yards, so a data check comes first.
+**Fixed 21 October.** Both `CreatePropertyDto.province` and
+`UpdatePropertyDto.province` are `@IsIn(SA_PROVINCES)` now. They are separate
+classes rather than a `PartialType`, so each had to be changed — and each is
+falsified separately: reverting create fails one test, reverting update fails
+a different one.
 
-Covered by `backend/test/properties.int-spec.ts`, the test marked 🔴.
+⚠️ **The risk I flagged turned out to be much smaller than it looked, and
+measuring it is what showed that.** I expected tightening this to start
+refusing edits to yards already stored outside the list. It cannot break the
+landlord's form: the province control is a `<select>` bound to
+`SA_PROVINCES`, so the UI has never been able to submit anything else. Only a
+direct API call could, which is exactly what this now refuses. An edit that
+does not mention the province is unaffected, and there is a test for that
+because it is the ordinary case.
+
+Five tests in `backend/test/properties.int-spec.ts`: an invalid province
+refused on create, **all nine real provinces accepted** (so the fix cannot
+have narrowed the list by accident), the room side agreeing, an invalid
+province refused on update with the record left alone, and an ordinary edit
+still working.
+
+⚠️ **Prevents new ones; repairs none.** Any yard already stored outside the
+list keeps its province until somebody edits it. To find them:
+
+```sql
+SELECT id, name, province FROM properties
+WHERE province NOT IN (
+  'Eastern Cape','Free State','Gauteng','KwaZulu-Natal','Limpopo',
+  'Mpumalanga','Northern Cape','North West','Western Cape');
+```
+
+Any row that comes back is a yard the board's province filter cannot find.
+Editing it through the landlord's form repairs it, because the select offers
+only valid values.
 
 ---
 
