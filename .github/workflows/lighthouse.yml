@@ -153,6 +153,39 @@ jobs:
             --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage"
           node scripts/lhr-summary.mjs ./board-lhr.json
 
+          # ── Two discriminating observations, five seconds each ──────────
+          #
+          # Run 15 attributed a 0.9162 shift to the footer brand block and made
+          # the cookie notice the LCP element. The notice is already
+          # `position: fixed`, so it cannot push anything — something ABOVE the
+          # footer grows after paint, and there are two candidates that fit:
+          # the hero's phone splash, which `afterNextRender` applies on a first
+          # visit, and room cards arriving into a board the served HTML does not
+          # contain. Guessing between them is how a change gets credited with a
+          # number it did not move.
+          #
+          # 1. Desktop. The splash is mobile-only (JS at ≤700px, CSS at ≤768px)
+          #    while fonts and room cards load identically at any width. A CLS
+          #    near zero here implicates the splash; a CLS near 0.9 exonerates
+          #    it.
+          echo "── the same board at desktop width"
+          lighthouse https://www.umastande.co.za/ \
+            --quiet --output=json --output-path=./board-desktop.json \
+            --preset=desktop \
+            --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage"
+          node scripts/lhr-summary.mjs ./board-desktop.json
+
+          # 2. What the server actually sends. If the served HTML carries no
+          #    room links, every card is a post-paint insertion and the shift is
+          #    the board filling itself in.
+          echo "── what the served HTML contains, before any JavaScript runs"
+          BODY=$(curl -s https://www.umastande.co.za/)
+          echo "bytes:        $(printf '%s' "$BODY" | wc -c)"
+          echo "room links:   $(printf '%s' "$BODY" | grep -o '/rooms/[0-9a-f-]\{36\}' | sort -u | wc -l)"
+          echo "skeletons:    $(printf '%s' "$BODY" | grep -c 'app-skeleton-card' || true)"
+          echo "hero--splash: $(printf '%s' "$BODY" | grep -c 'hero--splash' || true)"
+          echo "trust-strip:  $(printf '%s' "$BODY" | grep -c 'trust-strip' || true)"
+
       - name: Verify sitemap URLs all resolve
         # ⚠️ `!cancelled()`, because a step's default condition is success() and
         # this one spent run 13 SKIPPED — the audit above failed on the board's
