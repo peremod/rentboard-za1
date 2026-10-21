@@ -15,21 +15,40 @@ a number written here.
 
 ---
 
-## 1. Push the release tags
+## 1. Push the release tags — ✅ DONE 21 October 2026
 
-⚠️ **This section said "nineteen tags" and `Created 19 tag(s)` long after
-that stopped being true.** Measured on 21 October 2026: the script holds **76
-entries**, the remote holds **271 tags**, and exactly **two are missing** —
-`v1.160.0` and `v1.161.0`, both cut in this session. The rest were pushed at
-some point and the section never caught up, which made it read as a large
-outstanding job when it is a two-tag one.
+✅ **Nothing outstanding.** The operator ran the script from their own clone
+and the tags landed. Verified from the container by reading the remote rather
+than taking it on trust — and verified by TARGET, not just by presence, since
+a tag that exists but points at the wrong commit is worse than one missing:
 
-Pushing `refs/tags/*` is refused (HTTP 403) from the coding session, and that
-IS still true — re-measured, three attempts, while branch pushes in the same
-session succeeded. So the tag objects can be created in a container but never
-pushed from one, and a container is reclaimed, so they have to be made again
-from your clone. The script is idempotent and every entry names a fixed
-commit, so re-creating them produces the same tags.
+```
+v1.162.0 → 11e1f4fb35cb  ✅ chore(release): v1.162.0 to production
+v1.163.0 → b933cce2f5a3  ✅ chore(release): v1.163.0 to production
+v1.164.0 → 9f5dc0648982  ✅ chore(release): v1.164.0 to production
+```
+
+The remote now holds **276 tags** against the script's **80 entries**.
+
+### The history of this section, kept because it is the lesson
+
+⚠️ It said "nineteen tags" and `Created 19 tag(s)` long after that stopped
+being true. Measured on 21 October: the script held 76 entries, the remote 271
+tags, and exactly **two** were missing — a two-tag job reading as a large one,
+because a number written into prose goes stale and nothing tells you.
+
+⚠️ And it was missing `v1.162.0` entirely — released, deployed and superseded
+without ever being tagged. That is why the count was two rather than one, and
+it was only found by diffing the script's entries against the release commits
+rather than reading the section.
+
+**Pushing `refs/tags/*` cannot be done from a coding container.** Re-measured
+on 21 October, four attempts: `git push --dry-run` is ACCEPTED, which is the
+trap, while the real push dies with `send-pack: unexpected disconnect while
+reading sideband packet` and `git ls-remote` confirms nothing landed. Branch
+pushes in the same session succeed. ⚠️ The symptom has changed — this section
+used to record an HTTP 403 — so match on the outcome (the tag is not on the
+remote) rather than on the error text.
 
 ```bash
 cd /path/to/rentboard-za1
@@ -5493,7 +5512,33 @@ Falsified by putting the real leaked value back and watching both guards fire.
 ---
 
 
-## 79. Two defects the integration tests found — both fixed
+## 79. Two defects the integration tests found — both fixed, residue VERIFIED CLEAR
+
+✅ **CLOSED 21 October 2026.** Both defects fixed, both fixes deployed to
+production in v1.164.0, and both residues measured against the production
+database rather than assumed away.
+
+The residue check was run in the Neon SQL editor against `neondb` on the
+production endpoint `ep-royal-hill-b1vy1vmt`:
+
+```
+control_users 4 · control_rooms 2 · control_properties 1 · control_tenancies 2
+orphaned_tenancies 0 · bad_province_yards 0 · db neondb
+```
+
+⚠️ **The controls are the point, and the first attempt had none.** Run as two
+bare `SELECT`s, both came back "Statement executed successfully" — which is
+what Neon shows for a query returning no rows, and also what you would see on
+a branch holding no data at all. A zero-row grid and a query that never
+reached the real tables are indistinguishable. The rewritten check returns one
+row of counts, including four totals that must be non-zero for the findings to
+mean anything, and `current_database()` so the answer carries its own label.
+
+**What the controls also say:** production holds 4 users, 2 rooms and 1
+property. The §79a exposure — two people told they have the same back room —
+was therefore almost certainly never realised on a live letting. The fix was
+still right, and far better shipped before the board fills up than after.
+
 
 Both are recorded as passing tests that assert **what the code does**, with the
 reasoning beside them. Neither was fixed, because both are changes to business

@@ -6,6 +6,7 @@ import { IMAGE_LOADER, ImageLoaderConfig } from '@angular/common';
 import { routes } from './app.routes';
 import { PublicPreloadStrategy } from './core/preloading/public-preload.strategy';
 import { provideRouteSeo } from './core/seo/route-seo';
+import { provideSiteIdentity } from './core/seo/site-identity';
 import { NavigationHistoryService } from './core/services/navigation-history.service';
 import { provideLocaleRouting, provideRememberedLocaleRedirect } from './core/i18n/locale-routing';
 import { LOCALE_URL_SERIALIZER_PROVIDER } from './core/i18n/locale-url-serializer';
@@ -100,6 +101,8 @@ export const appConfig: ApplicationConfig = {
      * <title> on its own.
      */
     provideRouteSeo(),
+    // Organization + WebSite, once, from the root — see site-identity.ts.
+    provideSiteIdentity(),
 
     /**
      * serverTimeoutInterceptor is FIRST on purpose: it has to wrap the rest of

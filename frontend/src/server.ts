@@ -216,6 +216,42 @@ const prerenderedPages = collectPrerenderedPages();
 app.use(compression());
 
 /**
+ * `X-Robots-Tag: noindex` on every private route, set by the SERVER.
+ *
+ * 🔴 Why this is needed when those routes already carry `seo: { noIndex: true }`.
+ *
+ * The private trees render client-side (`RenderMode.Client` in app.routes.ts),
+ * which is right — private data must never be rendered into cacheable HTML.
+ * But it means a crawler asking for `/tenant/dashboard` is handed the CSR
+ * shell: 200 OK, about 6KB, and **no robots directive of any kind**. The
+ * `noIndex` is applied by SeoService after hydration, so a crawler that does
+ * not execute JavaScript never sees it. Measured, not assumed — curl returns
+ * that shell with no `<meta name="robots">` and no header.
+ *
+ * ⚠️ robots.txt does not close this. It stops a well-behaved crawler
+ * FETCHING the URL; it does not stop the URL being indexed from a link
+ * somewhere else, which is exactly what Google's "Indexed, though blocked by
+ * robots.txt" state is. A Disallow also means the crawler never reads a
+ * noindex it is not allowed to fetch.
+ *
+ * A header is the one signal that does not depend on rendering, on
+ * JavaScript, or on the crawler being allowed in. It is defence in depth, not
+ * the defence: the guards are what keep the data private — see
+ * CLAUDE.md on controls that only look like controls.
+ */
+const PRIVATE_PREFIXES = ['auth', 'welcome', 'tenant', 'landlord', 'account', 'admin', 'reference'];
+
+app.use((req, res, next) => {
+  const segments = req.path.split('/').filter(Boolean);
+  // Skip a locale prefix if there is one, so /zu/tenant/... is covered too.
+  const first = segments[0] && isPrefixedLocale(segments[0]) ? segments[1] : segments[0];
+  if (first && PRIVATE_PREFIXES.includes(first)) {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  }
+  next();
+});
+
+/**
  * robots.txt and sitemap.xml, from the API that generates them.
  *
  * Both are served by the backend (seo.controller.ts) — on the API host. A

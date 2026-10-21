@@ -84,7 +84,42 @@ jobs:
             --url=https://umastande.co.za/pricing \
             --url=https://umastande.co.za/how-it-works \
             --numberOfRuns=3
+          # ⚠️ `|| true` used to end this line, which made the whole audit a
+          # collection exercise: three runs of Lighthouse, every score
+          # discarded, and a green tick whatever happened. Performance and SEO
+          # could regress for months without a single red build — a check that
+          # cannot fail, in the workflow whose job is to catch regressions.
+          #
+          # The recommended preset stays NON-blocking, because it asserts
+          # dozens of audits and a brand-new failure in any one of them would
+          # block a release for something nobody chose to care about. It is
+          # printed for a human to read.
           lhci assert --preset=lighthouse:recommended || true
+
+          # These do block, and they are deliberately few. Each is a number
+          # this product has a real stake in, on the slow Android phone it is
+          # built for, and each is set at the level the site should not fall
+          # BELOW rather than at an aspiration:
+          #
+          #   · SEO 0.9      — metadata, crawlability, tap targets. A drop here
+          #                    is almost always an accident.
+          #   · LCP 4000ms   — the board's hero and first room card. Google's
+          #                    "poor" threshold is 4s; this fails only when a
+          #                    real person would call the page slow.
+          #   · CLS 0.1      — the "good" bound. Layout shift on a listing
+          #                    card is how somebody taps the wrong room.
+          #   · TBT 600ms    — a proxy for INP, which Lighthouse cannot
+          #                    measure in a lab run (it needs real
+          #                    interactions). Named as a proxy rather than
+          #                    reported as INP, because they are not the same
+          #                    metric and saying otherwise would be a claim
+          #                    this workflow cannot support.
+          lhci assert \
+            --assertions.categories:seo="error,minScore=0.9" \
+            --assertions.largest-contentful-paint="error,maxNumericValue=4000" \
+            --assertions.cumulative-layout-shift="error,maxNumericValue=0.1" \
+            --assertions.total-blocking-time="error,maxNumericValue=600"
+
           lhci upload --target=temporary-public-storage
 
       - name: Verify sitemap URLs all resolve

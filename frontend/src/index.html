@@ -7,7 +7,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="description" content="Find a room to rent direct from landlords across South Africa. Free to apply, always. No estate agent, no application fees."/>
   <meta name="theme-color" content="#AD4222"/>
+  <!--
+    Icons.
+
+    ⚠️ The SVG alone was not enough for Google. Its favicon guidance asks for
+    a raster square whose side is a MULTIPLE OF 48px, and a site that offers
+    only an SVG can end up with the generic globe beside its result. These are
+    rendered from favicon.svg itself rather than redrawn, so every size is the
+    same mark.
+
+    ⚠️ They are also listed in angular.json `assets`. A file sitting in src/
+    that nothing lists is not copied into the build — it would 404 in
+    production while working perfectly in `ng serve`, which is the worst kind
+    of missing asset.
+  -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
+  <link rel="icon" type="image/png" sizes="48x48" href="icon-48.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"/>
 
   <!-- Room images are served from ImageKit and include the LCP element on
        both the board and room detail, so the connection is opened early. -->
