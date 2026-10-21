@@ -1,9 +1,9 @@
 {
   "counts": {
     "total": 236,
-    "public": 39,
+    "public": 41,
     "optionalAuth": 2,
-    "admin": 62,
+    "admin": 61,
     "throttled": 25,
     "withBody": 81
   }

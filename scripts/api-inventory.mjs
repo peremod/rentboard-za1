@@ -49,75 +49,120 @@ function literal(arg) {
   return m ? m[1] : '';
 }
 
+/**
+ * Read a decorator's arguments with the parentheses balanced.
+ *
+ * ⚠️ `[^)]*` was not enough and the sweep caught it: `@UseGuards(AuthGuard('google'))`
+ * came back as `AuthGuard('google'` — a guard name that matches nothing and
+ * reads as corrupt in the table.
+ */
+function args(src, openIdx) {
+  let depth = 0;
+  for (let i = openIdx; i < src.length; i++) {
+    if (src[i] === '(') depth++;
+    else if (src[i] === ')') { depth--; if (depth === 0) return src.slice(openIdx + 1, i); }
+  }
+  return '';
+}
+
+/**
+ * ⚠️ ONE FILE CAN HOLD SEVERAL CONTROLLERS, and reading only the first is how
+ * this tool reported two PUBLIC routes as guarded.
+ *
+ * `lost-number.controller.ts` declares `@Controller('admin/recoveries')` and
+ * then `@Controller('auth/lost-number')`; `storefront.controller.ts` declares
+ * `@Controller('landlord/storefront')` and then `@Controller('storefronts')`.
+ * Taking the first prefix and the first class-level @UseGuards for the whole
+ * file put `POST /auth/lost-number/confirm` in the inventory as
+ * `POST /admin/recoveries/confirm` behind JwtAuthGuard + AdminGuard, and
+ * `GET /storefronts/:slug` as `GET /landlord/storefront/:slug` behind
+ * JwtAuthGuard + LandlordGuard.
+ *
+ * Both are open to the world. The auth sweep then "passed" them as refusals
+ * while the real routes were never called at all — a list wrong in the one
+ * direction that cannot be noticed by anything downstream of it, which is
+ * exactly the family of defect this repository keeps finding. The sweep found
+ * it on its first run, because a guarded route answering 404 to everybody is
+ * not a thing that happens.
+ */
+function controllerBlocks(src) {
+  const blocks = [];
+  const re = /@Controller\(/g;
+  const starts = [];
+  let m;
+  while ((m = re.exec(src))) starts.push(m.index);
+  for (let i = 0; i < starts.length; i++) {
+    const from = starts[i];
+    const to = i + 1 < starts.length ? starts[i + 1] : src.length;
+    blocks.push({ text: src.slice(from, to), prefix: literal(args(src, src.indexOf('(', from))) });
+  }
+  return blocks;
+}
+
 function parse(file) {
-  const src = readFileSync(file, 'utf8');
+  const whole = readFileSync(file, 'utf8');
   const rel = file.slice(ROOT.length + 1);
-
-  const cls = src.match(/@Controller\(\s*([^)]*)\)/);
-  if (!cls) return [];
-  const prefix = literal(cls[1]);
-
-  // Class-level guards apply to every route in the file.
-  const head = src.slice(0, src.search(/export\s+class/));
-  const classGuards = [...head.matchAll(/@UseGuards\(([^)]*)\)/g)]
-    .flatMap((m) => m[1].split(',').map((s) => s.trim()).filter(Boolean));
-
   const routes = [];
-  const lines = src.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const verb = lines[i].match(new RegExp(`^\\s*@(${VERBS.join('|')})\\(([^)]*)\\)`));
-    if (!verb) continue;
 
-    // Decorators between this one and the handler belong to this route; so do
-    // the ones immediately above it, which is where @UseGuards usually sits.
-    let from = i;
-    while (from > 0 && /^\s*(@|\/\*|\*|\/\/)/.test(lines[from - 1])) from--;
-    let to = i;
-    while (to < lines.length - 1 && !/^\s*(async\s+)?[A-Za-z_$][\w$]*\s*\(/.test(lines[to + 1])) to++;
-    const block = lines.slice(from, Math.min(to + 6, lines.length)).join('\n');
+  for (const block of controllerBlocks(whole)) {
+    const src = block.text;
+    const prefix = block.prefix;
 
-    const guards = [...block.matchAll(/@UseGuards\(([^)]*)\)/g)]
-      .flatMap((m) => m[1].split(',').map((s) => s.trim()).filter(Boolean));
-    const all = [...new Set([...classGuards, ...guards])];
+    // Class-level guards apply to every route in THIS controller.
+    const classEnd = src.search(/export\s+class|^\s*class\s/m);
+    const head = classEnd > 0 ? src.slice(0, classEnd) : '';
+    const classGuards = [...head.matchAll(/@UseGuards\(/g)]
+      .flatMap((m) => args(head, m.index + '@UseGuards'.length).split(',').map((x) => x.trim()).filter(Boolean));
 
-    const throttle = block.match(/@Throttle\(\{[^}]*limit:\s*(\d+)[^}]*ttl:\s*([^,}]+)/);
-    const httpCode = block.match(/@HttpCode\(\s*(?:HttpStatus\.)?([A-Z_0-9]+)\s*\)/);
-    const summary = block.match(/summary:\s*['"`]([^'"`]*)['"`]/);
-    const body = block.match(/@Body\(\)\s*\w+:\s*([A-Za-z0-9_]+)/);
-    const params = [...block.matchAll(/@Param\(\s*['"`](\w+)['"`]/g)].map((m) => m[1]);
-    const query = [...block.matchAll(/@Query\(\s*['"`](\w+)['"`]/g)].map((m) => m[1]);
-    const queryDto = block.match(/@Query\(\)\s*\w+:\s*([A-Za-z0-9_]+)/);
+    const lines = src.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const verb = lines[i].match(new RegExp(`^\\s*@(${VERBS.join('|')})\\(`));
+      if (!verb) continue;
+      const decoratorArgs = args(lines[i], lines[i].indexOf('('));
 
-    const sub = literal(verb[2]);
-    const path = `/${[prefix, sub].filter(Boolean).join('/')}`.replace(/\/+/g, '/');
+      let from = i;
+      while (from > 0 && /^\s*(@|\/\*|\*|\/\/)/.test(lines[from - 1])) from--;
+      let to = i;
+      while (to < lines.length - 1 && !/^\s*(async\s+)?[A-Za-z_$][\w$]*\s*\(/.test(lines[to + 1])) to++;
+      const b = lines.slice(from, Math.min(to + 6, lines.length)).join('\n');
 
-    /**
-     * ⚠️ A ThrottlerGuard is NOT an authentication guard, and counting it as
-     * one made /auth/register and /auth/login read as protected routes in the
-     * first run of this script. They are the two most exposed endpoints in
-     * the product. A rate limiter bounds how often an anonymous caller may
-     * try; it never asks who they are. So "public" means no guard that
-     * establishes identity, and the limiter is reported separately.
-     */
-    const authGuards = all.filter((g) => !/Throttler/.test(g));
+      const guards = [...b.matchAll(/@UseGuards\(/g)]
+        .flatMap((m) => args(b, m.index + '@UseGuards'.length).split(',').map((x) => x.trim()).filter(Boolean));
+      const all = [...new Set([...classGuards, ...guards])];
 
-    routes.push({
-      method: verb[1].toUpperCase(),
-      path: `/api${path}`,
-      file: rel,
-      guards: all,
-      authGuards,
-      public: authGuards.length === 0,
-      optionalAuth: authGuards.some((g) => /Optional/.test(g)),
-      admin: authGuards.some((g) => /Admin/.test(g)),
-      throttle: throttle ? `${throttle[1]}/${throttle[2].trim()}` : null,
-      successStatus: httpCode ? httpCode[1] : (verb[1] === 'Post' ? 'CREATED(201 default)' : 'OK(200 default)'),
-      bodyDto: body ? body[1] : null,
-      queryDto: queryDto ? queryDto[1] : null,
-      pathParams: params,
-      queryParams: query,
-      summary: summary ? summary[1] : '',
-    });
+      const throttle = b.match(/@Throttle\(\{[^}]*limit:\s*(\d+)[^}]*ttl:\s*([^,}]+)/);
+      const httpCode = b.match(/@HttpCode\(\s*(?:HttpStatus\.)?([A-Z_0-9]+)\s*\)/);
+      const summary = b.match(/summary:\s*['"`]([^'"`]*)['"`]/);
+      const body = b.match(/@Body\(\)\s*\w+:\s*([A-Za-z0-9_]+)/);
+      const params = [...b.matchAll(/@Param\(\s*['"`](\w+)['"`]/g)].map((m) => m[1]);
+      const query = [...b.matchAll(/@Query\(\s*['"`](\w+)['"`]/g)].map((m) => m[1]);
+      const queryDto = b.match(/@Query\(\)\s*\w+:\s*([A-Za-z0-9_]+)/);
+
+      const sub = literal(decoratorArgs);
+      const path = `/${[prefix, sub].filter(Boolean).join('/')}`.replace(/\/+/g, '/');
+
+      const authGuards = all.filter((g) => !/Throttler/.test(g));
+
+      routes.push({
+        method: verb[1].toUpperCase(),
+        path: `/api${path}`,
+        file: rel,
+        guards: all,
+        authGuards,
+        public: authGuards.length === 0,
+        optionalAuth: authGuards.some((g) => /Optional/.test(g)),
+        admin: authGuards.some((g) => /Admin/.test(g)),
+        /** Passport's OAuth guard answers an unauthenticated caller with a redirect, by design. */
+        oauth: authGuards.some((g) => /AuthGuard\(/.test(g)),
+        throttle: throttle ? `${throttle[1]}/${throttle[2].trim()}` : null,
+        successStatus: httpCode ? httpCode[1] : (verb[1] === 'Post' ? 'CREATED(201 default)' : 'OK(200 default)'),
+        bodyDto: body ? body[1] : null,
+        queryDto: queryDto ? queryDto[1] : null,
+        pathParams: params,
+        queryParams: query,
+        summary: summary ? summary[1] : '',
+      });
+    }
   }
   return routes;
 }

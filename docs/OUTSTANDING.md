@@ -6042,6 +6042,96 @@ it goes too**, along with its smoke check and the aggregation behind it.
 ---
 
 
+## 85. The API sweeps, and the 500 they found on the busiest public route
+
+Steps 1–5 of the API testing brief. `scripts/api-inventory.mjs` reads the
+inventory out of the 35 controllers — **236 routes**, 41 unauthenticated, 2
+optional-auth, 61 admin-only, 25 rate-limited, 81 with a body DTO — and
+`backend/test/api-contract.int-spec.ts` sweeps that inventory rather than a
+hand-written list of routes, because "a row-shaped check only ever finds what
+somebody thought to list" and 236 of them is well past what anybody keeps in
+step by hand.
+
+### 85a. 🔴 `GET /api/rooms?page=999999999999&limit=999999999` → 500
+
+On the busiest unauthenticated route in the product. `rooms.service.ts`
+computes `skip = (page - 1) * limit`, about **1e21** for those numbers, far
+past what Postgres will take for an OFFSET — so Prisma threw and the board
+answered Internal Server Error to an anonymous caller.
+
+**Either parameter alone was fine**, which is why nothing had ever hit it: a
+large page with the default limit returns an empty list, and a large limit on
+page 1 returns the board. It takes both.
+
+The unbounded `limit` was the second half of the same hole: no maximum at
+all, so one anonymous request could ask for every active row. At 423 rooms
+that is a fat response; on a board that grows it is a full scan served to
+whoever asks.
+
+`@Max(100)` on `limit` and `@Max(100_000)` on `page`. The board pages at 12
+and nothing in this codebase or the frontend ever asks for more, so 100 is
+generous; the pair also bounds the product, so `skip` cannot exceed 1e7 and
+the overflow cannot return through another combination. Measured against the
+running API: 500 → **400 "limit must not be greater than 100"**, with the
+boundaries exact — 100 and page 100000 pass, 101 and page 100001 are refused,
+and `?page=1&limit=12` is untouched. Falsified: removing both `@Max`
+decorators brings the 500 back and fails two tests.
+
+### 85b. ⚠️ The inventory was wrong in the one direction that hides routes
+
+Its first run reported `POST /admin/recoveries/confirm` behind
+`JwtAuthGuard + AdminGuard` and `GET /landlord/storefront/:slug` behind
+`JwtAuthGuard + LandlordGuard`. **Both are public.**
+
+`lost-number.controller.ts` declares two controllers —
+`@Controller('admin/recoveries')` and then `@Controller('auth/lost-number')` —
+and so does `storefront.controller.ts`. The parser read only the first
+`@Controller` and the first class-level `@UseGuards` per file, so the second
+controller's routes inherited the first one's prefix **and its guards**. The
+real routes, `POST /auth/lost-number/confirm` and `GET /storefronts/:slug`,
+were never swept at all, and two open routes sat in the inventory as
+protected.
+
+A list wrong this way cannot be caught by anything downstream of it — every
+sweep would have reported those routes as correctly refusing a caller while
+calling a path that does not exist. The sweep found it on its first run,
+because *a guarded route answering 404 to everybody is not a thing that
+happens*. Public is 41, not 39; admin is 61, not 62.
+
+It also parsed `@UseGuards(AuthGuard('google'))` as `AuthGuard('google'` —
+`[^)]*` stops at the first `)`. Decorator arguments are read with balanced
+parentheses now.
+
+### 85c. Two of my own test defects, both the familiar shapes
+
+**Ten supertest requests built eagerly** raced each other onto `listen(0)` and
+one lost, failing with "Cannot read properties of null (reading 'address')" —
+which reads as the API crashing on hostile input when it is the harness
+racing itself. The probes are thunks now, created and awaited in turn.
+
+**The OAuth callback** is excluded from the unauthenticated sweep *with a
+reason in the code*, not quietly: `AuthGuard('google')` exists to answer an
+unauthenticated caller — that is the return leg of the sign-in — and it
+redirects. It has its own test asserting the redirect mints no token and sets
+no cookie.
+
+### What the sweeps assert
+
+| Sweep | Scope |
+|---|---|
+| unauthenticated | all 194 identity-guarded routes must answer 401/403 |
+| privilege escalation | all 61 admin routes refuse a TENANT **and** a LANDLORD |
+| the control for both | a real admin gets *past* the guard on the same routes — otherwise "everything 403s" would pass with a broken token or misspelt paths |
+| malformed id | no `:id` route may answer 5xx to `not-a-uuid` |
+| unsupported method | 404/405, never a crash |
+| hostile input | malformed JSON, wrong content type, SQL strings, arrays and nulls where objects belong, absurd query values — all < 500 |
+| leakage | no V8 frame, `node_modules` path, PrismaClient reference, connection string, raw SQL, JWT secret or internal file path in **any** response collected above |
+| oversized body | 2MB → 400/413, and nothing written |
+| unexpected field | `forbidNonWhitelisted` enforced, with a control proving the same body minus the field succeeds |
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash
