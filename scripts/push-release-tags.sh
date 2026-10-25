@@ -2034,6 +2034,35 @@ found most of it — 91 unit, 207 integration.
 Verified in production rather than assumed: the deploy verifier read
 {\"version\":\"1.164.0\",\"env\":\"production\"} with uptime 82."
 
+tag_if_missing "v1.165.0" "610412c137371a0937096321a7ab86f615d21c99" "2026-10-25T11:32:20+00:00" "v1.165.0 - the board had never been server-rendered in production
+
+Vercel's \`handle: filesystem\` was answering '/' from disk with Angular's
+index.csr.html: 7,618 bytes, no rooms, no hero, no trust strip, no canonical and
+none of the site JSON-LD. The route has been RenderMode.Server since v1.93.0 and
+the function was healthy the whole time - an unmatched path answered 404 with 27
+KB of server-rendered HTML - it simply never got the home page. The shell is out
+of the static output and the build refuses to assemble one that has it.
+
+With it: the Lighthouse budgets job stops reporting seo 0.66 on every run it has
+ever made (it audits a localhost COPY of the site, which correctly answers
+Disallow: /, and never said which it was auditing); the weekly production audit
+completes for the first time, having died on MODULE_NOT_FOUND; both budget files
+read the MEDIAN of three runs rather than lhci's default 'optimistic', which had
+passed a board whose median CLS was 0.95 against a bound of 0.1; seo-drive runs
+in CI on both builds, having never been run by anything at all.
+
+And four defects reported from a phone: a landlord nav strip 101px against the
+tenant's 61px because its mobile overrides had never applied; a terracotta rule
+3px from its own text; a drawer that hid Dashboard, List a room and Log out
+behind a vh cap bigger than the phone screen - with the walkthrough card and the
+report dialog carrying the same cap; and a Server error dialog that answered
+three different situations with one sentence.
+
+⚠️ Verified in production? NOT YET at the time of tagging. The prediction is
+written into the merge commit: '/' must answer with s-maxage=60 and its body
+must carry room links, the trust strip, a canonical and ld-site."
+
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
