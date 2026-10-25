@@ -2087,6 +2087,55 @@ Close button removed at the owner's request.
 5 unit tests, falsified by restoring Promise.all. The smoke suite asserts for
 both inboxes that every count is a number and that partial is false."
 
+tag_if_missing "v1.167.0" "14075dd633b78347e875df286342d7bd404ed9ba" "2026-10-25T18:40:29+00:00" "v1.167.0 - the board's font shift, and the two families coming home
+
+DM Sans and Playfair Display move from fonts.googleapis.com to
+src/assets/fonts, four subset files, 113 KB, both variable so no weight is
+synthesised. The faces declare font-display: optional rather than swap.
+
+swap paints in the fallback and REFLOWS when the files land - that is where the
+live board's remaining CLS 0.071 came from, with Lighthouse naming it twice as
+'Web font loaded' against the hero stats and the trust strip. optional decides
+the layout once: used from first paint if the file arrives inside its window,
+fallback for that view if it does not, and cached for the next one.
+
+Driven both ways with the font response delayed: CLS 0 whether the face arrives
+or not. Falsified by restoring swap: CLS 0.0109 shifting .hero-inner, the same
+element Lighthouse named in production.
+
+Verified in production: board CLS 0.071 -> 0.012 on mobile, 0.005 -> 0.001 on
+desktop, with both 'Web font loaded' culprits gone from the shift list.
+
+⚠️ The trade is deliberate: a first-time visitor on a bad connection reads the
+board in Georgia and the system sans, and gets the brand faces from the second
+page view out of cache.
+
+⚠️ And this release shipped two font preloads that cost LCP. They come out in
+v1.168.0."
+
+tag_if_missing "v1.168.0" "a36d54f6ed6f004a80a6b2aef2935b31ca702b3d" "2026-10-25T19:37:44+00:00" "v1.168.0 - the font preloads come out
+
+Two <link rel=preload> tags deleted. That is the whole code change.
+
+A font preload is fetched at the HIGHEST priority Chrome has - ahead of the
+render-critical CSS and JavaScript and ahead of the LCP image. Median of three
+runs per URL on the CI runner:
+
+  /how-it-works   LCP 2877 -> 1811 ms   a full second, from deleting two tags
+  /               LCP 2529 -> 2501 ms
+  /pricing        LCP 1820 -> 1810 ms
+
+On a fast connection font-display: optional was going to use the face anyway,
+so the preload bought something already bought at the cost of the metric that
+decides whether the board looks loaded.
+
+⚠️ This does NOT close the budget item. Self-hosting still costs about 310 ms
+of LCP against the Google Fonts baseline, so the budgets job's 2500 ms
+assertion on '/' fails by 1.5 ms. That is a regression I introduced and the
+budget is not being raised to meet it - the faces are not glyph-subset yet
+(dm-sans-latin.woff2 is the whole latin range at 36 KB) and that is the lever.
+docs/OUTSTANDING.md section 90e."
+
 
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
