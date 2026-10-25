@@ -6704,14 +6704,20 @@ is wrapped now — it returns its own items or, on failure, an empty list, a log
 line **naming the section**, and `partial: true` on the response so the screen
 knows what it is showing is incomplete rather than empty.
 
-⚠️ **The failing row itself is still not identified, and this does not identify
-it.** Every state that could be built locally answers 200: a pending
-application, a shortlisting, an unread message, a viewing fifteen days gone
-with no outcome, an acceptance with and without a tenancy, a lease ending,
-notice given by the landlord. Whatever production holds, this container does
-not. What changed is the blast radius and the evidence: the next occurrence
-costs one section instead of the dashboard, and the server log says which one
-by name.
+⚠️ ~~**The failing row itself is still not identified, and this does not
+identify it.** Every state that could be built locally answers 200 … Whatever
+production holds, this container does not.~~
+
+**Struck through — it was found, and the reason it could not be found is in the
+sentence itself. See §91.** There was no failing row. `messageItems()` indexes
+`r.messages[0]` on a list a concurrent mark-as-read can empty between the two
+SELECTs Prisma issues for one `findMany`, so the defect needs two things
+happening at once and every state above was one thing standing still. Driven
+against a real Postgres: 19 of 30 attempts failed before the fix, 0 of 40
+after.
+
+What §89 did change, and it still stands: the blast radius and the evidence.
+A section failing now costs one section instead of the dashboard.
 
 ### 89c. 🔴 A count that was `null` in the API for months, in both inboxes
 
@@ -6949,6 +6955,206 @@ meet it. Why the trade is still right, and what is actually left:
 
 So the open item is `/` at 1.5 ms over a real budget, with a named remedy, not
 a threshold to relax. Recorded here rather than silenced in `lighthouserc.json`.
+
+### 90f. Measured in production, v1.168.0 — and the budget passed by 10 ms
+
+Live board, `main-ORV4AFAJ.js`, `x-vercel-cache: STALE` so the SSR function
+answered, body 71,488 bytes with 2 room links and no skeletons:
+
+| | v1.167.0 (preloads in) | v1.168.0 (preloads out) |
+|---|---|---|
+| mobile LCP | 3128 ms | **2528 ms** |
+| mobile CLS | 0.012 | 0.018 |
+| mobile performance | — | 0.96 |
+| desktop LCP | 687 ms | **578 ms** |
+| desktop CLS | 0.001 | 0.002 |
+| desktop performance | — | 1.00 |
+
+**LCP: 600 ms back on mobile, 109 ms on desktop.** The runner's verdict
+transferred to production, which was the thing in doubt.
+
+⚠️ **CLS went 0.012 → 0.018 and I am not calling that a regression or a win.**
+The production audit is **one run per viewport**, and the culprit changed
+identity: v1.167.0's was the trust strip (0.0115), this one is the province
+`<select>` list (0.0184). A shift that moves between elements between single
+runs is noise, not a trend. What can be said: no "Web font loaded" cause
+appears in either, which is what `font-display: optional` was for, and both
+numbers are far inside the 0.1 budget. A real before/after on CLS needs the
+weekly job's repeated runs, not this.
+
+⚠️ **The LCP budget on `/` now passes by 10 ms, not comfortably.** Same code as
+the run that failed by 1.5 ms: median 2490 ms against 2500, having been 2501.5.
+So the assertion is sitting inside the runner's own variance and the earlier
+failure was noise in the other direction. §90e's open item stands exactly as
+written — self-hosting still costs ~310 ms against the Google Fonts baseline,
+the faces are still not glyph-subset, and a gate that flips on 11 ms of jitter
+is not evidence the cost went away. Budgets, median of 3:
+
+    /               LCP 2490 ms  CLS 0.033   (budget 2500)
+    /pricing        LCP 1814 ms  CLS 0.004
+    /how-it-works   LCP 1819 ms  CLS 0.027
+    /zu/pricing     LCP 1816 ms  CLS 0.004
+
+⚠️ **An unrelated thing the probe says and should not be read literally:**
+`/index.csr.html` answers 200 with 10,084 bytes and `cache-control: no-cache`.
+That is NOT the static shell coming back — `vercel-build.mjs` asserts it is
+absent from `static/` and the build would have failed. It is the SSR function
+answering a path no file matches, the same way `/zzz-no-such-path-xyz` gets a
+29,449-byte 404 page. The probe's label ("does index.csr.html exist as a static
+file?") can no longer tell the two apart and will mislead the next reader.
+
+## 91. The tenant inbox 500, found — it was never a row — 25 October 2026
+
+§89 fixed the blast radius of `GET /api/tenant-inbox (500)` and closed saying
+the failing row was unidentified. It stayed open for that reason. It is closed
+now, and the thing that kept it open was the word **row**.
+
+### 91a. One `findMany` is four SELECTs
+
+`messageItems()` asks for the applications that have an unread message, and for
+each one the unread messages:
+
+```ts
+where:  { messages: { some: { senderId: { not: tenantId }, readAt: null } } }
+select: { messages: { where: { senderId: { not: tenantId }, readAt: null },
+                      select: { id: true, createdAt: true } } }
+```
+
+That reads as one question asked twice, and the second copy looks redundant. It
+is not one question. Prisma loads a to-many relation with a **separate query** —
+no `relationJoins`, no `relationLoadStrategy` in `schema.prisma`, so the default
+holds — and that single `findMany` issues four SELECTs, the messages one last:
+
+    SELECT ... FROM applications WHERE (...)                   <- the row matches here
+    SELECT ... FROM rooms        WHERE id IN ($1)
+    SELECT ... FROM users        WHERE id IN ($1)
+    SELECT ... FROM messages     WHERE readAt IS NULL AND ...  <- and is empty here
+
+Anything that sets `readAt` between the first and the last leaves a row the
+outer query matched holding an **empty** message list. The next line was:
+
+```ts
+const waiting = -daysUntil(r.messages[0].createdAt);
+```
+
+`undefined.createdAt` is a TypeError. A TypeError in a Nest handler with no
+global exception filter is a 500. The tenant dashboard calls this endpoint on
+load, so the screen was a "Server error" dialog with nothing behind it.
+
+### 91b. ⚠️ The window is wide, and deliberately so
+
+Opening a thread marks the other side's messages read, and `messages.service.ts`
+fires that `updateMany` **without awaiting it**:
+
+```ts
+this.prisma.message.updateMany({ ... }).catch(() => {});
+```
+
+That is deliberate and documented where it sits — "a failure here must not stop
+somebody reading their messages" — so the write lands whenever it lands. Open a
+conversation, go to the dashboard: that is the whole reproduction.
+
+The fire-and-forget is **not** the defect and has not been changed. A list that
+cannot survive its own filter going stale is the defect.
+
+### 91c. Why no fixture could have found it
+
+§89 listed what it had tried: a pending application, a shortlisting, an unread
+message, a viewing fifteen days gone, an acceptance with and without a tenancy,
+a lease ending, notice given. Every one of them is **one thing standing still**.
+This needs two things happening at once. No amount of building states by hand
+reaches it, which is exactly why the honest "could not reproduce" in §89 was
+also a dead end — the search was in the wrong dimension, not insufficiently
+thorough.
+
+### 91d. Measured, in both directions
+
+`scripts/inbox-race-drive.mjs` drives `TenantInboxService.inbox()` itself —
+the real service, a real Postgres, the real unawaited write — and asserts the
+response is not `partial`:
+
+    before the fix   19 / 30 attempts came back partial
+    after the fix     0 / 50
+
+⚠️ The before number was taken **first**, against the unfixed service. A check
+written after the fix that has never been seen to fail is the thing this
+codebase keeps finding.
+
+⚠️ **And it refuses to pass vacuously, which took a second pass to notice.**
+"0 partial" is also what you get if the write lands after the messages SELECT
+every single time — the race never fires, nothing is exercised, and the drive
+reports success over nothing. That is precisely the green-tick-over-nothing
+this file is a list of. So each attempt is now classified, and a run where the
+race never fired exits **2 as INCONCLUSIVE** rather than 0:
+
+    the mark-read landed mid-query (the race fired): 35 / 40
+    it landed after the read, item served as normal:  5 / 40
+    attempts whose response came back partial:        0 / 40
+
+Falsified by moving the write so it cannot land mid-query: 0/20 fired, and the
+drive reported INCONCLUSIVE and exited 2 instead of passing.
+
+⚠️ The first CI run of this step passed in **one second**, which is the shape of
+a check that did nothing — that is what prompted the guard. The step is green
+with the race firing, not green because nothing happened.
+
+### 91e. Skipped, not defaulted — and the near-miss has its own test
+
+The fix is `flatMap` plus `if (unread === 0) return []`. They read the messages
+a moment ago; nothing is waiting on them.
+
+The obvious alternative is `r.messages[0]?.createdAt ?? new Date()`, which also
+stops the throw and is **wrong**: it invents "1 unread message, sent today" for
+a conversation with nothing unread in it. That is the landlord list's
+`_min.createdAt ?? new Date()`, correct there because its count comes from a
+`groupBy` that cannot be empty, and wrong here.
+
+Two unit tests in `inbox-resilience.spec.ts`, each falsified by the defect it is
+for:
+
+| test | reintroduce | result |
+|---|---|---|
+| does not throw when the messages were read mid-query | the original `map` + `[0]` | ❌ fails (`partial` true) |
+| emits no item for a thread with nothing unread | `?? new Date()` | ❌ fails (an item appears) |
+
+⚠️ The first test passes under the `?? new Date()` version and the second passes
+under the original bug. Neither test alone covers this; that is why there are
+two, and why each was run against its own defect rather than against "the old
+code" in general.
+
+### 91f. 🔴 The same class, one line from a guard that knew better
+
+Grepping `[0].` across the backend found four other sites. Three are guarded
+(`storage.service.ts` checks `length === 0`, `listing-bot.service.ts` checks
+`hits.length === 0`). The fourth:
+
+```ts
+email: emails[0].value,
+fullName: displayName,
+avatarUrl: photos?.[0]?.value,     // <- guarded, one line below
+```
+
+`google.strategy.ts`. A Google profile with no email — the scope withheld, an
+account without a verified address — was a TypeError inside a Passport verify
+callback, surfacing as a 500 on the sign-in redirect naming nothing. It is a
+refusal with a reason now, naming email-and-password sign-in, because an email
+is not optional here: `User.email` is nullable for the WhatsApp-first landlord
+who has a phone number instead, not for a Google account that came back without
+one.
+
+⚠️ **Not reproduced.** It needs Google to return such a profile and this
+container cannot make it do that. Stated as what it is — a read of the code and
+of the guarded line beside it — rather than implied to be driven.
+
+### 91g. What is NOT covered
+
+`scripts/smoke-test.sh` asserts, for both inboxes, that every per-kind count is
+a number and that `partial` is false. Those assertions pass before and after
+this fix, because from outside the race is invisible unless it happens to fire
+during the run. **No new smoke assertion was added, because there is no way to
+assert a race from an HTTP client without causing it.** The drive is what
+covers this, and it is wired into CI's backend job (after the smoke suite's
+fixtures, against the same seeded database) and into `npm run audit:inbox-race`.
 
 ---
 

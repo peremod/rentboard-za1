@@ -92,6 +92,75 @@ describe('the tenant inbox survives one broken section', () => {
   });
 });
 
+/**
+ * The 500 itself, which was never a row — §91.
+ *
+ * `messageItems()` asks for applications that HAVE an unread message, and for
+ * each one the unread messages. Prisma loads a to-many relation with a SEPARATE
+ * query, so that one `findMany` is four SELECTs with the messages one last, and
+ * anything setting `readAt` in between leaves a matched row with an EMPTY list.
+ * `r.messages[0].createdAt` was a TypeError, which is a 500, on an endpoint the
+ * dashboard calls on load.
+ *
+ * ⚠️ This double is NOT the evidence that Prisma can produce that row — it
+ * cannot be. `scripts/inbox-race-drive.mjs` drives the real service against a
+ * real Postgres with the real concurrent write and measured 19 of 30 attempts
+ * failing before the fix, 0 of 40 after. This is the fast version of the same
+ * property, so CI holds the line without a database.
+ */
+describe('the tenant inbox and a message list emptied mid-query', () => {
+  /** One application that matched the outer filter, whose inner list came back empty. */
+  function prismaWithRacedMessages() {
+    const base = prismaWith(null) as unknown as Record<string, { findMany: unknown }>;
+    return {
+      ...base,
+      application: {
+        ...base.application,
+        findMany: vi.fn(async () => [
+          {
+            id: 'app-1',
+            status: 'pending',
+            decidedAt: null,
+            createdAt: new Date(),
+            room: {
+              id: 'room-1',
+              title: 'Back room in Yeoville',
+              locationDisplay: 'Yeoville',
+              status: 'active',
+              landlord: { fullName: 'A Landlord' },
+            },
+            tenancy: null,
+            // The race: matched on "has an unread message", then had none.
+            messages: [],
+          },
+        ]),
+      },
+    } as never;
+  }
+
+  it('does not throw when the unread messages were read mid-query', async () => {
+    const service = new TenantInboxService(prismaWithRacedMessages(), surveysStub);
+
+    const result = await service.inbox('tenant-1');
+
+    // Not partial: nothing failed. A caught TypeError would make it true, which
+    // is what this asserts against — the per-section catch from §89 would
+    // otherwise hide the defect behind a merely-degraded response.
+    expect(result.partial).toBe(false);
+  });
+
+  it('emits no message item for a conversation with nothing unread in it', async () => {
+    const service = new TenantInboxService(prismaWithRacedMessages(), surveysStub);
+
+    const { items, counts } = await service.inbox('tenant-1');
+
+    // Skipped, not defaulted. `?? new Date()` would invent "1 unread message,
+    // sent today" for a thread they had just finished reading.
+    expect(items.filter((i) => i.kind === 'message_unread')).toEqual([]);
+    expect(counts.message_unread).toBe(0);
+  });
+});
+
 describe('the landlord inbox survives one broken section', () => {
   it('answers rather than throwing when a section fails', async () => {
     const service = new LandlordInboxService(prismaWith('application'), leaseStub, surveysStub);

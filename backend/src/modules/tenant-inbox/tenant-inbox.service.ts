@@ -443,10 +443,40 @@ export class TenantInboxService {
       },
     });
 
-    return rows.map((r) => {
+    /**
+     * ⚠️ `flatMap`, and the length check, because THIS IS THE 500.
+     *
+     * The filter above is written twice and reads as one question: the
+     * applications that have an unread message, and for each one the unread
+     * messages. It is not one question. Prisma loads a to-many relation with a
+     * SEPARATE query — this single `findMany` is four SELECTs, the messages one
+     * last — so anything that sets `readAt` after the applications SELECT and
+     * before the messages SELECT leaves a row the outer query matched with an
+     * EMPTY list. `r.messages[0].createdAt` was then a TypeError, which is a
+     * 500, on an endpoint the dashboard calls on load.
+     *
+     * And the window is wide, not theoretical: opening a thread fires the
+     * mark-read WITHOUT awaiting it (`messages.service.ts`, deliberately, so a
+     * failure there cannot stop somebody reading their messages), so it lands
+     * whenever it lands. Driven against a real Postgres, 19 of 30 attempts
+     * came back with the section failed — `scripts/inbox-race-drive.mjs`.
+     *
+     * This is the row production was reporting on 25 October. §89 fixed the
+     * blast radius and could not find the cause, because the cause needs two
+     * things happening at once and every fixture built by hand was one thing
+     * standing still.
+     *
+     * Skipped rather than defaulted: they read the messages a moment ago, so
+     * there is nothing waiting on them. A `?? new Date()` here would invent an
+     * item for a conversation with no unread message in it — which is the
+     * landlord list's `_min.createdAt ?? new Date()`, correct there because its
+     * count comes from a groupBy that cannot be empty, and wrong here.
+     */
+    return rows.flatMap((r) => {
       const unread = r.messages.length;
+      if (unread === 0) return [];
       const waiting = -daysUntil(r.messages[0].createdAt);
-      return {
+      return [{
         kind: 'message_unread' as const,
         // Counts UP with waiting time, so it is negated to sort alongside
         // deadlines where a smaller number is sooner — the same scale the
@@ -461,7 +491,7 @@ export class TenantInboxService {
         daysUntil: -waiting,
         actionLabel: 'Read it',
         actionPath: '/account/messages',
-      };
+      }];
     });
   }
 

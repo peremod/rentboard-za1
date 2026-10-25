@@ -1,6 +1,6 @@
 {
   "name": "mastande-za",
-  "version": "1.168.0",
+  "version": "1.169.0",
   "private": true,
   "description": "Mastande ZA — South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
   "scripts": {
@@ -22,6 +22,7 @@
     "audit:scale": "node scripts/scale-lint.mjs",
     "audit:fonts": "node scripts/font-lint.mjs",
     "audit:viewport": "node scripts/viewport-unit-lint.mjs",
+    "audit:inbox-race": "node scripts/inbox-race-drive.mjs",
     "audit:house-ads": "node scripts/house-ads-drive.mjs",
     "lint:templates": "node scripts/template-literal-lint.mjs",
     "lighthouse": "npm --prefix frontend run build:prod && npx @lhci/cli@0.14.x autorun --config=lighthouserc.json",
