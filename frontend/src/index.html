@@ -31,32 +31,35 @@
   <link rel="preconnect" href="https://ik.imagekit.io"/>
 
   <!--
-    Fonts, loaded without blocking render.
+    Fonts, self-hosted — 25 October 2026.
 
-    A plain <link rel="stylesheet"> to Google Fonts is render-blocking: the
-    browser will not paint until that stylesheet has been fetched from a
-    third-party origin, resolved, and parsed. On a slow South African mobile
-    connection that alone was pushing First Contentful Paint out by several
-    hundred milliseconds on every page load.
+    This block used to fetch a stylesheet from fonts.googleapis.com, which then
+    fetched the files from fonts.gstatic.com: two third-party origins, two DNS
+    lookups and two TLS handshakes before a letter could be drawn in the right
+    face, on the slow connections this product exists to work on. The comment
+    that stood here named self-hosting as the "preferred next step"; this is it.
 
-    The pattern below fetches the stylesheet at low priority and applies it
-    once it arrives, so text paints immediately in the fallback face and
-    swaps when the webfont lands (`display=swap` is already in the URL). The
-    <noscript> copy keeps the fonts working with JavaScript disabled.
+    The reason it finally happened is Cumulative Layout Shift. `display=swap`
+    paints in the fallback and REFLOWS when the files land, and the live board
+    measured CLS 0.071 with Lighthouse naming the cause twice over — "Web font
+    loaded", against the hero stats and the trust strip. The faces now declare
+    `font-display: optional` (see styles.scss), which decides the layout once:
+    used from the first paint if the file is there, fallback for that view if
+    it is not, and no reflow either way.
 
-    Preferred next step: self-host the two families under /assets/fonts and
-    drop the third-party origin entirely — that removes two DNS + TLS
-    handshakes from the critical path. Tracked in SEO-LIGHTHOUSE-CHECKLIST.md.
+    ⚠️ Only the LATIN subsets are preloaded. latin-ext exists for Sepedi's š
+    and the other marks the eleven locales need, and it is fetched by
+    unicode-range only on a page that actually contains one — preloading it
+    would make every visitor pay for it.
+
+    ⚠️ `crossorigin` is required even same-origin. A font is a CORS-mode
+    request; without the attribute the preload is fetched a SECOND time by the
+    CSS, which is worse than not preloading at all.
   -->
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap"
-        media="print" onload="this.media='all'"/>
-  <noscript>
-    <link rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap"/>
-  </noscript>
+  <link rel="preload" as="font" type="font/woff2" crossorigin
+        href="/assets/fonts/dm-sans-latin.woff2"/>
+  <link rel="preload" as="font" type="font/woff2" crossorigin
+        href="/assets/fonts/playfair-display-latin.woff2"/>
 
   <!-- Social defaults. SeoService overwrites these per route; they exist so a
        crawler that renders no JavaScript still gets a usable card. -->

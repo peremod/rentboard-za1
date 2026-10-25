@@ -2063,6 +2063,31 @@ written into the merge commit: '/' must answer with s-maxage=60 and its body
 must carry room links, the trust strip, a canonical and ld-site."
 
 
+tag_if_missing "v1.166.0" "de7e65ea9d9bc569bc9f3c462bc9ba477354c7d1" "2026-10-25T17:29:31+00:00" "v1.166.0 - one bad row could take either dashboard down
+
+Both inboxes fan out to seven independent queries under a single Promise.all,
+which rejects on the FIRST rejection. One bad row in any one section answered
+the whole endpoint with a 500, and both dashboards call their inbox on load, so
+the screen became a Server error dialog with nothing behind it. The landlord
+report of 21 October and the tenant report of 25 October were the same defect,
+once per role. Each section degrades on its own now, logs by name, and sets
+partial: true on the response.
+
+Found because the error dialog shipped in v1.165.0 quotes the failing call: the
+report came back as a screenshot reading GET /api/tenant-inbox (500).
+
+⚠️ The failing ROW is still not identified. Every state buildable locally
+answers 200. What changed is the blast radius and the evidence.
+
+With it: a per-kind count that has answered null in BOTH inboxes for months -
+viewing_elapsed was in each kind union and in neither counts object, and
+'as Record<InboxKind, number>' is where type checking stopped - and the drawer's
+Close button removed at the owner's request.
+
+5 unit tests, falsified by restoring Promise.all. The smoke suite asserts for
+both inboxes that every count is a number and that partial is false."
+
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
