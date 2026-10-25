@@ -1,19 +1,36 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SurveysService } from '../surveys/surveys.service';
 
 /** What kind of thing needs doing. The screen renders per kind; it never guesses. */
-export type TenantInboxKind =
-  | 'message_unread'
-  | 'application_accepted'
-  | 'application_shortlisted'
-  | 'rent_unrecorded'
-  | 'lease_ending'
-  | 'notice_given'
-  | 'passport_expired'
-  | 'passport_expiring'
-  | 'viewing_elapsed'
-  | 'survey_open';
+/**
+ * Every kind this list can contain, as VALUES rather than only as a type.
+ *
+ * ⚠️ It was a type union and a hand-written counts object, and they had already
+ * drifted: `viewing_elapsed` was added to the union in Phase 8n and never added
+ * to the counts, so `counts.viewing_elapsed++` incremented `undefined` and the
+ * endpoint answered `"viewing_elapsed": null` for every tenant with an elapsed
+ * viewing. TypeScript could not catch it because the object was cast with
+ * `as Record<TenantInboxKind, number>` — a cast is a promise the compiler stops
+ * checking, and this one was false the day it was written. The landlord inbox
+ * had the identical hole.
+ *
+ * Derived from this array now, so a new kind is counted by existing.
+ */
+export const TENANT_INBOX_KINDS = [
+  'message_unread',
+  'application_accepted',
+  'application_shortlisted',
+  'rent_unrecorded',
+  'lease_ending',
+  'notice_given',
+  'passport_expired',
+  'passport_expiring',
+  'viewing_elapsed',
+  'survey_open',
+] as const;
+
+export type TenantInboxKind = (typeof TENANT_INBOX_KINDS)[number];
 
 /**
  * One thing to do, with everything the row needs to be acted on in place.
@@ -84,6 +101,8 @@ function monthStart(): Date {
  */
 @Injectable()
 export class TenantInboxService {
+  private readonly logger = new Logger(TenantInboxService.name);
+
   constructor(
     private prisma: PrismaService,
     private surveys: SurveysService,
@@ -95,28 +114,71 @@ export class TenantInboxService {
    * Four queries rather than one join: they are over unrelated tables with
    * unrelated shapes. Run concurrently, so the list costs one round trip.
    */
-  async inbox(tenantId: string): Promise<{ items: TenantInboxItem[]; counts: Record<TenantInboxKind, number> }> {
-    const [applications, viewings, messages, rent, lease, passport, survey] = await Promise.all([
-      this.applicationItems(tenantId),
-      this.elapsedViewingItems(tenantId),
-      this.messageItems(tenantId),
-      this.rentItems(tenantId),
-      this.leaseItems(tenantId),
-      this.passportItems(tenantId),
-      this.surveyItems(tenantId),
+  async inbox(tenantId: string): Promise<{
+    items: TenantInboxItem[];
+    counts: Record<TenantInboxKind, number>;
+    partial: boolean;
+  }> {
+    /**
+     * ⚠️ Seven independent lists, and one of them used to be able to take the
+     * whole dashboard down.
+     *
+     * `Promise.all` rejects on the first rejection, so a single bad row in any
+     * one of these seven answered the WHOLE endpoint with a 500 — and the
+     * tenant dashboard calls this on load, so the screen became a "Server
+     * error" dialog with nothing behind it. Reported from a phone on 25
+     * October as exactly that, and the endpoint named itself only because the
+     * error dialog had just been taught to quote it: GET /api/tenant-inbox
+     * (500).
+     *
+     * These lists have nothing to do with each other: an unread message does
+     * not depend on a rent period, and a lease date does not depend on a
+     * survey. So one failing section is now one missing section, logged by
+     * NAME so the next occurrence says which, and `partial` tells the screen
+     * that what it is showing is incomplete rather than empty.
+     *
+     * It is deliberately not a silent catch. A swallowed error that leaves a
+     * list looking complete is the defect this codebase keeps finding; this
+     * one says so in the log and in the payload.
+     */
+    const failed: string[] = [];
+    const section = async (
+      name: string,
+      run: () => Promise<TenantInboxItem[]>,
+    ): Promise<TenantInboxItem[]> => {
+      try {
+        return await run();
+      } catch (err) {
+        failed.push(name);
+        this.logger.error(
+          `tenant inbox: the "${name}" section failed for tenant ${tenantId} — `
+          + 'the rest of the list is served without it',
+          err instanceof Error ? err.stack : String(err),
+        );
+        return [];
+      }
+    };
+
+    const lists = await Promise.all([
+      section('applications', () => this.applicationItems(tenantId)),
+      section('elapsed viewings', () => this.elapsedViewingItems(tenantId)),
+      section('messages', () => this.messageItems(tenantId)),
+      section('rent', () => this.rentItems(tenantId)),
+      section('lease', () => this.leaseItems(tenantId)),
+      section('passport', () => this.passportItems(tenantId)),
+      section('survey', () => this.surveyItems(tenantId)),
     ]);
 
-    const items = [...applications, ...viewings, ...messages, ...rent, ...lease, ...passport, ...survey]
-      .sort((a, b) => a.urgency - b.urgency);
+    const items = lists.flat().sort((a, b) => a.urgency - b.urgency);
 
-    const counts = {
-      message_unread: 0, application_accepted: 0, application_shortlisted: 0, survey_open: 0,
-      rent_unrecorded: 0, lease_ending: 0, notice_given: 0,
-      passport_expired: 0, passport_expiring: 0,
-    } as Record<TenantInboxKind, number>;
+    // Built from the kind list rather than written out again — see the note on
+    // TENANT_INBOX_KINDS for the count that was NaN for months.
+    const counts = Object.fromEntries(
+      TENANT_INBOX_KINDS.map((k) => [k, 0]),
+    ) as Record<TenantInboxKind, number>;
     for (const i of items) counts[i.kind]++;
 
-    return { items, counts };
+    return { items, counts, partial: failed.length > 0 };
   }
 
   /**

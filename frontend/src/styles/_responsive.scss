@@ -289,24 +289,10 @@
     z-index: 98;
   }
 
-  .nav-sheet-close {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: .5rem;
-    align-self: flex-end;
-    min-height: 44px;
-    min-width: 44px;
-    padding: .25rem .75rem;
-    border: 1.5px solid var(--border-strong);
-    border-radius: var(--r-full);
-    background: var(--white);
-    color: var(--ink2);
-    font: inherit;
-    font-size: .8rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
+  // The `.nav-sheet-close` rule that stood here is deleted with the button it
+  // styled. A rule for an element the template no longer renders is dead
+  // weight that the next person has to prove is dead before touching it, and
+  // css-coverage would have carried it as an unused selector for ever.
 
   // Privacy / Terms / Disclaimer, demoted. They are still links and still
   // 44px; they are no longer the same visual weight as the one item most

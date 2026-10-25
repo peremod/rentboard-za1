@@ -1,16 +1,31 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SurveysService } from '../surveys/surveys.service';
 import { LeaseService } from '../tenancies/lease.service';
 
-/** What kind of thing needs doing. The screen renders per kind; it never guesses. */
-export type InboxKind =
-  | 'application_waiting'
-  | 'lease_ending'
-  | 'notice_given'
-  | 'rent_unmarked'
-  | 'rent_disputed'
-  | 'unread_message'
+/**
+ * What kind of thing needs doing. The screen renders per kind; it never guesses.
+ *
+ * ⚠️ VALUES, not only a type, and the reason is a count that was NaN.
+ *
+ * `viewing_elapsed` below was added to the union and never added to the
+ * hand-written counts object in `inbox()`, so `counts.viewing_elapsed++`
+ * incremented `undefined` and this endpoint answered `"viewing_elapsed": null`
+ * for every landlord with a viewing that had been and gone. The compiler could
+ * not see it because the object was cast `as Record<InboxKind, number>`, and a
+ * cast is where type checking stops. The tenant inbox had the identical hole,
+ * on the same kind, from the same phase.
+ *
+ * The counts are built from this array now, so a new kind is counted by
+ * existing rather than by being remembered.
+ */
+export const LANDLORD_INBOX_KINDS = [
+  'application_waiting',
+  'lease_ending',
+  'notice_given',
+  'rent_unmarked',
+  'rent_disputed',
+  'unread_message',
   /**
    * A room marked `let` with nobody in it — a letting ended and it was never
    * put back on the board.
@@ -26,9 +41,12 @@ export type InboxKind =
    * state changes, which is exactly what "this room is empty and nobody can
    * find it" needs.
    */
-  | 'room_vacant'
-  | 'viewing_elapsed'
-  | 'survey_open';
+  'room_vacant',
+  'viewing_elapsed',
+  'survey_open',
+] as const;
+
+export type InboxKind = (typeof LANDLORD_INBOX_KINDS)[number];
 
 /**
  * One thing to do, with everything the row needs to be acted on in place.
@@ -138,6 +156,8 @@ function leasePath(propertyId: string | null | undefined): string {
 
 @Injectable()
 export class LandlordInboxService {
+  private readonly logger = new Logger(LandlordInboxService.name);
+
   constructor(
     private prisma: PrismaService,
     private lease: LeaseService,
@@ -151,30 +171,65 @@ export class LandlordInboxService {
    * different shapes, and a single query would need the code to un-merge them
    * anyway. Run concurrently, so the inbox costs one round trip's latency.
    */
-  async inbox(landlordId: string): Promise<{ items: InboxItem[]; counts: Record<InboxKind, number> }> {
-    const [applications, viewings, upcoming, rentGaps, unread, vacant, survey] = await Promise.all([
-      this.waitingApplications(landlordId),
-      this.elapsedViewings(landlordId),
-      this.leaseItems(landlordId),
-      this.rentItems(landlordId),
-      this.unreadMessages(landlordId),
-      this.vacantRooms(landlordId),
-      this.surveyItems(landlordId),
+  async inbox(landlordId: string): Promise<{
+    items: InboxItem[];
+    counts: Record<InboxKind, number>;
+    partial: boolean;
+  }> {
+    /**
+     * ⚠️ Seven independent lists, and `Promise.all` let any one of them take
+     * the whole dashboard down.
+     *
+     * A single bad row in any one section answered the WHOLE endpoint with a
+     * 500, and the landlord dashboard calls this on load — so the screen became
+     * a "Server error" dialog with nothing behind it. Reported from a phone
+     * twice, on both dashboards.
+     *
+     * These lists are unrelated: an unread message does not depend on a rent
+     * period, and a vacant room does not depend on a survey. One failing
+     * section is one missing section now, logged by NAME so the next occurrence
+     * says which, with `partial` telling the screen that what it shows is
+     * incomplete rather than that there is nothing to do.
+     */
+    const failed: string[] = [];
+    const section = async (
+      name: string,
+      run: () => Promise<InboxItem[]>,
+    ): Promise<InboxItem[]> => {
+      try {
+        return await run();
+      } catch (err) {
+        failed.push(name);
+        this.logger.error(
+          `landlord inbox: the "${name}" section failed for landlord ${landlordId} — `
+          + 'the rest of the list is served without it',
+          err instanceof Error ? err.stack : String(err),
+        );
+        return [];
+      }
+    };
+
+    const lists = await Promise.all([
+      section('applications', () => this.waitingApplications(landlordId)),
+      section('elapsed viewings', () => this.elapsedViewings(landlordId)),
+      section('lease', () => this.leaseItems(landlordId)),
+      section('rent', () => this.rentItems(landlordId)),
+      section('messages', () => this.unreadMessages(landlordId)),
+      section('vacant rooms', () => this.vacantRooms(landlordId)),
+      section('survey', () => this.surveyItems(landlordId)),
     ]);
 
-    const items = [...applications, ...viewings, ...upcoming, ...rentGaps, ...unread, ...vacant, ...survey]
-      .sort((a, b) => a.urgency - b.urgency);
+    const items = lists.flat().sort((a, b) => a.urgency - b.urgency);
 
     // Counted per kind so the screen can say "3 applicants waiting" in a header
-    // without re-deriving it from the list and getting the plural wrong.
-    const counts = {
-      application_waiting: 0, lease_ending: 0, notice_given: 0,
-      rent_unmarked: 0, rent_disputed: 0, unread_message: 0, room_vacant: 0,
-      survey_open: 0,
-    } as Record<InboxKind, number>;
+    // without re-deriving it from the list and getting the plural wrong. Built
+    // from LANDLORD_INBOX_KINDS — see the note there for the count that was NaN.
+    const counts = Object.fromEntries(
+      LANDLORD_INBOX_KINDS.map((k) => [k, 0]),
+    ) as Record<InboxKind, number>;
     for (const i of items) counts[i.kind]++;
 
-    return { items, counts };
+    return { items, counts, partial: failed.length > 0 };
   }
 
   /**

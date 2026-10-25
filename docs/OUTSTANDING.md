@@ -6672,6 +6672,102 @@ written for exactly this; run it before the build, not after.
 ---
 
 
+## 89. The server error names itself, and both dashboards could be taken down by one row — 25 October 2026
+
+### 89a. The dialog worked
+
+v1.165.0 taught the error dialog to quote the failing call. The next report
+came back as a screenshot of:
+
+    Server error
+    Something went wrong on our end, and it was not your doing. Please try
+    again shortly. If it keeps happening, quote this: GET /api/tenant-inbox (500).
+
+That is §88d paying for itself: one screenshot, one endpoint, no guessing.
+
+### 89b. 🔴 Seven independent queries under one `Promise.all`
+
+Both inboxes fan out to seven queries and merge the results:
+
+    const [applications, viewings, messages, rent, lease, passport, survey] =
+      await Promise.all([...]);
+
+`Promise.all` rejects on the **first** rejection. So one bad row in any one of
+those seven answered the WHOLE endpoint with a 500 — and both dashboards call
+their inbox on load, so the screen became a "Server error" dialog with nothing
+behind it. The landlord dashboard reported on 21 October and the tenant
+dashboard on 25 October are the same defect, once per role.
+
+These lists have nothing to do with each other: an unread message does not
+depend on a rent period, a lease date does not depend on a survey. Each section
+is wrapped now — it returns its own items or, on failure, an empty list, a log
+line **naming the section**, and `partial: true` on the response so the screen
+knows what it is showing is incomplete rather than empty.
+
+⚠️ **The failing row itself is still not identified, and this does not identify
+it.** Every state that could be built locally answers 200: a pending
+application, a shortlisting, an unread message, a viewing fifteen days gone
+with no outcome, an acceptance with and without a tenancy, a lease ending,
+notice given by the landlord. Whatever production holds, this container does
+not. What changed is the blast radius and the evidence: the next occurrence
+costs one section instead of the dashboard, and the server log says which one
+by name.
+
+### 89c. 🔴 A count that was `null` in the API for months, in both inboxes
+
+`viewing_elapsed` is in both kind unions. It was in **neither** counts object:
+
+    const counts = { message_unread: 0, … } as Record<TenantInboxKind, number>;
+    for (const i of items) counts[i.kind]++;
+
+`counts.viewing_elapsed++` increments `undefined` → `NaN` → JSON `null`. So
+every user with a viewing that had been and gone got `"viewing_elapsed": null`
+from the API.
+
+**TypeScript could not catch it**, and that is the lesson rather than the bug:
+`as Record<InboxKind, number>` is a cast, and a cast is the point where type
+checking stops. The object was missing a key the type demanded and the compiler
+had been told to accept it. Both counts are built from a kind ARRAY now
+(`TENANT_INBOX_KINDS`, `LANDLORD_INBOX_KINDS`), so a new kind is counted by
+existing rather than by being remembered.
+
+Measured after: tenant 10 kinds, landlord 9, none of them anything but a
+number, `viewing_elapsed: 0`.
+
+### 89d. The Close button is out of the drawer
+
+Removed at the owner's request. The reasoning that added it — "the burger is at
+the top-right and a thumb that has just scrolled the sheet is nowhere near it"
+— described a sheet that scrolls; this one opens at the top with the burger a
+thumb's width above it, already showing an ✕, already labelled "Close menu".
+With the scrim and Escape that is four ways out, one of which was taking the
+first screen of the menu.
+
+Focus still enters the sheet on open — the first link now, not a button whose
+only job was to undo the tap that opened it — and the trap and the first-focus
+share one selector so they cannot disagree about what "focusable" means. The
+`.nav-sheet-close` rule is deleted with the button rather than left for
+somebody to prove dead later.
+
+Driven at 360 / 390 / 768: no close button, focus lands on "Browse rooms"
+inside the sheet, every item reachable, Escape still closes it, the burger
+still reads "Close menu".
+
+### What the checks say now
+
+- `scripts/smoke-test.sh` asserts, for **both** inboxes, that every per-kind
+  count is a number and that `partial` is present and false. The first is the
+  check that would have caught 89c from outside; the second cannot pass while
+  a section is silently failing.
+- `backend/src/modules/tenant-inbox/inbox-resilience.spec.ts` — 5 tests, one
+  per property, both roles. Falsified by making the section rethrow (the old
+  `Promise.all` behaviour): 1 failed, 4 passed.
+- Gates: 96 backend unit tests, a11y drive 10 public + 33 portal pages,
+  mobile-drive, css-coverage, production build, viewport and template lints.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash
