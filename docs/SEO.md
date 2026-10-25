@@ -181,6 +181,27 @@ one belongs to, because a content-type check passed the broken version.
 `scripts/verify-build.sh` asserts the content type of both against a running
 server, so a regression fails before a release is tagged.
 
+**And the third direction, which cost the SEO budget its whole life: a copy of
+the site.** `isCanonicalHost()` answers any hostname that is not this site's
+with `Disallow: /` and no sitemap — correct, and what a Vercel preview should
+say. The Lighthouse `budgets` job serves the **production** bundle on
+`localhost:4000`, which is exactly that case, and never said otherwise. So
+Lighthouse read `Disallow: /`, correctly scored all four URLs blocked, and
+reported `is-crawlable` 0 with `categories:seo` 0.66 against a budget of 1.0 —
+on every run from the day the job was written until 21 October 2026, in the
+workflow whose purpose is to catch SEO regressions. Nobody read it, and no check
+in the repository could see it: `scripts/seo-drive.mjs` read headers and markup
+and never once fetched `robots.txt`.
+
+Two fixes, and the second is the one that matters. `SITE_CANONICAL_HOSTS`
+(`docs/DEPLOYMENT.md`) lets that job state what it is auditing — measured
+afterwards, not assumed: seo 0.66 → **1.00**, `is-crawlable` 0 → 1. And the
+drive now asserts the DIRECTION of robots.txt, derived from what the page says
+about itself rather than hardcoded, so both branches are checked: an indexable
+deployment on its own hostname must invite a crawl, and anything else must
+refuse one. Falsified by serving the bundle without the variable — 8 failures,
+the direction check among them.
+
 
 Both served by `backend/src/modules/seo/seo.controller.ts` at the domain root, outside the `/api` prefix.
 
@@ -390,23 +411,89 @@ curl -s http://localhost:4000/pricing | grep -E 'canonical|og:title|name="descri
 curl -s http://localhost:4000/ | grep -c 'application/ld+json'
 
 # Sitemap entries must all resolve
-curl -s https://umastande.co.za/sitemap.xml \
+curl -s https://www.umastande.co.za/sitemap.xml \
   | grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g' \
   | xargs -P4 -I{} sh -c 'printf "%s %s\n" "$(curl -s -o /dev/null -w %{http_code} {})" "{}"' \
   | grep -v '^200' || echo "every sitemap URL returns 200"
 
-# Structured data, icons and private-route headers, read from the SERVED HTML
+# Structured data, icons, private-route headers and robots.txt, read from the
+# SERVED HTML — on BOTH builds, because they check different things and each
+# build hides something the other shows.
+#
+# Development build (API on :3000, rooms from the local database): the room
+# markup section runs, and robots.txt must REFUSE a crawl — a development
+# deployment is not indexable and says so.
 BASE=http://localhost:4200 node scripts/seo-drive.mjs
+#
+# Production build: canonical and the real site URL appear, the room section
+# states a skip (this bundle fetches from api.umastande.co.za), and robots.txt
+# must INVITE a crawl — which needs the server told that localhost is the site
+# for this run and not a copy of it.
+SITE_CANONICAL_HOSTS=localhost NG_ALLOWED_HOSTS=localhost PORT=4200 \
+  node frontend/dist/mastande-frontend/server/server.mjs &
+BASE=http://localhost:4200 SITE_CANONICAL_HOSTS=localhost node scripts/seo-drive.mjs
+#
+# ⚠️ Running it against the development build ALONE is how this drive reported
+# 38/38 while crashing on the production build: the Organization logo is an
+# absolute production URL there, and the check stripped `BASE` from it, which
+# matches only when siteUrl is localhost. Both are in CI now; before 21 October
+# neither was, and nothing ran this file at all.
 
 # Routes, guards, internal links, locale sync, environment parity
 npm run audit          # routes, guards, links, i18n parity, env parity
 
 # Lighthouse
-npx lighthouse https://umastande.co.za --preset=desktop --view
-npx lighthouse https://umastande.co.za --form-factor=mobile --throttling-method=simulate --view
+npx lighthouse https://www.umastande.co.za --preset=desktop --view
+npx lighthouse https://www.umastande.co.za --form-factor=mobile --throttling-method=simulate --view
 ```
 
 Targets: Performance ≥ 90 mobile, Accessibility 100, Best Practices 100, SEO 100. Run monthly — see `OPERATIONS.md` §5.
+
+Two config files hold the numbers CI enforces, and they are not the same numbers:
+
+| File | Audits | Asserts |
+|---|---|---|
+| `lighthouserc.json` | a production **build** served on localhost, four URLs, 3 runs | what the code should achieve in a lab: performance ≥ 0.9, accessibility 1.0, SEO 1.0, LCP 2500ms, CLS 0.1, TBT 200ms — and **best-practices ≥ 0.96, not 1.0** |
+| `lighthouserc.production.json` | the live **site**, weekly | floors it must not fall below: SEO ≥ 0.9, LCP 4000ms, CLS 0.1, TBT 600ms |
+
+The weekly floors used to be written as inline flags in the workflow while
+`lighthouserc.json` carried different values for the same four metrics — two
+sources of truth for one budget. The workflow now carries no thresholds.
+
+**Why best-practices is 0.96 and not 1.0.** The local run serves the production
+bundle, whose API URL is the real `api.umastande.co.za`, so the board's own
+fetches are cross-origin from an origin the API does not allow and the browser
+logs a network error: `errors-in-console`, weight 1, the only audit that
+category loses. Allow-listing localhost in the production API's CORS policy
+would buy 0.04 by widening what that API accepts, so the budget names the gap
+instead. 0.96 rather than 0.95 keeps it able to fail — a second failing audit
+drops the score below the line.
+
+**Production, measured once — 21 October 2026, run 11.** Until then the weekly
+job had never completed an audit: `lhci collect` ran from the repo root, picked
+up `lighthouserc.json`'s `startServerCommand`, and died on `MODULE_NOT_FOUND`
+booting a server out of a `dist/` that job never builds. With `--config` passed
+explicitly it ran, mobile, three runs per URL, median shown:
+
+| URL | Performance | LCP | TBT | CLS |
+|---|---|---|---|---|
+| `/pricing` | 0.98 | 1.1s | 180ms | 0.017 |
+| `/how-it-works` | 0.97 | 1.1s | 170ms | 0.050 |
+| **`/` (the board)** | **0.62** | **3.3s** | **310ms** | **0.953** |
+
+Accessibility, best practices and SEO are 1.0 on all three, and `is-crawlable`,
+`robots-txt`, `canonical`, `meta-description` and `errors-in-console` pass on
+the live site — the first evidence any of §3 works in production rather than in
+a lab.
+
+🔴 **The board's CLS is nine times the asserted bound, and the run reported
+green.** `lhci` defaults to `aggregationMethod: 'optimistic'`, which for a
+`maxNumericValue` assertion reads the BEST of the three runs, so one lucky run
+satisfied the budget and the other two were discarded. Both config files now set
+`median`, the weekly job will go red on this until the board is fixed, and
+`scripts/lhr-summary.mjs` prints what shifted into the job log because
+`lhci upload` sanitises the published report. The shift is not yet explained —
+see `docs/OUTSTANDING.md` §87.
 
 ---
 

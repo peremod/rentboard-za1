@@ -6177,6 +6177,455 @@ no cookie.
 ---
 
 
+## 86. The SEO budget that failed every run, the audit that never ran, and the drive nothing executed — 21 October 2026
+
+Three defects behind one red check, found by reading a CI log rather than by
+anything in this repository.
+
+### 86a. 🔴 `categories:seo` 0.66 on all four URLs, every run since the job was written
+
+The Lighthouse `budgets` job builds the **production** bundle, serves it on
+`localhost:4000` and audits it. A production bundle's site is
+`www.umastande.co.za`, so `isCanonicalHost()` in `frontend/src/server.ts`
+answered `localhost` the way it answers any hostname that is not this site —
+`Disallow: /`, no sitemap, which is exactly right for a Vercel preview and for
+`rentboard-za1.vercel.app`. Lighthouse then read that robots.txt and correctly
+reported every audited URL as blocked from indexing.
+
+    ✘  categories.seo failure for minScore assertion
+          expected: >=1          found: 0.66     all values: 0.66, 0.66, 0.66
+    ✘  is-crawlable failure for minScore assertion
+          Page is blocked from indexing
+          expected: >=0.9        found: 0        all values: 0, 0, 0
+
+Four URLs, three runs each, run 10 and every run before it. **Not a bug in the
+server** — the server was right about what it was serving. The job never said
+which of the two things it was auditing.
+
+Reproduced here before changing anything, by serving the bundle and reading the
+file: `User-agent: *` / `Disallow: /`, and a local Lighthouse run giving
+`seo 0.66`, `is-crawlable 0`, `best-practices 0.96` — the runner's numbers
+exactly. `SITE_CANONICAL_HOSTS` (documented in `docs/DEPLOYMENT.md`) lets the
+job state that localhost is the site for this run; measured after:
+**seo 1.00, is-crawlable 1, robots-txt 1**. Falsified by removing it again:
+back to `Disallow: /`.
+
+It widens nothing. The variable adds hostnames and never removes one, no
+deployment sets it, and the `X-Robots-Tag` header on private prefixes and the
+page's own `robots` meta tag are untouched — a copy still cannot be indexed
+whatever its robots.txt invites.
+
+### 86b. 🔴 The weekly production audit has never audited production
+
+`lhci collect --url=https://umastande.co.za/ …` runs from the repo root, and
+lhci auto-discovers `lighthouserc.json` from the working directory. That file
+budgets a **local** build, so collect read its `startServerCommand` and tried
+to boot a server the job never builds:
+
+    Error: Cannot find module '…/dist/mastande-frontend/server/server.mjs'
+    code: 'MODULE_NOT_FOUND'
+
+Eleven seconds in, nothing collected, every weekly run since the domain started
+answering. The thresholds and URLs now live in `lighthouserc.production.json`
+and every subcommand passes `--config` explicitly, so a local-build setting
+cannot leak into a remote audit. Also moved off the apex: `environment.prod.ts`
+documents it as a 301 to www, so the old URLs were measuring a redirect hop
+through a host that is not ours.
+
+⚠️ **No Core Web Vitals claim about production follows from any of this.**
+Nothing has measured the live site. The job can run now; it has not run yet.
+
+### 86c. ⚠️ A correction: "the Lighthouse gate could not fail" was wrong
+
+`PRE-LAUNCH-CHECKLIST.md` row 115 said that, and it was true of only one of the
+two jobs in that workflow. The weekly `production` job did end with
+`lhci assert … || true` and discarded every score. The `budgets` job asserted
+strictly, ran on every frontend PR, **and was failing** — for weeks, visibly,
+on the numbers in 86a. "The gate cannot fail" and "the gate fails every run and
+nobody reads it" are opposite defects, and I reported the first while looking at
+the second. Row 115 is corrected rather than quietly edited.
+
+### 86d. ⚠️ `scripts/seo-drive.mjs` had never been run by anything
+
+Written ten days earlier, reported 38/38, and wired into no job — so the
+checklist row claiming its coverage was claiming a drive no gate executed. It
+was also verified only against a **development** build, which is the one build
+where two of its own defects are invisible:
+
+- the Organization logo check did `org.logo.url.replace(BASE, '')`, which
+  matches only when `siteUrl` is localhost. On a production bundle the fetch
+  became `http://localhost:4000https://www.umastande.co.za/icon-512.png` and
+  the whole drive **crashed** on an invalid URL.
+- the room section took a room id from `localhost:3000` and then asked the
+  server under test to render it. On a production bundle those are two
+  different databases, so there was no room, no markup — and five negatives
+  ("no rating is attached", "the street address is not published") scored full
+  marks against an **empty object**. Markup absent read as markup correct.
+
+Now: the id comes from the board the server under test actually renders, so the
+two halves share one scope on any build; "this board serves no rooms" is a
+stated skip; `the room page carries listing markup at all` is asserted before
+any negative is; and the logo is fetched by path. A new section reads
+`robots.txt` itself — the file at the centre of 86a, which this drive had never
+once fetched — and asserts its DIRECTION, derived from what the page says about
+itself rather than hardcoded, so both branches are covered.
+
+Both builds run it in CI now: 44/44 on development, 40/40 on production (room
+section skipped, as stated). Falsified by serving the bundle without
+`SITE_CANONICAL_HOSTS` while telling the drive it was there: **8 failures**,
+the direction check among them.
+
+### What is still open
+
+- The weekly production audit needs to run once and be read. Until then
+  `lighthouserc.production.json` holds four unmeasured floors.
+- `best-practices` is 0.96 and not 1.0 on the local run, from one audit
+  (`errors-in-console`) caused by the bundle's cross-origin fetches to the real
+  API. The budget names it rather than loosening the production API's CORS
+  policy for a cosmetic 0.04.
+- `/rooms/:id` is still not in the audited URL list. It is the page the whole
+  listing business depends on being indexed, and auditing it needs a bundle
+  whose API is reachable from the runner.
+
+---
+
+
+## 87. The first real measurement of production, and the gate that reported it green — 21 October 2026
+
+§86b fixed the weekly audit; run 11 is the first one it has ever completed.
+Three URLs, three runs each, mobile, simulated throttling, against
+`https://www.umastande.co.za`. Median run:
+
+| URL | Performance | LCP | TBT | CLS |
+|---|---|---|---|---|
+| `/pricing` | 0.98 | 1.1s | 180ms | 0.017 |
+| `/how-it-works` | 0.97 | 1.1s | 170ms | 0.050 |
+| **`/` (the board)** | **0.62** | **3.3s** | **310ms** | **0.953** |
+
+Accessibility, best practices and SEO are **1.0 on all three**. `is-crawlable`,
+`robots-txt`, `canonical`, `meta-description` and `errors-in-console` all pass
+on the live site, which is the first evidence any of that works in production
+rather than in a lab.
+
+### 87a. 🔴 CLS 0.953 on the board — nine times the budget, and the gate said green
+
+The job asserts `cumulative-layout-shift ≤ 0.1`. The median run measured
+**0.953**. It passed.
+
+`lhci` defaults to **`aggregationMethod: 'optimistic'`**, and for a
+`maxNumericValue` assertion optimistic takes the **best** of the three runs:
+`assertions.js` line 139, `aggregationMethod = 'optimistic'`. So one lucky run
+satisfied a budget the typical run missed by a factor of nine, and the other two
+were discarded. Every number in both config files was being read that way —
+LCP, TBT and CLS alike. Both now set `aggregationMethod: 'median'`.
+
+This is the defect family again, in the one place meant to catch it: a gate that
+asserted the right metric against the right bound and still could not fail,
+because it was reading the luckiest sample.
+
+### 87b. ⚠️ Why the budgets job cannot see this, and the board page is the one that matters
+
+The `budgets` job measures `/` at **CLS 0.026** — a board with no room cards in
+it. The bundle fetches rooms from `api.umastande.co.za`, which the runner's
+browser is not allowed to use cross-origin, so the page it audits is an empty
+board. A green CLS there is a statement about a page that renders nothing, and
+the live board is the page the whole listing business depends on.
+
+### 87c. ⚠️ The culprits are not in the published report
+
+`lhci upload --target=temporary-public-storage` sanitises what it publishes:
+`layout-shifts` came back with a null score and no details, so the shift could
+be seen and not explained. The full LHRs were on the runner and were thrown away
+with it. `scripts/lhr-summary.mjs` now prints the median run's metrics, every
+run's CLS, the LCP element and what shifted, into the job's own log, before the
+assert, so a failing run explains itself.
+
+### 87d. ⚠️ Three more measurements, and the shift does not reproduce locally
+
+Runs 12 and 13 (dispatched, same commit family):
+
+| Run | `/` CLS, all three runs | `/` perf | `/pricing` | `/how-it-works` |
+|---|---|---|---|---|
+| 12 | 0.916, 0.953, 0.916 | 0.62 | 0.99 / CLS 0.017 | 0.99 / CLS 0.050 |
+| 13 | 0.916, 0.916, 0.916 | 0.57 | **1.00** / CLS 0.004 | **1.00** / CLS 0.027 |
+
+Run 13's three values are identical to sixteen decimal places, which says this
+is one deterministic shift of a fixed size and not a race between loads. The
+two other pages are now perfect scores. Only the board.
+
+And it does **not** reproduce here. A development build served on `localhost`
+with the local API and two seeded rooms measures **CLS 0** on the same page —
+the API answers in about a millisecond, so whatever difference in height exists
+between what the server renders and what the client settles on never becomes a
+visible move. The shift needs production conditions, which makes the weekly job
+the only thing in this project that can see it.
+
+### 87e. ⚠️ The culprit audit is erroring, and two print-outs could not say so
+
+Run 12's summary said `layout-shifts: no items reported`. Run 13's, after
+reading both audit ids, said:
+
+    · cumulative-layout-shift: score 0.03 mode numeric details debugdata/1 item(s)
+    · layout-shifts: score null mode error details none
+
+`mode error` means the audit **threw**. The reason is in `errorMessage`, which
+the print-out did not read — so the second version of a diagnostic added to
+explain a failure again stopped one field short of the explanation, and the
+debugdata it reported as "1 item" was never shown either. Both are printed now.
+That is three iterations on one diagnostic, each blind in a different way, which
+is worth recording as plainly as the defect it is chasing.
+
+### 87f. 🔴 The cause is not a layout bug: production serves the board as an empty shell
+
+Runs 15 and 16 answered it, and the answer is not about CSS.
+
+    what shifted (mobile):  · 0.9162  Mastande / South Africa's dedicated room-letting notice board…
+    LCP element (mobile):   app-root > app-cookie-consent > div.cookie-notice > p.cookie-notice__body
+    the same board at desktop width: CLS 0.718
+    what the served HTML contains, before any JavaScript runs:
+      bytes:        7617
+      room links:   0
+      skeletons:    0
+      hero--splash: 0
+      trust-strip:  0
+
+**`https://www.umastande.co.za/` answers with 7.6 KB that contain no board.** No
+room links, no skeletons, no trust strip, no hero. That is `index.csr.html` —
+the client-side shell — and every pixel of the page is painted by JavaScript
+after load, which is why the footer moves nearly a full viewport and why the
+cookie notice is the largest thing painted early enough to be the LCP element.
+
+Both earlier candidates are dead. The phone splash is mobile-only (JS at ≤700px,
+CSS at ≤768px) and desktop still shifts 0.718, so it is not the cause; the fonts
+account for 0.0495 and 0.0002 of it. The cookie notice is `position: fixed` and
+cannot push anything.
+
+⚠️ **And the CLS is the smaller half of this.** `app.routes.ts` has
+`{ path: '', renderMode: RenderMode.Server }` — on master, not only on develop —
+precisely so the board is rendered per request rather than baked at deploy. It
+is not being rendered at all in production. Consequences beyond the shift:
+
+- Every crawler that does not run JavaScript sees a page with no rooms, no hero,
+  no trust strip and none of the `Organization`/`WebSite` JSON-LD that §86 and
+  the SEO phase shipped. All of that was verified against `localhost`, where
+  `server.ts` renders it — which is the "measured on the wrong build" trap again,
+  one layer out: the right build, the wrong deployment.
+- `BOARD_CACHE_CONTROL` and the `s-maxage=60` reasoning in `server.ts` describe
+  a render that is not happening.
+- The sitemap advertises `/` as the primary URL of the site.
+
+### 87g. 🔴 The cause: the CSR shell is in the static output, so `/` never reaches the function
+
+Runs 17 and 18, against the live site:
+
+    /                  200  cache-control: public, max-age=0, must-revalidate
+                            x-vercel-cache: HIT   content-length: 7618
+    /index.csr.html    200  content-length: 7618      ← the same document, by name
+    /pricing           200  content-length: 33190     cache-control: identical
+    /zzz-no-such-path  404  content-length: 27027     x-vercel-cache: MISS
+    icon-48: 1   apple-touch-icon: 1   ld-site: 0   canonical: 0   trust-strip: 0
+    scripts: main-NQO6TBEY.js
+
+Three things fall out of that. `public, max-age=0, must-revalidate` is Vercel's
+**static** default, not the `s-maxage=60, stale-while-revalidate=600` that
+`server.ts` stamps on a board it rendered. `/` returns exactly the same bytes as
+`/index.csr.html`. And an unmatched path answers **404 with a 27 KB
+server-rendered body**, so the function is healthy and rendering — it simply
+never gets `/`.
+
+`handle: filesystem` in `tools/vercel-build.mjs` serves anything in `static/`,
+and the static copy contains `index.csr.html`. That takes `/` before
+`dest: /ssr` sees it. The comment above that copy said the HTML there "is not
+served from disk — the function answers every page — but leaving it costs
+nothing". It cost the home page, and it said so in this file for as long as the
+bug was in production.
+
+**Fixed** by removing the shell from `static/` while keeping it inside the
+function, where the Angular engine reads it as the template for every page it
+renders — remove the wrong copy and there are no pages at all, so the build now
+asserts both directions and refuses rather than assembling a broken output.
+Falsified by reintroducing the defect in the code (not by planting a file in the
+output, which the script wipes first — the first falsification attempt proved
+nothing and said "NO FAILURE"):
+
+    ✘ static/index.csr.html exists. `handle: filesystem` will serve it for `/`…
+    exit=1
+
+⚠️ **Not yet deployed.** The fix reaches production when master is deployed, and
+the prediction to check against then is specific: `/` answers with
+`s-maxage=60, stale-while-revalidate=600`, its body carries room links, the
+trust strip, a canonical and `ld-site`, and the board's CLS falls from 0.95.
+
+### 87h. ⚠️ A correction: "the deployment is not this build's output" was wrong
+
+§87f said production's 7,618-byte shell could not be this repository's current
+build, because the local `index.csr.html` was 5,835 bytes and referenced
+`main.js`. That was **my own measurement on the wrong build** — the last thing
+built in this container was `ng build --configuration development`, for the SEO
+drive, and a development build does not hash its filenames.
+
+Rebuilt with `npm run build:prod`: **7,618 bytes, `src="main-NQO6TBEY.js"`** —
+identical to what production serves, down to the byte and the hash. Production
+is running exactly this build. Everything else in §87f stands; that one
+inference does not, and it is the same defect this section is about, committed
+by me three findings after writing it up about somebody else's check.
+
+### What is open
+
+- ⚠️ **The board's render is fixed in the repository and not yet in production**
+  (87g). It takes effect on the next deployment of master, and the prediction to
+  verify is in that section.
+- 🔴 **The board's CLS, explained but not fixed.** 0.916 is a real defect on the
+  busiest public page. It cannot be diagnosed from this container —
+  `www.umastande.co.za` and `api.umastande.co.za` are both `connect_rejected`
+  by the egress proxy — and it does not reproduce locally (87d), so each
+  iteration costs a CI run. The next run prints why `layout-shifts` errored and
+  what the CLS debugdata holds. Candidates worth checking first: a difference in
+  height between the server-rendered board and the client's first settled
+  render, the house ad slot in the sidebar, and the two Google Fonts families.
+- ⚠️ **The sitemap check was skipped in run 13** because the audit step above it
+  failed — a step's default condition is `success()`, so a soft 404 in a
+  submitted sitemap would have gone unnoticed for as long as a performance
+  number stayed red. Now `!cancelled()`.
+- ⚠️ **The weekly job will now go red** on that CLS, correctly, and stay red
+  until the board is fixed. That is the point of arming it.
+- ⚠️ **Performance 0.62 and LCP 3.3s on the board** pass the floors in
+  `lighthouserc.production.json` (LCP 4000ms) and fail the lab budgets in
+  `lighthouserc.json` (2500ms). Both are deliberate: the floor is what the live
+  site must not fall below, the budget is what the code should achieve.
+
+---
+
+
+## 88. Four things reported from a phone — 25 October 2026
+
+Reported with screenshots, from the live site, on an Android phone. Three
+reproduced and are fixed; one cannot be reproduced in this container at all,
+and that is the interesting one.
+
+### 88a. The landlord's nav strip stood 101px against the tenant's 61px
+
+Same component, same stylesheet. The only difference between the two
+dashboards is that a landlord has a primary action and a tenant has none — and
+`.portal-nav-cta` computed `padding: 12px 20px; margin: 16px 0 0`, so it stood
+84px tall in a row of 44px links and the flex row grew to fit it.
+
+🔴 **The mobile overrides had never applied.** They sit inside
+`@media (max-width: 900px)` at line ~430 of `_responsive.scss`; the base rule
+sits at line ~647, unconditional, at equal specificity, and **later**. So the
+rule that reads like the override is the one that loses, and the strip's
+`padding`, `margin-top` and `width: auto` were decoration. Scoping the base
+rule to `@media (min-width: 901px)` — the sidebar it was written for — fixes
+it, with `align-items: center` on the strip so no single taller child can pull
+the row up again.
+
+This file already carries the same lesson once, on `.results-header` at line
+~337: *"that rule sat in a narrower media query than the fix, so the fix never
+applied"*.
+
+Measured, 360 / 390 / 768px: landlord **101px → 61px**, exactly the tenant's,
+every link 44px, no horizontal scroll, no target under 44px. The desktop
+sidebar is unchanged — wrapper padding `12px 20px`, margin-top `16px`, button
+full width at 199px.
+
+### 88b. The tenant's viewings panel had a terracotta rule with nothing behind it
+
+`.vi-section { border-left: 3px solid var(--terra); }` and `.dash-section`
+carries no padding of its own, so the heading, the time, the room name, the
+address and all five outcome buttons sat **3px** from the line — on the one
+screen somebody reads standing outside a stranger's gate.
+
+`padding-left: .9rem`, which is what the `.hint` aside beside it uses with its
+own 4px rule. Measured at all four widths: the nearest element is now 17px from
+the rule; with the padding removed again it measures 3px.
+
+### 88c. 🔴 The landlord's drawer hid its own two call-to-action buttons
+
+`max-height: calc(100vh - 66px); overflow-y: auto;` on the top-nav sheet.
+
+On mobile Chrome **`100vh` is the viewport with the address bar hidden**, which
+is taller than what you can see while it is showing. So the cap was bigger than
+the screen: the sheet never overflowed its own max-height, `overflow-y: auto`
+therefore had nothing to scroll, the page scroll is locked behind it, and
+"Dashboard", "+ List a room" and "Log out" sat past the bottom edge — the
+screenshot shows the third button sliced in half at the screen edge.
+
+⚠️ **Not reproducible here, and it never will be.** Headless Chromium has no
+address bar, so `100vh` and the visible height are the same number: the drawer
+measures correctly at every viewport this container can produce (575px tall at
+360×800, scrollable at 360×640, nothing off-screen). The diagnosis comes from
+the screenshot plus the arithmetic, and `.hero--splash` already carries the
+same lesson in this codebase with the comment *"dvh, not vh: on mobile Chrome
+the address bar makes vh taller than the visible area"*.
+
+**It is a family, not an instance.** `scripts/viewport-unit-lint.mjs` found
+three more, and two were real:
+
+| Where | What | Verdict |
+|---|---|---|
+| `.wt-card` | `max-height: calc(100vh - 2rem)` + scroll | 🔴 the walkthrough **every new account meets**, on a phone |
+| `.report-dialog` | `max-height: 85vh` + scroll | 🔴 its submit button is the thing past the edge |
+| `.portal-wrap` | `min-height: calc(100vh - 66px)` | ⚠️ every portal screen a little taller than the screen |
+| `.filter-panel` | `max-height: calc(100vh - 5rem)` | ✅ inside `min-width: 901px` — desktop has no address bar |
+
+All four now carry a `dvh` line after the `vh` one, the `vh` first as the
+fallback.
+
+⚠️ **The lint's own first version was wrong twice**, and running it said so:
+`\bdvh\b` cannot match `100dvh` (a digit and a letter are both word
+characters, so there is no boundary between them), so it reported the single
+line in the codebase that was already correct; and it flagged every `vh` height
+including `min-height: 50vh` on centring blocks, which can strand nothing. The
+rule is now the actual failure shape: a `max-height` in vh on a box that
+scrolls, or a `min-height` of a full viewport or more.
+
+### 88d. ⚠️ "Server error" — not reproduced, and the dialog could not have told us
+
+A landlord dashboard showed **"Server error — Something went wrong on our end"**
+at 04:38. Every one of the thirteen API calls that screen makes was driven
+locally and all thirteen answer 200, including for a landlord with no rooms,
+which is the state the screenshot shows. So it is production-specific and
+nothing here reproduces it.
+
+What the dialog did NOT say is the point: that sentence was the answer to every
+status at or above 500, and those are three different situations.
+
+- the phone could not reach the API at all (status 0)
+- the **platform** answered instead of the API — 502/503/504. This deployment's
+  API sleeps when idle, so the first request after a quiet spell can be one of
+  these and the next succeeds. 04:38 is exactly the hour it would be cold, and
+  this is the leading hypothesis.
+- the API itself threw: a real 500, which will not fix itself on a retry.
+
+"Please try again shortly" is right for the first two and wrong for the third.
+The three now read differently, the failing call is logged to the console in
+every case, and a genuine 500 shows a line worth quoting. Driven, all three:
+
+    500 → "Server error … If it keeps happening, quote this: GET /api/landlord/calendar (500)."
+    503 → "Waking up … it was idle and is starting up. Wait a few seconds."
+      0 → "No connection … check your data or wi-fi."
+
+🔴 **Still open**: the underlying failure. The next report will name the
+endpoint and the status, which is what this change buys. Nothing has been
+changed on the server, because nothing here has seen it fail.
+
+### Gates
+
+Production build green. a11y drive **10 public + 33 portal pages**, headings,
+names and contrast at rest, hover and focus — all clean. mobile-drive: all
+reported bugs still fixed. template-literal, emoji, viewport-unit lints green.
+
+⚠️ Two of this repository's own documented traps, both hit in one edit of one
+file: an **emoji inside a CSS comment** (fails esbuild's CSS parser) and a
+**backtick quoting a class name inside a `styles` template literal** (ends the
+literal). Both produced the same unhelpful build error —
+`Failed to resolve @Component.styles` — naming nothing.
+`scripts/template-literal-lint.mjs` named the second in one line, and it was
+written for exactly this; run it before the build, not after.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash

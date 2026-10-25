@@ -206,8 +206,28 @@
     // The sheet can be taller than the phone once a landlord is signed in
     // and it carries Dashboard, List a room and Log out as well. Scrolls
     // itself rather than the page, which is the other half of the lock.
+    //
+    // ⚠️ dvh, not vh — the same trap as `.hero--splash`, and it cost the
+    // landlord's two call-to-action buttons.
+    //
+    // On mobile Chrome `100vh` is the viewport with the address bar HIDDEN,
+    // which is taller than what you can actually see while it is showing. So
+    // this cap was bigger than the screen: the sheet never overflowed its own
+    // max-height, `overflow-y: auto` therefore had nothing to scroll, and the
+    // last items — Dashboard, + List a room and Log out — sat below the
+    // bottom edge with the page scroll locked behind them. Reported from a
+    // phone with the third button sliced in half at the screen edge.
+    //
+    // ⚠️ Not reproducible in this container: headless Chromium has no address
+    // bar, so 100vh and the visible height are the same number and the drawer
+    // measures correctly at every viewport tested here. The vh line stays
+    // first as the fallback for a browser without dvh.
     max-height: calc(100vh - 66px);
+    max-height: calc(100dvh - 66px);
     overflow-y: auto;
+    // Scrolling the sheet must not hand the gesture to the page behind it
+    // once it reaches an end.
+    overscroll-behavior: contain;
   }
   // The links were written for ink. On white they have to be re-stated, and
   // the active one needs a colour that is not "slightly less faint".
@@ -405,6 +425,12 @@
     // nav changing.
     scroll-behavior: smooth;
     overscroll-behavior-x: contain;
+    // Items sit on one line rather than stretching to the tallest of them.
+    // Without this the strip inherits `align-items: normal`, so a single
+    // taller child — the landlord's "+ List a room" — pulls every link up to
+    // its height and the whole bar grows with it.
+    align-items: center;
+
     // ⚠️ min-width: 0, or the scroller is not a scroller.
     //
     // This is a GRID item in .portal-wrap, and a grid item's default
@@ -430,8 +456,34 @@
     padding: .5rem .8rem;
     border-radius: var(--r4);
   }
-  .portal-nav-cta { flex: 0 0 auto; padding: .25rem .5rem; margin-top: 0; align-self: center; }
-  .portal-nav-cta .btn { width: auto; white-space: nowrap; }
+  .portal-nav-cta {
+    flex: 0 0 auto;
+    margin-top: 0;
+    align-self: center;
+    /* No vertical padding. With .25rem top and bottom this block measured 68px
+       against a 44px nav link, and since the strip is a flex row with the
+       default `align-items: normal` (= stretch) every OTHER item stretched to
+       match it: the links measured 84px and the landlord's strip stood 101px
+       tall against the tenant's 61px. Same component, same CSS, and the only
+       difference between the two dashboards is that a landlord has a primary
+       action and a tenant does not. */
+    padding: 0 .5rem;
+  }
+  .portal-nav-cta .btn {
+    width: auto;
+    white-space: nowrap;
+    /* Sized like the links beside it rather than like the sidebar button it is
+       at desktop width: 44px is the WCAG 2.5.8 target and the height every
+       other item in this strip already has. */
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    /* On the scale — .25/.5/.75/1/1.25/1.5/2/2.5/3rem. This read .85rem until
+       scale-lint refused the commit: 46 uses of an off-scale value against a
+       baseline of 45, which is the ratchet doing its job on the one person
+       most likely to wave it through. */
+    padding: .5rem .75rem;
+  }
   .portal-main { padding: 1.25rem 1rem; }
   .stat-row { grid-template-columns: repeat(2, 1fr); }
 
@@ -597,8 +649,29 @@
 }
 
 // ── Portal shell additions (v2 mocks the portals as static HTML) ─────────
-.portal-nav-cta { padding: .75rem 1.25rem; margin-top: 1rem; }
-.portal-nav-cta .btn { width: 100%; font-size: .82rem; }
+//
+// ⚠️ These two are DESKTOP-ONLY, and they were not.
+//
+// They describe the sidebar's call-to-action: full width, generous padding,
+// pushed down from the nav above it. Unconditional and at line 647, they also
+// applied inside the phone strip — and because the strip's own overrides live
+// in the `max-width: 900px` block five hundred lines EARLIER at equal
+// specificity, the later rule won at every width. The mobile `padding`,
+// `margin-top` and `width: auto` there had never applied to anything.
+//
+// Measured: the block computed `padding: 12px 20px; margin: 16px 0 0`, so it
+// stood 84px tall in a row of 44px links and the landlord's nav strip measured
+// 101px against the tenant's 61px. Same component, same stylesheet; the only
+// difference is that a landlord has a primary action and a tenant has none.
+//
+// The file already carries this exact lesson once, on `.results-header` at
+// line ~337: "that rule sat in a narrower media query than the fix, so the fix
+// never applied". Two rules, one cascade, and the one that reads like the
+// override is the one that loses.
+@media (min-width: 901px) {
+  .portal-nav-cta { padding: .75rem 1.25rem; margin-top: 1rem; }
+  .portal-nav-cta .btn { width: 100%; font-size: .82rem; }
+}
 .portal-nav-badge {
   background: var(--terra); color: var(--white);
   font-size: .6rem; font-weight: 700;

@@ -79,7 +79,14 @@ import { ReportsService, ReportReason, REPORT_REASON_LABELS } from '../../../cor
       position: fixed; z-index: 999;
       left: 50%; top: 50%; transform: translate(-50%,-50%);
       width: min(30rem, calc(100vw - 2rem));
-      max-height: 85vh; overflow-y: auto;
+      /* dvh, not vh: on mobile Chrome vh is the viewport with the address bar
+         hidden, so an 85vh cap can be taller than the visible screen - the box
+         then never overflows its own max-height, overflow-y has nothing to
+         scroll, and the submit button sits past the bottom edge. vh first as
+         the fallback. */
+      max-height: 85vh;
+      max-height: 85dvh;
+      overflow-y: auto;
       background: var(--white); border-radius: var(--r12);
       padding: 1.5rem; box-shadow: var(--shadow-xl);
       h2 { font-size: 1.2rem; margin-bottom: .35rem; }

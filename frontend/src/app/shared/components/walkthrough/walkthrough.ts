@@ -341,7 +341,12 @@ const ADMIN_STEPS: Step[] = [
       background: var(--card, var(--white)); border-radius: var(--r12);
       box-shadow: var(--shadow-xl);
       max-width: 30rem; width: 100%; padding: 1.5rem;
-      max-height: calc(100vh - 2rem); overflow-y: auto;
+      /* dvh, not vh - this card is the first thing a new account sees, and on
+         a phone a vh cap is bigger than the visible screen, so its own buttons
+         can sit below the edge with nothing to scroll. vh first as fallback. */
+      max-height: calc(100vh - 2rem);
+      max-height: calc(100dvh - 2rem);
+      overflow-y: auto;
     }
     .wt-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
     .wt-step { font-size: .72rem; color: var(--slate); font-weight: 600; letter-spacing: .02em; }
@@ -371,7 +376,11 @@ const ADMIN_STEPS: Step[] = [
       .wt-overlay { align-items: flex-end; padding: 0; }
       .wt-card {
         max-width: none; border-radius: var(--r12) var(--r12) 0 0;
-        padding: 1.25rem 1.1rem 1.5rem; max-height: 88vh;
+        padding: 1.25rem 1.1rem 1.5rem;
+        /* Same reason as the card above; this is the phone sheet, where it
+           matters most. */
+        max-height: 88vh;
+        max-height: 88dvh;
       }
       .wt-actions .btn { flex: 1; justify-content: center; }
       .wt-go { margin-left: 0; width: 100%; justify-content: center; }

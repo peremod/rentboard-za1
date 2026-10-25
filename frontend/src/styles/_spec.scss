@@ -782,7 +782,11 @@ img{display:block;max-width:100%}
 /* ═══ PORTAL DASH ═══ */
 .portal-wrap{
   display:grid;grid-template-columns:240px 1fr;
+  /* dvh, not vh: on a phone vh is the viewport with the address bar hidden, so
+     a full-viewport minimum makes every portal screen taller than the screen
+     and pushes its own footer below the fold. vh first as the fallback. */
   min-height:calc(100vh - 66px);
+  min-height:calc(100dvh - 66px);
 }
 .portal-nav{
   background:var(--ink2);padding:1.5rem 0;

@@ -331,6 +331,32 @@ function fallbackRobots(indexable: boolean): string {
  * a staging copy is an instruction we do not mean, and the static deployment
  * it replaced got this right.
  */
+/**
+ * Hostnames an operator has declared to be this site, on top of the ones the
+ * environment file knows.
+ *
+ * There is exactly one caller: the Lighthouse `budgets` job, which serves the
+ * PRODUCTION bundle on `localhost:4000` and audits it. `localhost` is not
+ * `www.umastande.co.za`, so the copy rule above fired and robots.txt answered
+ * `Disallow: /` — correct for a copy, and it meant Lighthouse scored every
+ * audited URL as blocked from indexing. `is-crawlable` 0, `categories:seo`
+ * 0.66 against a budget of 1.0, on all four URLs, every run since the job was
+ * written. Measured here before the fix, with the same numbers the runner
+ * reported, by serving the bundle and reading robots.txt.
+ *
+ * So the job states what it is auditing rather than the server guessing. It is
+ * an addition and never a replacement: the real site stays canonical whatever
+ * this says, an unset variable changes nothing, and nothing here relaxes the
+ * `X-Robots-Tag` header or the meta tag that keep a copy out of an index even
+ * when its robots.txt invites a crawl.
+ */
+function declaredCanonicalHosts(): string[] {
+  return (process.env['SITE_CANONICAL_HOSTS'] ?? '')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 function isCanonicalHost(req: express.Request): boolean {
   const header = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? '')
     .split(',')[0]
@@ -354,6 +380,10 @@ function isCanonicalHost(req: express.Request): boolean {
   // reach it: siteUrl says localhost, and someone typing 127.0.0.1 should not
   // silently get a different answer.
   if (!environment.production && (requested === 'localhost' || requested === '127.0.0.1')) {
+    return true;
+  }
+
+  if (declaredCanonicalHosts().includes(requested)) {
     return true;
   }
 

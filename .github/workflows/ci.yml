@@ -206,6 +206,21 @@ jobs:
         # at all (measured: a bogus family and Playfair render identically).
         run: node scripts/font-lint.mjs
 
+      - name: Viewport height units — vh is not the height of a phone screen
+        if: ${{ !cancelled() }}
+        # On mobile Chrome `100vh` is the viewport with the address bar HIDDEN,
+        # so a vh cap on a scrolling panel is BIGGER than the screen: the panel
+        # never overflows its own max-height, overflow-y has nothing to scroll,
+        # and the bottom of it cannot be reached. The top-nav drawer lost
+        # Dashboard, + List a room and Log out that way, reported from a phone
+        # with the third button cut in half at the screen edge.
+        #
+        # ⚠️ Static, and it has to be: headless Chromium has no address bar, so
+        # vh and the visible height are the same number in CI and every
+        # viewport measures correctly. No drive in this repository can see
+        # this class of bug.
+        run: node scripts/viewport-unit-lint.mjs
+
       - name: Inline template and styles literals — no stray backtick
         if: ${{ !cancelled() }}
         # A backtick inside a component's inline `template:` or `styles:`
@@ -626,6 +641,19 @@ jobs:
           ADMIN_PASSWORD: CiSmokeAdmin123
         run: node scripts/phase-drive.mjs
 
+      # ⚠️ This drive existed for ten days and NOTHING RAN IT. It was written
+      # against a development build on a developer's machine, reported 38/38,
+      # and was never wired into a job — so the checklist row claiming its
+      # coverage was claiming a drive no gate executed. Both builds now, below
+      # and after pass 2, because the two builds disagree about the things it
+      # reads: only production emits canonical and the real site URL, and only
+      # development can serve a room from the database this job seeded.
+      - name: SEO — served metadata, development build
+        if: ${{ !cancelled() }}
+        env:
+          BASE: http://localhost:4200
+        run: node scripts/seo-drive.mjs
+
       # Pass 2 — production build, the only one that emits canonical.
       - name: Build frontend (production) and serve
         if: ${{ !cancelled() }}
@@ -636,6 +664,12 @@ jobs:
         # /rooms/:id rather than on anything it is testing.
         env:
           NG_ALLOWED_HOSTS: localhost
+          # Says which of the two things this server is: the site, or a copy of
+          # it. Without it robots.txt answers `Disallow: /` — right for a copy,
+          # and the reason the Lighthouse budgets job scored every URL blocked
+          # from indexing on every run it ever made. The SEO drive below asserts
+          # the direction, so this line is load-bearing rather than cosmetic.
+          SITE_CANONICAL_HOSTS: localhost
         run: |
           pkill -f "mastande-frontend/server/server.mjs" || true
           npm run build:prod
@@ -646,6 +680,18 @@ jobs:
       - name: E2E — locale routing and server-rendered SEO
         if: ${{ !cancelled() }}
         run: npx playwright test --project=desktop e2e/locale-and-seo.spec.ts
+
+      # The same drive against the build Lighthouse and production serve. The
+      # room section states a skip here — a production bundle fetches from
+      # api.umastande.co.za, so this board renders no rooms from the local
+      # database — and the robots.txt section takes its OTHER branch, the one
+      # that was wrong until 21 October.
+      - name: SEO — served metadata, production build
+        if: ${{ !cancelled() }}
+        env:
+          BASE: http://localhost:4200
+          SITE_CANONICAL_HOSTS: localhost
+        run: node scripts/seo-drive.mjs
 
       - name: Logs and traces on failure
         if: failure()

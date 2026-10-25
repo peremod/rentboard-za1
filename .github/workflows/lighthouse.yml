@@ -41,7 +41,19 @@ jobs:
         working-directory: frontend
         run: |
           npm install -g @lhci/cli@0.14.x
-          lhci autorun --config=../lighthouserc.json
+          lhci autorun --config=../lighthouserc.json || STATUS=$?
+          # Same summary as the production job, and for the same reason: the
+          # uploaded report has no shift details. `if: always()` would not help
+          # here — autorun exits non-zero on a failed assertion, so the status
+          # is held and re-raised after the numbers are printed.
+          #
+          # ⚠️ This job cannot see the board's real CLS. The bundle fetches
+          # rooms from api.umastande.co.za, which the runner's browser is not
+          # allowed to use cross-origin, so / renders an empty board: 0.026
+          # here against 0.953 on the live site. A green CLS in this job is a
+          # statement about a board with no cards in it.
+          node ../scripts/lhr-summary.mjs .lighthouseci
+          exit ${STATUS:-0}
         env:
           # Posts the run as a PR status check with a link to the full report.
           LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
@@ -50,6 +62,17 @@ jobs:
           # prerendered and would be served without it, but /rooms/:id would
           # not, and that is exactly the page to add to this list next.
           NG_ALLOWED_HOSTS: localhost
+          # And it must be told that localhost IS the site for this run, not a
+          # copy of it. Without this the server does the right thing for a
+          # copy — robots.txt answers `Disallow: /` — and Lighthouse then
+          # scores all four URLs blocked from indexing: is-crawlable 0,
+          # categories:seo 0.66 against a budget of 1.0. That is what this job
+          # reported on every run from the day it was written until 21 October,
+          # including run 10. Reproduced locally by serving the bundle and
+          # reading robots.txt, and the fix measured the same way: seo 0.66 →
+          # 1.00, is-crawlable 0 → 1. It widens nothing — the X-Robots-Tag
+          # header and the meta tag still keep a copy out of any index.
+          SITE_CANONICAL_HOSTS: localhost
 
   production:
     name: Weekly production audit
@@ -68,67 +91,149 @@ jobs:
       - name: Is the site live yet?
         id: live
         run: |
-          if curl -sfI --connect-timeout 10 --max-time 20 https://umastande.co.za/ >/dev/null 2>&1; then
+          if curl -sfI --connect-timeout 10 --max-time 20 https://www.umastande.co.za/ >/dev/null 2>&1; then
             echo "live=true" >> "$GITHUB_OUTPUT"
           else
             echo "live=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::https://umastande.co.za does not answer yet — skipping the production audit. This is expected until the domain is registered and pointed at Vercel."
+            echo "::notice::https://www.umastande.co.za does not answer yet — skipping the production audit. This is expected until the domain is registered and pointed at Vercel."
           fi
 
       - name: Audit production
         if: steps.live.outputs.live == 'true'
+        # ⚠️ --config on EVERY subcommand, and not optional. lhci discovers
+        # lighthouserc.json from the working directory, which is the repo root
+        # here — so `lhci collect --url=…` read that file's startServerCommand
+        # and tried to boot a server out of a dist/ this job never builds. Run
+        # 10 died on `Cannot find module …/dist/mastande-frontend/server/
+        # server.mjs`, MODULE_NOT_FOUND, 11 seconds in, having collected
+        # nothing. Every weekly run since the domain started answering has
+        # ended there.
+        #
+        # URLs and thresholds live in lighthouserc.production.json. They used
+        # to be written here as inline flags while lighthouserc.json carried
+        # different numbers for the same four metrics — two sources of truth
+        # for one budget.
+        #
+        # ⚠️ `|| true` used to end the preset line below AND it was the only
+        # assert in this job, which made the whole audit a collection exercise:
+        # three runs of Lighthouse, every score discarded, a green tick
+        # whatever happened. The preset stays non-blocking on purpose — it
+        # asserts dozens of audits and a brand-new failure in any one of them
+        # would block a release for something nobody chose to care about, so it
+        # is printed for a human to read. The blocking assert is the one after
+        # it, which has no `|| true`.
         run: |
           npm install -g @lhci/cli@0.14.x
-          lhci collect \
-            --url=https://umastande.co.za/ \
-            --url=https://umastande.co.za/pricing \
-            --url=https://umastande.co.za/how-it-works \
-            --numberOfRuns=3
-          # ⚠️ `|| true` used to end this line, which made the whole audit a
-          # collection exercise: three runs of Lighthouse, every score
-          # discarded, and a green tick whatever happened. Performance and SEO
-          # could regress for months without a single red build — a check that
-          # cannot fail, in the workflow whose job is to catch regressions.
-          #
-          # The recommended preset stays NON-blocking, because it asserts
-          # dozens of audits and a brand-new failure in any one of them would
-          # block a release for something nobody chose to care about. It is
-          # printed for a human to read.
-          lhci assert --preset=lighthouse:recommended || true
+          lhci collect --config=lighthouserc.production.json
+          # Printed BEFORE the assert, so it is in the log whether the gate
+          # passes or fails. `lhci upload` sanitises the report it publishes —
+          # run 11 measured CLS 0.953 on the board and the published report
+          # carried `layout-shifts` with a null score and no details, so the
+          # one number worth acting on could be seen and not explained.
+          node scripts/lhr-summary.mjs .lighthouseci
+          lhci upload --config=lighthouserc.production.json
+          lhci assert --config=lighthouserc.production.json --preset=lighthouse:recommended || true
+          lhci assert --config=lighthouserc.production.json
 
-          # These do block, and they are deliberately few. Each is a number
-          # this product has a real stake in, on the slow Android phone it is
-          # built for, and each is set at the level the site should not fall
-          # BELOW rather than at an aspiration:
-          #
-          #   · SEO 0.9      — metadata, crawlability, tap targets. A drop here
-          #                    is almost always an accident.
-          #   · LCP 4000ms   — the board's hero and first room card. Google's
-          #                    "poor" threshold is 4s; this fails only when a
-          #                    real person would call the page slow.
-          #   · CLS 0.1      — the "good" bound. Layout shift on a listing
-          #                    card is how somebody taps the wrong room.
-          #   · TBT 600ms    — a proxy for INP, which Lighthouse cannot
-          #                    measure in a lab run (it needs real
-          #                    interactions). Named as a proxy rather than
-          #                    reported as INP, because they are not the same
-          #                    metric and saying otherwise would be a claim
-          #                    this workflow cannot support.
-          lhci assert \
-            --assertions.categories:seo="error,minScore=0.9" \
-            --assertions.largest-contentful-paint="error,maxNumericValue=4000" \
-            --assertions.cumulative-layout-shift="error,maxNumericValue=0.1" \
-            --assertions.total-blocking-time="error,maxNumericValue=600"
+      # ⚠️ A second Lighthouse, on purpose, and only for the board.
+      #
+      # lhci 0.14 bundles Lighthouse 12.1, whose RootCauses gatherer throws on
+      # this page — `layout-shifts: score null mode error`, errorMessage
+      # `Cannot read properties of undefined (reading 'frame_sequence')` — so
+      # the audit that names WHAT shifted cannot run in the collection above.
+      # 12.8 produces it. One run, one URL, after the gate, so a red CLS comes
+      # with the elements that moved instead of a number nobody can act on.
+      - name: What shifted on the board
+        if: ${{ !cancelled() && steps.live.outputs.live == 'true' }}
+        run: |
+          npm install -g lighthouse@12.8.2
+          lighthouse https://www.umastande.co.za/ \
+            --quiet --output=json --output-path=./board-lhr.json \
+            --form-factor=mobile --screenEmulation.mobile --throttling-method=simulate \
+            --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage"
+          node scripts/lhr-summary.mjs ./board-lhr.json
 
-          lhci upload --target=temporary-public-storage
+          # ── Two discriminating observations, five seconds each ──────────
+          #
+          # Run 15 attributed a 0.9162 shift to the footer brand block and made
+          # the cookie notice the LCP element. The notice is already
+          # `position: fixed`, so it cannot push anything — something ABOVE the
+          # footer grows after paint, and there are two candidates that fit:
+          # the hero's phone splash, which `afterNextRender` applies on a first
+          # visit, and room cards arriving into a board the served HTML does not
+          # contain. Guessing between them is how a change gets credited with a
+          # number it did not move.
+          #
+          # 1. Desktop. The splash is mobile-only (JS at ≤700px, CSS at ≤768px)
+          #    while fonts and room cards load identically at any width. A CLS
+          #    near zero here implicates the splash; a CLS near 0.9 exonerates
+          #    it.
+          echo "── the same board at desktop width"
+          lighthouse https://www.umastande.co.za/ \
+            --quiet --output=json --output-path=./board-desktop.json \
+            --preset=desktop \
+            --chrome-flags="--headless=new --no-sandbox --disable-dev-shm-usage"
+          node scripts/lhr-summary.mjs ./board-desktop.json
+
+          # 2. What the server actually sends. If the served HTML carries no
+          #    room links, every card is a post-paint insertion and the shift is
+          #    the board filling itself in.
+          echo "── what the served HTML contains, before any JavaScript runs"
+          BODY=$(curl -s https://www.umastande.co.za/)
+          echo "bytes:        $(printf '%s' "$BODY" | wc -c)"
+          echo "room links:   $(printf '%s' "$BODY" | grep -o '/rooms/[0-9a-f-]\{36\}' | sort -u | wc -l)"
+          echo "skeletons:    $(printf '%s' "$BODY" | grep -c 'app-skeleton-card' || true)"
+          echo "hero--splash: $(printf '%s' "$BODY" | grep -c 'hero--splash' || true)"
+          echo "trust-strip:  $(printf '%s' "$BODY" | grep -c 'trust-strip' || true)"
+
+          # 3. WHO answered. `/` is RenderMode.Server, so server.ts should have
+          #    rendered it and stamped BOARD_CACHE_CONTROL
+          #    (`public, max-age=0, s-maxage=60, stale-while-revalidate=600`).
+          #    A different Cache-Control, or an x-matched-path pointing at a
+          #    file, means the SSR function did not answer and the static CSR
+          #    shell did — which is what the 7,617-byte body above suggests.
+          #    /pricing is the control: it is genuinely prerendered.
+          echo "── who answered, board vs a prerendered page"
+          for u in https://www.umastande.co.za/ https://www.umastande.co.za/pricing; do
+            echo "  $u"
+            curl -sI "$u" | grep -iE '^(HTTP|cache-control|age|x-vercel|x-matched-path|content-length|server|x-robots-tag)' | sed 's/^/    /'
+          done
+
+          # 4. WHICH BUILD. Run 17 showed `/` and `/pricing` both answering
+          #    with `cache-control: public, max-age=0, must-revalidate` and
+          #    `x-vercel-cache: HIT` — Vercel's STATIC default, not the
+          #    `s-maxage=60, stale-while-revalidate=600` that server.ts stamps
+          #    on a board it rendered. So no function answered either page, and
+          #    the 7,618-byte body is not this build's index.csr.html (5,835
+          #    bytes) either. Both point at a deployment that is not this
+          #    repository's current output, so: name what is actually deployed.
+          #
+          #    The icon links went into index.html on 21 October and reached
+          #    master in that day's merge. Their absence dates the deployment.
+          echo "── which build is deployed"
+          for marker in icon-48 apple-touch-icon ld-site 'rel="canonical"' mastande-status trust-strip; do
+            echo "  $marker: $(printf '%s' "$BODY" | grep -c "$marker" || true)"
+          done
+          echo "  scripts:"
+          printf '%s' "$BODY" | grep -o 'src="[^"]*\.js"' | sed 's/^/    /' | head -8
+          echo "  does index.csr.html exist as a static file?"
+          curl -sI https://www.umastande.co.za/index.csr.html | grep -iE '^(HTTP|content-length|cache-control)' | sed 's/^/    /'
+          echo "  what answers a path no route and no file matches?"
+          curl -sI https://www.umastande.co.za/zzz-no-such-path-xyz | grep -iE '^(HTTP|content-length|cache-control|x-vercel)' | sed 's/^/    /'
 
       - name: Verify sitemap URLs all resolve
-        if: steps.live.outputs.live == 'true'
+        # ⚠️ `!cancelled()`, because a step's default condition is success() and
+        # this one spent run 13 SKIPPED — the audit above failed on the board's
+        # CLS, and a sitemap check that stops running whenever an unrelated
+        # metric regresses is a check held hostage by another. A soft 404 in a
+        # submitted sitemap is exactly what nobody would notice while a
+        # performance number is red.
+        if: ${{ !cancelled() && steps.live.outputs.live == 'true' }}
         # A sitemap entry that 404s is a soft-404 signal we are submitting
         # ourselves. Cheap to check, invisible if we do not.
         run: |
           set -o pipefail
-          BAD=$(curl -sf https://umastande.co.za/sitemap.xml \
+          BAD=$(curl -sf https://www.umastande.co.za/sitemap.xml \
             | grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g' \
             | xargs -P 8 -I {} sh -c 'code=$(curl -s -o /dev/null -w "%{http_code}" "{}"); [ "$code" = "200" ] || echo "$code {}"')
           if [ -n "$BAD" ]; then
