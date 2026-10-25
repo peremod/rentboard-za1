@@ -54,14 +54,18 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
                whether the BURGER and the SCRIM were absent and never
                whether anything belonging to the sheet had leaked out.
                Found by looking at a screenshot of the dashboard. -->
-          @if (mobileOpen()) {
-            <!-- The burger doubles as the close, but it is at the top-right
-                 of the header and a thumb that has just scrolled the sheet
-                 is nowhere near it. -->
-            <button type="button" class="nav-sheet-close" (click)="close()" #closeBtn>
-              <app-icon name="x"/> Close
-            </button>
-          }
+          <!-- ⚠️ There WAS a "✕ Close" button here, and it is gone at the
+               owner's request after seeing it on a phone.
+               The reasoning that put it in — "the burger is at the top-right
+               and a thumb that has just scrolled the sheet is nowhere near
+               it" — described a sheet that scrolls. This one opens at the top
+               with the burger a thumb's width above it, already showing an ✕,
+               already labelled "Close menu", and the scrim and Escape both
+               close it too. Four ways out, one of them taking the first screen
+               of the menu and pushing the links people came for further down.
+               Focus still enters the sheet on open: it lands on the first link
+               now rather than on a button whose only job was to undo the tap
+               that opened it. -->
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }"
              (click)="close()">{{ 'nav.browse_rooms' | translate }}</a>
           <a routerLink="/how-it-works" routerLinkActive="active"
@@ -169,7 +173,6 @@ export class Navbar {
   private doc = inject(DOCUMENT);
   private isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
   private sheet = viewChild<ElementRef<HTMLElement>>('sheet');
-  private closeBtn = viewChild<ElementRef<HTMLButtonElement>>('closeBtn');
 
   constructor() {
     /**
@@ -197,7 +200,11 @@ export class Navbar {
       if (!this.isBrowser) return;
       const open = this.mobileOpen();
       queueMicrotask(() => {
-        if (open) this.closeBtn()?.nativeElement?.focus();
+        // The first link in the sheet, because the Close button that used to
+        // take this focus is gone. Not the burger: it is outside the sheet,
+        // so landing there would put the first Tab back at the top of the
+        // page rather than in the menu that just opened.
+        if (open) this.firstFocusable()?.focus();
         else if (this.wasOpen) this.doc.getElementById('nav-burger')?.focus();
         this.wasOpen = open;
       });
@@ -232,6 +239,23 @@ export class Navbar {
    * worse than no dialog role at all because a screen reader has been told
    * the opposite. Cycles within the sheet, both directions.
    */
+  /**
+   * The first thing in the sheet a person can land on.
+   *
+   * Shares the trap's selector below rather than keeping a second list: two
+   * definitions of "focusable" is how the first element of the trap and the
+   * element that receives focus on open end up being different elements.
+   */
+  private firstFocusable(): HTMLElement | null {
+    const root = this.sheet()?.nativeElement;
+    if (!root) return null;
+    return Array.from(
+      root.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled])',
+      ),
+    ).find((el) => el.offsetParent !== null) ?? null;
+  }
+
   @HostListener('document:keydown.tab', ['$event'])
   @HostListener('document:keydown.shift.tab', ['$event'])
   onTab(raw: Event) {

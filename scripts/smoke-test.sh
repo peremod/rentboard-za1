@@ -4092,6 +4092,21 @@ if echo "$BODY" | jq -e 'has("items") and has("counts")' >/dev/null 2>&1; then
 else
   red "  FAIL  inbox shape: $(echo "$BODY" | head -c 200)"; FAIL=$((FAIL+1))
 fi
+
+# The same two checks as the tenant inbox above, and for the same two defects:
+# `viewing_elapsed` was missing from this counts object too, and these seven
+# queries ran under the same Promise.all that turned one bad row into a 500 on
+# the whole dashboard.
+if echo "$BODY" | jq -e '.counts | length > 0 and (to_entries | all(.value | type == "number"))' >/dev/null 2>&1; then
+  green "  PASS  every per-kind count is a number, none of them null"; PASS=$((PASS+1))
+else
+  red "  FAIL  a landlord inbox count is not a number: $(echo "$BODY" | jq -c '.counts' 2>/dev/null | head -c 200)"; FAIL=$((FAIL+1))
+fi
+if echo "$BODY" | jq -e 'has("partial") and (.partial == false)' >/dev/null 2>&1; then
+  green "  PASS  it reports itself complete rather than partial"; PASS=$((PASS+1))
+else
+  red "  FAIL  landlord inbox partial flag: $(echo "$BODY" | jq -c '.partial' 2>/dev/null)"; FAIL=$((FAIL+1))
+fi
 # Every row must carry where its action goes. A template deciding that per kind
 # is a template that gets one wrong the next time a kind is added.
 if echo "$BODY" | jq -e '.items | all(has("actionPath") and has("actionLabel") and has("urgency"))' >/dev/null 2>&1; then
@@ -4173,6 +4188,31 @@ if echo "$BODY" | jq -e '.items | all(has("actionPath") and has("actionLabel") a
   green "  PASS  every row carries its own action and its urgency"; PASS=$((PASS+1))
 else
   red "  FAIL  a tenant row is missing actionPath/actionLabel/urgency"; FAIL=$((FAIL+1))
+fi
+
+# ⚠️ Every count a NUMBER, because one of them was null for months.
+#
+# `viewing_elapsed` was in the kind union and missing from the hand-written
+# counts object, so `counts.viewing_elapsed++` incremented undefined and the
+# API answered null for it to every tenant who had a viewing that had been and
+# gone. The object was cast `as Record<TenantInboxKind, number>`, and a cast is
+# where type checking stops. Both inboxes build their counts from a kind ARRAY
+# now; this is the check that says so from outside.
+if echo "$BODY" | jq -e '.counts | length > 0 and (to_entries | all(.value | type == "number"))' >/dev/null 2>&1; then
+  green "  PASS  every per-kind count is a number, none of them null"; PASS=$((PASS+1))
+else
+  red "  FAIL  a tenant inbox count is not a number: $(echo "$BODY" | jq -c '.counts' 2>/dev/null | head -c 200)"; FAIL=$((FAIL+1))
+fi
+
+# ⚠️ `partial` says the list is incomplete, and it must be FALSE on a healthy
+# run. Seven independent queries used to run under Promise.all, so one bad row
+# in any one of them answered the whole endpoint with a 500 and the dashboard
+# became a "Server error" dialog. They degrade one section at a time now — and
+# a flag that is always true would hide that just as well as no flag at all.
+if echo "$BODY" | jq -e 'has("partial") and (.partial == false)' >/dev/null 2>&1; then
+  green "  PASS  it reports itself complete rather than partial"; PASS=$((PASS+1))
+else
+  red "  FAIL  tenant inbox partial flag: $(echo "$BODY" | jq -c '.partial' 2>/dev/null)"; FAIL=$((FAIL+1))
 fi
 # ⚠️ Mastande does not handle the money and has not checked whether it arrived.
 # A tenant who paid in cash on the 1st being told by an app that they are in
