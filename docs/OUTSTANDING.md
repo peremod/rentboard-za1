@@ -6949,9 +6949,23 @@ meet it. Why the trade is still right, and what is actually left:
 - the baseline is not like-for-like: Google Fonts serves from a CDN edge with
   warm DNS and an `immutable` cache that a large share of visitors already
   hold. Our files come from Vercel's edge on first visit and from cache after.
-- the 300 ms is **not** irreducible. The faces are not subset to the glyphs
+- ~~the 300 ms is **not** irreducible. The faces are not subset to the glyphs
   this product uses; `dm-sans-latin.woff2` is the whole latin range at 36 KB.
-  A glyph-subset build is the next lever and has not been pulled.
+  A glyph-subset build is the next lever and has not been pulled.~~
+
+  ⚠️ **Withdrawn — see §92.** Both halves of this were unsupported. The 310 ms
+  was inferred from two numbers taken either side of a commit that changed the
+  origin AND the display strategy together, and glyph-subsetting was named as
+  the lever for a cause that had never been isolated. Driven three ways
+  against one build, this container measures **0 ms** between `optional` and
+  `swap` and **8 ms** between `optional` and no webfont at all, with a
+  within-variant spread of 184–296 ms — so it cannot see an effect of this
+  size, which §90e had itself recorded two paragraphs earlier and then
+  reasoned past anyway.
+
+  Also withdrawn by §92b: subsetting would not have been the only option, but
+  **deferring the faces out of the render-critical stylesheet would not have
+  worked either** — Angular SSR inlines the `@font-face` blocks into the HTML.
 
 So the open item is `/` at 1.5 ms over a real budget, with a named remedy, not
 a threshold to relax. Recorded here rather than silenced in `lighthouserc.json`.
@@ -6988,7 +7002,13 @@ So the assertion is sitting inside the runner's own variance and the earlier
 failure was noise in the other direction. §90e's open item stands exactly as
 written — self-hosting still costs ~310 ms against the Google Fonts baseline,
 the faces are still not glyph-subset, and a gate that flips on 11 ms of jitter
-is not evidence the cost went away. Budgets, median of 3:
+is not evidence the cost went away.
+
+⚠️ **Half of that is withdrawn by §92.** The gate-flipping-on-jitter point
+stands. The "~310 ms against the Google Fonts baseline" does not: it was
+inferred from a comparison that changed the origin and the display strategy
+together, and nothing has isolated it. There is no measured cost to recover
+and therefore no lever to pull. Budgets, median of 3:
 
     /               LCP 2490 ms  CLS 0.033   (budget 2500)
     /pricing        LCP 1814 ms  CLS 0.004
@@ -7175,6 +7195,131 @@ during the run. **No new smoke assertion was added, because there is no way to
 assert a race from an HTTP client without causing it.** The drive is what
 covers this, and it is wired into CI's backend job (after the smoke suite's
 fixtures, against the same seeded database) and into `npm run audit:inbox-race`.
+
+## 92. The 310ms I attributed to self-hosting, withdrawn — 25 October 2026
+
+§90e said self-hosting the two families costs about **310ms of LCP** against
+the Google Fonts baseline, and named **glyph-subsetting** as "the next lever".
+Both halves are being withdrawn. The first was an inference from two numbers
+taken either side of a change that altered two things at once; the second was
+a remedy proposed for a cause that had never been isolated.
+
+### 92a. The comparison conflated two changes
+
+Moving to `src/assets/fonts` changed the **origin** (fonts.gstatic.com became
+this origin) and the **display strategy** (`display=swap` became
+`font-display: optional`) in the same commit. Those cost different things, and
+the before/after was read as though only the first had happened.
+
+So `scripts/font-paint-drive.mjs` separates them: one build, three variants —
+as shipped, `swap`, and **no webfont at all** — produced by rewriting the
+stylesheet *and the document* in flight, with every font response held back
+1500ms so the file is certain to miss its window.
+
+### 92b. ⚠️ Angular SSR inlines the `@font-face` blocks into the HTML
+
+This is the finding worth keeping, and it is structural rather than a timing
+measurement, so this container's load cannot weaken it. The served board
+carries all four faces in a `<style>` tag:
+
+    $ curl -s http://localhost:4000/ | grep -c '@font-face'      -> 1 block
+    $ curl -s http://localhost:4000/ | grep -o 'woff2' | wc -l    -> 8 refs
+
+Two consequences:
+
+- **The strategy governing the first paint is the inlined copy**, not the
+  external stylesheet, which applies later and merely overrides it.
+- **Deferring the fonts out of the render-critical stylesheet cannot work.**
+  That was the other obvious remedy — load the faces from a stylesheet
+  injected after `load`, so the first view never contends for bandwidth. The
+  inliner would put them back. Killed before anybody spends a day on it.
+
+### 92c. Font requests begin before the headline paints
+
+Read from the page's own resource timeline, so the two numbers share a clock:
+
+    first woff2 request   ~138ms
+    first contentful paint ~220ms      (the LCP element is h1.hero-headline)
+    began before the paint: 7 / 7 runs
+
+That is the contention mechanism, measured rather than assumed, and it is the
+honest version of what §90e was reaching for: self-hosted faces are discovered
+in a stylesheet the browser is already parsing, so they start at once, whereas
+Google Fonts cannot be discovered until a third-party DNS lookup, TLS
+handshake and CSS round trip have finished. On an unthrottled localhost that
+ordering costs nothing. On CI's throttled link it is where a delta could come
+from — **could**, which is not the same as does.
+
+### 92d. 🔴 And this box cannot adjudicate the difference
+
+Medians of 7 runs per variant, same build, same box:
+
+| variant | LCP (median) | all 7 runs | headline in brand face |
+|---|---|---|---|
+| optional (as shipped) | 220ms | 268, 208, 236, 220, 212, 184, 224 | false |
+| swap | 220ms | 284, 220, 216, 232, 184, 236, 204 | false |
+| no webfont at all | 212ms | 252, 200, 172, 212, 220, 212, 296 | false |
+
+`optional` vs `swap`: **0ms**. `optional` vs no webfont at all: **8ms**. The
+spread **within** one variant (184–296ms) is an order of magnitude wider than
+any gap **between** them, so the only defensible reading is that this
+container cannot see an effect of this size. It is the same limit §90e itself
+recorded — `/` measured at 4370ms here against the runner's 2529ms — and I
+then drew a 310ms conclusion anyway.
+
+⚠️ **The budget is no longer the reason to care.** `/` passes at 2490ms against
+2500ms (§90f), on the same code that failed it by 1.5ms the run before. There
+is no gate being chased here, so no font change is being made on the strength
+of a number nothing can measure.
+
+### 92e. ⚠️ Local CLS does not reproduce §90b, and the case for `optional` does not rest on it
+
+All three variants measured **CLS 0.0000**, in every run, including `swap` with
+the font arriving 1500ms late — which §90b reported locally as **0.0109
+shifting `.hero-inner`**. That is a direct non-reproduction of an earlier local
+measurement and I cannot explain it; the board has changed by two releases
+since, and this harness differs from that one in viewport and in rewriting the
+inlined CSS as well.
+
+Stated rather than smoothed over, because the honest position is that
+**`font-display: optional` is justified by the PRODUCTION before/after, not by
+any local number**: the live board went from CLS 0.071 with two "Web font
+loaded" culprits named by Lighthouse to 0.012 with both gone (§90, §90f). That
+evidence is unaffected by anything in this section.
+
+### 92f. ⚠️ Five defects in this harness, every one found by running it
+
+Listed because the pattern is the point — each version produced a confident
+number that was wrong, and three of them would have been reported as a finding:
+
+1. **Single runs.** The first result showed `optional` costing **+80ms**, which
+   matched the block-period story exactly. With 5 runs it was **−4ms**. The
+   number that agreed with my hypothesis was noise.
+2. **An unverified control.** "No webfont at all" was never checked to remove
+   anything. It reported 4 → 0 `@font-face` in the external CSS *and two font
+   requests*, which a page with no face cannot make.
+3. **The inlined CSS** (§92b) — the rewrite only touched `**/*.css`, so for two
+   versions the variants did not govern the first paint at all. This is what
+   defect 2 was a symptom of.
+4. **Two clocks.** Font request starts were taken as `Date.now()` minus a
+   baseline captured outside the page, then compared with FCP's page-relative
+   `startTime`. Now read from the page's own resource timeline.
+5. **A probe that measured the wrong element, at the wrong time, and caused
+   the requests it counted.** A fresh `<span>` asking for Playfair *after* the
+   wait reported "brand face in use: true" on runs where every font response
+   was held back 1500ms — impossible, and the tell for a sixth problem:
+   cross-run **caching**, since a `BrowserContext` does not isolate the HTTP
+   cache the way it isolates cookies. The probe now swaps a bogus family onto
+   the `h1` itself, at load, and the cache is disabled through CDP per run.
+
+### 92g. What is NOT wired into CI, and why
+
+`font-paint-drive.mjs` is in `npm run audit:font-paint` and **not** in
+`.github/workflows/ci.yml`. It cannot assert a timing threshold — §92d is the
+reason — and a check whose assertion cannot be trusted is worse than no check,
+because it gets believed. It answers ordering and structural questions on
+demand: whether the requests precede the paint, whether the faces are inlined,
+whether a variant is really the variant it claims to be.
 
 ---
 
