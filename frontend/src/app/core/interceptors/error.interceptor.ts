@@ -74,7 +74,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         return attemptSilentRefreshAndRetry(req, next, auth, router, dialogs);
       }
 
-      if (!req.context.get(INLINE_ERRORS)) handleNonAuthError(err, dialogs);
+      if (!req.context.get(INLINE_ERRORS)) handleNonAuthError(err, dialogs, req);
       return throwError(() => err);
     }),
   );
@@ -119,7 +119,49 @@ function attemptSilentRefreshAndRetry(
   );
 }
 
-function handleNonAuthError(err: HttpErrorResponse, dialogs: DialogService) {
+/**
+ * What a person is told when a request fails for a reason that is not theirs.
+ *
+ * ⚠️ "Something went wrong on our end. Please try again shortly." was the
+ * answer to every status at or above 500, and it is three different situations
+ * wearing one sentence:
+ *
+ *   · the API was unreachable, or the phone's connection dropped (status 0)
+ *   · the platform answered instead of the API: 502, 503 or 504. On this
+ *     deployment the API sleeps when idle, so the FIRST request after a quiet
+ *     spell can be one of these and the next one succeeds. Reported on a
+ *     landlord dashboard at 04:38 — exactly the hour the API would be cold.
+ *   · the API itself threw: a genuine 500, which is a bug and will not fix
+ *     itself on a retry.
+ *
+ * Telling somebody to "try again shortly" is right for the first two and wrong
+ * for the third, and a report of "Server error" names none of them. So the
+ * dialog says which of the three it was, and the console carries the method,
+ * the path and the status — the one line that would have turned a screenshot
+ * into a diagnosis.
+ */
+function describeServerFailure(err: HttpErrorResponse, path: string): { title: string; body: string } {
+  if (err.status === 0) {
+    return {
+      title: 'No connection',
+      body: 'Your phone could not reach Mastande. Check your data or wi-fi and try again.',
+    };
+  }
+  if (err.status === 502 || err.status === 503 || err.status === 504) {
+    return {
+      title: 'Waking up',
+      body: 'Mastande did not answer in time — this usually means it was idle and is starting up. '
+        + 'Wait a few seconds and try again.',
+    };
+  }
+  return {
+    title: 'Server error',
+    body: `Something went wrong on our end, and it was not your doing. Please try again shortly.\n\n`
+      + `If it keeps happening, quote this: ${path} (${err.status}).`,
+  };
+}
+
+function handleNonAuthError(err: HttpErrorResponse, dialogs: DialogService, req?: HttpRequest<unknown>) {
   switch (err.status) {
     /**
      * ⚠️ Use OUR message when there is one.
@@ -150,8 +192,25 @@ function handleNonAuthError(err: HttpErrorResponse, dialogs: DialogService) {
       break;
     }
     default:
-      if (err.status >= 500) {
-        dialogs.error('Something went wrong on our end. Please try again shortly.', 'Server error');
+      if (err.status >= 500 || err.status === 0) {
+        // Path only, never the query string: a search or a filter can carry
+        // what somebody typed, and this line goes on screen and into a log.
+        const path = req ? `${req.method} ${safePath(req.url)}` : 'a request';
+        // Always, and before the dialog: whoever is looking at a browser
+        // console gets the failing call named even if the person taps OK
+        // before reading anything.
+        console.error(`[http] ${path} failed with ${err.status}`, err.error);
+        const { title, body } = describeServerFailure(err, path);
+        dialogs.error(body, title);
       }
+  }
+}
+
+/** The path of a URL, without origin or query string. */
+function safePath(url: string): string {
+  try {
+    return new URL(url, 'http://x').pathname;
+  } catch {
+    return url.split('?')[0];
   }
 }

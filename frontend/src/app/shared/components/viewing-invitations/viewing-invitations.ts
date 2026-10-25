@@ -156,7 +156,22 @@ import { Icon } from '../icon/icon';
     }
   `,
   styles: `
-    .vi-section { border-left: 3px solid var(--terra); }
+    /* WARNING: the padding is half the rule, and it was missing.
+
+       .dash-section carries no padding of its own, so a bare border-left put a
+       terracotta line hard against the heading, the time, the room name, the
+       address and all five outcome buttons - on the one screen somebody reads
+       standing outside a stranger's gate. .9rem is what the .hint aside beside
+       it uses with its own 4px rule, so the two read as the same device rather
+       than two accidents.
+
+       Two of this file's own traps in one edit, both listed in CLAUDE.md and
+       both hit anyway: an emoji in a CSS comment, which fails esbuild's CSS
+       parser, and a backtick quoting a class name, which ENDS this template
+       literal - the build said "Failed to resolve @Component.styles" both
+       times and named nothing. scripts/template-literal-lint.mjs named the
+       second in one line. Run it before the build, not after. */
+    .vi-section { border-left: 3px solid var(--terra); padding-left: .9rem; }
     .vi {
       display: grid; gap: .5rem; padding: .8rem 0;
       border-bottom: 1px solid var(--border);

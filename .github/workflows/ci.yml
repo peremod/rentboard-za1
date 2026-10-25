@@ -206,6 +206,21 @@ jobs:
         # at all (measured: a bogus family and Playfair render identically).
         run: node scripts/font-lint.mjs
 
+      - name: Viewport height units — vh is not the height of a phone screen
+        if: ${{ !cancelled() }}
+        # On mobile Chrome `100vh` is the viewport with the address bar HIDDEN,
+        # so a vh cap on a scrolling panel is BIGGER than the screen: the panel
+        # never overflows its own max-height, overflow-y has nothing to scroll,
+        # and the bottom of it cannot be reached. The top-nav drawer lost
+        # Dashboard, + List a room and Log out that way, reported from a phone
+        # with the third button cut in half at the screen edge.
+        #
+        # ⚠️ Static, and it has to be: headless Chromium has no address bar, so
+        # vh and the visible height are the same number in CI and every
+        # viewport measures correctly. No drive in this repository can see
+        # this class of bug.
+        run: node scripts/viewport-unit-lint.mjs
+
       - name: Inline template and styles literals — no stray backtick
         if: ${{ !cancelled() }}
         # A backtick inside a component's inline `template:` or `styles:`

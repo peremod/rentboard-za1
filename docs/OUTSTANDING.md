@@ -6497,6 +6497,135 @@ by me three findings after writing it up about somebody else's check.
 ---
 
 
+## 88. Four things reported from a phone — 25 October 2026
+
+Reported with screenshots, from the live site, on an Android phone. Three
+reproduced and are fixed; one cannot be reproduced in this container at all,
+and that is the interesting one.
+
+### 88a. The landlord's nav strip stood 101px against the tenant's 61px
+
+Same component, same stylesheet. The only difference between the two
+dashboards is that a landlord has a primary action and a tenant has none — and
+`.portal-nav-cta` computed `padding: 12px 20px; margin: 16px 0 0`, so it stood
+84px tall in a row of 44px links and the flex row grew to fit it.
+
+🔴 **The mobile overrides had never applied.** They sit inside
+`@media (max-width: 900px)` at line ~430 of `_responsive.scss`; the base rule
+sits at line ~647, unconditional, at equal specificity, and **later**. So the
+rule that reads like the override is the one that loses, and the strip's
+`padding`, `margin-top` and `width: auto` were decoration. Scoping the base
+rule to `@media (min-width: 901px)` — the sidebar it was written for — fixes
+it, with `align-items: center` on the strip so no single taller child can pull
+the row up again.
+
+This file already carries the same lesson once, on `.results-header` at line
+~337: *"that rule sat in a narrower media query than the fix, so the fix never
+applied"*.
+
+Measured, 360 / 390 / 768px: landlord **101px → 61px**, exactly the tenant's,
+every link 44px, no horizontal scroll, no target under 44px. The desktop
+sidebar is unchanged — wrapper padding `12px 20px`, margin-top `16px`, button
+full width at 199px.
+
+### 88b. The tenant's viewings panel had a terracotta rule with nothing behind it
+
+`.vi-section { border-left: 3px solid var(--terra); }` and `.dash-section`
+carries no padding of its own, so the heading, the time, the room name, the
+address and all five outcome buttons sat **3px** from the line — on the one
+screen somebody reads standing outside a stranger's gate.
+
+`padding-left: .9rem`, which is what the `.hint` aside beside it uses with its
+own 4px rule. Measured at all four widths: the nearest element is now 17px from
+the rule; with the padding removed again it measures 3px.
+
+### 88c. 🔴 The landlord's drawer hid its own two call-to-action buttons
+
+`max-height: calc(100vh - 66px); overflow-y: auto;` on the top-nav sheet.
+
+On mobile Chrome **`100vh` is the viewport with the address bar hidden**, which
+is taller than what you can see while it is showing. So the cap was bigger than
+the screen: the sheet never overflowed its own max-height, `overflow-y: auto`
+therefore had nothing to scroll, the page scroll is locked behind it, and
+"Dashboard", "+ List a room" and "Log out" sat past the bottom edge — the
+screenshot shows the third button sliced in half at the screen edge.
+
+⚠️ **Not reproducible here, and it never will be.** Headless Chromium has no
+address bar, so `100vh` and the visible height are the same number: the drawer
+measures correctly at every viewport this container can produce (575px tall at
+360×800, scrollable at 360×640, nothing off-screen). The diagnosis comes from
+the screenshot plus the arithmetic, and `.hero--splash` already carries the
+same lesson in this codebase with the comment *"dvh, not vh: on mobile Chrome
+the address bar makes vh taller than the visible area"*.
+
+**It is a family, not an instance.** `scripts/viewport-unit-lint.mjs` found
+three more, and two were real:
+
+| Where | What | Verdict |
+|---|---|---|
+| `.wt-card` | `max-height: calc(100vh - 2rem)` + scroll | 🔴 the walkthrough **every new account meets**, on a phone |
+| `.report-dialog` | `max-height: 85vh` + scroll | 🔴 its submit button is the thing past the edge |
+| `.portal-wrap` | `min-height: calc(100vh - 66px)` | ⚠️ every portal screen a little taller than the screen |
+| `.filter-panel` | `max-height: calc(100vh - 5rem)` | ✅ inside `min-width: 901px` — desktop has no address bar |
+
+All four now carry a `dvh` line after the `vh` one, the `vh` first as the
+fallback.
+
+⚠️ **The lint's own first version was wrong twice**, and running it said so:
+`\bdvh\b` cannot match `100dvh` (a digit and a letter are both word
+characters, so there is no boundary between them), so it reported the single
+line in the codebase that was already correct; and it flagged every `vh` height
+including `min-height: 50vh` on centring blocks, which can strand nothing. The
+rule is now the actual failure shape: a `max-height` in vh on a box that
+scrolls, or a `min-height` of a full viewport or more.
+
+### 88d. ⚠️ "Server error" — not reproduced, and the dialog could not have told us
+
+A landlord dashboard showed **"Server error — Something went wrong on our end"**
+at 04:38. Every one of the thirteen API calls that screen makes was driven
+locally and all thirteen answer 200, including for a landlord with no rooms,
+which is the state the screenshot shows. So it is production-specific and
+nothing here reproduces it.
+
+What the dialog did NOT say is the point: that sentence was the answer to every
+status at or above 500, and those are three different situations.
+
+- the phone could not reach the API at all (status 0)
+- the **platform** answered instead of the API — 502/503/504. This deployment's
+  API sleeps when idle, so the first request after a quiet spell can be one of
+  these and the next succeeds. 04:38 is exactly the hour it would be cold, and
+  this is the leading hypothesis.
+- the API itself threw: a real 500, which will not fix itself on a retry.
+
+"Please try again shortly" is right for the first two and wrong for the third.
+The three now read differently, the failing call is logged to the console in
+every case, and a genuine 500 shows a line worth quoting. Driven, all three:
+
+    500 → "Server error … If it keeps happening, quote this: GET /api/landlord/calendar (500)."
+    503 → "Waking up … it was idle and is starting up. Wait a few seconds."
+      0 → "No connection … check your data or wi-fi."
+
+🔴 **Still open**: the underlying failure. The next report will name the
+endpoint and the status, which is what this change buys. Nothing has been
+changed on the server, because nothing here has seen it fail.
+
+### Gates
+
+Production build green. a11y drive **10 public + 33 portal pages**, headings,
+names and contrast at rest, hover and focus — all clean. mobile-drive: all
+reported bugs still fixed. template-literal, emoji, viewport-unit lints green.
+
+⚠️ Two of this repository's own documented traps, both hit in one edit of one
+file: an **emoji inside a CSS comment** (fails esbuild's CSS parser) and a
+**backtick quoting a class name inside a `styles` template literal** (ends the
+literal). Both produced the same unhelpful build error —
+`Failed to resolve @Component.styles` — naming nothing.
+`scripts/template-literal-lint.mjs` named the second in one line, and it was
+written for exactly this; run it before the build, not after.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash
