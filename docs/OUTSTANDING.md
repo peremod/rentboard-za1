@@ -6906,6 +6906,50 @@ template lints.
 as it has all session — a slow shared box, and the same gate passes on the
 runner. Local CLS on the board: **0.012**, and 0.000 on the two static pages.
 
+### 90e. ⚠️ The preloads bought the brand face and cost the largest paint
+
+Self-hosting put two `<link rel="preload">` lines in `index.html` — the obvious
+companion to `font-display: optional`, because `optional` only uses the face if
+it arrives inside its ~100ms window, and a preload is how you make it arrive.
+It worked for that, and it was the wrong trade.
+
+A font preload is fetched at the **highest** priority Chrome has, ahead of the
+stylesheet and the LCP image. Median of three runs per URL on the CI runner,
+all three states measured on the same box:
+
+| URL | Google Fonts (before) | self-hosted + preload | self-hosted, no preload |
+|---|---|---|---|
+| `/` | 2188 ms | 2529 ms | **2501 ms** |
+| `/pricing` | 1527 ms | 1820 ms | **1810 ms** |
+| `/how-it-works` | 1412 ms | 2877 ms | **1811 ms** |
+| `/zu/pricing` | 1530 ms | — | **1810 ms** |
+
+`/how-it-works` is the line that decides it: **2877 → 1811 ms**, a full second
+returned by deleting two tags. The other two move ~10–30 ms, so the preload was
+doing almost nothing for them and a second of damage to the one page whose
+largest paint is text.
+
+⚠️ **What this does NOT fix, and I am not going to paper over it:** self-hosting
+still costs LCP against the Google Fonts baseline — about **310 ms** on `/`,
+**280 ms** on `/pricing`, **400 ms** on `/how-it-works`. The budgets job's
+2500 ms LCP assertion on `/` therefore fails by **1.5 ms** (2501.5 vs 2500).
+
+That number is a regression I introduced, so the budget is not being raised to
+meet it. Why the trade is still right, and what is actually left:
+
+- the thing being paid for is CLS 0.071 → **0.012** on the live board, measured
+  in production, and a layout that stops moving under a thumb is worth more on
+  a cheap Android than 300 ms of text paint.
+- the baseline is not like-for-like: Google Fonts serves from a CDN edge with
+  warm DNS and an `immutable` cache that a large share of visitors already
+  hold. Our files come from Vercel's edge on first visit and from cache after.
+- the 300 ms is **not** irreducible. The faces are not subset to the glyphs
+  this product uses; `dm-sans-latin.woff2` is the whole latin range at 36 KB.
+  A glyph-subset build is the next lever and has not been pulled.
+
+So the open item is `/` at 1.5 ms over a real budget, with a named remedy, not
+a threshold to relax. Recorded here rather than silenced in `lighthouserc.json`.
+
 ---
 
 
