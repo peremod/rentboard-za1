@@ -7146,7 +7146,27 @@ one.
 container cannot make it do that. Stated as what it is — a read of the code and
 of the guarded line beside it — rather than implied to be driven.
 
-### 91g. What is NOT covered
+### 91g. Deployed and confirmed
+
+    {"status":"ok","db":"connected","version":"1.169.0","env":"production",
+     "uptime":458}
+
+    ✅ serving 1.169.0, which is the version in this commit
+    ✅ the service identifies as production
+    ✅ database is connected
+
+`uptime 458` is about seven and a half minutes, consistent with a fresh deploy
+rather than a stale instance reporting an old build.
+
+⚠️ **What that does NOT prove.** It proves the fix is deployed; it does not
+prove the dialog is gone, because the only witness to that is a tenant opening
+their dashboard. The fix is proven against a defect **measured** to produce the
+500 — it is not proven to be the only cause of one. If it recurs, the dialog
+still quotes the endpoint, the response carries `partial: true`, and the log
+names the section: §89's machinery is what would catch a second cause, and it
+stays.
+
+### 91h. What is NOT covered
 
 `scripts/smoke-test.sh` asserts, for both inboxes, that every per-kind count is
 a number and that `partial` is false. Those assertions pass before and after
