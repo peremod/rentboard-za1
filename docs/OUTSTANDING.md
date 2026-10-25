@@ -6753,6 +6753,33 @@ Driven at 360 / 390 / 768: no close button, focus lands on "Browse rooms"
 inside the sheet, every item reachable, Escape still closes it, the burger
 still reads "Close menu".
 
+### 89e. Deployed, 25 October — and what that does and does not prove
+
+v1.166.0 is live. The repository's own deploy verifier read the live API rather
+than a build log:
+
+    Verifying production at https://api.umastande.co.za
+    {"status":"ok","db":"connected","version":"1.166.0","env":"production","uptime":43}
+    ✅ serving 1.166.0, which is the version in this commit
+    ✅ the service identifies as production
+    ✅ database is connected
+
+⚠️ That run finished in **11 seconds**, which is fast enough to be a skip rather
+than a check — so the log was read instead of the tick. `uptime: 43` says the
+API had just restarted on the new build, so it caught the deploy rather than an
+old process. The frontend rolled too: the served board's bundle changed from
+`main-MI4IYX5M.js` to `main-ORV4AFAJ.js`, which is the build carrying the drawer
+change.
+
+**What this proves:** the fix is running in production.
+
+**What it does not prove:** that the failing row is gone. It was never found,
+and nothing here could find it. The defect it fixes is the blast radius — one
+section instead of the whole dashboard — and the evidence. The next occurrence
+will show a dashboard that renders with something missing, `partial: true` in
+the response, and one server-log line naming the section. That line is the
+thing still wanted.
+
 ### What the checks say now
 
 - `scripts/smoke-test.sh` asserts, for **both** inboxes, that every per-kind
