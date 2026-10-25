@@ -6456,6 +6456,52 @@ the prediction to check against then is specific: `/` answers with
 `s-maxage=60, stale-while-revalidate=600`, its body carries room links, the
 trust strip, a canonical and `ld-site`, and the board's CLS falls from 0.95.
 
+### 87i. ✅ Verified in production — 25 October 2026, after v1.165.0 deployed
+
+The prediction written into the merge commit, checked against the live site
+rather than assumed. Every line of it held.
+
+| | before | after |
+|---|---|---|
+| `/` body | **7,618 bytes** | **69,068 bytes** |
+| room links in the served HTML | **0** | **2** |
+| `trust-strip` | 0 | 2 |
+| `ld-site` (the site JSON-LD) | 0 | 1 |
+| `rel="canonical"` | 0 | 1 |
+| board CLS, mobile | **0.916 – 0.966** | **0.071** |
+| board CLS, desktop | 0.718 | **0.005** |
+| board performance, mobile | 0.57 – 0.62 | **0.98** |
+| board performance, desktop | 0.76 | **1.00** |
+| the weekly gate | red on CLS | **passes** |
+
+`/` now answers `cache-control: public, max-age=0` with **`x-vercel-cache:
+STALE`**. ⚠️ Worth being exact: that is not the literal
+`s-maxage=60, stale-while-revalidate=600` string `server.ts` sets — Vercel
+consumes those directives at the edge and does not echo them. The proof the
+function rendered it is the cache STATE and the body: a static file is never
+`STALE`, and 69 KB containing two room links is not `index.csr.html`.
+`/pricing` still answers `must-revalidate` + `HIT` from its prerendered file,
+exactly as designed.
+
+So the board is server-rendered in production for the first time since the
+route was made `RenderMode.Server`, and a crawler that runs no JavaScript now
+sees the rooms, the hero, the trust strip, the canonical and the
+`Organization`/`WebSite` markup — all of which §86 shipped and none of which
+had ever been served.
+
+**What is left on this page, and it is small.** CLS 0.071 is inside the 0.1
+bound but is no longer zero, and the culprits are named:
+
+    · 0.0392  "2 rooms available / 0 verified landlords / Free to apply…"  Web font loaded
+    · 0.0204  the same hero stats block
+    · 0.0115  "POPIA Compliant / Rental Housing Act Aligned…"              Web font loaded
+
+That is the Google Fonts swap reflowing the hero stats and the trust strip —
+a different defect from the one just fixed, an order of magnitude smaller, and
+the obvious next move is `size-adjust`/`font-display` on the two families
+rather than anything structural. ⚠️ The mobile figure is ONE run (the
+diagnostic audit runs once); the gate's own three-run median is what passed.
+
 ### 87h. ⚠️ A correction: "the deployment is not this build's output" was wrong
 
 §87f said production's 7,618-byte shell could not be this repository's current
