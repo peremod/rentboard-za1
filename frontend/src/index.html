@@ -56,10 +56,27 @@
     request; without the attribute the preload is fetched a SECOND time by the
     CSS, which is worse than not preloading at all.
   -->
-  <link rel="preload" as="font" type="font/woff2" crossorigin
-        href="/assets/fonts/dm-sans-latin.woff2"/>
-  <link rel="preload" as="font" type="font/woff2" crossorigin
-        href="/assets/fonts/playfair-display-latin.woff2"/>
+  <!-- ⚠️ NOT preloaded, and that is the measurement rather than a preference.
+
+       Both latin files were preloaded when this landed, and CI's budget job
+       refused the build: LCP 2529ms on the board and 2864ms on /how-it-works
+       against a 2500ms budget, consistently across three runs each. Compared
+       like for like on the same runner, before and after:
+
+           /               2188 -> 2529 ms
+           /pricing        1527 -> 1820 ms
+           /how-it-works   1412 -> 2877 ms
+
+       A preload is fetched at the highest priority, so 75 KB of fonts went
+       ahead of the render-critical CSS and JavaScript on a throttled
+       connection and pushed the largest paint out behind them. On the fast
+       connection where a preload pays off, `font-display: optional` was going
+       to use the face anyway.
+
+       So the faces load at their normal priority, discovered from the CSS. On
+       a slow first visit optional keeps the fallback for that view — which is
+       the trade already accepted above — and the file is cached for the next
+       one. -->
 
   <!-- Social defaults. SeoService overwrites these per route; they exist so a
        crawler that renders no JavaScript still gets a usable card. -->
