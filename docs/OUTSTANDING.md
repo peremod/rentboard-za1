@@ -7080,6 +7080,24 @@ response is not `partial`:
 written after the fix that has never been seen to fail is the thing this
 codebase keeps finding.
 
+⚠️ **And it refuses to pass vacuously, which took a second pass to notice.**
+"0 partial" is also what you get if the write lands after the messages SELECT
+every single time — the race never fires, nothing is exercised, and the drive
+reports success over nothing. That is precisely the green-tick-over-nothing
+this file is a list of. So each attempt is now classified, and a run where the
+race never fired exits **2 as INCONCLUSIVE** rather than 0:
+
+    the mark-read landed mid-query (the race fired): 35 / 40
+    it landed after the read, item served as normal:  5 / 40
+    attempts whose response came back partial:        0 / 40
+
+Falsified by moving the write so it cannot land mid-query: 0/20 fired, and the
+drive reported INCONCLUSIVE and exited 2 instead of passing.
+
+⚠️ The first CI run of this step passed in **one second**, which is the shape of
+a check that did nothing — that is what prompted the guard. The step is green
+with the race firing, not green because nothing happened.
+
 ### 91e. Skipped, not defaulted — and the near-miss has its own test
 
 The fix is `flatMap` plus `if (unread === 0) return []`. They read the messages

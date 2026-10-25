@@ -89,6 +89,8 @@ try {
   console.log(`  ${ATTEMPTS} attempts, driving TenantInboxService.inbox() itself.`);
 
   let partial = 0;
+  let raced = 0;
+  let served = 0;
   for (let i = 0; i < ATTEMPTS; i++) {
     // Back to unread, so every attempt starts from the state that matches.
     await prisma.message.updateMany({ where: { applicationId: app.id }, data: { readAt: null } });
@@ -103,12 +105,40 @@ try {
 
     const result = await service.inbox(tenant.id);
     if (result.partial) partial++;
+
+    /**
+     * ⚠️ Did the race actually fire this round?
+     *
+     * Without this the drive passes VACUOUSLY: if the update always landed
+     * after the messages SELECT, every attempt would serve the message item,
+     * nothing would be partial, and the run would report success having never
+     * exercised the thing it exists for. That is the shape of every dead check
+     * this codebase has found — a green tick over nothing.
+     *
+     * An attempt that raced produces no `message_unread` item: the list was
+     * empty by the time it was read, so the row is skipped (after the fix) or
+     * the section threw (before it). An attempt that did not race serves the
+     * item normally. Both are legitimate outcomes of a race; a run of only the
+     * second proves nothing, so it is reported as inconclusive, not as a pass.
+     */
+    if (result.items.some((i) => i.kind === 'message_unread')) served++;
+    else raced++;
+
     await inFlight;
   }
 
-  console.log(`  attempts whose response came back partial: ${partial} / ${ATTEMPTS}`);
+  console.log(`  the mark-read landed mid-query (the race fired): ${raced} / ${ATTEMPTS}`);
+  console.log(`  it landed after the read, item served as normal:  ${served} / ${ATTEMPTS}`);
+  console.log(`  attempts whose response came back partial:        ${partial} / ${ATTEMPTS}`);
 
-  if (partial > 0) {
+  if (raced === 0) {
+    console.log('\n  ⚠️  INCONCLUSIVE — the race never fired in any attempt, so this run');
+    console.log('     did not exercise the defect and 0 failures means nothing. The write');
+    console.log('     landed after the messages SELECT every time. Raise ATTEMPTS, or this');
+    console.log('     machine is too slow for the window to open.');
+    console.log('══════════════════════════════════════════════════════════\n');
+    process.exitCode = 2;
+  } else if (partial > 0) {
     console.log('\n  ❌ the messages section is still throwing under the race.');
     console.log('     Before §91 this was a 500 for the whole endpoint; the per-section');
     console.log('     catch turned it into a missing section, which is better and is');
