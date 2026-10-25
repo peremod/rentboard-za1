@@ -2136,6 +2136,36 @@ budget is not being raised to meet it - the faces are not glyph-subset yet
 (dm-sans-latin.woff2 is the whole latin range at 36 KB) and that is the lever.
 docs/OUTSTANDING.md section 90e."
 
+tag_if_missing "v1.169.0" "eb694367d214510d0bba4e3b4eb85befb993c7aa" "2026-10-25T22:32:00+00:00" "v1.169.0 - the tenant inbox 500, found: it was never a row
+
+messageItems() asks for the applications that HAVE an unread message and, for
+each, the unread messages. Prisma loads a to-many relation with a SEPARATE
+query, so that one findMany is four SELECTs with the messages one LAST. A
+mark-read landing between them leaves a matched application holding an empty
+list, and the next line read r.messages[0].createdAt unconditionally - a
+TypeError, which with no global exception filter is a 500, on an endpoint the
+dashboard calls on load.
+
+The window is wide because opening a thread fires the mark-read WITHOUT
+awaiting it: deliberate, documented, unchanged. Open a conversation, go to the
+dashboard.
+
+v1.166.0 fixed the blast radius and closed saying the failing ROW was
+unidentified. Every state it had tried was one thing standing still, and this
+needs two at once, so the search was in the wrong dimension.
+
+Fixed by skipping the row, not defaulting the date: '?? new Date()' also stops
+the throw and invents '1 unread message, sent today' for a thread with nothing
+unread.
+
+scripts/inbox-race-drive.mjs: 19/30 attempts partial before the fix, 0/50
+after, the before taken first. It refuses to pass vacuously - a run where the
+race never fires exits 2 as INCONCLUSIVE.
+
+Also google.strategy.ts, the same class one line from a guard that knew better:
+emails[0].value unguarded above photos?.[0]?.value. NOT reproduced - this
+container cannot make Google return an email-less profile."
+
 
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
