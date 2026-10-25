@@ -588,13 +588,23 @@ An unhandled exception occurred: Inlining of fonts failed.
 It is disabled in the production configuration. Fonts load normally at runtime
 via the `<link>` in index.html, which is where they were coming from anyway.
 
-**Worth doing properly before launch:** self-host the two families. Every
-visitor currently makes a request to `fonts.googleapis.com`, which is a
-third-party request on a site whose cookie notice says there are no
-third-party trackers. Google Fonts does not set cookies, so the claim still
-holds, but it does expose visitor IPs to Google and removing it would make the
-promise unambiguous. It also removes a render-blocking round trip, which is
-worth real Lighthouse points.
+**Done, 25 October 2026 (v1.167.0).** The two families are self-hosted from
+`frontend/src/assets/fonts` — latin and latin-ext subsets, OFL 1.1, provenance
+in `OFL.txt` beside them. No visitor makes a request to `fonts.googleapis.com`
+any more, so the cookie notice's "no third-party trackers" is now unambiguous
+rather than merely true-in-the-narrow-sense: nothing exposes a visitor's IP to
+Google, and two DNS lookups and two TLS handshakes are off the critical path.
+
+What actually forced it was layout shift, not privacy. `display=swap` paints in
+the fallback and reflows when the files land; the live board measured
+**CLS 0.071** with Lighthouse naming "Web font loaded" against the hero stats
+and the trust strip. The faces declare `font-display: optional` now, which
+decides the layout once — the face is used from first paint if the file is
+there, and this page view keeps the fallback if it is not.
+
+⚠️ The trade is real and deliberate: a first-time visitor on a bad connection
+reads the board in Georgia and the system sans. They get the brand faces from
+the second page view, out of cache.
 
 ### Render: leave Root Directory empty
 

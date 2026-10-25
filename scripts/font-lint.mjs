@@ -19,13 +19,24 @@
  * drive's font assertion is deliberately about the weight and size, not the
  * family.
  *
- * ⚠️ This cannot be checked in a browser in this container. Measured on 11
- * October: `"DM Mono"`, `"Playfair Display"` and two deliberately bogus
- * family names all render at **identical width** here, because
+ * ⚠️ This USED not to be checkable in a browser in this container. Measured on
+ * 11 October: `"DM Mono"`, `"Playfair Display"` and two deliberately bogus
+ * family names all rendered at **identical width** here, because
  * fonts.googleapis.com is unreachable through the agent proxy and every
- * webfont falls back. So a rendered check would report every family as
- * missing, including the ones that work in production. This is therefore a
- * STATIC check against the markup, which is where the truth is.
+ * webfont fell back — so a rendered check would have reported every family as
+ * missing, including the ones that worked in production.
+ *
+ * Self-hosting (25 October) changed that: the faces come from this origin, so
+ * they load in a headless browser here like anywhere else. Measured the day it
+ * landed, against a deliberately bogus family at the same size:
+ *
+ *     Playfair Display  300.23px   vs bogus 282.39px   -> the real face
+ *     DM Sans           312.20px   vs bogus 309.34px   -> the real face
+ *
+ * This file stays a STATIC check anyway, because it answers a different
+ * question — whether a token names something the app SERVES — and a static
+ * answer cannot be wrong about a build it did not run. The rendered proof
+ * belongs in a drive.
  *
  * What it does:
  *
@@ -67,19 +78,91 @@ const walk = (dir) =>
 console.log('\n── Fonts: named vs fetched ─────────────────────────────────');
 
 const index = readFileSync(INDEX, 'utf8');
-/** Families the page actually asks for, with the weights requested. */
-const requested = new Map();
-for (const m of index.matchAll(/family=([^&"']+)/g)) {
-  const [fam, weights] = m[1].split(':');
-  const name = decodeURIComponent(fam).replace(/\+/g, ' ').toLowerCase();
-  const ws = [...(weights ?? '').matchAll(/\d{3}/g)].map((w) => Number(w[0]));
-  requested.set(name, [...(requested.get(name) ?? []), ...ws]);
+
+/**
+ * Families the app actually serves, with the weight range each covers.
+ *
+ * ⚠️ Rewritten on 25 October 2026, when the two families moved from Google
+ * Fonts to src/assets/fonts. This used to parse `family=` out of the
+ * googleapis URL in index.html — and the moment that URL went, it correctly
+ * refused to run rather than passing on an empty set, which is the only reason
+ * this rewrite happened instead of a silent green.
+ *
+ * The source of truth is now the @font-face blocks, and the check is stronger
+ * for it: a Google URL could only ever prove what was ASKED for, while a local
+ * `src:` can be checked against a file that is either there or is not.
+ */
+const faces = [];
+for (const f of walk(STYLES).filter((p) => p.endsWith('.scss'))) {
+  const css = stripComments(readFileSync(f, 'utf8'));
+  for (const m of css.matchAll(/@font-face\s*\{([^}]*)\}/g)) {
+    const body = m[1];
+    const fam = /font-family\s*:\s*['"]?([^;'"]+)['"]?\s*;/.exec(body)?.[1]?.trim().toLowerCase();
+    const src = /url\(\s*['"]?([^'")]+)['"]?\s*\)/.exec(body)?.[1];
+    const weights = [...(/font-weight\s*:\s*([^;]+);/.exec(body)?.[1] ?? '').matchAll(/\d{2,4}/g)]
+      .map((w) => Number(w[0]));
+    const display = /font-display\s*:\s*([\w-]+)/.exec(body)?.[1];
+    if (fam && src) faces.push({ fam, src, weights, display, file: f });
+  }
 }
-if (requested.size === 0) {
-  console.error(`No font request found in ${INDEX}. Refusing to pass vacuously.`);
+if (faces.length === 0) {
+  console.error(`No @font-face found under ${STYLES}. Refusing to pass vacuously.`);
   process.exit(2);
 }
-ok(`${requested.size} family(ies) requested: ${[...requested.keys()].join(', ')}`);
+
+/** family -> [minWeight, maxWeight] across its faces. */
+const requested = new Map();
+for (const face of faces) {
+  const prev = requested.get(face.fam) ?? [];
+  requested.set(face.fam, [...prev, ...face.weights]);
+}
+ok(`${requested.size} family(ies) served from this origin: ${[...requested.keys()].join(', ')}`);
+
+// ── 0. Every face points at a file that exists ───────────────────────────
+//
+// The failure self-hosting introduces, and the one a URL could never have:
+// a renamed or uncopied file leaves a face that resolves to nothing, and the
+// page falls back silently in exactly the way the webfont was meant to stop.
+for (const face of faces) {
+  const onDisk = join('frontend/src', face.src.replace(/^\//, ''));
+  try {
+    statSync(onDisk);
+    ok(`${face.fam} ${face.src.split('/').pop()} is on disk (${(statSync(onDisk).size / 1024).toFixed(0)} KB)`);
+  } catch {
+    bad(`${face.fam} names ${face.src}, and ${onDisk} does not exist — that face renders nothing`);
+  }
+}
+
+// ── 0b. Nothing fetches a font from a third party any more ───────────────
+//
+// Not style: a third-party font request is two DNS lookups and two TLS
+// handshakes on the critical path, and it was also where the reflow came from.
+// If one creeps back in, the preloads below it are no longer the whole story.
+// ⚠️ Comments stripped first. The first version of this check read the whole
+// file and failed on the COMMENT that explains why the Google origin is gone —
+// a check that cannot tell markup from prose about markup.
+const markup = index.replace(/<!--[\s\S]*?-->/g, '');
+if (/fonts\.(googleapis|gstatic)\.com/.test(markup)) {
+  bad('index.html still fetches from a Google Fonts origin — the faces are self-hosted now');
+} else {
+  ok('no third-party font origin is fetched by index.html');
+}
+
+// ── 0c. The preload matches a face that exists ───────────────────────────
+const preloaded = [...index.matchAll(/<link[^>]+rel="preload"[^>]+href="([^"]+\.woff2)"/g)].map((m) => m[1]);
+for (const href of preloaded) {
+  const matching = faces.find((f) => f.src === href);
+  if (!matching) {
+    bad(`index.html preloads ${href}, which no @font-face uses — the browser fetches it and throws it away`);
+  } else if (!/crossorigin/.test(index.slice(Math.max(0, index.indexOf(href) - 200), index.indexOf(href)))) {
+    bad(`the preload of ${href} has no crossorigin attribute — a font is a CORS request, so it would be fetched twice`);
+  } else {
+    ok(`preload of ${href.split('/').pop()} matches a declared face`);
+  }
+}
+if (preloaded.length === 0) {
+  console.log('  ⚠️  nothing is preloaded — the faces still work, they just arrive later');
+}
 
 // ── 1. Every family in a token is fetched or is a system family ──────────
 const tokens = new Map();
@@ -106,7 +189,18 @@ for (const [name, value] of tokens) {
 const displayFamilies = (tokens.get('--font-display') ?? '')
   .split(',').map((x) => x.trim().replace(/^['"]|['"]$/g, '').toLowerCase())
   .filter((fam) => requested.has(fam));
-const displayWeights = new Set(displayFamilies.flatMap((fam) => requested.get(fam)));
+/**
+ * ⚠️ A range, not a list.
+ *
+ * `font-weight: 400 900` on a variable face covers every weight BETWEEN those
+ * two. The first version of this check collected the numbers as discrete
+ * values and then reported that 700 "is used but NOT requested" — about a
+ * variable font that renders 700 natively. A check that reads a range as a set
+ * is wrong in the direction that costs you a real weight.
+ */
+const declared = displayFamilies.flatMap((fam) => requested.get(fam) ?? []);
+const range = declared.length ? [Math.min(...declared), Math.max(...declared)] : null;
+const covers = (w) => range !== null && w >= range[0] && w <= range[1];
 
 const usedWeights = new Set();
 for (const f of [...walk(APP), ...walk(STYLES)]) {
@@ -125,10 +219,10 @@ for (const f of [...walk(APP), ...walk(STYLES)]) {
 if (usedWeights.size === 0) {
   console.log('  ⚠️  no rule sets --font-display and a numeric weight in the same block — nothing to check');
 } else {
-  const missing = [...usedWeights].filter((w) => !displayWeights.has(w));
+  const missing = [...usedWeights].filter((w) => !covers(w));
   missing.length === 0
-    ? ok(`display weights used (${[...usedWeights].sort().join(', ')}) are all requested (${[...displayWeights].sort().join(', ')})`)
-    : bad(`display weight(s) ${missing.join(', ')} are used but NOT requested — the browser synthesises them`);
+    ? ok(`display weights used (${[...usedWeights].sort((a, b) => a - b).join(', ')}) are all inside the face's range (${range?.join('–')})`)
+    : bad(`display weight(s) ${missing.join(', ')} fall outside the face's range (${range?.join('–')}) — the browser synthesises them`);
 }
 
 console.log('════════════════════════════════════════════════════════════');

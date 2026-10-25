@@ -6795,6 +6795,120 @@ thing still wanted.
 ---
 
 
+## 90. The board's font shift, and the two families coming home — 25 October 2026
+
+§87i left CLS 0.071 on the live board with the cause already named by the
+diagnostic:
+
+    · 0.0392  "2 rooms available / 0 verified landlords / Free to apply…"  Web font loaded
+    · 0.0204  the same hero stats block
+    · 0.0115  "POPIA Compliant / Rental Housing Act Aligned…"              Web font loaded
+
+`display=swap` paints the page in the fallback and **reflows** it when the
+files land. That is swap working as designed; the shift is the price.
+
+### 90a. Self-hosted, which was already the written plan
+
+`docs/DEPLOYMENT.md` has said since before launch that self-hosting was "worth
+doing properly before launch", and `index.html`'s own comment called it the
+"preferred next step". Four files now live in `frontend/src/assets/fonts`:
+
+| File | Size |
+|---|---|
+| `dm-sans-latin.woff2` | 36 KB |
+| `dm-sans-latin-ext.woff2` | 18 KB |
+| `playfair-display-latin.woff2` | 38 KB |
+| `playfair-display-latin-ext.woff2` | 21 KB |
+
+Both variable (DM Sans wght 100–1000, Playfair 400–900), so one file per subset
+covers every weight the app uses and nothing is synthesised. `unicode-range` is
+kept exactly as Google served it, so latin-ext is fetched only by a page that
+contains one of its characters — Sepedi's š and the marks the other locales
+need. Measured: a board visit fetches **two** files, not four.
+
+Licence and provenance in `src/assets/fonts/OFL.txt`. Both families are OFL
+1.1, unmodified.
+
+### 90b. `font-display: optional` is the fix, and it is a trade
+
+`swap` guarantees the brand face AND the reflow. `optional` gives the file
+about 100ms: there in time, it is used from the first paint and nothing moves;
+not there, this page view keeps the fallback and nothing moves — and the file
+still downloads, so the next view has it from cache.
+
+Driven both ways, with the font response delayed to force the slow path:
+
+    font delayed    0ms -> CLS 0        brand face in use: true
+    font delayed 1500ms -> CLS 0        brand face in use: false
+
+And falsified by putting `swap` back:
+
+    font delayed 1500ms -> CLS 0.0109   brand face in use: true
+                           shifting .hero-inner
+
+⚠️ `.hero-inner` is the element Lighthouse named on the live board. The local
+number is an order of magnitude smaller because this board is small and this
+server is instant, but it is the same element and the same mechanism.
+
+⚠️ **The trade, stated plainly:** a first-time visitor on a bad connection
+reads the board in Georgia and the system sans rather than Playfair and
+DM Sans. On a product whose audience is on cheap phones, a page that does not
+jump under a thumb is worth more than a serif on the first screen — and they
+get the serif from the second screen onward.
+
+### 90c. The fonts are testable here for the first time
+
+`scripts/font-lint.mjs` said in its own header that a rendered check was
+impossible in this container, because fonts.googleapis.com is unreachable
+through the agent proxy and every webfont fell back to the same width. Serving
+them from this origin ends that. Measured against a deliberately bogus family
+at the same size:
+
+    Playfair Display  300.23px  vs bogus 282.39px   -> the real face
+    DM Sans           312.20px  vs bogus 309.34px   -> the real face
+
+That also makes every contrast measurement the a11y drive has ever taken more
+faithful: text metrics decide which WCAG threshold applies, and until today
+every run measured fallback metrics.
+
+### 90d. ⚠️ The lint had to be rewritten, and its first two versions were wrong
+
+`font-lint` parsed `family=` out of the Google URL. With the URL gone it
+**refused to run** rather than passing on an empty set — the one reason this
+rewrite happened instead of a silent green. It now reads the `@font-face`
+blocks, which is a stronger source: a URL can only prove what was ASKED for,
+while a local `src:` is checked against a file that is either on disk or is
+not.
+
+Two defects in my own new checks, both found by running it:
+
+- the third-party-origin check read the whole file and failed on the **comment
+  explaining why the Google origin is gone** — a check that could not tell
+  markup from prose about markup.
+- the weight check read `font-weight: 400 900` as a LIST and reported that 700
+  "is used but NOT requested", about a variable font that renders 700
+  natively. A range read as a set is wrong in the direction that costs a real
+  weight.
+
+New assertions it carries: every face's file exists on disk (the failure
+self-hosting introduces — a rename leaves a face resolving to nothing), no
+third-party font origin is fetched, and every preload matches a declared face
+and carries `crossorigin` (without it a font preload is fetched twice).
+
+### Gates
+
+a11y drive 10 public + 33 portal pages — the first run ever to measure contrast
+with the real faces. mobile-drive, logo-drive 96/96, seo-drive 44/44,
+bundle-budget 50.1 KB under, css-coverage, production build, font/viewport/
+template lints.
+
+⚠️ The local Lighthouse run fails performance, LCP and TBT in this container,
+as it has all session — a slow shared box, and the same gate passes on the
+runner. Local CLS on the board: **0.012**, and 0.000 on the two static pages.
+
+---
+
+
 ## How to check the whole thing still works
 
 ```bash
