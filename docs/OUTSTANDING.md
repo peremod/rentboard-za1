@@ -6950,6 +6950,53 @@ meet it. Why the trade is still right, and what is actually left:
 So the open item is `/` at 1.5 ms over a real budget, with a named remedy, not
 a threshold to relax. Recorded here rather than silenced in `lighthouserc.json`.
 
+### 90f. Measured in production, v1.168.0 — and the budget passed by 10 ms
+
+Live board, `main-ORV4AFAJ.js`, `x-vercel-cache: STALE` so the SSR function
+answered, body 71,488 bytes with 2 room links and no skeletons:
+
+| | v1.167.0 (preloads in) | v1.168.0 (preloads out) |
+|---|---|---|
+| mobile LCP | 3128 ms | **2528 ms** |
+| mobile CLS | 0.012 | 0.018 |
+| mobile performance | — | 0.96 |
+| desktop LCP | 687 ms | **578 ms** |
+| desktop CLS | 0.001 | 0.002 |
+| desktop performance | — | 1.00 |
+
+**LCP: 600 ms back on mobile, 109 ms on desktop.** The runner's verdict
+transferred to production, which was the thing in doubt.
+
+⚠️ **CLS went 0.012 → 0.018 and I am not calling that a regression or a win.**
+The production audit is **one run per viewport**, and the culprit changed
+identity: v1.167.0's was the trust strip (0.0115), this one is the province
+`<select>` list (0.0184). A shift that moves between elements between single
+runs is noise, not a trend. What can be said: no "Web font loaded" cause
+appears in either, which is what `font-display: optional` was for, and both
+numbers are far inside the 0.1 budget. A real before/after on CLS needs the
+weekly job's repeated runs, not this.
+
+⚠️ **The LCP budget on `/` now passes by 10 ms, not comfortably.** Same code as
+the run that failed by 1.5 ms: median 2490 ms against 2500, having been 2501.5.
+So the assertion is sitting inside the runner's own variance and the earlier
+failure was noise in the other direction. §90e's open item stands exactly as
+written — self-hosting still costs ~310 ms against the Google Fonts baseline,
+the faces are still not glyph-subset, and a gate that flips on 11 ms of jitter
+is not evidence the cost went away. Budgets, median of 3:
+
+    /               LCP 2490 ms  CLS 0.033   (budget 2500)
+    /pricing        LCP 1814 ms  CLS 0.004
+    /how-it-works   LCP 1819 ms  CLS 0.027
+    /zu/pricing     LCP 1816 ms  CLS 0.004
+
+⚠️ **An unrelated thing the probe says and should not be read literally:**
+`/index.csr.html` answers 200 with 10,084 bytes and `cache-control: no-cache`.
+That is NOT the static shell coming back — `vercel-build.mjs` asserts it is
+absent from `static/` and the build would have failed. It is the SSR function
+answering a path no file matches, the same way `/zzz-no-such-path-xyz` gets a
+29,449-byte 404 page. The probe's label ("does index.csr.html exist as a static
+file?") can no longer tell the two apart and will mislead the next reader.
+
 ---
 
 
