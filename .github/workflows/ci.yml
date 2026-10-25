@@ -407,6 +407,21 @@ jobs:
       # Cross-tenant isolation is the one class of bug here that is both
       # silent and serious, and this is the only thing in the repository
       # that checks it.
+      - name: The tenant inbox under a concurrent mark-as-read
+        # §91. The 500 nobody could reproduce was a race, not a row: Prisma
+        # loads a to-many relation with a SEPARATE query, so the filter that
+        # reads as one question is asked twice, and a mark-read landing between
+        # the two leaves a matched application with an empty message list.
+        #
+        # ⚠️ A unit double cannot show that Prisma produces that row, which is
+        # the whole claim — so this drives the real service against this job's
+        # Postgres with the real concurrent write. Measured 19/30 attempts
+        # failing before the fix and 0/40 after.
+        run: node scripts/inbox-race-drive.mjs
+        env:
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_test
+          DIRECT_URL: postgresql://postgres:test@localhost:5432/mastande_test
+
       - name: Start API
         working-directory: backend
         run: |

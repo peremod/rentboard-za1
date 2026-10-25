@@ -6704,14 +6704,20 @@ is wrapped now — it returns its own items or, on failure, an empty list, a log
 line **naming the section**, and `partial: true` on the response so the screen
 knows what it is showing is incomplete rather than empty.
 
-⚠️ **The failing row itself is still not identified, and this does not identify
-it.** Every state that could be built locally answers 200: a pending
-application, a shortlisting, an unread message, a viewing fifteen days gone
-with no outcome, an acceptance with and without a tenancy, a lease ending,
-notice given by the landlord. Whatever production holds, this container does
-not. What changed is the blast radius and the evidence: the next occurrence
-costs one section instead of the dashboard, and the server log says which one
-by name.
+⚠️ ~~**The failing row itself is still not identified, and this does not
+identify it.** Every state that could be built locally answers 200 … Whatever
+production holds, this container does not.~~
+
+**Struck through — it was found, and the reason it could not be found is in the
+sentence itself. See §91.** There was no failing row. `messageItems()` indexes
+`r.messages[0]` on a list a concurrent mark-as-read can empty between the two
+SELECTs Prisma issues for one `findMany`, so the defect needs two things
+happening at once and every state above was one thing standing still. Driven
+against a real Postgres: 19 of 30 attempts failed before the fix, 0 of 40
+after.
+
+What §89 did change, and it still stands: the blast radius and the evidence.
+A section failing now costs one section instead of the dashboard.
 
 ### 89c. 🔴 A count that was `null` in the API for months, in both inboxes
 
@@ -6996,6 +7002,141 @@ absent from `static/` and the build would have failed. It is the SSR function
 answering a path no file matches, the same way `/zzz-no-such-path-xyz` gets a
 29,449-byte 404 page. The probe's label ("does index.csr.html exist as a static
 file?") can no longer tell the two apart and will mislead the next reader.
+
+## 91. The tenant inbox 500, found — it was never a row — 25 October 2026
+
+§89 fixed the blast radius of `GET /api/tenant-inbox (500)` and closed saying
+the failing row was unidentified. It stayed open for that reason. It is closed
+now, and the thing that kept it open was the word **row**.
+
+### 91a. One `findMany` is four SELECTs
+
+`messageItems()` asks for the applications that have an unread message, and for
+each one the unread messages:
+
+```ts
+where:  { messages: { some: { senderId: { not: tenantId }, readAt: null } } }
+select: { messages: { where: { senderId: { not: tenantId }, readAt: null },
+                      select: { id: true, createdAt: true } } }
+```
+
+That reads as one question asked twice, and the second copy looks redundant. It
+is not one question. Prisma loads a to-many relation with a **separate query** —
+no `relationJoins`, no `relationLoadStrategy` in `schema.prisma`, so the default
+holds — and that single `findMany` issues four SELECTs, the messages one last:
+
+    SELECT ... FROM applications WHERE (...)                   <- the row matches here
+    SELECT ... FROM rooms        WHERE id IN ($1)
+    SELECT ... FROM users        WHERE id IN ($1)
+    SELECT ... FROM messages     WHERE readAt IS NULL AND ...  <- and is empty here
+
+Anything that sets `readAt` between the first and the last leaves a row the
+outer query matched holding an **empty** message list. The next line was:
+
+```ts
+const waiting = -daysUntil(r.messages[0].createdAt);
+```
+
+`undefined.createdAt` is a TypeError. A TypeError in a Nest handler with no
+global exception filter is a 500. The tenant dashboard calls this endpoint on
+load, so the screen was a "Server error" dialog with nothing behind it.
+
+### 91b. ⚠️ The window is wide, and deliberately so
+
+Opening a thread marks the other side's messages read, and `messages.service.ts`
+fires that `updateMany` **without awaiting it**:
+
+```ts
+this.prisma.message.updateMany({ ... }).catch(() => {});
+```
+
+That is deliberate and documented where it sits — "a failure here must not stop
+somebody reading their messages" — so the write lands whenever it lands. Open a
+conversation, go to the dashboard: that is the whole reproduction.
+
+The fire-and-forget is **not** the defect and has not been changed. A list that
+cannot survive its own filter going stale is the defect.
+
+### 91c. Why no fixture could have found it
+
+§89 listed what it had tried: a pending application, a shortlisting, an unread
+message, a viewing fifteen days gone, an acceptance with and without a tenancy,
+a lease ending, notice given. Every one of them is **one thing standing still**.
+This needs two things happening at once. No amount of building states by hand
+reaches it, which is exactly why the honest "could not reproduce" in §89 was
+also a dead end — the search was in the wrong dimension, not insufficiently
+thorough.
+
+### 91d. Measured, in both directions
+
+`scripts/inbox-race-drive.mjs` drives `TenantInboxService.inbox()` itself —
+the real service, a real Postgres, the real unawaited write — and asserts the
+response is not `partial`:
+
+    before the fix   19 / 30 attempts came back partial
+    after the fix     0 / 50
+
+⚠️ The before number was taken **first**, against the unfixed service. A check
+written after the fix that has never been seen to fail is the thing this
+codebase keeps finding.
+
+### 91e. Skipped, not defaulted — and the near-miss has its own test
+
+The fix is `flatMap` plus `if (unread === 0) return []`. They read the messages
+a moment ago; nothing is waiting on them.
+
+The obvious alternative is `r.messages[0]?.createdAt ?? new Date()`, which also
+stops the throw and is **wrong**: it invents "1 unread message, sent today" for
+a conversation with nothing unread in it. That is the landlord list's
+`_min.createdAt ?? new Date()`, correct there because its count comes from a
+`groupBy` that cannot be empty, and wrong here.
+
+Two unit tests in `inbox-resilience.spec.ts`, each falsified by the defect it is
+for:
+
+| test | reintroduce | result |
+|---|---|---|
+| does not throw when the messages were read mid-query | the original `map` + `[0]` | ❌ fails (`partial` true) |
+| emits no item for a thread with nothing unread | `?? new Date()` | ❌ fails (an item appears) |
+
+⚠️ The first test passes under the `?? new Date()` version and the second passes
+under the original bug. Neither test alone covers this; that is why there are
+two, and why each was run against its own defect rather than against "the old
+code" in general.
+
+### 91f. 🔴 The same class, one line from a guard that knew better
+
+Grepping `[0].` across the backend found four other sites. Three are guarded
+(`storage.service.ts` checks `length === 0`, `listing-bot.service.ts` checks
+`hits.length === 0`). The fourth:
+
+```ts
+email: emails[0].value,
+fullName: displayName,
+avatarUrl: photos?.[0]?.value,     // <- guarded, one line below
+```
+
+`google.strategy.ts`. A Google profile with no email — the scope withheld, an
+account without a verified address — was a TypeError inside a Passport verify
+callback, surfacing as a 500 on the sign-in redirect naming nothing. It is a
+refusal with a reason now, naming email-and-password sign-in, because an email
+is not optional here: `User.email` is nullable for the WhatsApp-first landlord
+who has a phone number instead, not for a Google account that came back without
+one.
+
+⚠️ **Not reproduced.** It needs Google to return such a profile and this
+container cannot make it do that. Stated as what it is — a read of the code and
+of the guarded line beside it — rather than implied to be driven.
+
+### 91g. What is NOT covered
+
+`scripts/smoke-test.sh` asserts, for both inboxes, that every per-kind count is
+a number and that `partial` is false. Those assertions pass before and after
+this fix, because from outside the race is invisible unless it happens to fire
+during the run. **No new smoke assertion was added, because there is no way to
+assert a race from an HTTP client without causing it.** The drive is what
+covers this, and it is wired into CI's backend job (after the smoke suite's
+fixtures, against the same seeded database) and into `npm run audit:inbox-race`.
 
 ---
 
