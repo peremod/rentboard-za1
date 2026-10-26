@@ -7784,6 +7784,102 @@ shape is a defect.
 Falsified by putting the unconditional write back into `withdraw()`: **1 NEW
 method**, exit 1.
 
+## 96. The queue emptied — every one of the 23 read and judged — 26 October 2026
+
+§95 left 16 methods matching the shape with nobody having judged them, and the
+lint said so on every run. They have all been read. Fifteen of the 23 are
+fixed; five are judged survivable with the reason recorded; three dropped out
+when the detector was corrected.
+
+### 96a. 🔴 `auth.refresh` — one rotation was minting two credentials
+
+The method's own comment says two refresh calls are often in flight at once —
+"a page load and an interceptor retry" — and it has a grace window for exactly
+that. What it did not have was a conditional rotation. Both requests read
+`revokedAt` as null, both passed, and **both minted a refresh token**.
+
+One rotation, two valid credentials. The browser keeps whichever response
+arrived last, so the other is live until expiry **with nobody holding it**. And
+`replacedById` recorded only one of them, so the grace path — which exists to
+hand back "the token that replaced it" — could hand back the one the browser
+does not have, turning a race it was written to absorb into a sign-out.
+
+Driven, counted in the database because the HTTP responses cannot show it:
+
+    before:  201/201→1, 201/201→2, 201/201→2, 201/201→2, 201/201→2
+    after:   201/201→1, 201/201→1, 201/201→1, 201/201→1, 201/201→1
+
+⚠️ **The obvious fix was wrong, and dangerously so.** Claim, then mint, then
+write `replacedById` leaves the loser re-reading a token whose `revokedAt` is
+set but whose `replacedById` is not yet written — so it falls past the grace
+window and is treated as **theft**, revoking every session. A benign double
+refresh would sign the person out everywhere: worse than the bug. The token is
+therefore minted first, its id goes into the conditional update itself, and a
+loser revokes the credential it just minted before retrying.
+
+Smoke's four rotation assertions still pass, including "replaying the
+just-rotated token is treated as a race" and "the current session still works
+after the race".
+
+### 96b. 🔴 `rooms.discardDraft` — a check standing between a draft and a cascade
+
+`discardDraft` refuses anything that is not a draft, then **deletes the room** —
+and the delete cascades to every application on it. The check was a read. A
+landlord publishing in one tab while discarding in another, or the publish
+simply landing first, ran `delete` on a room that was no longer a draft. There
+is no undo: the room and its applicants are gone.
+
+`deleteMany` carrying the status refuses instead.
+
+### 96c. The rest that were fixed
+
+- **`rooms.markReserved` / `unpause` / `unreserve` / `pause` / `undoLet`** —
+  five copies of read-check-write on one column. They are landlord-only, but
+  the landlord is not the only writer: `accept` claims a room to `let` and
+  `cancel` puts it back to `active`, so pausing while an applicant was being
+  accepted left the room `paused` with a live tenancy. Now one
+  `claimRoomStatus` helper, because five copies is how one of them ends up
+  without the condition.
+- **`rooms.updatePhotos`** — "a published room must keep at least one photo" is
+  enforced from a read of `room.status`; clearing a draft's gallery while it is
+  being published left a published room with no cover.
+- **`applications.unshortlist`** — the same shape as `withdraw`: `shortlisted`
+  is a status `accept` may claim, so un-shortlisting while accepting wrote
+  `viewed` over an acceptance that had already opened a tenancy.
+- **`viewings.cancel`** — a cancellation racing an answer wrote `cancelled`
+  with `respondedAt: null` over a reply that had just been given.
+- **`rent.dispute`** — the tenant's only voice on that screen. A landlord
+  marking a month paid while the tenant disputes used to leave both written in
+  whichever order they landed, and `reminderSentAt` set on a paid month.
+  ⚠️ The rent tracker is the landlord's own record and this platform holds no
+  money: what is at stake is whether the disagreement is written down at all.
+
+### 96d. ⚠️ Five judged survivable — the reasons, not a silence
+
+They are in `scripts/.check-then-write-baseline.json` with a verdict each, and
+**none of them says "untriaged" any more**:
+
+| method | why it stands |
+|---|---|
+| `account-lifecycle.reactivate` | the guard reads `deletedAt`, the write touches `deactivatedAt` only — a lost race cannot un-delete, and login refuses on `deletedAt` independently |
+| `ads.reviewCampaign` | no status precondition to defeat; two admins reviewing is last-decision-wins, which is the intended semantic |
+| `auth.login` | the write is a CREATE of a session, not an update of the row checked; two logins are meant to make two sessions |
+| `messages.send` | the write is a message CREATE, so a thread closing mid-send appends one message to a just-closed conversation, which stays readable by design |
+| `rooms.findOne` | the status checks guard READING; the write is the per-day view counter, which carries no viewer identity by design (POPIA minimality) |
+
+### 96e. ⚠️ The detector was naming code it had already seen fixed
+
+`auth.refresh` kept appearing after it was fixed, because the guard pattern
+listed the state columns it knew about — `status|state|readAt|outcome` — and
+that claim keys on `revokedAt`. A detector that only recognises the fixes it
+has seen before keeps naming repaired code, and teaches the reader to skim past
+it.
+
+A conditional write is now anything whose `where` carries something **besides
+the id**: `where: { id }` is unconditional, `where: { id, anything }` is a
+compare-and-swap, whatever the column is called. That alone took the list from
+8 to 7 without changing a line of application code.
+
 ---
 
 

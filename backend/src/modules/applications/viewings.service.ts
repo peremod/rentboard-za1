@@ -259,8 +259,19 @@ export class ViewingsService {
     }
 
     const now = new Date();
-    const updated = await this.prisma.roomViewing.update({
-      where: { id: viewingId },
+    /**
+     * ⚠️ Conditional on the viewing still being callable off — §95's shape.
+     *
+     * The two checks above are reads, and `respond()` is the other writer. A
+     * cancellation racing an acceptance or a decline wrote `cancelled` with
+     * `respondedAt: null` over an answer that had just been given, and the
+     * duplicate case told the other party twice that the viewing was off.
+     *
+     * The predicate is the same pair the checks name, so the database decides
+     * rather than whichever request read first.
+     */
+    const claimed = await this.prisma.roomViewing.updateMany({
+      where: { id: viewingId, status: { notIn: ['cancelled', 'declined'] } },
       data: {
         status: 'cancelled',
         cancelledAt: now,
@@ -275,6 +286,10 @@ export class ViewingsService {
         declineReason: null,
       },
     });
+    if (claimed.count === 0) {
+      throw new BadRequestException('That viewing was already answered or called off.');
+    }
+    const updated = await this.prisma.roomViewing.findUniqueOrThrow({ where: { id: viewingId } });
 
     /** Whoever did NOT cancel is the one who needs telling. */
     const tell = isLandlord ? application.tenant : application.room.landlord;

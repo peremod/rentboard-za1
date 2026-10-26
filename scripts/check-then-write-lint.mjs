@@ -67,7 +67,21 @@ const READ = /\.(findUnique|findFirst|findUniqueOrThrow|findFirstOrThrow)\s*\(/;
 const HELPER_READ = /\b(?:this\.)?(assert[A-Z]\w*|get[A-Z]\w*|require[A-Z]\w*)\s*\(/;
 const STATE_THROW = /if\s*\([^)]*\b(status|state|archivedAt|deletedAt|decidedAt|readAt|outcome)\b[^)]*\)[\s\S]{0,160}?throw\s+new/;
 const WRITE = /\.(update|delete)\s*\(/;
-const GUARDED = /\$transaction\s*\(|\.updateMany\s*\(\s*\{[\s\S]{0,400}?where[\s\S]{0,400}?(status|state|readAt|outcome)/;
+/**
+ * What counts as already guarded.
+ *
+ * ⚠️ The first version listed the state COLUMNS it knew about
+ * (status|state|readAt|outcome), and so went on reporting `auth.refresh` after
+ * it had been fixed — that claim keys on `revokedAt`, which was not in the
+ * list. A detector that only recognises the fixes it has seen before will keep
+ * naming repaired code and, worse, teaches the reader to ignore it.
+ *
+ * So: a conditional write is an `updateMany`/`deleteMany` whose `where`
+ * carries something BESIDES the id. `where: { id }` is unconditional;
+ * `where: { id, anything: ... }` is a compare-and-swap, whatever the column is
+ * called.
+ */
+const GUARDED = /\$transaction\s*\(|\.(updateMany|deleteMany)\s*\(\s*\{\s*where:\s*\{[^}]*,[^}]*\}/;
 
 const findings = [];
 for (const rel of files) {
