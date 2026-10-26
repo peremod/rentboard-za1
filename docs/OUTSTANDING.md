@@ -7321,6 +7321,128 @@ because it gets believed. It answers ordering and structural questions on
 demand: whether the requests precede the paint, whether the faces are inlined,
 whether a variant is really the variant it claims to be.
 
+## 93. One room, let to two people — 26 October 2026
+
+§91 closed a race that cost a dialog. This one cost a room.
+
+`docs/API-TESTING.md` §6.5 named the gap in its own words — "no test races two
+acceptances of the same room" — and §91 is why it was worth closing now rather
+than later: a defect that needs two things happening at once cannot be found by
+building states one at a time, and this codebase had just spent four days
+learning that.
+
+### 93a. 🔴 Both accepts returned 200
+
+`scripts/double-let-drive.mjs`, against the real API, first attempt:
+
+    ── Two applications for one room, accepted at the same moment ──
+         responses: 200, 200
+      ❌ 2 of 2 acceptances succeeded — a room let 2 times
+      ❌ 2 accepted applications for one room
+      ❌ 2 live tenancies for one room — this is the double-let
+
+Two tenants each told "You got the room". No tricks: two requests that did not
+wait for each other.
+
+### 93b. The protection ran after the write
+
+```ts
+const application = await this.getOwnedApplication(id, landlordId);
+this.assertNotDecided(application);        // the application's OWN status
+... update the application to accepted ...
+... update the room to let ...
+await this.autoRejectOthers(roomId, id);   // what protected the room
+```
+
+`assertNotDecided` knows only about the application in front of it. What kept a
+room from being let twice was `autoRejectOthers` — which runs **after** the
+write. So the sequential path was safe (accept A, and B is rejected before
+anybody can accept it) and the concurrent path was not: two different
+applications for one room both read `pending`, both passed the check, both were
+accepted.
+
+⚠️ **The sequential safety is why this was invisible.** Every existing check
+accepts one applicant and then asserts the others are rejected, which is true
+and passes. 527 smoke assertions, 98 unit tests and a 236-route sweep all held
+while a room could be let twice.
+
+### 93c. Compare-and-swap, in one transaction
+
+Both writes now carry the old state in the `WHERE` clause, so Postgres blocks
+the second writer on the same row until the first commits and then re-evaluates
+it against the new version — exactly one caller sees `count === 1`:
+
+```ts
+const claimedApplication = await tx.application.updateMany({
+  where: { id: applicationId, status: { notIn: ['accepted', 'rejected', 'withdrawn'] } },
+  data: { status: 'accepted', decidedAt: new Date() },
+});
+if (claimedApplication.count === 0) throw new BadRequestException(…);
+
+const claimedRoom = await tx.room.updateMany({
+  where: { id: application.roomId, status: { not: 'let' } },
+  data: { status: 'let', letAt: new Date() },
+});
+if (claimedRoom.count === 0) throw new BadRequestException(
+  'This room has already been let to another applicant. Undo that acceptance first if it was a mistake.',
+);
+```
+
+- The **application** claim stops one application being accepted twice — a
+  double tap, a retry, two tabs.
+- The **room** claim stops two different applications letting one room.
+- One transaction, so a lost room claim rolls the acceptance back rather than
+  leaving an application accepted for a room somebody else has.
+- Ordered application-then-room in every caller, so two racing accepts cannot
+  deadlock.
+
+`{ status: { not: 'let' } }` rather than `=== 'active'` deliberately: a landlord
+may accept while the room is paused or reserved, and `undoAccept` puts it back
+to `active`, so a reversed acceptance can be made again. The smoke suite's
+undo-then-reaccept path is what would have caught an over-tight predicate, and
+it passes.
+
+### 93d. Measured, the before taken first
+
+| | before | after |
+|---|---|---|
+| two applications, one room | **200, 200** — 2 tenancies | **200, 400** — 1 tenancy |
+| one application, twice | **200, 200** | **200, 400** |
+| rent month, marked twice | 200, 200 — 1 period | 200, 200 — 1 period |
+
+### 93e. The rent half held, and was made to prove it
+
+`rent.service.ts mark()` is a Prisma `upsert` on the unique
+`[tenancyId, periodStart]`. An upsert is a read then a write, so two can both
+decide to INSERT and one must lose on the constraint — correctly, as long as
+the person is told something true rather than handed a 500 for pressing a
+button twice.
+
+⚠️ **One pair of requests would have proved nothing.** If the first upsert
+commits before the second reads, both take the UPDATE path, no constraint is
+ever tested, and the drive passes having raced nothing. So the period is
+**deleted between attempts**, which puts every pair back on the INSERT path —
+the only one the unique index can reject. Five attempts: `200/200` each time,
+one period each time.
+
+⚠️ And the rent tracker is the landlord's **own record**. Mastande never holds
+rent or a deposit, and nothing in this section moves money; a duplicated month
+would have been a wrong record, not a double charge.
+
+### 93f. ⚠️ What this does NOT cover
+
+- **One defect in my own drive**, found by running it: `dbRows` returns LINES
+  OF TEXT, one per row, not objects. Reading `.id` off one gave `undefined`,
+  which the route answered with "Validation failed (uuid is expected)".
+- **The pattern is not searched for.** Read, check, write, with the protection
+  running afterwards — that is the shape, and it was found by suspecting one
+  method, not by sweeping for it. Nothing here races a notice against a
+  withdrawal, two confirmations of one move-in, or two verification decisions.
+  Those remain as §6.5 now says.
+- **Two accepts from two different landlord sessions** are not driven
+  separately; both requests here carry the same token, which is the realistic
+  case (one landlord, two taps or two tabs) and exercises the same code path.
+
 ---
 
 

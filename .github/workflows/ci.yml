@@ -515,6 +515,19 @@ jobs:
       # A diagnostics step must never add a failure row of its own: when the
       # API was never started the log does not exist, `cat` exits 1, and the
       # job grows a fourth red step that says nothing about the real fault.
+      - name: One room, let once
+        # §93 and the gap docs/API-TESTING.md §6.5 names in its own words:
+        # "No test races two acceptances of the same room". It did not, and
+        # accept() was a read-check-write with no transaction and no condition,
+        # so two accepts fired together both returned 200 and left two live
+        # tenancies on one room. Driven against the real API, first attempt.
+        #
+        # A room let twice is a person arriving with their things, so this runs
+        # on every push rather than living in a doc.
+        run: node scripts/double-let-drive.mjs
+        env:
+          API: http://localhost:3000
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_test
       - name: API log on failure
         if: failure()
         run: cat /tmp/api.log || echo "(no /tmp/api.log — the API was never started)"
