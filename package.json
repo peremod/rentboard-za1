@@ -1,6 +1,6 @@
 {
   "name": "mastande-za",
-  "version": "1.171.0",
+  "version": "1.172.0",
   "private": true,
   "description": "Mastande ZA — South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
   "scripts": {
@@ -10,7 +10,7 @@
     "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install",
     "verify": "bash scripts/verify-build.sh",
     "audit:controls": "node scripts/control-contrast-audit.mjs",
-    "audit": "npm run audit:routes && npm run audit:i18n && npm run audit:env && npm run audit:tokens && npm run audit:states && npm run audit:feedback && npm run audit:scale && npm run audit:fonts && npm run audit:controls && npm run lint:templates",
+    "audit": "npm run audit:routes && npm run audit:anchors && npm run audit:i18n && npm run audit:env && npm run audit:tokens && npm run audit:states && npm run audit:feedback && npm run audit:scale && npm run audit:fonts && npm run audit:controls && npm run lint:templates",
     "audit:css": "node scripts/css-coverage-audit.mjs",
     "audit:routes": "node scripts/route-audit.mjs",
     "audit:i18n": "node scripts/i18n-audit.mjs",
@@ -25,6 +25,7 @@
     "audit:inbox-race": "node scripts/inbox-race-drive.mjs",
     "audit:font-paint": "node scripts/font-paint-drive.mjs",
     "audit:double-let": "node scripts/double-let-drive.mjs",
+    "audit:anchors": "node scripts/fragment-anchor-lint.mjs",
     "audit:house-ads": "node scripts/house-ads-drive.mjs",
     "lint:templates": "node scripts/template-literal-lint.mjs",
     "lighthouse": "npm --prefix frontend run build:prod && npx @lhci/cli@0.14.x autorun --config=lighthouserc.json",

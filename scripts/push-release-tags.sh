@@ -2196,6 +2196,39 @@ Five defects in that harness, every one found by running it. The first result
 showed optional costing +80ms, matching the hypothesis exactly; with five runs
 it was -4ms."
 
+tag_if_missing "v1.171.0" "47e322389568f99b79ffd912356e53a31126627b" "2026-10-26T03:40:00+00:00" "v1.171.0 - one room, let once
+
+A room could be let to two people at once, and both were told they had it.
+
+Two applications for one room, accepted together, both returned 200 - leaving
+two accepted applications and two live tenancies on one room. Driven against
+the real API, first attempt. accept() read the application, checked its status,
+then wrote, with no transaction and no condition on the write; what kept a room
+from being let twice was autoRejectOthers, which runs AFTER the write.
+
+The sequential path was always safe, which is why 527 smoke assertions, 98 unit
+tests and a 236-route sweep all held while this was live. A defect that needs
+two things happening at once cannot be found by building states one at a time -
+the same lesson as v1.169.0, a day earlier, for a defect that cost a dialog
+rather than a room.
+
+Both writes are compare-and-swap now, in one transaction: the old state in the
+WHERE clause, so Postgres blocks the second writer and re-evaluates it, and
+exactly one caller sees count === 1. After: 200, 400 with one accepted
+application and one tenancy.
+
+scripts/double-let-drive.mjs runs on every push and refuses to pass vacuously -
+'200, 400' is also what two requests that serialised look like, so it reads
+WHICH guard refused and reports INCONCLUSIVE if the conditional claim was never
+reached.
+
+The rent half of the same gap held, and was made to prove it: five attempts
+with the period deleted between each, so every pair raced the INSERT rather
+than taking the UPDATE path.
+
+Closes the concurrency gap docs/API-TESTING.md section 6.5 named in its own
+words. The PATTERN is not swept for, and section 6.5 now says so."
+
 
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run

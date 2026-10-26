@@ -7470,6 +7470,107 @@ not distinguish a working claim from two requests that never overlapped.
   separately; both requests here carry the same token, which is the realistic
   case (one landlord, two taps or two tabs) and exercises the same code path.
 
+## 94. Two things reported from a phone, and the third route of one old defect — 26 October 2026
+
+### 94a. 🔴 "Say what happened" did nothing, because the anchor did not exist
+
+The tenant inbox's elapsed-viewing row has pointed at
+`/tenant/dashboard#viewings` since Phase 8n. There is no `id="viewings"` on
+that page, and never was. Driven at 390px:
+
+    href: /tenant/dashboard#viewings
+    scrollY 0 -> 0   #viewings exists: false
+    ids on the page: ld-site, nav-sheet, nav-burger, main-content, needs-you,
+                     your-applications, room-alerts, your-sublets, saved-rooms
+
+The URL gained a fragment and the page stayed where it was. Reported as "the
+button does nothing", which is precisely what it did.
+
+⚠️ **Nothing in the repository could see it.** `route-audit` checks that a PATH
+resolves, and `/tenant/dashboard` resolves perfectly well; the fragment is not
+part of the route. That is the same blind spot as the nav audit that was
+"structurally incapable of seeing a dead link" — a different audit, the same
+shape of hole.
+
+Two halves to the fix, because one would not have been enough:
+
+- `id="viewings"` on the Viewings section.
+- an `effect()` that scrolls when the element appears. The section lives behind
+  `@if (viewings().length)` and does not exist when the navigation ends, which
+  is exactly when `withInMemoryScrolling({ anchorScrolling: 'enabled' })` looks
+  for it. The landlord inbox already carries this remedy, with the same comment,
+  for `#needs-attention`.
+
+Measured after: **`scrollY 0 -> 908`**, and `viewings` now appears in the page's
+id list.
+
+### 94b. 🔴 The notices card, and `:where(button)` arriving by a third route
+
+Opening a notice put the headline in a little floating card and left the body
+and the Open button outside it. Measured on the open head:
+
+    transform:  matrix(1, 0, 0, 1, 0, -1)          <- a 1px lift
+    box-shadow: rgba(173,66,34,.35) 0 4px 14px     <- a terracotta glow
+    border-radius: 4px
+
+None of that is in the component. `.notice-head` is a bare `<button>`, so it
+inherited the PRIMARY BUTTON's hover from `:where(button):hover` in
+`styles.scss` — right for a thing you press, wrong for a disclosure row. On a
+phone the hover state sticks after the tap, so it does not even flash past; it
+sits there looking like a card with its own content fallen out of it.
+
+`styles.scss` warns about this rule in its own comment — "paints EVERY button
+terracotta on hover, at zero specificity" — and `_responsive.scss` has twice
+called it "row 88's defect arriving by a new route". **This is the third
+route.**
+
+The row states its own hover now: a wash across the whole row, no lift, no
+shadow.
+
+⚠️ **And `is-open` had no rule at all** — a class set on the `<li>` that did
+nothing, the same fault as a `MAX_ATTEMPTS` nothing reads. An open notice now
+has one surface carrying the head AND the detail, so the body cannot look like
+it has fallen out of the card above it.
+
+Driven at four widths after the fix:
+
+    360px  head x16 w328   detail x16 w328   hScroll 0   targets 44px
+    390px  head x16 w358   detail x16 w358   hScroll 0   targets 44px
+    768px  head x16 w736   detail x16 w736   hScroll 0   targets 44px
+    1280px head x272 w976  detail x272 w976  hScroll 0   targets 44px
+
+Head and detail share an x and a width at every width, which is the thing that
+was wrong.
+
+⚠️ Contrast is unchanged in kind but not in surface: `.notice-meta` is
+`--slate`, now over `--cream2` rather than `--cream`. `styles.scss` already
+records that pair at **4.74:1**, over the 4.5 threshold for 12px text.
+
+### 94c. The check that would have caught 94a, and the defect in it
+
+`scripts/fragment-anchor-lint.mjs` reads every `/path#fragment` the API emits
+and asks whether anything in the frontend renders that id. Six links, six
+anchors, all present.
+
+⚠️ **Falsified, and the first version did not fail.** Deleting the real
+`id="viewings"` left the lint green — because the COMMENT above the fix quotes
+`id="viewings"` while explaining why it was needed, and the check was reading
+prose about markup as markup. Comments are stripped first now, and the same
+deletion fails it:
+
+    1 fragment(s) point at an id nothing renders.
+
+That is the identical defect font-lint had in §90d, found the identical way:
+by trying to make the check fail and watching it refuse.
+
+### 94d. ⚠️ Two traps in one edit, both documented in CLAUDE.md
+
+The first version of the notices comment used backticks to quote identifiers
+and an emoji — inside a `styles:` template literal. Backticks terminate the
+literal, and an emoji inside a CSS comment fails esbuild's parser.
+`template-literal-lint` named the file and line in one line, which is what it is
+for; it cost one cycle rather than the usual several.
+
 ---
 
 

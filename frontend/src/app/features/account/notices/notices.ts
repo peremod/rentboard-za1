@@ -168,8 +168,56 @@ import { EmptyState } from '../../../shared/components/empty-state/empty-state';
     }
     .notice-meta { font-size: .75rem; color: var(--slate); white-space: normal; }
     .notice-new { color: var(--terra); font-weight: 700; }
+    /*
+     * THE HEAD IS A BARE <button>, SO IT INHERITED THE PRIMARY BUTTON'S
+     * HOVER -- and on a phone that state sticks after the tap.
+     *
+     * :where(button):hover in styles.scss lifts by 1px, adds --shadow-lift
+     * (a terracotta glow) and rounds the corners. That is right for a thing
+     * you press and wrong for a disclosure row: measured on the open notice,
+     * the head alone came back with transform matrix(1,0,0,1,0,-1) and
+     * box-shadow rgba(173,66,34,.35) 0 4px 14px, so the title and date
+     * floated in a little card while the body and the Open button sat
+     * outside it, unlifted. Reported from a phone as "the space is off, the
+     * card is cluttered in the card", and the screenshot shows exactly that.
+     *
+     * styles.scss warns about this rule in its own comment -- "paints EVERY
+     * button terracotta on hover, at zero specificity" -- and _responsive.scss
+     * has twice called it "row 88's defect arriving by a new route". This is
+     * the third route.
+     *
+     * So the row states its own hover: a wash across the WHOLE row, no lift
+     * and no shadow, because nothing here is being lifted off the page.
+     */
+    .notice-head:hover:not(:disabled) {
+      background: var(--cream2);
+      color: var(--ink);
+      transform: none;
+      box-shadow: none;
+    }
     .notice-chevron { font-size: .7rem; color: var(--slate); flex-shrink: 0; line-height: 2; }
     .notice-detail { padding: 0 0 .75rem; display: grid; gap: .5rem; }
+
+    /*
+     * is-open was set on the <li> and had NO RULE AT ALL -- a class that did
+     * nothing, which is the same fault as the MAX_ATTEMPTS nothing read.
+     *
+     * An open notice is one thing: a headline, and the detail it opened to
+     * show. It now reads as one thing -- the head and the detail share a
+     * surface, so the body cannot look like it has fallen out of the card
+     * above it, which is what the hover was doing on its own.
+     */
+    .notice.is-open {
+      background: var(--cream2);
+      border-radius: var(--r8);
+    }
+    /* The surface needs an inset, or the text sits on its own edge. Applied to
+       the children rather than the <li>, so the unread bar stays flush left
+       where it reads as a marker rather than a border. */
+    .notice.is-open .notice-head,
+    .notice.is-open .notice-detail { padding-left: .75rem; padding-right: .75rem; }
+    /* …and the open head's hover must not repaint that surface a second time. */
+    .notice.is-open .notice-head:hover:not(:disabled) { background: transparent; }
     .notice-body {
       margin: 0; line-height: 1.6; max-width: 42rem;
       white-space: pre-line; overflow-wrap: anywhere;
