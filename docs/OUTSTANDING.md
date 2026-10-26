@@ -8101,3 +8101,104 @@ The suite prints the release invocation itself whenever anything skipped. Ninety
 -two checks in it had never run once before v1.84.0, and the one assertion
 covering "uploaded documents are deleted" was among them — a skipped check reads
 exactly like a passing one when you are scanning output.
+
+## 97. The notices drive that could not fail — 26 October 2026
+
+`docs/API-TESTING.md` §6 listed notices among eight domains with "refusal
+coverage only", so the next piece of the API-testing stream was to give one of
+them real handler coverage. Notices was the pick because CLAUDE.md already
+names this channel in its list of controls that only look like controls — "a
+notice channel nobody could read" — and because the notices screen was touched
+two releases ago.
+
+### What was already there, and why it did not count
+
+`scripts/notices-drive.mjs`: nine checks, written for this exact channel, and
+all nine green. Two things were wrong with trusting it.
+
+**It is not in CI.** It appears in this document as a manual command and
+nowhere in `.github/workflows/ci.yml`. So on every push, §6's description was
+right: notices had the 401 from the 236-route sweep and nothing else.
+
+**It stages its notice with a direct SQL `INSERT`**, which its own header
+states plainly. The consequence was not stated, and it is the whole point: a
+drive that writes the row itself never calls `NoticeRouter.deliver`, so it
+cannot see a fault in the write at all.
+
+Measured rather than argued. `deliver()` was altered to skip the row whenever
+the recipient has an email address — which **is** the v1.85.0 defect this drive
+was written about, the one where a shortlisted tenant was never notified and
+`/account/notices` was empty for nearly every account on the platform — the
+backend rebuilt, and both suites run against it:
+
+```
+scripts/notices-drive.mjs          9 / 9 PASS   ← on the broken build
+  …and it printed "the channel is no longer write-only", which was false
+
+backend/test/notices.int-spec.ts   8 / 9 FAIL   ← same build
+```
+
+The drive's summary line asserted a property of the write path while testing
+only the read path. That is the nav-audit defect again: a check structurally
+incapable of seeing the thing it is named after.
+
+### What changed
+
+**`backend/test/notices.int-spec.ts`, nine cases, in the integration suite** —
+so CI runs it on every push, against the isolated database, truncated between
+tests. No case inserts a `Notice`. Every notice read is one the application
+wrote as a side effect of a real action over HTTP: a tenant applying, a
+landlord accepting, a tenant sending a message.
+
+What it asserts beyond the drive: that the row the application *delivers* is
+the row the owner reads; that read is not deleted, so the notice is still in
+the record afterwards with a timestamp, because the screen says it is the
+record; that another person's notice id and an invented id answer
+**identically** — same status, same body — since the controller claims the
+endpoint "cannot be used to discover that a notice exists", and a 404 would
+confirm the opposite one id at a time; and that the list is newest-first,
+because `all()` takes 100 and a cap with the wrong sort order is the quiet
+version of this bug — every row present, 200 answered, and the person's most
+recent notice the one missing.
+
+**Falsified, eight ways, each reverted after.** Six of the first seven were
+caught:
+
+| reintroduced defect | caught by |
+| --- | --- |
+| `all()` loses its `userId` scope | 2 cases |
+| `markRead` loses its `userId` scope | 1 |
+| `markAllRead` loses its `userId` scope | 1 |
+| the row is skipped when there is an email (v1.85.0) | 8 |
+| `all()` serves oldest first | 1 |
+| `markRead` deletes instead of marking | 1 |
+| the badge counts read notices too | 2 |
+| the badge list is scoped to someone else | 4 |
+
+⚠️ **The seventh falsification found a defect in the new test, not the code.**
+`expect(count).toBe(items.length)` cannot fail: the controller computes the
+count *from* that array, so the two can never disagree. One more control that
+only looks like a control, written while fixing exactly that pattern. It now
+compares the badge's count against the unread rows the *other* endpoint
+serves — something it is not derived from — and both ways of breaking that
+agreement are caught.
+
+**`scripts/notices-drive.mjs` keeps its nine checks and loses its false
+claim.** Its header now states what the direct `INSERT` costs, with the 9/9
+measurement in it; the per-check message says a notice *row* is readable rather
+than that the channel is no longer write-only; and the summary says the read
+side holds and names the spec that covers the write. Its fixture is left alone
+— changing it would duplicate the spec for no gain.
+
+### Still open
+
+⚠️ **The nav badge stops counting at 50.** `unread()` takes 50 and the count is
+that array's length, so somebody with more than 50 unread notices is shown
+"50". Not fixed here: it is a real inaccuracy but a small one, and nobody on
+this platform has fifty unread notices yet. Named so it is a decision rather
+than a surprise.
+
+**Seven domains still have refusal coverage only** — ads, referrals, surveys,
+storefront, analytics, places, SEO. And the question this section really
+raises is how many of the other hand-written drives build their own fixture
+the way this one did. That has not been checked.
