@@ -2260,6 +2260,37 @@ surface now, measured aligned at 360, 390, 768 and 1280.
 a11y covered 10 public + 23 portal pages, not the usual 33: admin credentials
 were not set, so those screens were skipped. Stated rather than counted."
 
+tag_if_missing "v1.173.0" "735c952caec1c3160c09f614a50316f86281a56d" "2026-10-26T08:45:00+00:00" "v1.173.0 - four races, and the sweep that found three of them
+
+Section 93 fixed a double-let and closed admitting the PATTERN had never been
+searched for - it was found by suspecting one method.
+scripts/check-then-write-lint.mjs searches for it: a read of one row, a throw
+depending on its state, then a write to that row with no transaction and no
+condition. 23 methods matched. Seven are judged and fixed; 18 remain, marked
+untriaged, and the lint prints that count every run - a queue, not a pass.
+
+applications.withdraw: a tenant withdrawing while the landlord accepts left the
+application withdrawn with a live tenancy and a let room. The landlord believed
+they had let it; the tenant believed they pulled out; one row.
+Driven: accept 200 / withdraw 201 before, 200 / 400 after.
+
+lost-number.approve and refuse: two admins deciding one account recovery. An
+approval could overwrite a deliberate refusal and leave a live recovery code on
+a request somebody had decided against. NOT driven - approve() answers 503
+while WhatsApp is off, and 626 smoke assertions pass without touching either
+branch. Five unit tests cover it, and the FIRST version of those passed with
+the fix removed.
+
+tenancies.confirmStart, cancel and end: either party may make either transition
+and both leave pending, so a confirmation landing after a cancellation left a
+tenancy active carrying an endDate and endReason over an archived, withdrawn
+application - the letting live and the paperwork saying it fell through.
+Driven: confirm 200 / cancel 200 before, 200 / 400 after.
+
+⚠️ tenancy-lifecycle-drive.mjs did not run end to end: it registers more than
+60 accounts against a 60/hour in-memory limiter. 629 smoke assertions with an
+admin token and 103 unit tests did run."
+
 
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
