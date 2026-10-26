@@ -7571,6 +7571,91 @@ literal, and an emoji inside a CSS comment fails esbuild's parser.
 `template-literal-lint` named the file and line in one line, which is what it is
 for; it cost one cycle rather than the usual several.
 
+## 95. The pattern, searched for — and the second thing it found — 26 October 2026
+
+§93 fixed a double-let and closed saying the PATTERN was not searched for: it
+had been found by suspecting one method. `docs/API-TESTING.md` §6.5 says the
+same in its own words. This is that search.
+
+### 95a. What the shape is
+
+Inside one method body: a read of a single row, a throw that depends on that
+row's state, then a write to the same row — with no transaction around it and
+no condition on the write. Sequentially correct, and wrong the moment two
+requests do not wait for each other.
+
+`scripts/check-then-write-lint.mjs` looks for exactly that across every
+`*.service.ts`. It found **23** methods.
+
+### 95b. 🔴 The second one that matters: accepted and withdrawn at once
+
+`withdraw()` carries four checks, and one of them exists precisely to stop
+this:
+
+```ts
+if (application.status === 'accepted') {
+  throw new BadRequestException('This application was accepted. Contact the landlord…');
+}
+…
+await this.prisma.application.update({ where: { id }, data: { status: 'withdrawn' } });
+```
+
+The check is a read. The write was unconditional. If the landlord's `accept`
+commits between them — one tap, on another screen — the tenant's write sets an
+accepted application to `withdrawn`, and the guard that exists for this has
+already passed.
+
+Driven against the real API, first attempt:
+
+    accept 200, withdraw 201
+    application: withdrawn   tenancies: 1   room: let
+
+⚠️ **That state is worse than either outcome on its own.** The room is let, a
+tenancy is live, and the application both point at says the tenant pulled out.
+The landlord believes they have let the room. The tenant believes they have
+not taken it. They are reading the same row.
+
+Fixed with the same compare-and-swap as §93, on the states the checks already
+name. A lost claim re-reads and throws the message that matches what actually
+happened, so "contact the landlord" still reaches the person who needs it.
+After:
+
+    accept 200, withdraw 400
+    application: accepted   tenancies: 1   room: let
+
+### 95c. ⚠️ The other 22 are UNTRIAGED, and the baseline says so
+
+Two were judged and fixed: `applications.accept` and `applications.withdraw`.
+The remaining 22 matched the shape and **nobody has worked out what two
+concurrent callers would leave behind**. They are in
+`scripts/.check-then-write-baseline.json` marked `untriaged`, and the lint
+prints that count on **every run**:
+
+    ✅ no NEW read-check-write.
+    ⚠️  22 of 22 carried entr(y/ies) are UNTRIAGED —
+       they matched the shape and nobody has worked out yet what two
+       concurrent callers would leave behind. Not a pass; a queue.
+
+A baseline whose entries claim to have been considered when they have not is
+worse than no baseline — it is this codebase's own recurring defect wearing a
+JSON file. So they say what they are, out loud, until somebody judges them.
+
+The three §6.5 named are among them: `lease.giveNotice` (a notice against a
+withdrawal), `tenancies.confirmStart` (two confirmations of one move-in), and
+the decision pair `lost-number.approve` / `lost-number.refuse` — an account
+recovery, which is the one on that list with a security consequence.
+
+### 95d. What the sweep cannot know
+
+Whether a race matters. Some rows only one person can touch; some writes are
+idempotent; some checks are advisory with a unique index doing the real work —
+the rent month is exactly that (§93e). So it fails on what is NEW, against a
+baseline, the way `token-lint` and `scale-lint` do, rather than pretending a
+shape is a defect.
+
+Falsified by putting the unconditional write back into `withdraw()`: **1 NEW
+method**, exit 1.
+
 ---
 
 

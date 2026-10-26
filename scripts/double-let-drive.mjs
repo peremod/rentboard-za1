@@ -259,6 +259,45 @@ if (!tenancyId) {
   }
 }
 
+// ══ 4. Accepted and withdrawn at the same moment ═════════════════════════
+//
+// The mirror of §93, and the reason the pattern sweep exists. `withdraw()`
+// refuses an application that is already `accepted` — and that refusal is a
+// read-then-write with nothing holding the row still. If the landlord's accept
+// commits between the tenant's read and the tenant's write, the unconditional
+// update sets an ACCEPTED application to `withdrawn`.
+//
+// What that leaves behind is worse than either outcome on its own: a room
+// marked let, a live tenancy, and the application it points at marked
+// withdrawn. The landlord believes they have let the room. The tenant believes
+// they pulled out. Both are looking at the same row.
+console.log('\n── One application, accepted and withdrawn at the same moment ──');
+
+const room4 = await room('A room accepted and withdrawn at once');
+const e = room4 ? await applicant(room4) : null;
+if (!room4 || !e) { console.log('\n❌ fixtures failed'); process.exit(1); }
+
+const [acceptRes, withdrawRes] = await Promise.all([
+  apiCall(API, 'POST', `/api/applications/${e.applicationId}/accept`, {}, T),
+  apiCall(API, 'POST', `/api/applications/${e.applicationId}/withdraw`, {}, e.tenant.token),
+]);
+await settle();
+console.log(`     accept ${acceptRes.status}, withdraw ${withdrawRes.status}`);
+
+const [status] = dbRows(`SELECT status FROM applications WHERE id = '${e.applicationId}'`);
+const live = dbRows(`SELECT id FROM tenancies WHERE "applicationId" = '${e.applicationId}' AND status <> 'cancelled'`);
+const [roomStatus] = dbRows(`SELECT status FROM rooms WHERE id = '${room4}'`);
+console.log(`     application: ${status}   tenancies: ${live.length}   room: ${roomStatus}`);
+
+// The two states that are coherent: accepted with a tenancy and a let room, or
+// withdrawn with neither. Anything else is two people reading one row
+// differently.
+const acceptedWon = status === 'accepted' && live.length === 1 && roomStatus === 'let';
+const withdrewWon = status === 'withdrawn' && live.length === 0 && roomStatus !== 'let';
+acceptedWon || withdrewWon
+  ? ok(`one of the two won cleanly (${status})`)
+  : bad(`incoherent: application ${status}, ${live.length} live tenanc(y/ies), room ${roomStatus}`);
+
 console.log('\n═══ Summary ═══');
 if (fail === 0) {
   console.log('  ✅ a room is let once, however many accepts arrive together.');

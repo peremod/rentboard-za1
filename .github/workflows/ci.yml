@@ -37,6 +37,13 @@ jobs:
         # left the page where it was. route-audit cannot see this: the fragment
         # is not part of the route, and /tenant/dashboard resolves fine.
         run: node scripts/fragment-anchor-lint.mjs
+      - name: Read, check, then write
+        # The shape behind the double-let (section 93) and the accept-vs-withdraw
+        # race (section 95): a method reads a row, decides from its state, then
+        # writes it with nothing holding the row still in between. Fails on NEW
+        # occurrences only; the 22 it already found are listed as UNTRIAGED,
+        # which is a queue rather than a pass, and the run says so each time.
+        run: node scripts/check-then-write-lint.mjs
       - name: i18n and locale audit
         # Fails on a malformed bundle, a placeholder dropped in translation, or
         # the frontend and backend locale lists drifting apart — which would
