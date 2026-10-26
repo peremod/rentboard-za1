@@ -1,7 +1,10 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy, Component, ElementRef, OnInit, effect, inject, signal, viewChild,
+} from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
   ApplicationsService, UpcomingViewing, ViewingOutcome,
 } from '../../../core/services/applications.service';
@@ -37,7 +40,15 @@ import { Icon } from '../icon/icon';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (viewings().length) {
-      <section class="dash-section vi-section">
+      <!-- id="viewings" - the tenant inbox has pointed at this anchor since
+           Phase 8n and it DID NOT EXIST. The elapsed-viewing row's action is
+           /tenant/dashboard#viewings, and the only ids on that page were
+           needs-you, your-applications, room-alerts, your-sublets and
+           saved-rooms. So "Say what happened" navigated to a fragment with no
+           target and the page did not move: measured at 390px as
+           scrollY 0 -> 0, with #viewings exists false. Reported from a phone
+           as "the button does nothing", which is exactly what it did. -->
+      <section class="dash-section vi-section" id="viewings" #viewingsSection>
         <h2 class="dash-section-title">Viewings</h2>
 
         @for (v of viewings(); track v.id) {
@@ -230,6 +241,30 @@ import { Icon } from '../icon/icon';
 })
 export class ViewingInvitations implements OnInit {
   private applications = inject(ApplicationsService);
+
+  /**
+   * ⚠️ Scrolled here rather than left to the router's anchorScrolling — the
+   * same remedy, and for the same reason, as the landlord inbox's
+   * `#needs-attention`.
+   *
+   * `withInMemoryScrolling({ anchorScrolling: 'enabled' })` looks for the
+   * element ONCE, when the navigation ends. This section does not exist then:
+   * it is behind `@if (viewings().length)` and appears only after the
+   * viewings request comes back. So giving the section an id fixes half of
+   * it — the router would still find nothing on the first arrival and the
+   * page would stay where it was, which is the same silent nothing one step
+   * later. Doing it here means the scroll happens when the element does.
+   */
+  private readonly fragment = toSignal(inject(ActivatedRoute).fragment);
+  private readonly viewingsSection = viewChild<ElementRef<HTMLElement>>('viewingsSection');
+
+  constructor() {
+    effect(() => {
+      if (this.fragment() !== 'viewings') return;
+      const el = this.viewingsSection()?.nativeElement;
+      if (el) el.scrollIntoView({ block: 'start' });
+    });
+  }
 
   readonly viewings = signal<UpcomingViewing[]>([]);
   readonly busy = signal<string | null>(null);

@@ -30,6 +30,13 @@ jobs:
         # a routerLink to nowhere, or an endpoint under /admin without AdminGuard.
         run: node scripts/route-audit.mjs
 
+      - name: Fragment links point at anchors that exist
+        # A link to an anchor nothing renders does NOTHING when tapped. The
+        # tenant inbox pointed at /tenant/dashboard#viewings since Phase 8n and
+        # no id="viewings" existed, so "Say what happened" changed the URL and
+        # left the page where it was. route-audit cannot see this: the fragment
+        # is not part of the route, and /tenant/dashboard resolves fine.
+        run: node scripts/fragment-anchor-lint.mjs
       - name: i18n and locale audit
         # Fails on a malformed bundle, a placeholder dropped in translation, or
         # the frontend and backend locale lists drifting apart — which would
