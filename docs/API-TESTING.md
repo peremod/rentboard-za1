@@ -248,6 +248,17 @@ Stated rather than implied, because a suite's silence reads as a pass.
    so another person's id answers exactly as an invented one does, read is not
    deleted, and the list is newest-first.
 
+   **View counting also came off, partly — `backend/test/view-counting.int-spec.ts`,
+   §98.** Four cases, two of them structural: `room_view_days` holds exactly
+   `roomId`, `day` and `count`, and two different people viewing one room on
+   one day leave ONE row. That is CLAUDE.md's POPIA minimality decision
+   ("a count per day and no viewer identity … s.10") asserted rather than
+   assumed — it had rested entirely on the shape of the schema, and the smoke
+   assertions that cover the counting cannot see it, because a weekly total is
+   identical whether the table holds one row per day or one per viewer per day.
+   ⚠️ This does **not** close `analytics`: that module is separate from view
+   counting and nothing here touched it.
+
    ⚠️ **Read before trusting a domain's name on this list.** Notices already
    had `scripts/notices-drive.mjs`, nine checks, written for this exact
    channel — and it **passes 9/9 with the write deliberately broken**, because
