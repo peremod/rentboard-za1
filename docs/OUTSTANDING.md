@@ -7645,6 +7645,42 @@ withdrawal), `tenancies.confirmStart` (two confirmations of one move-in), and
 the decision pair `lost-number.approve` / `lost-number.refuse` — an account
 recovery, which is the one on that list with a security consequence.
 
+### 95e. 🔴 Triage began with the one that hands over an account
+
+`lost-number.approve` / `refuse` were top of the queue because the consequence
+is an account changing hands. Both had the shape.
+
+`approve()` checked `status !== 'open'` and wrote unconditionally; `refuse()`
+checked `status === 'recovered'` and did the same. So:
+
+- **two approvals** → two codes sent, only the last working, and
+  `approvedByAdminId` recording whoever wrote second, so the trail loses who
+  actually approved it;
+- **an approval racing a refusal** → both read `open`, last writer wins, and a
+  deliberate refusal can be overwritten by an approval that started before it,
+  leaving a live recovery code on a request somebody decided against;
+- **a refusal racing the hand-over** → the refusal writes `refused` over an
+  account that has already moved, so the record contradicts what happened.
+
+Both claims are conditional now, and `approve` claims **before** the code is
+sent, so a decision that has been overtaken cannot still put a live code on
+somebody's handset.
+
+⚠️ **NOT driven, and it cannot be from here.** `approve()` answers 503 while
+`WHATSAPP_ENABLED` is false — which it is, and stays. The smoke suite's
+lost-number section asserts the authorisation surface and the queue and never
+reaches the decision: **626 smoke assertions pass without touching either
+branch.** That is precisely why this would have been fixed late, or not at all,
+when the channel comes back.
+
+So it is covered by five unit tests instead — and ⚠️ **the first version of
+those tests passed with the fix removed.** The double returned the
+already-decided status from the very first read, so the method's own
+`status !== 'open'` check threw and the tests never reached the claim.
+Falsified by restoring the unconditional writes: 5 passed. The double models
+the race now — the read sees `open`, the CLAIM loses — and the same restoration
+fails **3 of 5**, with the two winner-path tests still passing, correctly.
+
 ### 95d. What the sweep cannot know
 
 Whether a race matters. Some rows only one person can touch; some writes are
