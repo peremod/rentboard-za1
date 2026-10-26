@@ -2291,6 +2291,32 @@ Driven: confirm 200 / cancel 200 before, 200 / 400 after.
 60 accounts against a 60/hour in-memory limiter. 629 smoke assertions with an
 admin token and 103 unit tests did run."
 
+tag_if_missing "v1.174.0" "4d2bddcfcd781212d7902613223abe262a9907e3" "2026-10-26T10:10:00+00:00" "v1.174.0 - the lease pair, and a state with no way back
+
+The last two methods docs/API-TESTING.md section 6.5 named. Nine of the 23 the
+sweep found are judged and fixed; 16 remain, marked untriaged.
+
+updateTerms is the worst of the nine, because its end state cannot be undone
+from inside the product. Every check in it reads tenancy.status: clearing
+startDate is allowed while pending and refused once active, because an active
+tenancy with no move-in date shuts the rent record permanently - mark() says
+'confirm the move-in first' and confirmStart() refuses because it is already
+active. The write was unconditional, so a landlord clearing the date while the
+tenant confirms wrote null onto an ACTIVE tenancy, reaching the forbidden state
+by a route the guard cannot see.
+
+giveNotice overwrote WHO gave notice, who may WITHDRAW it, and the date the
+countdown runs from. A landlord serving notice on the day a tenant hands theirs
+in is an ordinary Monday, and this file states plainly that a tenant may not
+claim the landlord served notice on them - which the losing request could
+assert.
+
+⚠️ The drive had to be fixed before it was a check. The stranded state only
+appears when the CLEAR wins, and the first falsifying run had the confirm write
+last: the row read active with a date and looked healthy while the guard had
+been bypassed. Repeated six times with a reset between attempts - 1/6 stranded
+without the fix, 0/6 with. One in six is why one attempt proves nothing."
+
 
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
