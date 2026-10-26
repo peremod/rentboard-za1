@@ -348,6 +348,67 @@ if (!tenancy5) {
     : bad(`${[confirmRes, cancelRes].filter((r) => r.status < 300).length} of 2 accepted`);
 }
 
+// ══ 6. Clearing the move-in date while the move-in is confirmed ══════════
+//
+// The one in this family with an UNRECOVERABLE end state. `updateTerms`
+// validates `startDate` against `tenancy.status`: clearing it is allowed while
+// the tenancy is `pending`, and refused once it is `active`, because an active
+// tenancy that started on no particular day shuts the rent record with no way
+// back in — `mark()` says "confirm the move-in first" and `confirmStart()`
+// refuses because it is already active.
+//
+// Both of those are reads. So a landlord clearing the date on a pending
+// tenancy, while the tenant confirms the move-in, used to write null onto an
+// active one — the exact state the guard exists to prevent, by a route the
+// guard cannot see.
+console.log('\n── Move-in confirmed while the date is being cleared ──────────');
+
+const room6 = await room('A room whose move-in date is cleared mid-confirm');
+const g = room6 ? await applicant(room6) : null;
+if (!room6 || !g) { console.log('\n❌ fixtures failed'); process.exit(1); }
+
+await apiCall(API, 'POST', `/api/applications/${g.applicationId}/accept`, {}, T);
+await settle();
+const [tenancy6] = dbRows(`SELECT id FROM tenancies WHERE "roomId" = '${room6}'`);
+
+if (!tenancy6) {
+  bad('no tenancy was opened, so the lease race cannot be driven');
+} else {
+  /**
+   * ⚠️ Repeated, with the tenancy reset between attempts.
+   *
+   * One pair proves little: the stranded state only appears when the CLEAR
+   * writes last, and on the first falsifying run `confirmStart` won and the
+   * row came back `active` with a date — looking perfectly healthy while the
+   * guard had in fact been bypassed. A single attempt here is a coin toss,
+   * and a drive that reports a coin toss as a pass is the thing this file
+   * keeps being written against.
+   *
+   * A tenancy can only be confirmed once, so each attempt puts it back to
+   * `pending` with no date before racing again.
+   */
+  const ATTEMPTS6 = 6;
+  let strandedCount = 0;
+  const pairs6 = [];
+  for (let i = 0; i < ATTEMPTS6; i++) {
+    dbQuery(`UPDATE tenancies SET status = 'pending', "startDate" = NULL WHERE id = '${tenancy6}'`);
+    const [clearRes, confirmRes6] = await Promise.all([
+      apiCall(API, 'PATCH', `/api/tenancies/${tenancy6}/lease`, { startDate: null }, T),
+      apiCall(API, 'POST', `/api/tenancies/${tenancy6}/confirm-start`, {}, g.tenant.token),
+    ]);
+    pairs6.push(`${clearRes.status}/${confirmRes6.status}`);
+    const [row] = dbRows(
+      `SELECT status || '|' || COALESCE("startDate"::text, 'NULL') FROM tenancies WHERE id = '${tenancy6}'`,
+    );
+    if (row.startsWith('active') && row.endsWith('NULL')) strandedCount++;
+  }
+  console.log(`     ${ATTEMPTS6} attempts, clear/confirm: ${pairs6.join(', ')}`);
+
+  strandedCount === 0
+    ? ok(`no tenancy left active without a move-in date, in ${ATTEMPTS6} attempts`)
+    : bad(`${strandedCount}/${ATTEMPTS6} left ACTIVE with no move-in date — the rent record is shut with no way in`);
+}
+
 console.log('\n═══ Summary ═══');
 if (fail === 0) {
   console.log('  ✅ a room is let once, however many accepts arrive together.');
