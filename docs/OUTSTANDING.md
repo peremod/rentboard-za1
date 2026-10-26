@@ -7724,6 +7724,55 @@ anything about this change — but the drive did not run end to end, and what di
 run is 629 smoke assertions (including `tenant confirms move-in`, `cannot
 cancel once active` and `landlord ends the tenancy`) plus 103 unit tests.
 
+### 95g. 🔴 The lease pair — and the one with no way back
+
+`lease.updateTerms` and `lease.giveNotice`, the last two §6.5 named.
+
+**`updateTerms` is the worst of the nine**, because its end state cannot be
+undone from inside the product. Every check in it reads `tenancy.status`, and
+clearing `startDate` is allowed while the tenancy is `pending` and refused once
+it is `active` — the comment above that guard explains exactly why:
+
+> `mark()` answers "Confirm the move-in first, then the rent record opens", and
+> `confirmStart()` refuses because the tenancy is already `active`. Neither
+> route can put the date back, so the landlord's rent record for that room is
+> shut with no way in.
+
+The write was unconditional. So a landlord clearing the date on a pending
+tenancy, while the tenant confirms the move-in, wrote `startDate: null` onto an
+**active** tenancy — arriving at the forbidden state by a route the guard
+cannot see. The claim now carries the status the validation assumed.
+
+**`giveNotice`** overwrote more than a timestamp. A landlord serving notice on
+the day a tenant hands theirs in is an ordinary Monday; both read
+`noticeGivenAt` as null, both wrote, and the second took the row — including:
+
+- `noticeGivenById`, **who** gave notice. This file says a tenant "may not
+  claim the landlord served notice on them"; the race let whichever request
+  arrived second assert precisely that.
+- `noticeRecordedById`, who may **withdraw** it. "Neither gets to undo the
+  other's act" is enforced from that column.
+- the date the countdown runs from, which the early return exists to protect.
+
+A lost claim returns the row as it stands — the same answer a second tap gets.
+
+### 95h. ⚠️ The drive was a coin toss, twice, before it was a check
+
+The stranded tenancy only appears when the CLEAR wins the race; when
+`confirmStart` writes last the row reads `active` with a date and looks
+perfectly healthy. The first falsifying run came back exactly like that — **the
+guard bypassed and the drive green**.
+
+That is the second time in this section a single-shot race assertion read as a
+pass (§95f was the first, and was left as a caveat). This one is repeated six
+times with the tenancy reset to `pending` between attempts, so both orderings
+occur:
+
+    with the fix:     0 / 6 left active with no move-in date
+    without the fix:  1 / 6
+
+One in six is why one attempt proves nothing.
+
 ### 95d. What the sweep cannot know
 
 Whether a race matters. Some rows only one person can touch; some writes are

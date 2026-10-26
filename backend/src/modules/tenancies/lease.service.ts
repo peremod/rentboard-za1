@@ -124,7 +124,38 @@ export class LeaseService {
       data['startDate'] = start;
     }
 
-    return this.prisma.tenancy.update({ where: { id: tenancyId }, data });
+    /**
+     * ⚠️ Conditional on the status this method VALIDATED AGAINST — §95's
+     * shape, and here it defeats the guard directly above.
+     *
+     * Every check in this method reads `tenancy.status`, and the write was
+     * unconditional. So a landlord opening the lease terms while the tenancy
+     * is still `pending` may clear `startDate` — which is allowed, because it
+     * has not started — and if the tenant confirms the move-in in between,
+     * that `startDate: null` lands on an ACTIVE tenancy.
+     *
+     * That is exactly the state the comment above exists to prevent, arrived
+     * at by a route the guard cannot see: `mark()` then answers "Confirm the
+     * move-in first, then the rent record opens", and `confirmStart()` refuses
+     * because the tenancy is already active. Neither route can put the date
+     * back. The landlord's rent record for that room is shut with no way in.
+     *
+     * So the claim carries the status the validation assumed. If it moved
+     * underneath, nothing is written and the landlord is told to look again —
+     * which is true, because what they were editing is no longer what is
+     * there.
+     */
+    const claimed = await this.prisma.tenancy.updateMany({
+      where: { id: tenancyId, status: tenancy.status },
+      data,
+    });
+    if (claimed.count === 0) {
+      throw new BadRequestException(
+        'This tenancy changed while you were editing it — the move-in may have just been '
+        + 'confirmed, or the letting ended. Open it again and make the change against what is there now.',
+      );
+    }
+    return this.prisma.tenancy.findUniqueOrThrow({ where: { id: tenancyId } });
   }
 
   /**
@@ -189,8 +220,34 @@ export class LeaseService {
     }
 
     const givenById = dto.givenBy === 'tenant' ? tenancy.tenantId : tenancy.landlordId;
-    return this.prisma.tenancy.update({
-      where: { id: tenancyId },
+
+    /**
+     * ⚠️ Conditional on no notice having been given yet — the same fact the
+     * early return above checks, which was a read.
+     *
+     * Two notices at once is not exotic: a landlord serving notice on the day
+     * a tenant hands theirs in is an ordinary Monday. Both read
+     * `noticeGivenAt` as null, both wrote, and the second write took the row.
+     *
+     * What that overwrites is not a timestamp. It is:
+     *
+     *   · `noticeGivenById` — WHO gave notice. This file's own comment says a
+     *     landlord serving notice and a tenant giving it "is a different fact
+     *     with different consequences", and that the tenant "may not claim the
+     *     landlord served notice on them". The race let the request that
+     *     happened to arrive second assert exactly that.
+     *   · `noticeRecordedById` — who may WITHDRAW it. "Neither gets to undo
+     *     the other's act" is enforced from this column, so losing it hands
+     *     the other party that power.
+     *   · the date the countdown runs from, which the early return exists to
+     *     protect.
+     *
+     * A lost claim returns the row as it now stands — the same answer a second
+     * tap gets, and the honest one: the first notice stands, and the caller
+     * can see whose it is.
+     */
+    const claimed = await this.prisma.tenancy.updateMany({
+      where: { id: tenancyId, noticeGivenAt: null },
       data: {
         noticeGivenAt: dto.givenOn ? new Date(dto.givenOn) : new Date(),
         noticeGivenById: givenById,
@@ -199,6 +256,10 @@ export class LeaseService {
         noticeRecordedById: userId,
       },
     });
+    if (claimed.count === 0) {
+      return this.prisma.tenancy.findUnique({ where: { id: tenancyId } });
+    }
+    return this.prisma.tenancy.findUniqueOrThrow({ where: { id: tenancyId } });
   }
 
   /**
