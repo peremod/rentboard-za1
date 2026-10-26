@@ -7681,6 +7681,49 @@ Falsified by restoring the unconditional writes: 5 passed. The double models
 the race now — the read sees `open`, the CLAIM loses — and the same restoration
 fails **3 of 5**, with the two winner-path tests still passing, correctly.
 
+### 95f. 🔴 The tenancy lifecycle: the other two §6.5 named
+
+`confirmStart`, `cancel` and `end` all had the shape, and the first two race
+each other in the ordinary course of events — **either party may make either
+transition**, and both leave `pending`.
+
+- **two confirmations**: the second `startDate` silently wins. That date is not
+  decoration — it bounds which months rent can be recorded for
+  (`assertRentWindow`), so the landlord saying the 1st and the tenant saying
+  the 3rd ends with whichever request arrived second, and nothing recording
+  that two were given.
+- **a confirmation racing a CANCELLATION**, which is the serious one.
+  Cancelling does not stop at the tenancy: it puts the room back on the board,
+  archives the application and moves its cycle. Whichever wrote second won, so
+  a confirmation landing after a cancellation left a tenancy marked `active`
+  carrying an `endDate`, an `endReason` and an `endedById`, over an application
+  already archived and marked withdrawn — **the letting live and the paperwork
+  saying it fell through**.
+- **two endings**: `endedById`, `endReason` and `endDate` overwritten — the
+  record of who ended it and why, which the review window and any later dispute
+  rest on — and `announceEnding` running twice, so both parties told twice.
+
+All three claim the state they already name. Driven through the API:
+
+    after:   confirm 200, cancel 400    tenancy: active, no ending attached
+    before:  confirm 200, cancel 200    both accepted
+
+⚠️ **The falsifying run ended `cancelled`, which looks coherent** — cancel
+happened to write last, and the incoherent state needs the other ordering. So
+the assertion that reliably catches this is "exactly one of the two was
+accepted"; the coherence check is the stronger claim and only fires on one of
+the two orderings. Said plainly, because a reader comparing the two outputs
+would otherwise conclude the before-state was fine.
+
+⚠️ **`tenancy-lifecycle-drive.mjs` could NOT be completed here.** It registers
+more than sixty accounts, and `/auth/register` allows 60 an hour counted in
+memory (v1.86.0). It reached §12 of the drive on the first attempt before the
+limiter stopped it; restarting the API cleared the counter and it exhausted it
+again within four minutes. That is the documented constraint rather than
+anything about this change — but the drive did not run end to end, and what did
+run is 629 smoke assertions (including `tenant confirms move-in`, `cannot
+cancel once active` and `landlord ends the tenancy`) plus 103 unit tests.
+
 ### 95d. What the sweep cannot know
 
 Whether a race matters. Some rows only one person can touch; some writes are

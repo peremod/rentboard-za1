@@ -84,10 +84,35 @@ export class TenanciesService {
       throw new BadRequestException('A move-in date cannot be in the future. Confirm once the tenant has moved in.');
     }
 
-    return this.prisma.tenancy.update({
-      where: { id },
+    /**
+     * ⚠️ Conditional on the tenancy still being pending — §95's shape, on a
+     * transition EITHER PARTY may make, which is what makes the race ordinary
+     * rather than exotic.
+     *
+     * The check above is a read. The write was unconditional, so:
+     *
+     *   · both parties confirming at once → two writes, and the second
+     *     `startDate` silently wins. The move-in date is not decoration: it
+     *     bounds which months rent can be recorded for (`assertRentWindow`),
+     *     so the landlord saying the 1st and the tenant saying the 3rd ends
+     *     with whichever request arrived second, and nothing recording that
+     *     two dates were given.
+     *   · a confirmation racing a CANCELLATION. Both read `pending`; last
+     *     writer wins. A confirmation landing after a cancellation leaves a
+     *     tenancy marked `active` that carries an `endDate`, an `endReason`
+     *     and an `endedById`, over an application the cancellation has already
+     *     archived and marked withdrawn or rejected. The letting is live and
+     *     the paperwork says it fell through.
+     */
+    const claimed = await this.prisma.tenancy.updateMany({
+      where: { id, status: 'pending' },
       data: { status: 'active', startDate: start },
     });
+    if (claimed.count === 0) {
+      const now = await this.prisma.tenancy.findUnique({ where: { id }, select: { status: true } });
+      throw new BadRequestException(`This tenancy is already ${now?.status ?? 'decided'}`);
+    }
+    return this.prisma.tenancy.findUniqueOrThrow({ where: { id } });
   }
 
   /** The letting fell through before move-in. Never produces reviews. */
@@ -106,6 +131,30 @@ export class TenanciesService {
      * "the letting fell through" would be a second name for that.
      */
     const byTenant = tenancy.tenantId === userId;
+
+    /**
+     * ⚠️ Claimed first, for the mirror of the race described in
+     * `confirmStart`: both transitions leave `pending`, either party may make
+     * either one, and whichever wrote second used to win.
+     *
+     * This one matters more than the duplicate-cancel case, because
+     * cancelling does not stop at the tenancy — it puts the room back on the
+     * board, archives the application and moves its cycle. A cancellation that
+     * lost the race would do all of that to a letting that had just been
+     * confirmed.
+     */
+    const claimedCancel = await this.prisma.tenancy.updateMany({
+      where: { id, status: 'pending' },
+      data: { status: 'cancelled' },
+    });
+    if (claimedCancel.count === 0) {
+      const now = await this.prisma.tenancy.findUnique({ where: { id }, select: { status: true } });
+      throw new BadRequestException(
+        now?.status === 'active'
+          ? 'The move-in was confirmed a moment ago. End the tenancy instead of cancelling it.'
+          : 'Only a tenancy that has not started can be cancelled. End it instead.',
+      );
+    }
 
     const cancelled = await this.prisma.tenancy.update({
       where: { id },
@@ -222,8 +271,17 @@ export class TenanciesService {
       throw new BadRequestException('The end date cannot be before the start date.');
     }
 
-    const updated = await this.prisma.tenancy.update({
-      where: { id },
+    /**
+     * ⚠️ Claimed from `active`, so one ending is recorded rather than two.
+     *
+     * Either party may end a tenancy, so both doing it at once is ordinary.
+     * Unconditionally, the second write replaced `endedById`, `endReason` and
+     * `endDate` — the record of WHO ended it and why, which is what the review
+     * window and any later dispute rest on — and `announceEnding` ran twice,
+     * so both parties were told twice.
+     */
+    const claimedEnd = await this.prisma.tenancy.updateMany({
+      where: { id, status: 'active' },
       data: {
         status: 'ended',
         endDate: ended,
@@ -232,6 +290,10 @@ export class TenanciesService {
         reviewsCloseAt: new Date(Date.now() + REVIEW_WINDOW_DAYS * 24 * 60 * 60 * 1000),
       },
     });
+    if (claimedEnd.count === 0) {
+      throw new BadRequestException('This tenancy has already ended');
+    }
+    const updated = await this.prisma.tenancy.findUniqueOrThrow({ where: { id } });
 
     this.logger.log(`Tenancy ${id} ended by ${userId}; reviews open for ${REVIEW_WINDOW_DAYS} days`);
 

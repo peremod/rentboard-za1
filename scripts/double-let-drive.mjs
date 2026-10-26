@@ -298,6 +298,56 @@ acceptedWon || withdrewWon
   ? ok(`one of the two won cleanly (${status})`)
   : bad(`incoherent: application ${status}, ${live.length} live tenanc(y/ies), room ${roomStatus}`);
 
+// ══ 5. Confirmed and cancelled at the same moment ════════════════════════
+//
+// §6.5's "two confirmations of one move-in", and the worse neighbour it has.
+// Both transitions leave `pending`, and EITHER PARTY may make either one — so
+// two people acting at once is ordinary, not exotic.
+//
+// A cancellation does not stop at the tenancy: it puts the room back on the
+// board, archives the application and moves its cycle. So a confirmation
+// landing after a cancellation leaves a tenancy marked `active` carrying an
+// endDate and an endReason, over an application the cancellation has already
+// archived — the letting live and the paperwork saying it fell through.
+console.log('\n── One move-in, confirmed and cancelled at the same moment ────');
+
+const room5 = await room('A room confirmed and cancelled at once');
+const f = room5 ? await applicant(room5) : null;
+if (!room5 || !f) { console.log('\n❌ fixtures failed'); process.exit(1); }
+
+await apiCall(API, 'POST', `/api/applications/${f.applicationId}/accept`, {}, T);
+await settle();
+const [tenancy5] = dbRows(`SELECT id FROM tenancies WHERE "roomId" = '${room5}'`);
+
+if (!tenancy5) {
+  bad('no tenancy was opened, so the lifecycle race cannot be driven');
+} else {
+  const [confirmRes, cancelRes] = await Promise.all([
+    apiCall(API, 'POST', `/api/tenancies/${tenancy5}/confirm-start`, {}, f.tenant.token),
+    apiCall(API, 'POST', `/api/tenancies/${tenancy5}/cancel`, { reason: 'They changed their mind.' }, T),
+  ]);
+  await settle();
+  console.log(`     confirm ${confirmRes.status}, cancel ${cancelRes.status}`);
+
+  const [row] = dbRows(
+    `SELECT status || ' | end=' || COALESCE("endDate"::text, '-') || ' | reason=' || COALESCE("endReason", '-') `
+    + `FROM tenancies WHERE id = '${tenancy5}'`,
+  );
+  console.log(`     tenancy: ${row}`);
+
+  // An active tenancy must carry no ending; a cancelled one must not be live.
+  const [status] = row.split(' | ');
+  const hasEnding = !row.includes('end=-') || !row.includes('reason=-');
+  const coherent = (status === 'active' && !hasEnding) || status === 'cancelled';
+  coherent
+    ? ok(`one transition won cleanly (${status})`)
+    : bad(`incoherent: ${row} — a live tenancy carrying its own ending`);
+
+  [confirmRes, cancelRes].filter((r) => r.status < 300).length === 1
+    ? ok('exactly one of the two was accepted')
+    : bad(`${[confirmRes, cancelRes].filter((r) => r.status < 300).length} of 2 accepted`);
+}
+
 console.log('\n═══ Summary ═══');
 if (fail === 0) {
   console.log('  ✅ a room is let once, however many accepts arrive together.');
