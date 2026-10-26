@@ -2229,6 +2229,37 @@ than taking the UPDATE path.
 Closes the concurrency gap docs/API-TESTING.md section 6.5 named in its own
 words. The PATTERN is not swept for, and section 6.5 now says so."
 
+tag_if_missing "v1.172.0" "43c307995864409d141f759865bc3597358b6a3a" "2026-10-26T06:45:00+00:00" "v1.172.0 - a button that did nothing, and a card with its content outside it
+
+Two things reported from a phone. Both root causes were invisible to
+everything this repository already runs.
+
+'Say what happened' did nothing. The tenant inbox has pointed at
+/tenant/dashboard#viewings since Phase 8n and no id='viewings' ever existed,
+so the URL gained a fragment and the page stayed where it was. Measured at
+390px: scrollY 0 -> 0 before, 0 -> 908 after.
+
+route-audit cannot see that. It checks a PATH resolves, and /tenant/dashboard
+resolves fine; the fragment is not part of the route. The same blind spot as
+the nav audit that was structurally incapable of seeing a dead link.
+scripts/fragment-anchor-lint.mjs closes it and runs on every push - and its
+FIRST version did not fail when falsified, because the comment above the fix
+quotes id='viewings' and the check was reading prose about markup as markup.
+The identical defect font-lint had. Comments are stripped now.
+
+Opening a notice put the headline in a floating card and left the body and the
+Open button outside it: transform matrix(1,0,0,1,0,-1) and box-shadow
+rgba(173,66,34,.35) 0 4px 14px, none of it in the component. .notice-head is a
+bare <button> and inherited the primary button's hover from :where(button),
+which on a phone sticks after the tap. styles.scss warns about that rule in
+its own comment; this is the third time it has arrived by a new route.
+
+is-open was set on the <li> and had no CSS rule at all. The open notice is one
+surface now, measured aligned at 360, 390, 768 and 1280.
+
+a11y covered 10 public + 23 portal pages, not the usual 33: admin credentials
+were not set, so those screens were skipped. Stated rather than counted."
+
 
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
