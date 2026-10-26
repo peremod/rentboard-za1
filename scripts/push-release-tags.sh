@@ -2318,6 +2318,45 @@ been bypassed. Repeated six times with a reset between attempts - 1/6 stranded
 without the fix, 0/6 with. One in six is why one attempt proves nothing."
 
 
+tag_if_missing "v1.175.0" "62f884c445bbc84d578a01e4ca655dee091850d1" "2026-10-26T15:40:00+00:00" "v1.175.0 - the race queue emptied, and the two it was hiding
+
+Section 95 left 16 methods matching the read-check-write shape with nobody
+having judged them. All 23 are now judged: 15 fixed, five survivable with the
+reason recorded in the baseline, three dropped out when the detector was
+corrected. Nothing says untriaged any more.
+
+auth.refresh is the one that mattered. Its own comment says two refresh calls
+are often in flight at once - a page load and an interceptor retry - and it has
+a grace window for exactly that. What it lacked was a conditional rotation:
+both requests read revokedAt as null, both passed, both minted a refresh token.
+One rotation, two live credentials, and replacedById recording only one of
+them, so the grace path could hand back the token the browser does not hold.
+Counted in the database, because the HTTP responses cannot show it: five runs
+gave 2 credentials four times before, 1 every time after.
+
+⚠️ The obvious fix was wrong and dangerously so. Claim, then mint, then write
+replacedById leaves the loser re-reading a row whose revokedAt is set and whose
+replacedById is not yet written - past the grace window, so treated as THEFT,
+revoking every session. A benign double refresh would sign the person out
+everywhere: worse than the bug. The token is minted first, its id goes into the
+conditional update itself, and a loser revokes what it just minted.
+
+rooms.discardDraft is the other serious one: it refuses anything that is not a
+draft and then DELETES the room, cascading to every application on it. That
+check was a read. There is no undo.
+
+Also fixed: the five room status toggles, now sharing one claimRoomStatus
+helper; updatePhotos; unshortlist, which could write 'viewed' over an
+acceptance; viewings.cancel; and rent.dispute, the tenant's only voice on that
+screen.
+
+⚠️ The detector was naming code it had already seen fixed - it listed the state
+columns it knew about, and refresh keys on revokedAt. A conditional write is
+now anything whose where carries more than the id.
+
+626 smoke assertions with an admin token, 103 unit tests, both race drives."
+
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could

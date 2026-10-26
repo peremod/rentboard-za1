@@ -25,6 +25,19 @@
  * Needs the API on :3000 and a DATABASE_URL — a notice is written by a
  * notification that fires on a real event, so this drive writes one directly
  * rather than staging an application just to produce one.
+ *
+ * ⚠️ WHAT THAT INSERT COSTS, stated because it is not obvious and it bit:
+ * staging the row by hand means this drive never runs `NoticeRouter.deliver`,
+ * so it cannot see a fault in the WRITE at all — only in the read. Measured,
+ * not assumed: with `deliver()` altered to skip the row whenever the recipient
+ * has an email address — which IS the v1.85.0 defect this file was written
+ * about — all nine checks below still pass, and the summary line still prints.
+ * A check that cannot fail is not a check.
+ *
+ * The write path is covered by `backend/test/notices.int-spec.ts`, whose
+ * notices come from a real application, acceptance and message over HTTP. That
+ * file fails 8 of its 9 cases on the same broken build, and CI runs it on every
+ * push; this drive is not in CI and is run by hand.
  */
 import { registerUser, apiCall, dbQuery as q } from './lib/drive-session.mjs';
 
@@ -45,7 +58,7 @@ const id = q(`INSERT INTO notices (id,"userId",kind,title,body,link,"createdAt")
 // ── 1. The owner can read it ─────────────────────────────────────────────
 const list = await apiCall(API, 'GET', '/api/notices', undefined, mine.token);
 JSON.stringify(list.body).includes(MARK)
-  ? ok('a notice written for someone is readable by them — the channel is no longer write-only')
+  ? ok('a notice ROW is readable by its owner (the row is inserted below, not delivered)')
   : bad(`the owner cannot read their own notice: ${list.status} ${JSON.stringify(list.body).slice(0, 200)}`);
 
 const unread = await apiCall(API, 'GET', '/api/notices/unread', undefined, mine.token);
@@ -94,5 +107,5 @@ after.body?.count === 0
 
 q(`DELETE FROM users WHERE id IN ('${mine.id}','${other.id}')`);
 
-console.log(fail ? `\n❌ ${fail} failure(s)` : '\n✅ notices are readable by their owner, by nobody else, and the count is the badge');
+console.log(fail ? `\n❌ ${fail} failure(s)` : '\n✅ the READ side holds: a notice row is readable by its owner, by nobody else, and the count is the badge.\n   (The write side is not exercised here — see backend/test/notices.int-spec.ts.)');
 process.exit(fail ? 1 : 0);

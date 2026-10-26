@@ -8101,3 +8101,207 @@ The suite prints the release invocation itself whenever anything skipped. Ninety
 -two checks in it had never run once before v1.84.0, and the one assertion
 covering "uploaded documents are deleted" was among them — a skipped check reads
 exactly like a passing one when you are scanning output.
+
+## 97. The notices drive that could not fail — 26 October 2026
+
+`docs/API-TESTING.md` §6 listed notices among eight domains with "refusal
+coverage only", so the next piece of the API-testing stream was to give one of
+them real handler coverage. Notices was the pick because CLAUDE.md already
+names this channel in its list of controls that only look like controls — "a
+notice channel nobody could read" — and because the notices screen was touched
+two releases ago.
+
+### What was already there, and why it did not count
+
+`scripts/notices-drive.mjs`: nine checks, written for this exact channel, and
+all nine green. Two things were wrong with trusting it.
+
+**It is not in CI.** It appears in this document as a manual command and
+nowhere in `.github/workflows/ci.yml`. So on every push, §6's description was
+right: notices had the 401 from the 236-route sweep and nothing else.
+
+**It stages its notice with a direct SQL `INSERT`**, which its own header
+states plainly. The consequence was not stated, and it is the whole point: a
+drive that writes the row itself never calls `NoticeRouter.deliver`, so it
+cannot see a fault in the write at all.
+
+Measured rather than argued. `deliver()` was altered to skip the row whenever
+the recipient has an email address — which **is** the v1.85.0 defect this drive
+was written about, the one where a shortlisted tenant was never notified and
+`/account/notices` was empty for nearly every account on the platform — the
+backend rebuilt, and both suites run against it:
+
+```
+scripts/notices-drive.mjs          9 / 9 PASS   ← on the broken build
+  …and it printed "the channel is no longer write-only", which was false
+
+backend/test/notices.int-spec.ts   8 / 9 FAIL   ← same build
+```
+
+The drive's summary line asserted a property of the write path while testing
+only the read path. That is the nav-audit defect again: a check structurally
+incapable of seeing the thing it is named after.
+
+### What changed
+
+**`backend/test/notices.int-spec.ts`, nine cases, in the integration suite** —
+so CI runs it on every push, against the isolated database, truncated between
+tests. No case inserts a `Notice`. Every notice read is one the application
+wrote as a side effect of a real action over HTTP: a tenant applying, a
+landlord accepting, a tenant sending a message.
+
+What it asserts beyond the drive: that the row the application *delivers* is
+the row the owner reads; that read is not deleted, so the notice is still in
+the record afterwards with a timestamp, because the screen says it is the
+record; that another person's notice id and an invented id answer
+**identically** — same status, same body — since the controller claims the
+endpoint "cannot be used to discover that a notice exists", and a 404 would
+confirm the opposite one id at a time; and that the list is newest-first,
+because `all()` takes 100 and a cap with the wrong sort order is the quiet
+version of this bug — every row present, 200 answered, and the person's most
+recent notice the one missing.
+
+**Falsified, eight ways, each reverted after.** Six of the first seven were
+caught:
+
+| reintroduced defect | caught by |
+| --- | --- |
+| `all()` loses its `userId` scope | 2 cases |
+| `markRead` loses its `userId` scope | 1 |
+| `markAllRead` loses its `userId` scope | 1 |
+| the row is skipped when there is an email (v1.85.0) | 8 |
+| `all()` serves oldest first | 1 |
+| `markRead` deletes instead of marking | 1 |
+| the badge counts read notices too | 2 |
+| the badge list is scoped to someone else | 4 |
+
+⚠️ **The seventh falsification found a defect in the new test, not the code.**
+`expect(count).toBe(items.length)` cannot fail: the controller computes the
+count *from* that array, so the two can never disagree. One more control that
+only looks like a control, written while fixing exactly that pattern. It now
+compares the badge's count against the unread rows the *other* endpoint
+serves — something it is not derived from — and both ways of breaking that
+agreement are caught.
+
+**`scripts/notices-drive.mjs` keeps its nine checks and loses its false
+claim.** Its header now states what the direct `INSERT` costs, with the 9/9
+measurement in it; the per-check message says a notice *row* is readable rather
+than that the channel is no longer write-only; and the summary says the read
+side holds and names the spec that covers the write. Its fixture is left alone
+— changing it would duplicate the spec for no gain.
+
+### Still open
+
+⚠️ **The nav badge stops counting at 50.** `unread()` takes 50 and the count is
+that array's length, so somebody with more than 50 unread notices is shown
+"50". Not fixed here: it is a real inaccuracy but a small one, and nobody on
+this platform has fifty unread notices yet. Named so it is a decision rather
+than a surprise.
+
+**Seven domains still have refusal coverage only** — ads, referrals, surveys,
+storefront, analytics, places, SEO. And the question this section really
+raises is how many of the other hand-written drives build their own fixture
+the way this one did. That has not been checked.
+
+## 98. The audit §97 asked for, and the one guarantee that had no check — 26 October 2026
+
+§97 ended on a question it had not answered: how many of the other hand-written
+drives build their own fixture the way `notices-drive.mjs` did. Answered here,
+and **the hypothesis was mostly wrong** — which is the useful part, because the
+alternative was a lint built on a pattern that mostly is not a defect.
+
+### What the audit found
+
+All 67 `scripts/*drive*.mjs` read mechanically, then the candidates read by
+hand.
+
+**39 of 67 stage state with a direct `INSERT` or `UPDATE`.** That number looks
+alarming and is not. The cases checked are each doing something the
+application cannot be asked to do:
+
+- **`lost-number-drive.mjs` is the opposite of the §97 defect, and exemplary.**
+  Its `INSERT`s are wrapped in `expectRefused`: they exist to prove the
+  DATABASE rejects a reasonless refusal and a dated identity check with no
+  note. Those are CHECK constraints, and a constraint can only be tested by
+  bypassing the service. Its own comment says why — "a rule only the service
+  holds is one direct UPDATE from being no rule". It was added because a CHECK
+  that evaluated to NULL was satisfied, on the most dangerous path in the
+  product.
+- **`phone-signup-drive.mjs`** inserts rows aged `now() - interval '2 days'` to
+  test a retention prune. A row cannot be aged through an API.
+- **`otp-drive.mjs`** inserts a user directly — which for a phone-only account
+  is the only way in, since `sendOtp` is the only delivery there has ever been
+  for a phone code and WhatsApp is off (§29).
+- **`dashboard-drive.mjs` / `dashboard-ui-drive.mjs`** insert `room_view_days`
+  rows to test that the dashboard RENDERS the weekly figure. That is the §97
+  shape — the read tested, the write staged — but the write side turns out to
+  be covered, and well, by `scripts/smoke-test.sh`, which runs in CI: a
+  landlord opening their own room must not count, somebody else opening it
+  counts as exactly one.
+
+So notices was the outlier, not the pattern. Stated plainly because the
+tempting next move after §97 was a lint for "a drive that stages its own
+fixture", and it would have fired on 39 drives of which most are right.
+
+### The number that did come out of it
+
+⚠️ **61 of the 67 drives do not run in CI.** The workflow invokes exactly six
+directly — `inbox-race`, `refund`, `double-let`, `refresh-race`, `phase`,
+`seo` — and none indirectly through an npm script. The rest are manual, which
+is what CLAUDE.md asks for ("run the smoke suite and the drives before merging
+a branch"), so this is a design, not a defect. It is recorded because it sets
+what a drive is worth: `notices-drive.mjs` was a file nobody ran on a push AND
+one that could not fail, and those two facts together are why nothing caught
+the write being broken.
+
+### The guarantee with no check
+
+Two POPIA constraints are stated in CLAUDE.md as decisions. One is thoroughly
+checked: document retention and "only outcomes persist" has 20 cases in
+`backend/test/documents.int-spec.ts`, including that an approved outcome is
+published and a rejection and its note never are.
+
+The other was not. `room_view_days` "stores a count per day and no viewer
+identity for exactly this reason (s.10, minimality)" — and that rested entirely
+on the shape of the schema. The smoke assertions cannot see it: they read a
+weekly TOTAL, which is identical whether the table holds one row per day or
+**one row per viewer per day**.
+
+**`backend/test/view-counting.int-spec.ts`, four cases, in the integration
+suite.** Two about shape rather than arithmetic:
+
+1. The table's columns are exactly `roomId`, `day`, `count` — asserted
+   `toEqual`, not `toContain`, because a subset check passes happily on a table
+   that has gained a `viewerId`, which is the only failure the test exists to
+   catch.
+2. Two DIFFERENT people viewing one room on one day leave ONE row. The same
+   claim proven from outside the schema: per-viewer granularity shows up as a
+   row each, and the dashboard's weekly total reads 2 either way.
+
+And two about the counting itself, in the isolated database rather than against
+a dev server: a signed-out visitor is counted, and the landlord opening their
+own room is not.
+
+**Falsified four ways, all caught.** The first attempt at falsifying the
+one-row claim was not a falsification at all — the replacement keyed `ON
+CONFLICT` on the same `(roomId, day)`, so it was the original behaviour written
+differently, and it passed. Reproducing the real regression needs the schema:
+the viewer column added to the test database, the primary key moved to
+`(roomId, day, viewerId)`, and the service writing per viewer. That fails both
+shape assertions. Schema and code reverted, and the suite re-run green after.
+
+| reintroduced defect | caught by |
+| --- | --- |
+| the owner exclusion removed | 1 |
+| a viewer column, keyed per viewer | 2 |
+| signed-out views no longer counted | 1 |
+
+### Still open
+
+- **Seven domains still have refusal coverage only** — ads, referrals, surveys,
+  storefront, analytics, places, SEO. This section does **not** close
+  analytics: the `analytics` module is separate from view counting, and nothing
+  here touched it.
+- The 39-drive figure was triaged by sampling the `INSERT` cases, not by
+  reading all 39 line by line. The `UPDATE`-only drives were not individually
+  judged.

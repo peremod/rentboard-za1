@@ -134,7 +134,26 @@ in this environment, say so by name rather than implying it was verified.
 - Rate limiting is real (v1.86.0): 60 registers an hour, 30 logins per 15
   minutes, counted in memory. The drives are heavy enough to exhaust it, and
   the failure reads as an auth bug. Restart the API to clear the counters.
-- Postgres may need `pg_ctlcluster 16 main start` before anything works.
+- Postgres **stops on its own, repeatedly** — three times in one session — and
+  it does not always stop cleanly. Two shapes, and the first is the one that
+  wastes time:
+
+  - **Up on the unix socket, refusing TCP.** `pg_isready` prints
+    `/var/run/postgresql:5432 - accepting connections` while every
+    `-h localhost` connection fails. The integration suite reads that as
+    "Can't reach database server at `localhost:5432`" and
+    `scripts/int-db-setup.sh` as `Connection refused`, so it looks like a
+    missing database rather than a missing listener. `listen_addresses` is
+    already `localhost` — there is nothing to configure.
+  - **Down altogether**, where `pg_isready` says `no response`.
+
+  `sudo pg_ctlcluster 16 main restart` fixes both, and prints "Removed stale
+  pid file" when it does.
+
+  ⚠️ **Do not check with `ss`.** `ss -lntp` shows nothing on 5432 from this
+  container even when TCP is working and `psql` connects over it — so `ss` says
+  "broken" in all three states and distinguishes nothing. The honest probe is
+  `psql -h 127.0.0.1 -U rentboard -d postgres -tAc 'select 1'`.
 - `prisma migrate` connects through **`directUrl`**, not `url`. `schema.prisma`
   declares `directUrl = env("DIRECT_URL")`, so exporting only `DATABASE_URL`
   leaves `DIRECT_URL` coming from `backend/.env` — and the migration lands on

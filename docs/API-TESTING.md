@@ -217,17 +217,56 @@ Stated rather than implied, because a suite's silence reads as a pass.
    landing in between left the application `withdrawn` with a live tenancy and
    a let room. Fixed with the same compare-and-swap.
 
-   ⚠️ **What is still open, precisely:** the sweep lists **22 further methods
-   with the same shape, all UNTRIAGED** — nobody has worked out what two
-   concurrent callers would leave behind. The three this section used to name
-   are among them: `lease.giveNotice`, `tenancies.confirmStart`, and the
-   `lost-number.approve` / `refuse` decision pair. They are a queue, not a
-   clean bill, and the lint says so on every run.
+   **The queue is now empty — all 23 are judged (§96).** Fifteen are fixed with
+   a compare-and-swap, five carry a written verdict in the lint's own baseline,
+   and three left the list when the detector was corrected: it had been keying
+   on a list of state columns it knew about, so it could not see
+   `auth.refresh`, which keys on `revokedAt`. A conditional write is now
+   anything whose `where` carries more than the id.
+
+   The three this section used to name are among the fixed: `lease.giveNotice`,
+   `tenancies.confirmStart` and the `lost-number.approve` / `refuse` pair. Two
+   the sweep found that nobody had suspected were worse than any of them —
+   `auth.refresh` minted one credential per in-flight request, and
+   `rooms.discardDraft` ran a cascading DELETE off a read.
+
+   ⚠️ What the five surviving entries are NOT is a clean bill by silence: each
+   prints its reasoning on every run, so a later change that makes one of them
+   matter has to argue with a sentence rather than slip past a count. The
+   verdicts are `reactivate`, `reviewCampaign`, `login`, `messages.send` and
+   `rooms.findOne` — read them in the lint output, not here, so there is one
+   copy.
 6. **The 236-route sweeps call every route with a sample UUID**, so for most of
    them the assertion is about *refusal*, not about the handler's work. The
    handler's work is covered for the domains with their own spec files; the
-   rest (ads, referrals, surveys, storefront, analytics, notices, places,
-   SEO) have refusal coverage only.
+   rest (ads, referrals, surveys, storefront, analytics, places, SEO) have
+   refusal coverage only.
+
+   **Notices came off that list — `backend/test/notices.int-spec.ts`, §97.**
+   Nine cases over HTTP: the notice is readable by its owner, by nobody else,
+   the badge count agrees with the full list, mark-read is scoped in the WHERE
+   so another person's id answers exactly as an invented one does, read is not
+   deleted, and the list is newest-first.
+
+   **View counting also came off, partly — `backend/test/view-counting.int-spec.ts`,
+   §98.** Four cases, two of them structural: `room_view_days` holds exactly
+   `roomId`, `day` and `count`, and two different people viewing one room on
+   one day leave ONE row. That is CLAUDE.md's POPIA minimality decision
+   ("a count per day and no viewer identity … s.10") asserted rather than
+   assumed — it had rested entirely on the shape of the schema, and the smoke
+   assertions that cover the counting cannot see it, because a weekly total is
+   identical whether the table holds one row per day or one per viewer per day.
+   ⚠️ This does **not** close `analytics`: that module is separate from view
+   counting and nothing here touched it.
+
+   ⚠️ **Read before trusting a domain's name on this list.** Notices already
+   had `scripts/notices-drive.mjs`, nine checks, written for this exact
+   channel — and it **passes 9/9 with the write deliberately broken**, because
+   it stages its notice with a direct SQL `INSERT` and so never calls
+   `NoticeRouter.deliver`. It is also not in CI. The new spec's notices come
+   from a real application, acceptance and message, and it fails 8 of 9 on the
+   same build. The lesson is the file's, not the domain's: coverage that builds
+   its own fixture tests the reader and nothing else.
 7. **Production is never touched.** Every number here comes from a local
    isolated database. Nothing in this suite runs against staging or
    production, and nothing should.
