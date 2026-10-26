@@ -679,10 +679,56 @@ export class ApplicationsService {
       throw new BadRequestException('This application is already closed');
     }
 
-    const updated = await this.prisma.application.update({
-      where: { id: applicationId },
+    /**
+     * 🔴 THE MIRROR OF §93, AND THE REASON THE PATTERN SWEEP EXISTS.
+     *
+     * The four checks above are a read; this was an unconditional write. If
+     * the landlord's `accept` commits in between — and it is one tap on
+     * another screen — the tenant's write sets an ACCEPTED application to
+     * `withdrawn`, and the check that exists precisely to stop that has
+     * already passed.
+     *
+     * Driven against the real API, first attempt:
+     *
+     *     accept 200, withdraw 201
+     *     application: withdrawn   tenancies: 1   room: let
+     *
+     * That state is worse than either outcome alone. The room is let, a
+     * tenancy is live, and the application both of them point at says the
+     * tenant pulled out. The landlord believes they have let the room; the
+     * tenant believes they have not taken it; they are reading one row.
+     *
+     * Conditional now, on the same states the checks above name, so the
+     * decision is made by the database rather than by whichever request read
+     * first. The message still has to be the right one, so a lost claim
+     * re-reads and says what actually happened.
+     */
+    const claimed = await this.prisma.application.updateMany({
+      where: {
+        id: applicationId,
+        status: { notIn: ['accepted', 'rejected', 'withdrawn'] },
+        archivedAt: null,
+      },
       data: { status: 'withdrawn', decidedAt: new Date() },
     });
+
+    if (claimed.count === 0) {
+      const now = await this.prisma.application.findUnique({
+        where: { id: applicationId },
+        select: { status: true, archivedAt: true },
+      });
+      if (now?.status === 'accepted') {
+        throw new BadRequestException(
+          'This application was accepted. Contact the landlord directly to let them know your plans have changed.',
+        );
+      }
+      if (now?.status === 'withdrawn') {
+        throw new BadRequestException('This application has already been withdrawn');
+      }
+      throw new BadRequestException('This application is already closed');
+    }
+
+    const updated = await this.prisma.application.findUniqueOrThrow({ where: { id: applicationId } });
 
     // Keep the room's counter honest — the landlord's list no longer shows this one.
     await this.prisma.room

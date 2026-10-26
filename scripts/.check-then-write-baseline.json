@@ -1,0 +1,23 @@
+{
+  "note": "Methods that read a row, decide from its state, then write it, with nothing holding the row still in between. This is the shape of the double-let (OUTSTANDING.md section 93) and of the accept-vs-withdraw race (section 95). WARNING: every entry below is UNTRIAGED. It matched the shape on 26 October 2026 and NOBODY HAS JUDGED IT YET. A baseline whose entries claim to be considered when they are not is worse than no baseline, so they say what they are. Seven have been judged and fixed rather than listed: applications.accept, applications.withdraw, lost-number.approve, lost-number.refuse, tenancies.confirmStart, tenancies.cancel and tenancies.end. Entries are pruned when a method stops matching, so this file cannot accumulate ghosts of code that has already been fixed. To triage one: work out what two concurrent callers would leave behind, then either make the write conditional or replace 'untriaged' with the reason the race is survivable.",
+  "accepted": {
+    "backend/src/modules/account/account-lifecycle.service.ts:reactivate": "untriaged",
+    "backend/src/modules/ads/ads.service.ts:reviewCampaign": "untriaged",
+    "backend/src/modules/applications/applications.service.ts:unshortlist": "untriaged",
+    "backend/src/modules/applications/viewings.service.ts:cancel": "untriaged",
+    "backend/src/modules/auth/auth.service.ts:login": "untriaged",
+    "backend/src/modules/auth/auth.service.ts:refresh": "untriaged",
+    "backend/src/modules/messages/messages.service.ts:send": "untriaged",
+    "backend/src/modules/properties/rent.service.ts:dispute": "untriaged",
+    "backend/src/modules/rooms/rooms.service.ts:findOne": "untriaged",
+    "backend/src/modules/rooms/rooms.service.ts:markReserved": "untriaged",
+    "backend/src/modules/rooms/rooms.service.ts:unpause": "untriaged",
+    "backend/src/modules/rooms/rooms.service.ts:unreserve": "untriaged",
+    "backend/src/modules/rooms/rooms.service.ts:pause": "untriaged",
+    "backend/src/modules/rooms/rooms.service.ts:undoLet": "untriaged",
+    "backend/src/modules/rooms/rooms.service.ts:discardDraft": "untriaged",
+    "backend/src/modules/rooms/rooms.service.ts:updatePhotos": "untriaged",
+    "backend/src/modules/tenancies/lease.service.ts:updateTerms": "untriaged",
+    "backend/src/modules/tenancies/lease.service.ts:giveNotice": "untriaged"
+  }
+}

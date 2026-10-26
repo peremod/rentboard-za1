@@ -319,8 +319,33 @@ export class LostNumberService {
     }
 
     const code = String(crypto.randomInt(100000, 999999));
-    await this.prisma.accountRecovery.update({
-      where: { id },
+    /**
+     * ⚠️ Conditional on the row still being open — §95's shape, on the one
+     * decision in this codebase that hands over an account.
+     *
+     * The `status !== 'open'` check above is a read. The write was
+     * unconditional, so two admins acting on the same request in the same
+     * moment both passed it. Two consequences, and the second is the serious
+     * one:
+     *
+     *   · two approvals, two codes sent, only the last one working — the
+     *     person is read out a code that no longer verifies, and
+     *     `approvedByAdminId` records whoever wrote second, so the trail
+     *     loses who actually approved it.
+     *   · an approval racing a REFUSAL. Both read `open`; last writer wins. An
+     *     admin's deliberate refusal could be overwritten by an approval that
+     *     started before it, leaving a live recovery code on a request
+     *     somebody had decided against.
+     *
+     * ⚠️ NOT driven, and it cannot be from here: `approve` refuses with a 503
+     * while `WHATSAPP_ENABLED` is false, which it is and stays until the
+     * business can carry the per-message cost. So this path is unreachable in
+     * production today — which is exactly why it would have been fixed late,
+     * or not at all, when the channel comes back. The claim is mechanically
+     * the same as the two in §93 and §95 that were driven.
+     */
+    const claimed = await this.prisma.accountRecovery.updateMany({
+      where: { id, status: 'open' },
       data: {
         status: 'approved',
         approvedByAdminId: adminId,
@@ -330,6 +355,16 @@ export class LostNumberService {
         attempts: 0,
       },
     });
+
+    // Lost the claim: somebody else decided this request first. Refused BEFORE
+    // the code is sent, so a decision that has been overtaken cannot still put
+    // a live code on somebody's handset.
+    if (claimed.count === 0) {
+      const now = await this.prisma.accountRecovery.findUnique({
+        where: { id }, select: { status: true },
+      });
+      throw new BadRequestException(`That request is already ${now?.status ?? 'decided'}.`);
+    }
 
     await this.whatsapp
       .sendOtp(row.newPhone, code, CODE_TTL_MINUTES)
@@ -357,8 +392,20 @@ export class LostNumberService {
     const trimmed = reason.trim();
     if (!trimmed) throw new BadRequestException('Say why. A refusal with no reason is not reviewable.');
 
-    await this.prisma.accountRecovery.update({
-      where: { id },
+    /**
+     * ⚠️ Conditional, for the reason the comment below already gives.
+     *
+     * The check above refuses only a request that has already been RECOVERED —
+     * and it is a read. The write was unconditional, so a refusal arriving
+     * while the handover was in flight passed the check, then wrote `refused`
+     * and nulled the code over an account that had already moved. The record
+     * would say refused about something that happened.
+     *
+     * The predicate is the same state the check names, so the database makes
+     * the decision rather than whichever request read first.
+     */
+    const claimed = await this.prisma.accountRecovery.updateMany({
+      where: { id, status: { not: 'recovered' } },
       data: {
         status: 'refused',
         refusedAt: new Date(),
@@ -369,6 +416,11 @@ export class LostNumberService {
         codeExpiresAt: null,
       },
     });
+    if (claimed.count === 0) {
+      throw new BadRequestException(
+        'That account has already been handed over. Refusing it now changes nothing.',
+      );
+    }
     this.logger.warn(`Lost-number recovery REFUSED for user ${row.userId} by admin ${adminId}: ${trimmed}`);
     return { id, status: 'refused' };
   }

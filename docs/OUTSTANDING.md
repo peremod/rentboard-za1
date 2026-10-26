@@ -7571,6 +7571,170 @@ literal, and an emoji inside a CSS comment fails esbuild's parser.
 `template-literal-lint` named the file and line in one line, which is what it is
 for; it cost one cycle rather than the usual several.
 
+## 95. The pattern, searched for — and the second thing it found — 26 October 2026
+
+§93 fixed a double-let and closed saying the PATTERN was not searched for: it
+had been found by suspecting one method. `docs/API-TESTING.md` §6.5 says the
+same in its own words. This is that search.
+
+### 95a. What the shape is
+
+Inside one method body: a read of a single row, a throw that depends on that
+row's state, then a write to the same row — with no transaction around it and
+no condition on the write. Sequentially correct, and wrong the moment two
+requests do not wait for each other.
+
+`scripts/check-then-write-lint.mjs` looks for exactly that across every
+`*.service.ts`. It found **23** methods.
+
+### 95b. 🔴 The second one that matters: accepted and withdrawn at once
+
+`withdraw()` carries four checks, and one of them exists precisely to stop
+this:
+
+```ts
+if (application.status === 'accepted') {
+  throw new BadRequestException('This application was accepted. Contact the landlord…');
+}
+…
+await this.prisma.application.update({ where: { id }, data: { status: 'withdrawn' } });
+```
+
+The check is a read. The write was unconditional. If the landlord's `accept`
+commits between them — one tap, on another screen — the tenant's write sets an
+accepted application to `withdrawn`, and the guard that exists for this has
+already passed.
+
+Driven against the real API, first attempt:
+
+    accept 200, withdraw 201
+    application: withdrawn   tenancies: 1   room: let
+
+⚠️ **That state is worse than either outcome on its own.** The room is let, a
+tenancy is live, and the application both point at says the tenant pulled out.
+The landlord believes they have let the room. The tenant believes they have
+not taken it. They are reading the same row.
+
+Fixed with the same compare-and-swap as §93, on the states the checks already
+name. A lost claim re-reads and throws the message that matches what actually
+happened, so "contact the landlord" still reaches the person who needs it.
+After:
+
+    accept 200, withdraw 400
+    application: accepted   tenancies: 1   room: let
+
+### 95c. ⚠️ The other 22 are UNTRIAGED, and the baseline says so
+
+Two were judged and fixed: `applications.accept` and `applications.withdraw`.
+The remaining 22 matched the shape and **nobody has worked out what two
+concurrent callers would leave behind**. They are in
+`scripts/.check-then-write-baseline.json` marked `untriaged`, and the lint
+prints that count on **every run**:
+
+    ✅ no NEW read-check-write.
+    ⚠️  22 of 22 carried entr(y/ies) are UNTRIAGED —
+       they matched the shape and nobody has worked out yet what two
+       concurrent callers would leave behind. Not a pass; a queue.
+
+A baseline whose entries claim to have been considered when they have not is
+worse than no baseline — it is this codebase's own recurring defect wearing a
+JSON file. So they say what they are, out loud, until somebody judges them.
+
+The three §6.5 named are among them: `lease.giveNotice` (a notice against a
+withdrawal), `tenancies.confirmStart` (two confirmations of one move-in), and
+the decision pair `lost-number.approve` / `lost-number.refuse` — an account
+recovery, which is the one on that list with a security consequence.
+
+### 95e. 🔴 Triage began with the one that hands over an account
+
+`lost-number.approve` / `refuse` were top of the queue because the consequence
+is an account changing hands. Both had the shape.
+
+`approve()` checked `status !== 'open'` and wrote unconditionally; `refuse()`
+checked `status === 'recovered'` and did the same. So:
+
+- **two approvals** → two codes sent, only the last working, and
+  `approvedByAdminId` recording whoever wrote second, so the trail loses who
+  actually approved it;
+- **an approval racing a refusal** → both read `open`, last writer wins, and a
+  deliberate refusal can be overwritten by an approval that started before it,
+  leaving a live recovery code on a request somebody decided against;
+- **a refusal racing the hand-over** → the refusal writes `refused` over an
+  account that has already moved, so the record contradicts what happened.
+
+Both claims are conditional now, and `approve` claims **before** the code is
+sent, so a decision that has been overtaken cannot still put a live code on
+somebody's handset.
+
+⚠️ **NOT driven, and it cannot be from here.** `approve()` answers 503 while
+`WHATSAPP_ENABLED` is false — which it is, and stays. The smoke suite's
+lost-number section asserts the authorisation surface and the queue and never
+reaches the decision: **626 smoke assertions pass without touching either
+branch.** That is precisely why this would have been fixed late, or not at all,
+when the channel comes back.
+
+So it is covered by five unit tests instead — and ⚠️ **the first version of
+those tests passed with the fix removed.** The double returned the
+already-decided status from the very first read, so the method's own
+`status !== 'open'` check threw and the tests never reached the claim.
+Falsified by restoring the unconditional writes: 5 passed. The double models
+the race now — the read sees `open`, the CLAIM loses — and the same restoration
+fails **3 of 5**, with the two winner-path tests still passing, correctly.
+
+### 95f. 🔴 The tenancy lifecycle: the other two §6.5 named
+
+`confirmStart`, `cancel` and `end` all had the shape, and the first two race
+each other in the ordinary course of events — **either party may make either
+transition**, and both leave `pending`.
+
+- **two confirmations**: the second `startDate` silently wins. That date is not
+  decoration — it bounds which months rent can be recorded for
+  (`assertRentWindow`), so the landlord saying the 1st and the tenant saying
+  the 3rd ends with whichever request arrived second, and nothing recording
+  that two were given.
+- **a confirmation racing a CANCELLATION**, which is the serious one.
+  Cancelling does not stop at the tenancy: it puts the room back on the board,
+  archives the application and moves its cycle. Whichever wrote second won, so
+  a confirmation landing after a cancellation left a tenancy marked `active`
+  carrying an `endDate`, an `endReason` and an `endedById`, over an application
+  already archived and marked withdrawn — **the letting live and the paperwork
+  saying it fell through**.
+- **two endings**: `endedById`, `endReason` and `endDate` overwritten — the
+  record of who ended it and why, which the review window and any later dispute
+  rest on — and `announceEnding` running twice, so both parties told twice.
+
+All three claim the state they already name. Driven through the API:
+
+    after:   confirm 200, cancel 400    tenancy: active, no ending attached
+    before:  confirm 200, cancel 200    both accepted
+
+⚠️ **The falsifying run ended `cancelled`, which looks coherent** — cancel
+happened to write last, and the incoherent state needs the other ordering. So
+the assertion that reliably catches this is "exactly one of the two was
+accepted"; the coherence check is the stronger claim and only fires on one of
+the two orderings. Said plainly, because a reader comparing the two outputs
+would otherwise conclude the before-state was fine.
+
+⚠️ **`tenancy-lifecycle-drive.mjs` could NOT be completed here.** It registers
+more than sixty accounts, and `/auth/register` allows 60 an hour counted in
+memory (v1.86.0). It reached §12 of the drive on the first attempt before the
+limiter stopped it; restarting the API cleared the counter and it exhausted it
+again within four minutes. That is the documented constraint rather than
+anything about this change — but the drive did not run end to end, and what did
+run is 629 smoke assertions (including `tenant confirms move-in`, `cannot
+cancel once active` and `landlord ends the tenancy`) plus 103 unit tests.
+
+### 95d. What the sweep cannot know
+
+Whether a race matters. Some rows only one person can touch; some writes are
+idempotent; some checks are advisory with a unique index doing the real work —
+the rent month is exactly that (§93e). So it fails on what is NEW, against a
+baseline, the way `token-lint` and `scale-lint` do, rather than pretending a
+shape is a defect.
+
+Falsified by putting the unconditional write back into `withdraw()`: **1 NEW
+method**, exit 1.
+
 ---
 
 

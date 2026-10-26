@@ -208,12 +208,21 @@ Stated rather than implied, because a suite's silence reads as a pass.
    deleted between each so every pair raced the INSERT rather than taking the
    UPDATE path: 200/200 each time, one period each time.
 
-   ⚠️ **Still a gap:** these are the two races this document happened to name.
-   Nothing races a notice against a withdrawal, two confirmations of one
-   move-in, or two simultaneous verification decisions. The pattern that
-   produced the double-let — read, check, write, with the protection running
-   afterwards — is not searched for across the codebase; it was found by
-   suspecting one method.
+   ⚠️ ~~Still a gap: … the pattern that produced the double-let is not searched
+   for across the codebase; it was found by suspecting one method.~~
+
+   **The pattern IS searched for now — `scripts/check-then-write-lint.mjs`,
+   §95 — and the search found a second real one:** `withdraw()` refuses an
+   accepted application, and that refusal was a read-then-write, so an accept
+   landing in between left the application `withdrawn` with a live tenancy and
+   a let room. Fixed with the same compare-and-swap.
+
+   ⚠️ **What is still open, precisely:** the sweep lists **22 further methods
+   with the same shape, all UNTRIAGED** — nobody has worked out what two
+   concurrent callers would leave behind. The three this section used to name
+   are among them: `lease.giveNotice`, `tenancies.confirmStart`, and the
+   `lost-number.approve` / `refuse` decision pair. They are a queue, not a
+   clean bill, and the lint says so on every run.
 6. **The 236-route sweeps call every route with a sample UUID**, so for most of
    them the assertion is about *refusal*, not about the handler's work. The
    handler's work is covered for the domains with their own spec files; the
