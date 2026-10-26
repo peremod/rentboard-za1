@@ -2166,6 +2166,36 @@ Also google.strategy.ts, the same class one line from a guard that knew better:
 emails[0].value unguarded above photos?.[0]?.value. NOT reproduced - this
 container cannot make Google return an email-less profile."
 
+tag_if_missing "v1.170.0" "f12dfed76a5907ae366732d8f776584e166a6698" "2026-10-25T23:15:00+00:00" "v1.170.0 - a claim of mine, withdrawn
+
+No code change and no font change. The product behaves exactly as v1.169.0,
+which is the point of the release.
+
+Section 90e claimed self-hosting the two families cost about 310ms of LCP
+against the Google Fonts baseline and named glyph-subsetting as the next
+lever. Both halves are withdrawn. The number came from two measurements taken
+either side of a commit that changed the ORIGIN and the DISPLAY STRATEGY
+together, and the remedy was proposed for a cause nobody had isolated.
+
+What survives is structural, so this container's load cannot weaken it:
+Angular SSR INLINES the four @font-face blocks into the HTML. The strategy
+governing the first paint is therefore the inlined copy, and deferring the
+faces out of the render-critical stylesheet - the other obvious remedy -
+cannot work at all. Font requests also begin before the headline paints, 7/7
+runs, both numbers from the page's own resource timeline.
+
+What does not survive: optional vs swap measures 0ms here and optional vs no
+webfont at all 8ms, against a 184-296ms spread within a single variant.
+
+scripts/font-paint-drive.mjs is behind npm run audit:font-paint and is
+deliberately NOT in CI: it cannot assert a timing threshold on this hardware,
+and a check whose assertion cannot be trusted is worse than no check because
+it gets believed.
+
+Five defects in that harness, every one found by running it. The first result
+showed optional costing +80ms, matching the hypothesis exactly; with five runs
+it was -4ms."
+
 
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run

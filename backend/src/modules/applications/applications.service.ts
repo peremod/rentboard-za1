@@ -520,17 +520,74 @@ export class ApplicationsService {
 
   async accept(applicationId: string, landlordId: string) {
     const application = await this.getOwnedApplication(applicationId, landlordId);
+    // A fast, friendly refusal for the ordinary sequential case. It is NOT the
+    // guard — the guard is the conditional claim below, because this read and
+    // any write after it are two separate moments.
     this.assertNotDecided(application);
 
-    const [updated, tenant] = await Promise.all([
-      this.prisma.application.update({
-        where: { id: applicationId },
+    /**
+     * 🔴 TWO PEOPLE WERE TOLD THEY HAD THE SAME ROOM.
+     *
+     * This method used to read the application, check its status, and then
+     * write — with no transaction and no condition on the write.
+     * `assertNotDecided` knows only about the application in front of it, and
+     * what kept a ROOM from being let twice was `autoRejectOthers`, which runs
+     * after the write. So sequentially the room was safe, and concurrently
+     * there was a window where two different applications for one room both
+     * read `pending`, both passed the check, and both were accepted.
+     *
+     * Driven against the real API — `scripts/double-let-drive.mjs`, written
+     * for the gap `docs/API-TESTING.md` §6.5 names in its own words — two
+     * accepts fired together returned **200 and 200**, leaving two accepted
+     * applications and **two live tenancies on one room**. First attempt, no
+     * tricks: just two requests that did not wait for each other.
+     *
+     * That is not a dialog. This product is built for somebody with four back
+     * rooms, and a room let twice is a person arriving with their things.
+     *
+     * Both claims below are compare-and-swap: `updateMany` with the old state
+     * in the WHERE clause. Postgres blocks the second writer on the same row
+     * until the first commits and then re-evaluates that clause against the
+     * new version, so exactly one caller sees `count === 1`.
+     *
+     *   · the APPLICATION claim stops the same application being accepted
+     *     twice (a double tap, a retry, two tabs).
+     *   · the ROOM claim stops two different applications letting one room.
+     *
+     * In one transaction, so a lost room claim rolls the acceptance back
+     * rather than leaving an application accepted for a room somebody else
+     * has. Ordered application-then-room in both callers, so two racing
+     * accepts cannot deadlock.
+     */
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const claimedApplication = await tx.application.updateMany({
+        where: {
+          id: applicationId,
+          status: { notIn: ['accepted', 'rejected', 'withdrawn'] },
+        },
         data: { status: 'accepted', decidedAt: new Date() },
-      }),
-      this.prisma.user.findUniqueOrThrow({ where: { id: application.tenantId } }),
-    ]);
+      });
+      if (claimedApplication.count === 0) {
+        throw new BadRequestException('This application has already been decided');
+      }
 
-    await this.prisma.room.update({ where: { id: application.roomId }, data: { status: 'let', letAt: new Date() } });
+      const claimedRoom = await tx.room.updateMany({
+        // Anything but `let` is claimable: a landlord may accept while the
+        // room is paused or reserved, and `undoAccept` puts it back to
+        // `active`, so a reversed acceptance can be made again.
+        where: { id: application.roomId, status: { not: 'let' } },
+        data: { status: 'let', letAt: new Date() },
+      });
+      if (claimedRoom.count === 0) {
+        throw new BadRequestException(
+          'This room has already been let to another applicant. Undo that acceptance first if it was a mistake.',
+        );
+      }
+
+      return tx.application.findUniqueOrThrow({ where: { id: applicationId } });
+    });
+
+    const tenant = await this.prisma.user.findUniqueOrThrow({ where: { id: application.tenantId } });
 
     await this.notice.deliver(tenant, {
       kind: 'accepted',

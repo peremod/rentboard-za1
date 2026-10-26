@@ -189,9 +189,31 @@ Stated rather than implied, because a suite's silence reads as a pass.
    would not be caught here.
 4. **OAuth** is asserted only to the extent that the callback redirects and
    mints no token without a code. The Google round trip is not driven.
-5. **Concurrency.** No test races two acceptances of the same room, or two
+5. ~~**Concurrency.** No test races two acceptances of the same room, or two
    simultaneous rent marks for one month. The idempotency that exists is
-   asserted sequentially.
+   asserted sequentially.~~
+
+   **Partly closed — `scripts/double-let-drive.mjs`, and it found a double-let.**
+   Both races this gap names are now driven against the real API on every push.
+
+   🔴 **Two applications for one room, accepted together, both returned 200**
+   and left two accepted applications and **two live tenancies on one room**.
+   First attempt. `accept()` read the application, checked its status, then
+   wrote, with no transaction and no condition on the write; what kept a room
+   from being let twice was `autoRejectOthers`, which runs *after* the write.
+   Both claims are compare-and-swap now, in one transaction. See §93 of
+   `docs/OUTSTANDING.md`.
+
+   ✅ **Two rent marks for one month held**, across 5 attempts with the row
+   deleted between each so every pair raced the INSERT rather than taking the
+   UPDATE path: 200/200 each time, one period each time.
+
+   ⚠️ **Still a gap:** these are the two races this document happened to name.
+   Nothing races a notice against a withdrawal, two confirmations of one
+   move-in, or two simultaneous verification decisions. The pattern that
+   produced the double-let — read, check, write, with the protection running
+   afterwards — is not searched for across the codebase; it was found by
+   suspecting one method.
 6. **The 236-route sweeps call every route with a sample UUID**, so for most of
    them the assertion is about *refusal*, not about the handler's work. The
    handler's work is covered for the domains with their own spec files; the
