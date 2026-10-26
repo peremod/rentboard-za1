@@ -542,6 +542,15 @@ jobs:
         env:
           API: http://localhost:3000
           DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_test
+      - name: One rotation, one credential
+        # Section 96a. refresh() minted a token per in-flight request, so one
+        # rotation left two valid refresh tokens and the browser only ever held
+        # one of them. Counted in the database, because the HTTP responses
+        # cannot show it: 4/5 rounds left two before the fix, 0/5 after.
+        run: node scripts/refresh-race-drive.mjs
+        env:
+          API: http://localhost:3000
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_test
       - name: API log on failure
         if: failure()
         run: cat /tmp/api.log || echo "(no /tmp/api.log — the API was never started)"

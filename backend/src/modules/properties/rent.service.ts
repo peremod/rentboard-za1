@@ -124,8 +124,25 @@ export class RentService {
       throw new BadRequestException('That month is already marked paid — there is nothing to dispute.');
     }
 
-    return this.prisma.rentPeriod.update({
-      where: { id: periodId },
+    /**
+     * ⚠️ Conditional on the month still not being marked paid — §95's shape,
+     * on the tenant's only voice in this record.
+     *
+     * The check above is a read: "that month is already marked paid — there is
+     * nothing to dispute". The landlord's `mark()` is the other writer, and a
+     * landlord marking paid while the tenant is disputing used to leave BOTH
+     * written, in whichever order they landed. A dispute recorded against a
+     * month the landlord had just marked paid reads as a contradiction; worse,
+     * `reminderSentAt` would be set on a paid month, which is the field the
+     * reminder pass reads.
+     *
+     * ⚠️ The rent tracker is the landlord's OWN RECORD and this platform never
+     * holds rent — so what is at stake here is whether the tenant's
+     * disagreement is written down at all, not money. That is reason enough:
+     * it is the one thing on this screen the tenant can say.
+     */
+    const claimed = await this.prisma.rentPeriod.updateMany({
+      where: { id: periodId, status: { not: 'paid' } },
       data: {
         tenantDisputedAt: new Date(),
         tenantNote: dto.note ? sanitizeText(dto.note) : null,
@@ -133,6 +150,13 @@ export class RentService {
         reminderSentAt: new Date(),
       },
     });
+    if (claimed.count === 0) {
+      throw new BadRequestException(
+        'Your landlord marked that month paid a moment ago, so there is nothing to dispute. '
+        + 'If that is wrong, speak to them directly.',
+      );
+    }
+    return this.prisma.rentPeriod.findUniqueOrThrow({ where: { id: periodId } });
   }
 
   /**

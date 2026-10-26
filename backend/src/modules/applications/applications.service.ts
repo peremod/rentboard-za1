@@ -512,10 +512,31 @@ export class ApplicationsService {
     if (application.status !== 'shortlisted') {
       throw new BadRequestException('This application is not shortlisted');
     }
-    return this.prisma.application.update({
-      where: { id: applicationId },
+    /**
+     * ⚠️ Conditional, because `accept` is the other writer — §95's shape, and
+     * the same one `withdraw` had.
+     *
+     * The check above reads `shortlisted`, which is a status `accept` is
+     * allowed to claim. So a landlord un-shortlisting while accepting (two
+     * taps, two tabs, a retry) could write `viewed` OVER an acceptance that
+     * had already opened a tenancy and let the room — leaving an application
+     * marked `viewed` with a live tenancy against it.
+     */
+    const claimed = await this.prisma.application.updateMany({
+      where: { id: applicationId, status: 'shortlisted' },
       data: { status: 'viewed' },
     });
+    if (claimed.count === 0) {
+      const now = await this.prisma.application.findUnique({
+        where: { id: applicationId }, select: { status: true },
+      });
+      throw new BadRequestException(
+        now?.status === 'accepted'
+          ? 'This application was accepted a moment ago. Undo the acceptance if that was a mistake.'
+          : 'This application is not shortlisted',
+      );
+    }
+    return this.prisma.application.findUniqueOrThrow({ where: { id: applicationId } });
   }
 
   async accept(applicationId: string, landlordId: string) {

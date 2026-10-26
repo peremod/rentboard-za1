@@ -623,7 +623,17 @@ export class RoomsService {
     if (room.status !== 'active') {
       throw new BadRequestException(`Only an active room can be reserved (this one is ${room.status})`);
     }
-    return this.prisma.room.update({ where: { id }, data: { status: 'reserved' } });
+    /**
+     * ⚠️ Conditional on the status the check above names — §95's shape.
+     *
+     * These transitions are landlord-only, but the landlord is not the only
+     * writer: `accept` claims a room to `let`, and `cancel` puts it back to
+     * `active`. The check was a read, so a landlord pausing a room while an
+     * applicant is being accepted left the room `paused` with a live tenancy
+     * on it — a status contradicting the letting it belongs to.
+     */
+    return this.claimRoomStatus(id, 'active', { status: 'reserved' },
+      `Only an active room can be reserved`);
   }
 
   /**
@@ -638,10 +648,16 @@ export class RoomsService {
     if (room.status !== 'paused') {
       throw new BadRequestException('This room is not paused');
     }
-    return this.prisma.room.update({
-      where: { id },
-      data: { status: 'active' },
-    });
+    /**
+     * ⚠️ Conditional on the status the check above names — §95's shape.
+     *
+     * These transitions are landlord-only, but the landlord is not the only
+     * writer: `accept` claims a room to `let`, and `cancel` puts it back to
+     * `active`. The check was a read, so a landlord pausing a room while an
+     * applicant is being accepted left the room `paused` with a live tenancy
+     * on it — a status contradicting the letting it belongs to.
+     */
+    return this.claimRoomStatus(id, 'paused', { status: 'active' }, 'This room is not paused');
   }
 
   /** Reserved → active, when a prospective tenant falls through. */
@@ -650,7 +666,16 @@ export class RoomsService {
     if (room.status !== 'reserved') {
       throw new BadRequestException('This room is not reserved');
     }
-    return this.prisma.room.update({ where: { id }, data: { status: 'active' } });
+    /**
+     * ⚠️ Conditional on the status the check above names — §95's shape.
+     *
+     * These transitions are landlord-only, but the landlord is not the only
+     * writer: `accept` claims a room to `let`, and `cancel` puts it back to
+     * `active`. The check was a read, so a landlord pausing a room while an
+     * applicant is being accepted left the room `paused` with a live tenancy
+     * on it — a status contradicting the letting it belongs to.
+     */
+    return this.claimRoomStatus(id, 'reserved', { status: 'active' }, 'This room is not reserved');
   }
 
   /**
@@ -665,7 +690,17 @@ export class RoomsService {
     if (room.status !== 'active' && room.status !== 'reserved') {
       throw new BadRequestException(`Cannot pause a ${room.status} room`);
     }
-    return this.prisma.room.update({ where: { id }, data: { status: 'paused' } });
+    /**
+     * ⚠️ Conditional on the status the check above names — §95's shape.
+     *
+     * These transitions are landlord-only, but the landlord is not the only
+     * writer: `accept` claims a room to `let`, and `cancel` puts it back to
+     * `active`. The check was a read, so a landlord pausing a room while an
+     * applicant is being accepted left the room `paused` with a live tenancy
+     * on it — a status contradicting the letting it belongs to.
+     */
+    return this.claimRoomStatus(id, ['active', 'reserved'], { status: 'paused' },
+      'That room can no longer be paused');
   }
 
   /**
@@ -804,7 +839,17 @@ export class RoomsService {
     if (minutesSince > UNDO_LET_WINDOW_MINUTES) {
       throw new BadRequestException(`Undo window has expired (${UNDO_LET_WINDOW_MINUTES} min). Please relist instead.`);
     }
-    return this.prisma.room.update({ where: { id }, data: { status: 'active', letAt: null } });
+    /**
+     * ⚠️ Conditional on the status the check above names — §95's shape.
+     *
+     * These transitions are landlord-only, but the landlord is not the only
+     * writer: `accept` claims a room to `let`, and `cancel` puts it back to
+     * `active`. The check was a read, so a landlord pausing a room while an
+     * applicant is being accepted left the room `paused` with a live tenancy
+     * on it — a status contradicting the letting it belongs to.
+     */
+    return this.claimRoomStatus(id, 'let', { status: 'active', letAt: null },
+      'This room has not been marked as let');
   }
 
   /** One-click relist — restores an archived room to active, preserving all details. */
@@ -960,7 +1005,26 @@ export class RoomsService {
         'Only drafts can be discarded. Published rooms should be marked as let so their applications are preserved.',
       );
     }
-    await this.prisma.room.delete({ where: { id } });
+    /**
+     * 🔴 Conditional, because this one DELETES — and the delete cascades to
+     * every application on the room.
+     *
+     * The check above is the only thing standing between "discard my draft"
+     * and "destroy a published listing and its applicants", and it was a read.
+     * A landlord publishing in one tab while discarding in another, or the
+     * publish request simply landing first, meant `delete` ran on a room that
+     * was no longer a draft. There is no undo for that: the room and its
+     * applications are gone.
+     *
+     * `deleteMany` carrying the status refuses instead.
+     */
+    const removed = await this.prisma.room.deleteMany({ where: { id, status: 'draft' } });
+    if (removed.count === 0) {
+      throw new BadRequestException(
+        'That room is no longer a draft — it was published while you were discarding it. '
+        + 'Mark it as let if you want it off the board, so its applications are preserved.',
+      );
+    }
     return { deleted: true, id };
   }
 
@@ -980,13 +1044,27 @@ export class RoomsService {
       );
     }
 
-    return this.prisma.room.update({
-      where: { id },
+    /**
+     * ⚠️ Conditional on the status the check above read.
+     *
+     * "A published room must keep at least one photo" is enforced from
+     * `room.status`, and that was a read. Clearing the gallery on a draft
+     * while it is being published left a PUBLISHED room with no cover image —
+     * the state the guard exists to prevent, by a route it cannot see.
+     */
+    const claimed = await this.prisma.room.updateMany({
+      where: { id, status: room.status },
       data: {
         heroImagePath: paths[0] ?? null,
         imagePaths: paths.slice(1),
       },
     });
+    if (claimed.count === 0) {
+      throw new BadRequestException(
+        'That room changed while you were editing its photos. Open it again and try once more.',
+      );
+    }
+    return this.prisma.room.findUniqueOrThrow({ where: { id } });
   }
 
   /**
@@ -1223,6 +1301,37 @@ export class RoomsService {
     } catch (err) {
       this.logger.error(`Could not notify savers for room ${roomId}`, err as Error);
     }
+  }
+
+  /**
+   * Move a room from a known status to a new one, or refuse.
+   *
+   * ⚠️ One helper rather than five copies of the same three lines, because
+   * five copies is how one of them ends up without the condition. Every status
+   * transition in this file read the room, checked its status and then wrote
+   * unconditionally — §93's shape — so a landlord acting while `accept` or
+   * `cancel` was writing could leave the room in a status that contradicts the
+   * letting on it.
+   *
+   * The old status goes in the WHERE clause, so Postgres blocks the second
+   * writer on the row and re-evaluates it: exactly one caller sees count 1.
+   */
+  private async claimRoomStatus(
+    id: string,
+    from: string | string[],
+    data: Record<string, unknown>,
+    refusal: string,
+  ) {
+    const allowed = Array.isArray(from) ? from : [from];
+    const claimed = await this.prisma.room.updateMany({
+      where: { id, status: { in: allowed as never } },
+      data,
+    });
+    if (claimed.count === 0) {
+      const now = await this.prisma.room.findUnique({ where: { id }, select: { status: true } });
+      throw new BadRequestException(`${refusal} (this one is ${now?.status ?? 'gone'})`);
+    }
+    return this.prisma.room.findUniqueOrThrow({ where: { id } });
   }
 
   private async assertOwner(roomId: string, landlordId: string) {

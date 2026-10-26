@@ -1,21 +1,10 @@
 {
-  "note": "Methods that read a row, decide from its state, then write it, with nothing holding the row still in between. This is the shape of the double-let (OUTSTANDING.md section 93) and of the accept-vs-withdraw race (section 95). WARNING: every entry below is UNTRIAGED. It matched the shape on 26 October 2026 and NOBODY HAS JUDGED IT YET. A baseline whose entries claim to be considered when they are not is worse than no baseline, so they say what they are. Nine have been judged and fixed rather than listed: applications.accept, applications.withdraw, lost-number.approve, lost-number.refuse, tenancies.confirmStart, tenancies.cancel, tenancies.end, lease.updateTerms and lease.giveNotice. Entries are pruned when a method stops matching, so this file cannot accumulate ghosts of code that has already been fixed. To triage one: work out what two concurrent callers would leave behind, then either make the write conditional or replace 'untriaged' with the reason the race is survivable.",
+  "note": "Methods that read a row, decide from its state, then write it, with nothing holding the row still in between -- the shape behind the double-let (OUTSTANDING.md section 93), the accept-vs-withdraw race (section 95) and the rest of that section. Fifteen have been judged and FIXED rather than listed: applications.accept, applications.withdraw, applications.unshortlist, viewings.cancel, lost-number.approve, lost-number.refuse, tenancies.confirmStart, tenancies.cancel, tenancies.end, lease.updateTerms, lease.giveNotice, auth.refresh, rent.dispute, rooms.discardDraft and rooms.updatePhotos -- plus the five room status toggles, which now share one claimRoomStatus helper. Every entry below has been READ and judged, with the reason recorded. None is 'untriaged'. Entries are pruned when a method stops matching, so this file cannot accumulate ghosts of code that has already been fixed.",
   "accepted": {
-    "backend/src/modules/account/account-lifecycle.service.ts:reactivate": "untriaged",
-    "backend/src/modules/ads/ads.service.ts:reviewCampaign": "untriaged",
-    "backend/src/modules/applications/applications.service.ts:unshortlist": "untriaged",
-    "backend/src/modules/applications/viewings.service.ts:cancel": "untriaged",
-    "backend/src/modules/auth/auth.service.ts:login": "untriaged",
-    "backend/src/modules/auth/auth.service.ts:refresh": "untriaged",
-    "backend/src/modules/messages/messages.service.ts:send": "untriaged",
-    "backend/src/modules/properties/rent.service.ts:dispute": "untriaged",
-    "backend/src/modules/rooms/rooms.service.ts:findOne": "untriaged",
-    "backend/src/modules/rooms/rooms.service.ts:markReserved": "untriaged",
-    "backend/src/modules/rooms/rooms.service.ts:unpause": "untriaged",
-    "backend/src/modules/rooms/rooms.service.ts:unreserve": "untriaged",
-    "backend/src/modules/rooms/rooms.service.ts:pause": "untriaged",
-    "backend/src/modules/rooms/rooms.service.ts:undoLet": "untriaged",
-    "backend/src/modules/rooms/rooms.service.ts:discardDraft": "untriaged",
-    "backend/src/modules/rooms/rooms.service.ts:updatePhotos": "untriaged"
+    "backend/src/modules/account/account-lifecycle.service.ts:reactivate": "Judged survivable. The guard reads deletedAt; the write touches deactivatedAt ONLY. A reactivate racing a deletion cannot un-delete anything, and login refuses on deletedAt independently, so the worst outcome is a cleared deactivatedAt on a row that is still a tombstone and still refused at sign-in.",
+    "backend/src/modules/ads/ads.service.ts:reviewCampaign": "Judged: not a race. The method has NO status precondition to defeat -- it reads the campaign only to confirm it exists and that a rejection carries a reason. Two admins reviewing one campaign is last-decision-wins, which is the intended semantic for an admin decision; approvedById records whoever decided last, which is the one who decided.",
+    "backend/src/modules/auth/auth.service.ts:login": "Judged: not a race on the row it reads. The checks are on the user (password, deletedAt, isActive) and the write is a CREATE of a new refresh token, not an update of the user. Two simultaneous logins are meant to produce two sessions. The rotation race that DID matter was auth.refresh, fixed in section 96.",
+    "backend/src/modules/messages/messages.service.ts:send": "Judged survivable, and the cost is one message. The checks read the application's archivedAt and status; the write is a message CREATE, so a thread closing mid-send appends one message to a conversation that has just closed. The thread stays readable by design, so the message is visible rather than lost, and nothing about the letting changes. Making this exact would need the send inside a transaction re-reading the application, which is a real cost for a cosmetic outcome.",
+    "backend/src/modules/rooms/rooms.service.ts:findOne": "Judged: not a race that matters. The status checks guard READING (a deleted or draft room is 404 to a non-owner); the write the detector sees is the per-day view counter, which is deliberately a count with no viewer identity (POPIA minimality, room_view_days). A race there miscounts a view by one."
   }
 }

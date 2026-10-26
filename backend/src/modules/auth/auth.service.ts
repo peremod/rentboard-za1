@@ -306,15 +306,69 @@ export class AuthService {
       throw new UnauthorizedException('Your account has been suspended. Please contact support.');
     }
 
-    const { accessToken, refreshToken, refreshTokenId, user } = await this.buildAuthResponse(stored.user);
+    /**
+     * ⚠️ CONSUMED BEFORE A NEW TOKEN IS MINTED — §95's shape, in the one place
+     * that hands out credentials.
+     *
+     * The `revokedAt` check above is a read, and the rotation below used to be
+     * an unconditional write with `buildAuthResponse` BEFORE it. The comment
+     * at the top of this method says two refresh calls are often in flight at
+     * once — a page load and an interceptor retry — and that is exactly the
+     * case this got wrong: both read `revokedAt` as null, both passed, and
+     * both minted a refresh token.
+     *
+     * One rotation, two valid credentials. The browser keeps whichever
+     * response arrived last, so the other is a live refresh token with NO
+     * HOLDER, valid until it expires. And `replacedById` recorded only one of
+     * them, so the grace path above — which exists to hand back "the token
+     * that replaced it" — could hand back the one the browser does not have,
+     * turning a race it was written to absorb into a sign-out.
+     *
+     * Claiming first inverts that: exactly one caller may consume the token,
+     * and only that caller mints. The loser falls through to the same grace
+     * handling as any other replay, which is what it is.
+     */
+    /**
+     * ⚠️ Minted first so the claim can carry the LINK, and the claim is what
+     * decides.
+     *
+     * The obvious shape — claim, then mint, then write `replacedById` — is
+     * wrong here, and dangerously so: the loser would re-read a token whose
+     * `revokedAt` is set but whose `replacedById` is not yet written, fall
+     * past the grace window, and be treated as THEFT. A benign double refresh
+     * would sign the person out of every session. That is a worse failure than
+     * the one being fixed.
+     *
+     * So the new token is created first and its id goes into the conditional
+     * update itself. Exactly one caller sets `revokedAt` and `replacedById`
+     * together, and the loser — which blocked on that row until the winner
+     * committed — finds both present and takes the grace path cleanly.
+     */
+    const built = await this.buildAuthResponse(stored.user);
 
-    // Rotate: mark the presented token as consumed → replaced by the new one.
-    await this.prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: { revokedAt: new Date(), replacedById: refreshTokenId },
+    const consumed = await this.prisma.refreshToken.updateMany({
+      where: { id: stored.id, revokedAt: null },
+      data: { revokedAt: new Date(), replacedById: built.refreshTokenId },
     });
 
-    return { accessToken, refreshToken, user };
+    if (consumed.count === 0) {
+      /**
+       * Lost the rotation. Revoke the credential just minted rather than
+       * leaving it live: a refresh token nobody was handed is exactly the
+       * dangling credential this change exists to stop.
+       */
+      await this.prisma.refreshToken
+        .update({ where: { id: built.refreshTokenId }, data: { revokedAt: new Date() } })
+        .catch(() => {});
+      this.logger.debug(
+        `Refresh rotation lost for user ${stored.userId} — another request consumed the token first`,
+      );
+      // Re-enter, which now takes the `stored.revokedAt` branch above and
+      // answers the race the way that branch was written to.
+      return this.refresh(rawToken);
+    }
+
+    return { accessToken: built.accessToken, refreshToken: built.refreshToken, user: built.user };
   }
 
   /** Revokes a single refresh token — called on logout. */
