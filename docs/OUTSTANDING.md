@@ -7429,7 +7429,34 @@ one period each time.
 rent or a deposit, and nothing in this section moves money; a duplicated month
 would have been a wrong record, not a double charge.
 
-### 93f. ⚠️ What this does NOT cover
+### 93f. ⚠️ And it refuses to pass vacuously
+
+`200, 400` is **also** what a run where the two requests serialised looks like:
+the first acceptance completes, `autoRejectOthers` rejects the second
+application, and `assertNotDecided` refuses it on the sequential path — which
+was always correct and was never the defect. A drive that cannot tell that
+apart from a working compare-and-swap passes whether or not the fix is there.
+
+The guards say different things, so they can be told apart:
+
+| refusal | what it means |
+|---|---|
+| "already been let to another applicant" | the room claim — the race fired |
+| "already been decided" | the application claim — the race fired |
+| "already been rejected" | the sequential path — the race did **not** fire |
+
+A run refused only by the sequential path is reported **INCONCLUSIVE for this
+race** and fails, rather than passing. Measured: the refusal comes from the
+room claim, so the window is genuinely open on this machine —
+
+    ✅ the conditional claim is what refused — "This room has already been
+       let to another applicant. Undo that acceptance first if it was a mistake."
+
+⚠️ This was added AFTER the first CI run went green, for the same reason §92f
+lists five harness defects: the step passed in six seconds and its output could
+not distinguish a working claim from two requests that never overlapped.
+
+### 93g. ⚠️ What this does NOT cover
 
 - **One defect in my own drive**, found by running it: `dbRows` returns LINES
   OF TEXT, one per row, not objects. Reading `.id` off one gave `undefined`,

@@ -100,9 +100,45 @@ const errored = [ra, rb].filter((r) => r.status >= 500).length;
 
 console.log(`     responses: ${ra.status}, ${rb.status}`);
 
+/**
+ * ⚠️ WHICH guard refused, and why that decides what this run proves.
+ *
+ * `200, 400` is also what a run where the two requests SERIALISED looks like:
+ * the first acceptance completes, `autoRejectOthers` rejects the second
+ * application, and `assertNotDecided` then refuses it on the sequential path —
+ * which was always correct and was never the defect. A drive that cannot tell
+ * that apart from a working compare-and-swap passes whether or not the fix is
+ * there, which is the fault §91 was a lesson in.
+ *
+ * The two refusals say different things, so they can be told apart:
+ *
+ *   · the room CAS      "This room has already been let to another applicant"
+ *   · the application
+ *     CAS               "This application has already been decided"
+ *   · the sequential
+ *     path              "This application has already been rejected"
+ *
+ * A run refused only by the sequential path is reported as INCONCLUSIVE for
+ * this race, not as a pass.
+ */
+const refusals = [ra, rb]
+  .filter((r) => r.status >= 400)
+  .map((r) => String(r.body?.message ?? ''));
+const byRace = refusals.filter((m) => /already been let|already been decided/i.test(m));
+const bySequence = refusals.filter((m) => /already been rejected|already been accepted/i.test(m));
+
 accepted === 1
   ? ok('exactly one acceptance succeeded')
   : bad(`${accepted} of 2 acceptances succeeded — a room let ${accepted} times`);
+
+if (accepted === 1 && byRace.length === 0 && bySequence.length > 0) {
+  warn('INCONCLUSIVE for this race: the two requests serialised, so the refusal');
+  warn('came from autoRejectOthers and the conditional claim was never tested.');
+  warn(`refusal was: "${bySequence[0]}"`);
+  fail++;
+} else if (byRace.length > 0) {
+  ok(`the conditional claim is what refused — "${byRace[0]}"`);
+}
 refused === 1
   ? ok('…and the other was refused with a 4xx, which is the honest answer')
   : bad(`${refused} refusals; a loser must be told why, not given a 500 or a silent 200`);
