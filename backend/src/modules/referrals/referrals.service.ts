@@ -172,7 +172,25 @@ export class ReferralsService {
     };
   }
 
-  /** Spends one free-verification reward. Returns false when there is none. */
+  /**
+   * Spends one free-verification reward. Returns false when there is none.
+   *
+   * ⚠️ NOTHING CALLS THIS, and that is the larger defect — see §100. The
+   * screen tells a landlord "You have N free verifications earned. It covers
+   * the R149 identity check", `qualify()` grants the reward, `/referrals/mine`
+   * counts it, and no code path spends it: `requiresPayment(type, role)` takes
+   * only a type and a role, so the verification flow cannot see a credit even
+   * in principle. Honouring the promise is a billing change and a product
+   * decision, so it is flagged rather than made here.
+   *
+   * ⚠️ The claim below is fixed anyway, so whoever wires this up does not
+   * inherit the bug. The write was unconditional, and the state check is in
+   * the QUERY rather than in an `if` — `rewardUsedAt: null` in the where —
+   * which is why `check-then-write-lint` could not see it: that lint looks for
+   * an `if` that refuses. Two concurrent callers both found the same row (the
+   * `orderBy` makes it the same one), both passed, both wrote, and both
+   * returned true. One R149 credit, two paid-for verifications.
+   */
   async consumeFreeVerification(userId: string): Promise<boolean> {
     const reward = await this.prisma.referral.findFirst({
       where: { referrerId: userId, reward: 'free_verification', rewardUsedAt: null },
@@ -180,11 +198,11 @@ export class ReferralsService {
     });
     if (!reward) return false;
 
-    await this.prisma.referral.update({
-      where: { id: reward.id },
+    const spent = await this.prisma.referral.updateMany({
+      where: { id: reward.id, rewardUsedAt: null },
       data: { rewardUsedAt: new Date() },
     });
-    return true;
+    return spent.count === 1;
   }
 
   // ── Admin ────────────────────────────────────────────────────────────────
