@@ -157,11 +157,30 @@ export class AdsService {
     );
   }
 
-  /** Fire-and-forget counter. No user, no session, no timestamp per view. */
+  /**
+   * Fire-and-forget counter. No user, no session, no timestamp per view.
+   *
+   * ⚠️ Scoped to ACTIVE campaigns, which `recordClick` already did and this
+   * did not. The endpoint is public and unauthenticated by design — it is a
+   * beacon from the board — so without that filter anyone could raise the
+   * impression count of a campaign that was still in review, or rejected, or
+   * long ended. Measured: five anonymous posts put 5 impressions on a
+   * `pending_review` campaign.
+   *
+   * What that costs is a REPORT rather than an invoice: placement is sold at a
+   * flat monthly rate ("impressions-based pricing is not credible until there
+   * is volume to report honestly"), so nobody is billed per impression. But
+   * `/campaigns/:id/stats` is what an advertiser is shown and the reach
+   * analysis is what makes the rate card checkable, and both get less honest
+   * the more of this there is.
+   */
   async recordImpressions(campaignIds: string[]) {
     if (campaignIds.length === 0) return;
     await this.prisma.adCampaign
-      .updateMany({ where: { id: { in: campaignIds } }, data: { impressions: { increment: 1 } } })
+      .updateMany({
+        where: { id: { in: campaignIds }, status: 'active' },
+        data: { impressions: { increment: 1 } },
+      })
       .catch(() => {});
   }
 
@@ -415,8 +434,57 @@ export class AdsService {
     return updated;
   }
 
+  /**
+   * Pause, resume or end a campaign that has already been through review.
+   *
+   * ⚠️ THE SECOND DOOR INTO THE BOARD, and it used to be wide open.
+   *
+   * `reviewCampaign` exists because "a scam ad on a rental platform, seen by
+   * people about to pay deposits to strangers, does far more damage than the
+   * placement earns". This method is the pause/resume control, and it wrote
+   * `status` unconditionally — so it would put ANY campaign live, including
+   * one nobody had reviewed and one an admin had explicitly rejected.
+   *
+   * Measured before the fix:
+   *
+   *   pending_review → active   200, served on the public board, and
+   *                             approvedById / approvedAt still NULL, so
+   *                             nothing recorded who put it there
+   *   rejected       → active   200, served on the public board with its
+   *                             headline, `rejectionReason` still on the row:
+   *                             the record said rejected and active at once
+   *
+   * Going live is now conditional on having been approved, as a claim rather
+   * than a read-then-write (sections 95-96): `approvedAt` set and the status not
+   * `rejected`. Pausing and ending stay unconditional — stopping an ad must
+   * never be blocked, whatever state it is in.
+   */
   async setStatus(id: string, status: 'active' | 'paused' | 'ended') {
-    return this.prisma.adCampaign.update({ where: { id }, data: { status } });
+    if (status !== 'active') {
+      return this.prisma.adCampaign.update({ where: { id }, data: { status } });
+    }
+
+    const claimed = await this.prisma.adCampaign.updateMany({
+      where: { id, approvedAt: { not: null }, status: { not: 'rejected' } },
+      data: { status },
+    });
+
+    if (claimed.count === 0) {
+      // Which of the two it was, because "cannot activate" with no reason sends
+      // an admin looking for a broken endpoint.
+      const campaign = await this.prisma.adCampaign.findUnique({
+        where: { id },
+        select: { status: true, approvedAt: true },
+      });
+      if (!campaign) throw new NotFoundException('Campaign not found');
+      throw new BadRequestException(
+        campaign.status === 'rejected'
+          ? 'This creative was rejected. Review it again before it can run.'
+          : 'This creative has not been approved yet. Approve it first.',
+      );
+    }
+
+    return this.prisma.adCampaign.findUniqueOrThrow({ where: { id } });
   }
 
   /** What an advertiser is shown: their own aggregates, nothing about viewers. */

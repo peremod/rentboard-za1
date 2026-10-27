@@ -2357,6 +2357,44 @@ now anything whose where carries more than the id.
 626 smoke assertions with an admin token, 103 unit tests, both race drives."
 
 
+tag_if_missing "v1.176.0" "bc2c94bb67c9a1b030480d968b7fecd2197245e0" "2026-10-26T19:20:00+00:00" "v1.176.0 - a drive that could not fail, and a guarantee with no check
+
+Tests and documentation only. No application code changed, which is itself the
+thing to know if any screen behaves differently after this deploy.
+
+scripts/notices-drive.mjs is nine checks written for the in-app notice channel,
+and all nine pass with the write deliberately broken. It stages its notice with
+a direct SQL INSERT, so it never calls NoticeRouter.deliver and cannot see a
+fault in the write at all. With deliver() altered to skip the row whenever the
+recipient has an email address - the v1.85.0 defect this drive was written
+about - it printed 9/9 and the words 'the channel is no longer write-only'.
+It is also not in CI.
+
+backend/test/notices.int-spec.ts replaces that with nine cases in the
+integration suite, which CI runs, and no case inserts a Notice: every notice
+read is one the application wrote when a tenant applied, a landlord accepted or
+a tenant sent a message. It fails 8 of 9 on the same broken build.
+
+⚠️ Then the audit that asked for: 39 of 67 drives stage state with a direct
+INSERT or UPDATE and MOST ARE RIGHT TO. lost-number-drive.mjs wraps its INSERTs
+in expectRefused to prove the DATABASE rejects a reasonless refusal, which can
+only be tested by bypassing the service; phone-signup-drive.mjs ages rows two
+days into the past for a retention prune. Notices was the outlier, not the
+pattern - recorded because the tempting next move was a lint that would have
+fired on 39 drives of which most are correct.
+
+What the audit did turn up: 61 of 67 drives do not run in CI, and room_view_days
+- 'a count per day and no viewer identity ... s.10, minimality' - had no check
+at all. backend/test/view-counting.int-spec.ts closes it with four cases, two
+structural: the columns are exactly roomId/day/count, and two different people
+viewing one room on one day leave ONE row.
+
+⚠️ And the falsification found a defect in the new test: expect(count).toBe(
+items.length) cannot fail, because the controller computes the count from that
+array. One more control that only looks like a control, written while fixing
+exactly that pattern."
+
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could

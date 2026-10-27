@@ -239,14 +239,33 @@ Stated rather than implied, because a suite's silence reads as a pass.
 6. **The 236-route sweeps call every route with a sample UUID**, so for most of
    them the assertion is about *refusal*, not about the handler's work. The
    handler's work is covered for the domains with their own spec files; the
-   rest (ads, referrals, surveys, storefront, analytics, places, SEO) have
+   rest (referrals, surveys, storefront, analytics, places, SEO) have
    refusal coverage only.
+
+   ⚠️ **This list has been wrong twice, so read the checks rather than the
+   list.** Both notices (§97) and ads (§99) were described here as
+   refusal-only and both already had substantial coverage — ads has a whole
+   section of `scripts/smoke-test.sh` running in CI. What each was missing was
+   narrower and more specific than "the handler's work": for notices, that the
+   row the application DELIVERS is the row the owner reads; for ads, the
+   negative behind every serving assertion — that a creative which has not been
+   through review cannot reach the board. It could not, and
+   `PATCH /campaigns/:id/status` was the door (§99).
 
    **Notices came off that list — `backend/test/notices.int-spec.ts`, §97.**
    Nine cases over HTTP: the notice is readable by its owner, by nobody else,
    the badge count agrees with the full list, mark-read is scoped in the WHERE
    so another person's id answers exactly as an invented one does, read is not
    deleted, and the list is newest-first.
+
+   **Ads came off the list — `backend/test/ads.int-spec.ts`, §99.** 11 cases:
+   an unreviewed creative is not served and cannot be activated, a rejected one
+   cannot either, pausing and resuming an approved campaign still works, ending
+   works from any state, the status body is validated rather than handed to
+   Prisma, the public payload carries the advertiser's name and none of their
+   contact details or the destination URL, the impression beacon counts only
+   for a running campaign and declares its own ceiling, and the counters stay
+   aggregate with no column or sibling table that could name a viewer.
 
    **View counting also came off, partly — `backend/test/view-counting.int-spec.ts`,
    §98.** Four cases, two of them structural: `room_view_days` holds exactly

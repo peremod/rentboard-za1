@@ -8305,3 +8305,143 @@ shape assertions. Schema and code reverted, and the suite re-run green after.
 - The 39-drive figure was triaged by sampling the `INSERT` cases, not by
   reading all 39 line by line. The `UPDATE`-only drives were not individually
   judged.
+
+## 99. A rejected scam ad could be put on the board — 27 October 2026
+
+`docs/API-TESTING.md` §6 listed ads among the domains with "refusal coverage
+only", so ads was next in the API-testing stream — picked because it is the one
+of the seven where money moves, an advertiser pays, and because the review step
+guards what strangers see while deciding where to pay a deposit.
+
+### The list was wrong again, and that is the second time
+
+Ads is well covered by `scripts/smoke-test.sh`, which runs in CI: the public
+endpoints answer, a landlord and a tenant are refused every admin route, an
+admin creates an advertiser and a campaign and approves it, the approved
+campaign is served, a Gauteng campaign is not served on a Western Cape page, a
+suburb campaign stays in its suburb, `targetUrl` is absent from the public
+payload, a house ad does not outrank a paid one, and the click endpoint's
+Location header points at the site rather than the API. §97 found the same
+understatement for notices. The list in §6 is not a reliable index of what is
+checked; read the checks.
+
+### What nothing checked, and it was false
+
+**Every one of those serving assertions runs AFTER the campaign is approved.**
+Nothing asserted the negative, and the negative is the control with teeth.
+`reviewCampaign`'s own comment states the stake: "a scam ad on a rental
+platform, seen by people about to pay deposits to strangers, does far more
+damage than the placement earns."
+
+🔴 `PATCH /api/ads/campaigns/:id/status` — the pause/resume/end control — wrote
+`status` unconditionally. It was a second door onto the board, and it went
+round the review step completely. Driven against the real API:
+
+```
+creative created                       status = pending_review, approvedById = null
+PATCH status=active                    200
+  → served on the public board?        true
+  → approvedById / approvedAt          null, null      ← nobody recorded as having done it
+
+creative rejected, reason recorded     status = rejected, "Obvious deposit scam"
+PATCH status=active                    200
+  → served on the public board?        true
+  → headline shown to the public       "SEND A DEPOSIT TO THIS NUMBER"
+  → rejectionReason still on the row    "Obvious deposit scam"
+```
+
+The second case is the worse one: the row said rejected and active at once, so
+the record of the decision survived while the decision itself did not hold —
+the same incoherence as the confirm-vs-cancel race in §95, by a different
+route.
+
+**The body was never validated either.** `@Body() body: { status: 'active' |
+'paused' | 'ended' }` is an inline type, and an inline type carries no
+validation metadata, so `ValidationPipe` had nothing to check and the union was
+decorative. Measured: `{"status":"pending_review"}` was accepted and written,
+`{"status":"not-a-real-status"}` reached Prisma and came back a **500**, and an
+empty body answered **200** having changed nothing.
+
+🔴 **`POST /api/ads/impressions` had the same inline-type body and no status
+filter**, which `recordClick` already had. The endpoint is public and
+unauthenticated by design — it is a beacon from the board — so five anonymous
+posts put 5 impressions on a campaign still in review. What that costs is a
+REPORT and not an invoice: placement sells at a flat monthly rate
+("impressions-based pricing is not credible until there is volume to report
+honestly"), so nobody is billed per impression. But `/campaigns/:id/stats` is
+what an advertiser is shown and the reach analysis is what makes the rate card
+checkable, and both get less honest the more of this there is.
+
+⚠️ One thing I expected and did not find: an unbounded array is **not** a way
+in. 5,000 ids came back 413 from the request body limit. The route still
+declares its own ceiling now, because the body parser refusing a big enough
+array is not the same as this route having a bound.
+
+### What changed
+
+- **Activation is conditional on having been approved** — `approvedAt` set and
+  the status not `rejected`, written as a claim rather than a read-then-write
+  (§§95–96). The refusal says which of the two it was, because "cannot
+  activate" with no reason sends an admin looking for a broken endpoint.
+  **Pausing and ending stay unconditional**: stopping an ad must never be
+  blocked, whatever state it is in — that is the control you reach for when a
+  live creative turns out to be a problem.
+- **Two real DTOs** replace the inline body types: `SetCampaignStatusDto` and
+  `RecordImpressionsDto`.
+- **Impressions are scoped to active campaigns**, matching clicks.
+- **`backend/test/ads.int-spec.ts`, 11 cases**, and seven smoke assertions.
+
+**Falsified seven ways, each caught by the right test and nothing else:**
+
+| reintroduced defect | caught by |
+| --- | --- |
+| the activation gate removed (the original write) | 2 cases |
+| the gate forgets to exclude a rejected creative | 1 |
+| the gate forgets to require approval | 1 |
+| impressions lose the active filter | 1 |
+| the status body back to an inline type | 1 |
+| the beacon body back to an inline type | 1 |
+| the public payload spreads the whole campaign | 1 |
+
+### Three defects of my own, all found by running things
+
+⚠️ **The falsification harness destroyed the fix it was testing.** It restored
+each file with `git checkout -- <path>`, which restores from HEAD — and the fix
+was uncommitted, so the first revert threw it away. The next two patches
+reported "pattern not found" and the two after that ran against code with no
+fix at all, which is why they showed failures in tests they could not affect.
+Rewritten to restore from a snapshot taken before the run, and re-run: seven
+for seven, each failure in exactly the test that owns the claim. The earlier
+run's output was not evidence of anything.
+
+⚠️ **`IsUUID('4')` rejected the application's own data.** The seeded demo
+campaigns carry deterministic ids like `00000000-0000-0000-0000-0000000000b1`,
+so every impression from a board showing a demo ad came back 400. `IsUUID()`
+with no version refuses it too — class-validator's "all" still wants an
+RFC-4122 version nibble of 1–5 — so no `IsUUID` setting accepts it. The field
+needs a bound on its input, not a certificate of provenance, so it matches
+8-4-4-4-12 hex and lets the uuid column be the arbiter. **Smoke caught this and
+the new spec could not have**: the spec used a v4-shaped placeholder, smoke
+posts the id of a real seeded campaign. The spec now asserts a non-v4 uuid is
+accepted.
+
+⚠️ **`LIKE 'ad_%'` matched `advertisers`** — `_` is a single-character wildcard
+in SQL LIKE. The per-view-table assertion failed on its own pattern. Fixed the
+pattern (`~ '^ad_'`), not the expectation: widening the expected list to
+include `advertisers` would have left a check that no longer said what it
+meant.
+
+### Still open
+
+- **`ReviewCampaignDto` has the `IsEnum`-with-an-array wart** — the message
+  comes out as "status must be one of the following values: " with nothing
+  after the colon. The new DTO uses `IsIn` and names the three values; the
+  existing one was left alone rather than widened into this change.
+- **`recordClick` is not gated on the date window**, only on `status`. A
+  campaign whose `endsAt` has passed but which nobody set to `ended` is not
+  served, but a saved link still redirects and still counts a click. Judged
+  survivable and recorded rather than fixed: the serving path is correct, and
+  `setStatus` is the intended way a flight ends.
+- Six domains still have refusal coverage only — referrals, surveys,
+  storefront, analytics, places, SEO — and that description is now twice shown
+  to be unreliable.
