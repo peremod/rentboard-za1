@@ -541,10 +541,29 @@ export class PhoneOtpService {
       throw new BadRequestException('That code is wrong or has expired. Request a new one.');
     }
 
-    await this.prisma.authToken.update({
-      where: { id: record.id },
+    /**
+     * ⚠️ CLAIMED, not written. This method's own comment says the code is
+     * "single-use, like every other token here", and the write above was
+     * unconditional — so two requests carrying the SAME correct code both
+     * read `usedAt: null`, both passed every check, and both marked it used.
+     * One proof of handset possession, two authorised operations.
+     *
+     * That matters because of what the step-up guards on an account with no
+     * password: setting the FIRST password, and changing the email address
+     * (`account-recovery.service.ts`). Both are account-takeover adjacent, and
+     * the step-up is the only thing standing in front of either.
+     *
+     * `usedAt: null` in the where makes exactly one caller the one that spends
+     * it; the loser is told what a replayed code is told, because that is what
+     * it is.
+     */
+    const spent = await this.prisma.authToken.updateMany({
+      where: { id: record.id, usedAt: null },
       data: { usedAt: new Date() },
     });
+    if (spent.count === 0) {
+      throw new BadRequestException('That code is wrong or has expired. Request a new one.');
+    }
   }
 
 }

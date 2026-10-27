@@ -17,7 +17,8 @@
  * Inside one method body:
  *   1. a read of a single row     (findUnique / findFirst / …OrThrow, or a
  *      private helper whose name begins assert/get/require and returns one)
- *   2. a throw that depends on that row's state   (if (… status …) throw)
+ *   2. a refusal that depends on that row's state  (if (… status …) throw,
+ *      or `return` — see below)
  *   3. a write to the SAME model  (.update( / .delete( )
  * …with no `$transaction` around it and no conditional write (`updateMany`
  * carrying the old state in its `where`).
@@ -65,7 +66,24 @@ function methods(src) {
 
 const READ = /\.(findUnique|findFirst|findUniqueOrThrow|findFirstOrThrow)\s*\(/;
 const HELPER_READ = /\b(?:this\.)?(assert[A-Z]\w*|get[A-Z]\w*|require[A-Z]\w*)\s*\(/;
-const STATE_THROW = /if\s*\([^)]*\b(status|state|archivedAt|deletedAt|decidedAt|readAt|outcome)\b[^)]*\)[\s\S]{0,160}?throw\s+new/;
+/**
+ * A refusal, which is NOT always a throw.
+ *
+ * ⚠️ This read `throw\s+new` only, and that blind spot hid a real one:
+ * `referrals.consumeFreeVerification` refuses with `if (!reward) return false`
+ * and then writes — a single-use credit worth R149, spendable twice by two
+ * concurrent callers. §99 found it by reading the module, not by running this.
+ *
+ * ⚠️ The column list below is the same mistake `GUARDED` already carries a
+ * comment about, and it is still here on purpose. Dropping it takes this lint
+ * from 9 matches to **32** — measured — and 23 unexamined entries in a
+ * baseline is precisely the queue §96 spent a release clearing. A baseline
+ * whose entries claim to have been considered when they have not is this
+ * codebase's own recurring defect wearing a JSON file. So the list stays until
+ * somebody has the appetite to judge 32, and this comment is the record that
+ * it is a known limit rather than a complete search.
+ */
+const STATE_THROW = /if\s*\([^)]*\b(status|state|archivedAt|deletedAt|decidedAt|readAt|outcome|rewardUsedAt|usedAt|revokedAt)\b[^)]*\)[\s\S]{0,160}?(throw\s+new|return\b)/;
 const WRITE = /\.(update|delete)\s*\(/;
 /**
  * What counts as already guarded.
@@ -83,15 +101,44 @@ const WRITE = /\.(update|delete)\s*\(/;
  */
 const GUARDED = /\$transaction\s*\(|\.(updateMany|deleteMany)\s*\(\s*\{\s*where:\s*\{[^}]*,[^}]*\}/;
 
+/**
+ * RULE 2 — the check is in the QUERY, not in an `if`.
+ *
+ * ⚠️ Added because rule 1 structurally could not see the shape that matters
+ * most for a single-use credential:
+ *
+ *     findFirst({ where: { …, usedAt: null } })   // the check IS the query
+ *     update({ where: { id } })                   // unconditional write
+ *
+ * There is no `if` refusing on state, so no amount of widening rule 1's
+ * refusal clause reaches it — measured: the `return`-as-refusal widening took
+ * rule 1 from 5 matches to 9 and did NOT include either of the two below.
+ *
+ * It is deliberately narrow — a read whose `where` names a spent-marker
+ * column, then a write to that row by id — and it matches exactly two
+ * methods, both of them "consume a single-use thing":
+ * `referrals.consumeFreeVerification` (an R149 credit) and
+ * `phone-otp.consumeStepUp` (the step-up code that guards setting a first
+ * password and changing an email address on a passwordless account). Both are
+ * fixed; both would have been found by this on the day they were written.
+ */
+const STATEFUL_READ = /\.(findFirst|findUnique|findFirstOrThrow|findUniqueOrThrow)\s*\(\s*\{\s*where:\s*\{[^}]*\b(usedAt|rewardUsedAt|consumedAt|redeemedAt|revokedAt|spentAt)\b[^}]*\}/;
+const WRITE_BY_ID = /\.(update|delete)\s*\(\s*\{\s*where:\s*\{\s*id[^,}]*\}/;
+
 const findings = [];
 for (const rel of files) {
   const src = readFileSync(join(ROOT, rel), 'utf8');
   for (const m of methods(src)) {
-    const reads = READ.test(m.body) || HELPER_READ.test(m.body);
-    if (!reads) continue;
-    if (!STATE_THROW.test(m.body)) continue;
-    if (!WRITE.test(m.body)) continue;
     if (GUARDED.test(m.body)) continue;
+
+    // Rule 1: a read, an `if` that refuses on the row's state, then a write.
+    const reads = READ.test(m.body) || HELPER_READ.test(m.body);
+    const rule1 = reads && STATE_THROW.test(m.body) && WRITE.test(m.body);
+
+    // Rule 2: the state check sits in the read's own `where`.
+    const rule2 = STATEFUL_READ.test(m.body) && WRITE_BY_ID.test(m.body);
+
+    if (!rule1 && !rule2) continue;
     findings.push({ id: `${rel}:${m.name}`, rel, method: m.name, line: m.line });
   }
 }

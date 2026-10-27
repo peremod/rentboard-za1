@@ -353,10 +353,30 @@ export class ApplicationsService {
     const application = await this.getOwnedApplication(applicationId, landlordId);
     if (application.status !== 'pending') return application;
 
-    const updated = await this.prisma.application.update({
-      where: { id: applicationId },
+    /**
+     * ⚠️ Conditional, and it is `unshortlist`'s defect in a sibling method.
+     *
+     * The check above reads `pending`, which is a status `accept` and
+     * `withdraw` are both allowed to claim — and a landlord opening an
+     * applicant is the single most ordinary thing on that screen, so this
+     * races an acceptance more easily than anything else in this file. An
+     * unconditional write put `viewed` OVER an acceptance that had already
+     * opened a tenancy and let the room.
+     *
+     * ⚠️ `check-then-write-lint` did not flag this for a year because the
+     * refusal is a `return`, not a `throw`, and the lint only looked for a
+     * throw. Widening it (§100) named this on the first run.
+     */
+    const claimed = await this.prisma.application.updateMany({
+      where: { id: applicationId, status: 'pending' },
       data: { status: 'viewed', viewedAt: new Date() },
     });
+    // Lost the claim: somebody decided it first. Idempotent by contract, so
+    // the caller gets the row as it now stands and the tenant is not told
+    // their application was "seen" after it was accepted or withdrawn.
+    if (claimed.count === 0) return this.getOwnedApplication(applicationId, landlordId);
+
+    const updated = await this.prisma.application.findUniqueOrThrow({ where: { id: applicationId } });
 
     const tenant = await this.prisma.user.findUniqueOrThrow({ where: { id: application.tenantId } });
     await this.notice.deliver(tenant, {
@@ -375,7 +395,26 @@ export class ApplicationsService {
     const application = await this.getOwnedApplication(applicationId, landlordId);
     this.assertNotDecided(application);
 
-    const updated = await this.prisma.application.update({ where: { id: applicationId }, data: { status: 'shortlisted' } });
+    /**
+     * ⚠️ The same claim as `unshortlist`, and the lint CANNOT see this one at
+     * all: the refusal lives inside `assertNotDecided`, so there is no `if`
+     * in this body for rule 1 to match. Found by reading the method next to
+     * `markViewed`, not by running anything — stated because it means the
+     * sweep's clean run is not a proof for helper-guarded methods (§100).
+     *
+     * `assertNotDecided` permits pending, viewed and shortlisted, all of which
+     * `accept` may claim, so an unconditional write put `shortlisted` over an
+     * acceptance.
+     */
+    const claimed = await this.prisma.application.updateMany({
+      where: { id: applicationId, status: { notIn: ['accepted', 'rejected', 'withdrawn'] } },
+      data: { status: 'shortlisted' },
+    });
+    if (claimed.count === 0) {
+      throw new BadRequestException('This application has already been decided');
+    }
+
+    const updated = await this.prisma.application.findUniqueOrThrow({ where: { id: applicationId } });
 
     const tenant = await this.prisma.user.findUniqueOrThrow({ where: { id: application.tenantId } });
     await this.notice.deliver(tenant, {

@@ -8445,3 +8445,151 @@ meant.
 - Six domains still have refusal coverage only — referrals, surveys,
   storefront, analytics, places, SEO — and that description is now twice shown
   to be unreliable.
+
+## 100. A reward nobody can spend, and the lint that could not see a `return` — 27 October 2026
+
+Referrals was next on §6's list: the last of the remaining domains where
+something of value changes hands.
+
+### 🔴 FLAGGED, NOT FIXED: the platform promises a landlord R149 it never pays
+
+`referral-panel.ts` tells a landlord, in these words:
+
+> You have **N** free verifications earned. It covers the R149 identity check.
+
+and before they have earned one:
+
+> When a landlord you invite publishes their first room, your R149
+> verification is covered. Nothing is owed for a signup alone.
+
+**Nothing covers it.** Driven end to end against the real API:
+
+```
+1. referrer creates a code                     201  DRIVE-5D21
+   freeVerificationsAvailable                  0
+2. public validate                             200  {"valid":true,"invitedBy":"Drive Landlord"}
+3. referee registers with the code             201
+   referee publishes a room                    200
+4. the promise, as the API reports it:
+   freeVerificationsAvailable                  1
+   reward "free_verification"  status "rewarded"  rewardUsedAt null
+5. referrer submits the R149 identity check    201
+   status                                      "pending_payment"
+   any sign of the reward being applied?       false
+6. freeVerificationsAvailable afterwards       1      ← nothing spent it
+```
+
+The chain is granted, counted and displayed, and there is no redemption:
+
+- `qualify()` sets `reward: 'free_verification'` when a referred landlord
+  publishes. ✅ granted
+- `/referrals/mine` returns `freeVerificationsAvailable`. ✅ counted
+- the panel renders the promise in plain words. ✅ promised
+- `consumeFreeVerification()` exists to spend it and **nothing calls it** —
+  not one caller in the codebase. ❌
+- `requiresPayment(type, role)` takes only a type and a role, so the
+  verification flow cannot see a credit **even in principle**. ❌
+- the `verification` and `payments` modules contain no reference to referrals
+  at all. ❌
+
+This is CLAUDE.md's own list with a new entry: a `MAX_ATTEMPTS` nothing read, a
+`documentDeletedAt` that deleted nothing, a `Message.readAt` nobody wrote, a
+notice channel nobody could read, a rent-reminder control on a screen with no
+route — and now a reward nobody can spend.
+
+**Not fixed here, deliberately.** Honouring it is a billing change, and
+CLAUDE.md says to stop and flag rather than proceed at anything touching money.
+There are three defensible answers and they are the owner's to pick:
+
+1. **Wire it up** — `requiresPayment` grows a third input, or the submit path
+   consumes a credit before deciding `needsPayment`. The R149 then really is
+   covered.
+2. **Stop promising it** — remove the panel's two sentences and the
+   `freeVerificationsAvailable` figure. Keeps the scheme as attribution only.
+3. **Say it is coming** — leave the promise, mark it plainly as not yet
+   redeemable, and honour it by hand on request.
+
+Doing nothing is the only answer that is clearly wrong, because the screen
+currently makes a specific monetary promise in rands.
+
+### The lint could not see a refusal that returns
+
+`consumeFreeVerification` also had §95's read-check-write shape, and
+`check-then-write-lint` had never named it. Two reasons, both now addressed:
+
+**Rule 1 only looked for a `throw`.** Its regex ended `?throw\s+new`, and this
+method refuses with `if (!reward) return false`. Widening the refusal clause to
+`(throw\s+new|return\b)` took it from 5 matches to 9.
+
+⚠️ **And the widening still did not catch the method that motivated it**,
+which is worth stating because it would have been easy to claim otherwise. The
+state check in `consumeFreeVerification` is not in an `if` at all — it is in the
+**query**:
+
+```ts
+findFirst({ where: { …, rewardUsedAt: null } })   // the check IS the query
+update({ where: { id } })                         // unconditional write
+```
+
+So **rule 2** was added for that family: a read whose `where` names a
+spent-marker column, then a write to that row by id. It matches exactly **two**
+methods, both "consume a single-use thing", and the second was not on anybody's
+list:
+
+- `referrals.consumeFreeVerification` — the R149 credit.
+- 🔴 `auth.phone-otp.consumeStepUp` — **the step-up code that guards setting a
+  first password and changing the email address on an account with no
+  password** (`account-recovery.service.ts`, two call sites). Its own comment
+  says "single-use, like every other token here — spent whether or not the
+  caller's own work then succeeds, because a code that survives a failed
+  attempt is a code somebody can retry with." The write was unconditional, so
+  two requests carrying the same correct code both read `usedAt: null`, both
+  passed every check, and both spent it: one proof of handset possession, two
+  authorised operations.
+
+⚠️ **Dropping rule 1's state-column allow-list was measured and NOT done**: it
+takes the sweep from 9 matches to **32**, and 23 unexamined baseline entries is
+exactly the queue §96 spent a release clearing. The limit is recorded in the
+lint's own comment rather than left implied.
+
+### What the widening found on its first run
+
+**`applications.markViewed`** — `unshortlist`'s defect in a sibling method, and
+the most ordinary action on the applicants screen. Its check reads `pending`, a
+status `accept` may claim, and the write was unconditional, so `viewed` could
+land on top of an acceptance that had already opened a tenancy and let the room.
+Conditional now.
+
+**`applications.shortlist`** — the same family, and **the lint cannot see this
+one at all**: the refusal lives inside `assertNotDecided`, so there is no `if`
+in the method body for rule 1 to match. Found by reading the method beside
+`markViewed`. `assertNotDecided` permits pending, viewed and shortlisted, every
+one of which `accept` may claim. Conditional now. Stated because it means a
+clean sweep is not a proof for helper-guarded methods.
+
+Three others the widening named carry written verdicts in the baseline:
+`ads.recordClick` (the write is an atomic counter increment), `referrals.qualify`
+(one Referral per referee by schema, so it cannot grant twice; the cost is which
+action is recorded), and `rooms.update` (a false positive — the `if` notifies
+rather than refuses).
+
+### ⚠️ What is NOT driven, by name
+
+- **`consumeStepUp`**: the code is delivered by WhatsApp, which is off, so the
+  path answers 503 here. Same wall as §95's `lost-number.approve`.
+- **`consumeFreeVerification`**: nothing calls it, so there is no route to
+  drive.
+- **`markViewed` and `shortlist`**: the invariant is asserted in
+  `applications-api.int-spec.ts` and those assertions fail when the protections
+  are removed. **The race itself is not reproduced**, and that was measured, not
+  assumed — written as two concurrent requests under `Promise.all` they passed
+  with the conditional write removed and with the precondition removed as well.
+  In one process `accept` does far more work, so it finishes last and its own
+  claim legitimately moves the row on from `viewed`. The losing ordering never
+  occurs. A test that passes with the whole guard deleted is worse than no test,
+  so that version was deleted rather than kept with a comment.
+
+All four fixes rest on the lint plus the reasoning above. The lint was itself
+falsified: with each claim removed it exits 1 and names the right method, and
+with the OLD throw-only detector and `markViewed` broken it exits **0 and finds
+nothing**.

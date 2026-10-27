@@ -53,6 +53,26 @@ describe('applications API', () => {
   const statusOf = async (id: string) =>
     (await ctx.prisma.application.findUnique({ where: { id } }))?.status;
 
+  /**
+   * Wait for the work `accept` deliberately does not await.
+   *
+   * ⚠️ Not politeness — without it the next test's TRUNCATE deadlocks against
+   * the in-flight write, and the failure surfaces as
+   * `40P01 deadlock detected` inside resetDatabase, which reads like a broken
+   * harness rather than an unsettled one. `accept` opens the tenancy with
+   * `createFromApplication(...).catch(...)`, never awaited, so that a failure
+   * to open one cannot fail the acceptance; `createLetting` in the support
+   * file polls for the same reason.
+   */
+  async function settle(applicationId: string) {
+    for (let i = 0; i < 50; i++) {
+      const t = await ctx.prisma.tenancy.findUnique({ where: { applicationId } });
+      if (t) return t;
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    return null;
+  }
+
   // ── Step 2: the valid path ────────────────────────────────────────────────
 
   it('accepts an application and files it as pending', async () => {
@@ -251,5 +271,52 @@ describe('applications API', () => {
     expect([401, 403, 404]).toContain(read.status);
 
     expect(await ctx.prisma.message.count()).toBe(0);
+  });
+  // ── A decision must not be walked back by a later write (§100) ───────────
+
+  /**
+   * ⚠️ WHAT THESE DO AND DO NOT CHECK, because the first version of them was
+   * decoration.
+   *
+   * They assert the INVARIANT — a decided application never goes back to
+   * `viewed` or `shortlisted`. They do NOT reproduce the race that motivated
+   * the fix, and that was measured rather than assumed: written as two
+   * concurrent requests under `Promise.all`, they passed with the conditional
+   * write removed AND with the precondition removed as well. In one process
+   * `accept` does far more work than `markViewed` — a transaction, a room
+   * claim, notices — so it reliably finishes last and its own claim then
+   * legitimately moves the row on from `viewed`. The losing ordering never
+   * occurs, so the assertion could not fail. A test that passes with the whole
+   * guard deleted is worse than no test.
+   *
+   * Reproducing it needs separate processes, the way
+   * `scripts/double-let-drive.mjs` does it. The conditional writes in
+   * `markViewed` and `shortlist` therefore rest on the same reasoning as the
+   * rest of §§95-96 plus `check-then-write-lint`, which does fail on them —
+   * NOT on a drive. Said plainly here rather than implied by a green tick.
+   */
+  it('does not walk an acceptance back to viewed', async () => {
+    const created = await apply();
+    const id = created.body.id as string;
+
+    await ctx.http().post(`/api/applications/${id}/accept`).set(auth(landlord.token)).send({}).expect(200);
+    expect(await settle(id), 'the acceptance left no tenancy').toBeTruthy();
+
+    // Opening the applicant again after deciding must not move the row.
+    await ctx.http().post(`/api/applications/${id}/view`).set(auth(landlord.token)).send({});
+    expect(await statusOf(id)).toBe('accepted');
+  });
+
+  it('does not walk an acceptance back to shortlisted', async () => {
+    const created = await apply();
+    const id = created.body.id as string;
+
+    await ctx.http().post(`/api/applications/${id}/accept`).set(auth(landlord.token)).send({}).expect(200);
+    expect(await settle(id), 'the acceptance left no tenancy').toBeTruthy();
+
+    const res = await ctx.http().post(`/api/applications/${id}/shortlist`)
+      .set(auth(landlord.token)).send({});
+    expect(res.status).toBe(400);
+    expect(await statusOf(id)).toBe('accepted');
   });
 });
