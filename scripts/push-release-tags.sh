@@ -2435,6 +2435,42 @@ and the new spec could not have. And LIKE 'ad_%' matched advertisers, because _
 is a single-character wildcard."
 
 
+tag_if_missing "v1.178.0" "d382801d56174cc8923ac8ea75d9301b52c13435" "2026-10-27T08:05:00+00:00" "v1.178.0 - one step-up code could authorise two operations
+
+phone-otp.consumeStepUp is the step-up credential guarding two operations on
+an account with NO PASSWORD: setting the first password, and changing the email
+address. Its own comment calls it single-use - 'a code that survives a failed
+attempt is a code somebody can retry with' - and the write was unconditional.
+Two requests carrying the same correct code both read usedAt: null, both passed
+every check, and both spent it: one proof of handset possession, two authorised
+operations.
+
+Three more conditional writes alongside it: referrals.consumeFreeVerification,
+applications.markViewed (unshortlist's defect in a sibling method - 'viewed'
+could land over an acceptance that had opened a tenancy and let the room), and
+applications.shortlist.
+
+check-then-write-lint gained a rule for the family it was blind to: a read
+whose where names a spent-marker column, then an unconditional write by id. The
+old rule looked for an 'if' that THROWS, and these refuse with a return or do
+their checking in the query. It matches exactly two methods, both 'consume a
+single-use thing', and consumeStepUp was the one nobody had on a list.
+
+⚠️ Falsified: with each claim removed the lint exits 1 and names the right
+method, and with the OLD throw-only detector and markViewed broken it exits 0
+and finds nothing.
+
+docs/UI-TEST-SCRIPT.md is new - a phone-first hand-testing script written after
+a report that a landlord could see an application while the tenant's dashboard
+showed nothing. ⚠️ That did NOT reproduce: driven end to end through shortlist,
+viewing and no-show, then rendered in a browser at 390px, the tenant sees it
+under 'Your applications', Shortlisted. Section 4 settles such a report in
+under a minute; section 0 is the shared-session trap that most often causes it.
+
+⚠️ NOT DRIVEN, by name: consumeStepUp (WhatsApp off, so the path answers 503),
+consumeFreeVerification (no caller), and the markViewed/shortlist races."
+
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
