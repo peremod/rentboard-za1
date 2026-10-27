@@ -1,5 +1,6 @@
 import {
   IsString, IsOptional, IsUUID, IsEnum, IsInt, IsUrl, IsDateString, IsEmail, Min, MaxLength, MinLength, IsIn,
+  IsArray, ArrayMaxSize, Matches,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SA_PROVINCES } from '../../rooms/dto/room-filters.dto';
@@ -64,6 +65,67 @@ export class CreateCampaignDto {
   @ApiProperty({ description: 'Flat monthly rate in ZAR cents, e.g. 250000 for R2,500' })
   @IsInt() @Min(0)
   monthlyRateCents!: number;
+}
+
+/**
+ * The pause / resume / end control for a campaign that is ALREADY approved.
+ *
+ * ⚠️ This was an inline body type — `@Body() body: { status: 'active' |
+ * 'paused' | 'ended' }` — and an inline type carries no validation metadata,
+ * so `ValidationPipe` had nothing to check and the union was decorative.
+ * Measured: `{"status":"pending_review"}` was accepted and written,
+ * `{"status":"not-a-real-status"}` reached Prisma and came back a 500, and an
+ * empty body answered 200 having changed nothing.
+ */
+export class SetCampaignStatusDto {
+  /**
+   * `IsIn`, not `IsEnum`. `IsEnum` expects an enum object, and given an array
+   * it validates correctly but cannot name the permitted values — the message
+   * comes out as "status must be one of the following values: " with nothing
+   * after the colon, which tells an admin nothing. (`ReviewCampaignDto` above
+   * has the same wart; left alone here rather than widened into this change.)
+   */
+  @ApiProperty({ enum: ['active', 'paused', 'ended'] })
+  @IsIn(['active', 'paused', 'ended'])
+  status!: 'active' | 'paused' | 'ended';
+}
+
+/**
+ * Impression beacon. Public and unauthenticated, so it is bounded.
+ *
+ * ⚠️ Also an inline body type before, which meant the ids were never checked
+ * to be uuids and the array had no declared ceiling. The request body limit
+ * refuses a very large one (measured: 5,000 ids → 413), but that is the body
+ * parser protecting this route rather than the route protecting itself.
+ */
+export class RecordImpressionsDto {
+  /**
+   * ⚠️ A SHAPE match, not `IsUUID`, and it took two goes to get here.
+   *
+   * `IsUUID('4')` first — which looks stricter and is wrong. The seeded demo
+   * campaigns carry deterministic ids like
+   * `00000000-0000-0000-0000-0000000000b1`, so every impression from a board
+   * showing a demo ad came back 400. Caught by `scripts/smoke-test.sh`, which
+   * posts the id of a real seeded campaign; `ads.int-spec.ts` used a v4-shaped
+   * placeholder and could not have seen it.
+   *
+   * `IsUUID()` with no version next, which also refused it: class-validator's
+   * "all" still requires an RFC-4122 version nibble of 1-5 and a variant of
+   * 8/9/a/b, and those ids are nil-uuid shaped. So NO `IsUUID` setting accepts
+   * the application's own data.
+   *
+   * What this field needs is a bound on the input, not a certificate of
+   * provenance: 8-4-4-4-12 hex is enough to keep rubbish away from a uuid
+   * column, and the column itself is the real arbiter.
+   */
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @ArrayMaxSize(20)
+  @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, {
+    each: true,
+    message: 'each value in campaignIds must look like a uuid',
+  })
+  campaignIds!: string[];
 }
 
 export class ReviewCampaignDto {

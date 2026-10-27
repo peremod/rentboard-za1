@@ -8,7 +8,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AdsService } from './ads.service';
 import {
   CreateCampaignDto, ReviewCampaignDto, CreateAdvertiserDto,
-  CreateAdEnquiryDto, UpdateEnquiryDto,
+  CreateAdEnquiryDto, UpdateEnquiryDto, SetCampaignStatusDto, RecordImpressionsDto,
 } from './dto/ads.dto';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
@@ -63,8 +63,8 @@ export class AdsController {
   @Post('impressions')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiExcludeEndpoint()
-  async impressions(@Body() body: { campaignIds: string[] }) {
-    await this.adsService.recordImpressions(body?.campaignIds ?? []);
+  async impressions(@Body() dto: RecordImpressionsDto) {
+    await this.adsService.recordImpressions(dto.campaignIds);
   }
 
   /**
@@ -223,8 +223,8 @@ export class AdsController {
   @ApiBearerAuth()
   setStatus(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { status: 'active' | 'paused' | 'ended' },
+    @Body() dto: SetCampaignStatusDto,
   ) {
-    return this.adsService.setStatus(id, body.status);
+    return this.adsService.setStatus(id, dto.status);
   }
 }

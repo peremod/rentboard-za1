@@ -2295,6 +2295,46 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
         red "  FAIL  approved campaign is not active"; FAIL=$((FAIL+1))
       fi
 
+      # ── The review gate, from the other side (section 99) ──────────────
+      #
+      # ⚠️ Every serving assertion above runs AFTER the campaign is approved.
+      # Nothing asserted the negative, and the negative was false: PATCH
+      # /campaigns/:id/status wrote `status` unconditionally, so it was a
+      # second door onto the board that went round the review step. A creative
+      # rejected as an obvious deposit scam was served with its own headline.
+      req POST /api/ads/campaigns \
+        "{\"advertiserId\":\"$ADV_ID\",\"name\":\"Unreviewed flight $STAMP\",\"placement\":\"board_sidebar\",\"headline\":\"Unreviewed creative headline\",\"targetUrl\":\"https://example.co.za\",\"province\":\"Gauteng\",\"startsAt\":\"$STARTED\",\"endsAt\":\"2099-01-01\",\"monthlyRateCents\":100000}" "$ADMIN_TOKEN"
+      GATE_ID=$(echo "$BODY" | jq -r '.id // empty')
+      if [[ -n "$GATE_ID" ]]; then
+        req PATCH "/api/ads/campaigns/$GATE_ID/status" '{"status":"active"}' "$ADMIN_TOKEN"
+        check "an unreviewed creative cannot be activated" 400 "$STATUS" "$BODY"
+
+        req GET "/api/ads?placement=board_sidebar&province=Gauteng&limit=20"
+        if echo "$BODY" | jq -e --arg id "$GATE_ID" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then
+          red "  FAIL  an unreviewed creative reached the public board"; FAIL=$((FAIL+1))
+        else
+          green "  PASS  …and it is not on the board"; PASS=$((PASS+1))
+        fi
+
+        req PATCH "/api/ads/campaigns/$GATE_ID/review" '{"status":"rejected","rejectionReason":"Obvious deposit scam"}' "$ADMIN_TOKEN"
+        check "a creative can be rejected with a reason" 200 "$STATUS" "$BODY"
+        req PATCH "/api/ads/campaigns/$GATE_ID/status" '{"status":"active"}' "$ADMIN_TOKEN"
+        check "a REJECTED creative cannot be activated either" 400 "$STATUS" "$BODY"
+
+        # The body was an inline type, so nothing validated it: a bad value
+        # reached Prisma and came back 500, and an empty body answered 200.
+        req PATCH "/api/ads/campaigns/$GATE_ID/status" '{"status":"not-a-real-status"}' "$ADMIN_TOKEN"
+        check "a status outside the three is refused, not passed to the database" 400 "$STATUS" "$BODY"
+        req PATCH "/api/ads/campaigns/$GATE_ID/status" '{}' "$ADMIN_TOKEN"
+        check "an empty status body is refused rather than answered 200" 400 "$STATUS" "$BODY"
+
+        # Stopping an ad must never be blocked, whatever state it is in.
+        req PATCH "/api/ads/campaigns/$GATE_ID/status" '{"status":"ended"}' "$ADMIN_TOKEN"
+        check "a rejected creative can still be ended" 200 "$STATUS" "$BODY"
+      else
+        skipped "the review gate — the campaign for it was not created"
+      fi
+
       req GET "/api/ads?placement=board_sidebar&province=Western%20Cape&limit=3"
       if echo "$BODY" | jq -e --arg id "$CAMP_ID" 'any(.[]?; .id==$id)' >/dev/null 2>&1; then
         red "  FAIL  Gauteng campaign served on a Western Cape page"; FAIL=$((FAIL+1))
