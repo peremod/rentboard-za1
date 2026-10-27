@@ -2395,6 +2395,46 @@ array. One more control that only looks like a control, written while fixing
 exactly that pattern."
 
 
+tag_if_missing "v1.177.0" "33cf0e550d9e752f29f0c0a3ed69cc956c2779ed" "2026-10-27T01:50:00+00:00" "v1.177.0 - a rejected creative could be put on the board
+
+reviewCampaign exists because 'a scam ad on a rental platform, seen by people
+about to pay deposits to strangers, does far more damage than the placement
+earns'. PATCH /api/ads/campaigns/:id/status - the pause/resume/end control -
+wrote status unconditionally, so it was a second door onto the public board
+that went round the review step completely.
+
+  creative rejected, reason given    rejected, 'Obvious deposit scam'
+  PATCH status=active                200, SERVED on the public board
+    headline shown to the public     'SEND A DEPOSIT TO THIS NUMBER'
+    rejectionReason still on the row  'Obvious deposit scam'
+
+The row said rejected and active at once: the record of the decision survived
+while the decision did not hold. A never-reviewed creative went live the same
+way with approvedById still null, so nothing recorded who did it.
+
+Activation is conditional on approval now; pausing and ending stay
+unconditional, because stopping an ad must never be blocked.
+
+Also: both public-facing ad bodies were inline types, which carry no
+validation metadata - a garbage status reached Prisma as a 500 and an empty
+body answered 200 - and the impression beacon had no status filter, which
+recordClick already had.
+
+⚠️ docs/API-TESTING.md section 6 listed ads as refusal-only and that was wrong,
+as it was for notices in section 97. Ads has a whole CI section of smoke. What
+was missing was the NEGATIVE behind every serving assertion: they all run after
+approval, and nothing checked that an unreviewed creative cannot reach the
+board.
+
+⚠️ Three defects of mine, each found by running something: the falsification
+harness restored files with git checkout, which restores from HEAD, and the fix
+was uncommitted - so it destroyed what it was testing and two cases ran against
+no fix at all. IsUUID('4') then rejected the seeded demo campaigns' own ids, so
+every impression from a board showing a demo ad came back 400; smoke caught it
+and the new spec could not have. And LIKE 'ad_%' matched advertisers, because _
+is a single-character wildcard."
+
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
