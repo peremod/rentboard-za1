@@ -1,6 +1,6 @@
 /**
- * The free-instance waking notice on the public board, driven at the four
- * widths CLAUDE.md names: 360 / 390 / 768 / 1280.
+ * The slow-load notice on the public board, driven at the four widths
+ * CLAUDE.md names: 360 / 390 / 768 / 1280.
  *
  * ── What this proves, and what it does not
  *
@@ -44,7 +44,12 @@ const OUT = process.argv[2] ?? 'drive-output/wake-notice';
 const BASE = process.env.FRONTEND_URL ?? 'http://localhost:4200';
 /** Must match Home.WAKE_NOTICE_MS. */
 const THRESHOLD_MS = 6000;
-const WIDTHS = [360, 390, 768, 1280];
+/**
+ * The four widths CLAUDE.md names. WIDTHS=390 narrows it to one — for
+ * falsification runs, where the question is whether a check fails at all and
+ * four widths is the same answer four times. A real run uses all four.
+ */
+const WIDTHS = (process.env.WIDTHS ?? '360,390,768,1280').split(',').map(Number);
 
 mkdirSync(OUT, { recursive: true });
 
@@ -85,15 +90,50 @@ for (const width of WIDTHS) {
     const scrollW = await page.evaluate(() => document.documentElement.scrollWidth);
     check(scrollW <= width, `${width}px: no horizontal page scroll (scrollWidth ${scrollW})`);
 
-    // A single line hundreds of characters wide is the failure mode CLAUDE.md
-    // names; two lines or more means the copy wrapped.
-    const h = await notice.locator('p').evaluate((el) => Math.round(el.getBoundingClientRect().height));
-    check(h >= 24, `${width}px: body copy wraps rather than running one line (${h}px tall)`);
+    // ⚠️ This asserted `height >= 24px` first, as a proxy for "it wrapped",
+    // and shortening the copy turned it red at 768 and 1280 — where one line
+    // is the CORRECT rendering for two short sentences. A proxy that fails on
+    // a good change is measuring the wrong thing. CLAUDE.md's actual failure
+    // mode is text that runs wider than its box, so that is what is measured:
+    // no overflow at any width, and on a phone it still has to wrap.
+    const copy = await notice.locator('p').evaluate((el) => {
+      const cs = getComputedStyle(el);
+      const lineHeight = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.45;
+      return {
+        scrollW: el.scrollWidth,
+        clientW: el.clientWidth,
+        lines: Math.round(el.getBoundingClientRect().height / lineHeight),
+      };
+    });
+    check(
+      copy.scrollW <= copy.clientW + 1,
+      `${width}px: body copy stays inside its box (${copy.scrollW} / ${copy.clientW})`,
+    );
+    if (width <= 480) {
+      check(copy.lines >= 2, `${width}px: and wraps on a phone (${copy.lines} lines)`);
+    }
 
+    // ⚠️ ONCE, not twice. The first version swapped this heading to the same
+    // sentence as the notice, so a phone screen carried it over the filters
+    // and again in the box three lines below. Reported from a phone.
     const heading = (await page.locator('h2.results-count').innerText()).trim();
-    check(/Waking the server/.test(heading), `${width}px: results heading says waking, not "Loading rooms…" (${JSON.stringify(heading)})`);
+    const noticeTitle = (await notice.locator('strong').innerText()).trim();
+    check(
+      heading !== noticeTitle,
+      `${width}px: the heading does not repeat the notice (heading ${JSON.stringify(heading)}, notice ${JSON.stringify(noticeTitle)})`,
+    );
 
-    await page.screenshot({ path: `${OUT}/board-waking-${width}.png`, fullPage: false });
+    // ⚠️ And it is the visitor's business, not the hosting's. The first copy
+    // read "the board is hosted on a free plan that sleeps when nobody is
+    // using it" — true, and nothing somebody looking for a room in Springs
+    // needs in order to decide whether to keep waiting.
+    const body = (await notice.locator('p').innerText()).toLowerCase();
+    const leaked = ['server', 'free plan', 'hosted', 'host', 'instance', 'render', 'sleep', 'api', 'deploy']
+      .filter((w) => body.includes(w) || noticeTitle.toLowerCase().includes(w));
+    check(leaked.length === 0, `${width}px: the copy names no infrastructure${leaked.length ? ` — leaked: ${leaked.join(', ')}` : ''}`);
+    check(/reload/.test(body), `${width}px: and it tells them reloading will not help`);
+
+    await page.screenshot({ path: `${OUT}/board-slow-load-${width}.png`, fullPage: false });
   }
 
   await ctx.close();

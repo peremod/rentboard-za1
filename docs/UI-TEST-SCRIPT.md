@@ -59,6 +59,19 @@ warm path and will tell you nothing.
 | 1b.2 | Keep waiting | The rooms appear and the notice disappears. **It should never still be there once rooms are on screen** |
 | 1b.3 | Now reload straight away | Rooms appear in well under a second and the notice **never** shows. A notice that flashes on a fast load is worse than none |
 | 1b.4 | Read the notice | It must not promise a WhatsApp message, an email, or that anything will be faster. It explains, it does not apologise for a fault |
+| 1b.5 | Read it again | It must not mention a server, a free plan, hosting, or Render. That was the first version and it is not a room-seeker's business. It should say rooms are coming and that reloading will not help |
+| 1b.6 | Look at the heading above the filters while the notice is up | It says "Loading rooms…", NOT the same sentence as the notice. The first version said it twice on one phone screen |
+
+### 1c. Signed in, the hero gets out of the way
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 1c.1 | Sign in, then open the board | No "Rooms to rent / Post your room free" headline, no 🇿🇦 eyebrow, no sub-line, no row of four statistics. Just "Browse rooms" and the buttons |
+| 1c.2 | On a phone, look at how far the first room card is | One short scroll, not a screen and a half. It should be roughly a quarter of the screen, not all of it |
+| 1c.3 | As a **landlord** | The second button says "+ List a room" and goes to the listing form |
+| 1c.4 | As a **tenant** | There is no second button. **"List your room free" must not be there** — and nothing may offer to register an account you are already signed in to |
+| 1c.5 | Sign out again | The full hero comes back: eyebrow, big headline, sub-line, four statistics, and on a first visit from a phone the one-screen hero with the "N rooms ⌄" cue |
+| 1c.6 | ⚠️ Signed in, on a phone, reload a few times | The hero must be short **every** time. If it is occasionally a full screen tall with just a heading in it, the splash race is back — see the checklist row |
 
 ⚠️ **What this does NOT cover.** On a sleeping server the rooms may appear,
 vanish back to skeletons for most of a minute, and then come back. That is a

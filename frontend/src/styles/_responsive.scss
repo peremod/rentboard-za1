@@ -313,6 +313,10 @@
 
   // Hero
   .hero { padding: 2.5rem 1rem; }
+  // Same class count as `.hero`, so without this the rule above wins on
+  // source order and the compact hero is no shorter than the full one here —
+  // which is the width it matters most at.
+  .hero--compact { padding: 1.5rem 1rem; }
   .hero-stats { gap: 1.5rem; }
   .hero-ctas { flex-direction: column; }
   .hero-ctas .btn-lg { width: 100%; justify-content: center; }
