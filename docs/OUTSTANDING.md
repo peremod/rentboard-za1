@@ -8593,3 +8593,93 @@ All four fixes rest on the lint plus the reasoning above. The lint was itself
 falsified: with each claim removed it exits 1 and names the right method, and
 with the OLD throw-only detector and `markViewed` broken it exits **0 and finds
 nothing**.
+
+## 101. "None of your applications are still open", while the landlord held Accept — 2 November 2026
+
+Reported from a phone with both screens side by side, and **I had called it
+false**. §100 said the first report did not reproduce, and for the scenario I
+tested it did not. The scenario was wrong, not the report.
+
+### What the screenshots actually said
+
+The detail that resolved it was in a part of the tenant's dashboard I had
+skimmed past: a **Reviews** section for the same room, "Oct 2026 – Oct 2026 ·
+reviews close 7 Nov". A review window only exists after a tenancy that
+**ended**. So this was not a tenant who had merely applied — it was a tenant
+who had been accepted, moved in, moved out, and then had a live application
+for that room again.
+
+My repro had covered applied → shortlisted → viewing → no-show. It was never
+going to find this.
+
+### Reproduced, then measured
+
+```
+application  status=shortlisted  archived=false  cycle=0  tenancy="ended"
+
+TENANT   /applications/mine              1 row
+LANDLORD /applications/inbox             1 row -> shortlisted
+LANDLORD /applications/room/:id          1 row -> shortlisted
+
+tenant dashboard, rendered at 390px:
+  "None of your applications are still open"      true
+  "Your applications" section                     EMPTY
+```
+
+Both screenshots, exactly.
+
+### The cause
+
+🔴 **The two screens were answering different questions.** The landlord's
+applicants screen reads the APPLICATION's status. `activeApplications()` on
+the tenant's dashboard read the TENANCY's:
+
+```ts
+!a.isArchived && a.status !== 'withdrawn' && a.status !== 'rejected'
+  && !this.tenancyHasMovedOn(a.tenancy?.status)
+```
+
+`tenancyHasMovedOn` is true for any tenancy status but `pending`, and the
+clause applied to **every** application status. So once a letting of that room
+had ended, the application was suppressed for good — including after it went
+back to `pending`, `viewed` or `shortlisted`.
+
+And it was not filed anywhere else. `closedApplications()` requires
+`isArchived || withdrawn || rejected`; `availableAgain()` requires
+`isArchived`. The row was none of those, so **it fell through every section of
+the dashboard and appeared nowhere at all** — while the landlord was holding
+Accept and Reject and waiting for an answer.
+
+The clause's own comment had anticipated this class and stopped one step
+short: "Same class of defect as the fix the comment above describes — that one
+covered `active` and went no further." This one covered the tenancy and went
+no further.
+
+### The fix
+
+Awaiting a landlord decision is live, whatever happened in a past letting of
+the same room. `pending`, `viewed` and `shortlisted` are live on their own
+account; the tenancy clause now applies only to an `accepted` application,
+which is what it was written for.
+
+Measured, same tenant and same rows, rendered at 390px:
+
+| state | before | after |
+| --- | --- | --- |
+| `shortlisted`, tenancy `ended` | not shown anywhere | **under Your applications, Shortlisted** |
+| `accepted`, tenancy `ended` | not shown | not shown — Phase D, still right |
+| `accepted`, tenancy `active` | not shown | not shown |
+| `accepted`, tenancy `pending` | shown | shown |
+
+**Falsified.** `tenant-dashboard.spec.ts` is new — 12 assertions across five
+cases — and with the clause removed it fails on exactly the case that names
+the bug and nothing else.
+
+### What this says about the earlier call
+
+§100's "did not reproduce" was true of what I ran and wrong as an answer. The
+report was right and the evidence for it was in the screenshot, two sections
+below the part I was reading. A reproduction that does not match the reported
+state proves nothing about the report, and saying "it does not reproduce"
+invites exactly the wrong conclusion. The UI script gained §4b so this
+sequence is run rather than reasoned about.

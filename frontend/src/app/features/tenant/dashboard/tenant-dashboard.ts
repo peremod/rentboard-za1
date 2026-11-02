@@ -637,28 +637,50 @@ export class TenantDashboard implements OnInit {
    * has confirmed the move, so it is genuinely still in progress.
    */
   activeApplications() {
-    return this.applications().filter(
-      (a) => !a.isArchived && a.status !== 'withdrawn' && a.status !== 'rejected'
-        // ⚠️ Every FINISHED state, not just `active` — Phase D.
-        //
-        // This excluded `active` and stopped there, so when a tenancy ENDED it
-        // fell straight back into this list: `tenancy.status` became 'ended'
-        // (which satisfies `!== 'active'`), the Application stays 'accepted'
-        // for good, and nothing archives it — `archivedAt` is set by a relist
-        // and ending a tenancy does not relist the room.
-        //
-        // The row then reappeared under "Your applications", and
-        // `activeApplicationsNote` counts an acceptance as waiting on the
-        // TENANT, so a person who had moved out six months earlier was told
-        // "The landlord has moved on this one — it is waiting on you."
-        // Meanwhile `currentHomes` requires 'active', so the room vanished
-        // from "Where you live now" in the same render. Moving out moved the
-        // room BACKWARDS through their own dashboard.
-        //
-        // Same class of defect as the fix the comment above describes — that
-        // one covered `active` and went no further.
-        && !this.tenancyHasMovedOn(a.tenancy?.status),
-    );
+    return this.applications().filter((a) => {
+      if (a.isArchived || a.status === 'withdrawn' || a.status === 'rejected') return false;
+
+      /**
+       * 🔴 AWAITING A DECISION IS LIVE, whatever happened in a past letting of
+       * the same room — reported from a phone, with both screens side by side.
+       *
+       * The tenancy clause below used to apply to EVERY status, and that made
+       * an application the landlord is actively waiting on invisible here.
+       * Reproduced: a tenant is accepted, moves in, the tenancy ends, and the
+       * application is later back to `shortlisted` — the landlord's applicants
+       * screen shows "Tk — SHORTLISTED" with Accept and Reject, and the
+       * tenant's dashboard says "None of your applications are still open".
+       * The row fell through every section: `closedApplications` wants
+       * archived/withdrawn/rejected and `availableAgain` wants archived, so it
+       * was not filed anywhere at all.
+       *
+       * The two screens were answering different questions. The landlord's
+       * reads the APPLICATION's status; this read the TENANCY's. They agree
+       * until something puts a decided application back into a live state, and
+       * then the person who most needs to act is the one who cannot see it.
+       */
+      if (a.status === 'pending' || a.status === 'viewed' || a.status === 'shortlisted') return true;
+
+      /**
+       * ⚠️ Every FINISHED state, not just `active` — Phase D. Still correct,
+       * and still needed, for an application that is `accepted`.
+       *
+       * This excluded `active` and stopped there, so when a tenancy ENDED it
+       * fell straight back into this list: `tenancy.status` became 'ended'
+       * (which satisfies `!== 'active'`), the Application stays 'accepted'
+       * for good, and nothing archives it — `archivedAt` is set by a relist
+       * and ending a tenancy does not relist the room.
+       *
+       * The row then reappeared under "Your applications", and
+       * `activeApplicationsNote` counts an acceptance as waiting on the
+       * TENANT, so a person who had moved out six months earlier was told
+       * "The landlord has moved on this one — it is waiting on you."
+       * Meanwhile `currentHomes` requires 'active', so the room vanished
+       * from "Where you live now" in the same render. Moving out moved the
+       * room BACKWARDS through their own dashboard.
+       */
+      return !this.tenancyHasMovedOn(a.tenancy?.status);
+    });
   }
 
   /**
