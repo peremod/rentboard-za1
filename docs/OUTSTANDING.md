@@ -8683,3 +8683,102 @@ below the part I was reading. A reproduction that does not match the reported
 state proves nothing about the report, and saying "it does not reproduce"
 invites exactly the wrong conclusion. The UI script gained §4b so this
 sequence is run rather than reasoned about.
+
+## 102. Why the board takes forever: the keep-warm fires every 5.2 hours, not every 10 minutes — 2 November 2026
+
+Reported as "the site is taking forever to load rooms and data". Measured
+rather than guessed, and the application turned out not to be the cause at all.
+
+### What is NOT the cause
+
+The board endpoint, warm, against 1,127 rooms (584 of them active):
+
+```
+GET /api/rooms?page=1&limit=12            1.33s, 24ms, 18ms, 14ms, 12ms
+GET /api/rooms?province=…&maxRent=…       3.7ms, 2.8ms, 4.1ms
+```
+
+The 1.33s is Node and Prisma warming up on the first request of a process, not
+the query. There is no N+1 and no missing index at this scale. Server-side
+rendering is also fine: the development build's SSR output carries
+`584 rooms found` and room-card markup.
+
+⚠️ **I claimed the opposite first, and it was my own test setup.** The SSR
+output I measured said `0 rooms found / No rooms match your filters`, which
+looked like a serious defect — an empty board served to every visitor and to
+Google. It was a PRODUCTION bundle being served from this container, so its
+`apiUrl` is `https://api.umastande.co.za`, which the container cannot resolve:
+`getaddrinfo ENOTFOUND`. The fetch failed, the empty state rendered.
+`scripts/lib/drive-session.mjs` warns about this exact trap in its own
+comment — "the served bundle had been built for production, so the browser was
+calling https://api.umastande.co.za, which is not reachable from a development
+machine. Both times that cost a debugging session" — and it has now cost a
+third. Rebuilt as development, the same page renders the rooms.
+
+### What IS the cause
+
+🔴 **The keep-warm cron asks for a ping every ten minutes and gets one every
+5.2 hours.** Measured across 29 consecutive scheduled runs:
+
+```
+cron asks for     : every 10 min   (144 runs/day)
+observed rate     : 4.8 runs/day   (3.3% of what is asked)
+shortest gap      : 2.8 h
+longest gap       : 12.3 h
+mean gap          : 5.2 h
+gaps under 15 min : 0 of 29        <-- Render's sleep threshold
+```
+
+Not one gap in 29 was inside the window the job exists to stay inside. The
+workflow's own comment anticipated this — "GitHub's scheduled runners are
+best-effort and are frequently late under load" — but "late" understates it by
+a factor of thirty. The mitigation is not imperfect; for its stated purpose it
+is not working.
+
+So the Render web service is suspended before almost every ping, and certainly
+before almost every real visitor. The next request pays the 30–60 second cold
+start that `keep-warm.yml` describes: "the first person to open
+umastande.co.za after a quiet quarter-hour waits up to a minute for a room
+board to appear, on a cheap Android, on mobile data — which is the person this
+product exists for, and they close the tab."
+
+**And the database sleeps too, by design.** The ping targets `/health/live`
+precisely so it does not hold the Neon compute open and pay a second bill. So
+once the web service wakes, the first request that touches data also waits for
+Neon to resume. That is why the complaint is about "rooms and data"
+specifically rather than the page itself: the shell is on Vercel, which does
+not sleep, so the frame appears quickly and then the content does not.
+
+### What was NOT done, and why
+
+The clean fix is the cheapest paid Render instance. `render.yaml` and
+`keep-warm.yml` both already say so, and it would additionally restore
+`preDeployCommand` — making migrations automatic rather than the manual step
+that cost production an extra hour on 5 October (§5a).
+
+**That is a money decision, so it is flagged rather than taken.** The options,
+with what each costs:
+
+1. **Cheapest paid Render instance.** Removes the sleep entirely and fixes the
+   migration hazard as a side effect. Costs money every month.
+2. **An external uptime pinger** on a free tier, checking every five minutes.
+   Costs nothing and would actually keep the WEB SERVICE awake, which GitHub's
+   scheduler demonstrably will not. Needs a third-party account. Does nothing
+   for Neon.
+3. **Point a ping at `/health` instead of `/health/live`**, so Neon stays warm
+   too. This is the second bill the endpoint was split to avoid, and holding
+   the compute open around the clock would very likely exceed a free
+   allowance. Not free, despite looking like a one-word change.
+
+⚠️ **There is no GitHub-only fix.** Raising the cron frequency does not help:
+the schedule is already `*/10` and the drops are the scheduler's, not the
+cron's. Holding one run open to ping repeatedly for an hour would consume
+Actions minutes at a rate the free allowance will not carry.
+
+### Offered and not built
+
+The one change that costs nothing is to stop the wait looking like a fault:
+after a few seconds the board could say the server is waking and that this can
+take up to a minute on the free plan, instead of an indefinite spinner. It
+makes nothing faster. It is user-facing copy and a product decision, so it is
+offered rather than written.
