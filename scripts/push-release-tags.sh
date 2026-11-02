@@ -2515,6 +2515,53 @@ I ran and wrong as an answer. A reproduction that does not match the reported
 state proves nothing about the report."
 
 
+tag_if_missing "v1.180.0" "ab3f89e01b77f1d01d8dbb06497c6904a701723d" "2026-11-02T14:10:00+00:00" "v1.180.0 - the board says the server is waking instead of spinning forever
+
+A Render free instance suspends after about fifteen minutes idle and takes
+30-60s to answer the first request after that. The board showed six skeleton
+cards for the whole of it, which to a visitor is indistinguishable from a
+broken site. After six seconds a first load now explains itself.
+
+It makes NOTHING faster. The three options that do are the money decisions in
+section 102, and this neither replaces them nor reduces the case for them.
+
+Driven at 360 / 390 / 768 / 1280 by scripts/wake-notice-drive.mjs: it fits the
+gutter, the copy wraps, no horizontal page scroll, and the results heading
+changes with it. Replacing the slowWake condition with false turned all four
+widths red. The timer is armed behind isPlatformBrowser, because a timeout
+created during SSR is never cleared.
+
+Falsified seven ways in home.spec.ts, among them deleting the
+isPlatformBrowser guard and deleting the clearWakeNotice call from fetchRooms
+own next handler.
+
+⚠️ That last one is why the spec has two blocks. The first seven cases COULD
+NOT SEE it: with the next handler no longer clearing - the live bug where a
+warm 20ms board shows the waking notice forever - all seven still passed,
+because each of them calls clearWakeNotice itself. Measured, not reasoned
+about. The second block drives the real fetchRooms with the service stubbed.
+
+The pre-commit token gate refused the first draft of the styles: three of its
+four values were one step off the existing spacing and type scales.
+
+⚠️ Records section 103 and does NOT fix it: the board is fetched TWICE on
+every first visit and the server's copy is thrown away. The rooms arrive inside
+the HTML and are serialised into the ng-state script; Angular then bootstraps
+with rooms() empty and re-requests the identical page off the wire. Sampled
+every 250ms with the API held open for 12s: cards at 461ms, back to six
+skeletons at 717ms, the real answer at 12.7s. ~300ms and invisible on a warm
+API; on a sleeping one it is the entire wait, after the rooms had already
+rendered. So the free plan makes an older defect visible; the defect is not
+the free plan.
+
+⚠️ And on the report that the rooms rendered fine before v1.179.0: checked,
+and not so. v1.179.0's only frontend change is tenant-dashboard.ts, the
+signed-in screen. Nothing on the board's fetch path has changed since 21 Oct -
+home.ts and rooms.service.ts at 10374c1, app.config.ts at d002bb9, twelve days
+earlier. What changed is how often the instance is asleep when somebody
+arrives."
+
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
