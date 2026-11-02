@@ -231,14 +231,64 @@ jobs:
         if: ${{ !cancelled() && steps.live.outputs.live == 'true' }}
         # A sitemap entry that 404s is a soft-404 signal we are submitting
         # ourselves. Cheap to check, invisible if we do not.
+        #
+        # ⚠️ This step used to be ONE pipeline assigned to BAD, under
+        # `set -o pipefail` and the shell's own `-e`. On 2 November it exited 1
+        # having printed NEITHER the ❌ list NOR the ✅ line — because the
+        # failure was in the assignment, not in the test below it, and `-e`
+        # killed the step before either echo could run. The log said "Process
+        # completed with exit code 1" and nothing else, on a check whose whole
+        # job is to say which URL is broken.
+        #
+        # Three distinct things can go wrong and the old form could not tell
+        # them apart: the sitemap itself is not 200 (the likely one — it is
+        # server-rendered and the API behind it may be asleep, see §102), the
+        # sitemap is 200 but holds no <loc> at all, or an entry is broken.
+        # Each is now its own branch with its own message.
         run: |
-          set -o pipefail
-          BAD=$(curl -sf https://www.umastande.co.za/sitemap.xml \
-            | grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g' \
-            | xargs -P 8 -I {} sh -c 'code=$(curl -s -o /dev/null -w "%{http_code}" "{}"); [ "$code" = "200" ] || echo "$code {}"')
+          set -uo pipefail
+
+          SITEMAP=https://www.umastande.co.za/sitemap.xml
+
+          # ⚠️ Two attempts, 45s apart. The sitemap is rendered by the Node
+          # server on Vercel, which calls the API on Render — and a free
+          # instance that has been idle takes 30-60s to answer its first
+          # request. Failing the weekly audit because the API was asleep when
+          # it ran measures the hosting tier, which §102 already records, and
+          # not the sitemap.
+          for attempt in 1 2; do
+            CODE=$(curl -s -o /tmp/sitemap.xml -w '%{http_code}' --max-time 90 "$SITEMAP" || echo 000)
+            [ "$CODE" = "200" ] && break
+            echo "   attempt $attempt: $SITEMAP answered $CODE"
+            [ "$attempt" = "1" ] && sleep 45
+          done
+
+          if [ "$CODE" != "200" ]; then
+            echo "❌ the sitemap itself does not return 200 — it answered $CODE after two attempts"
+            echo "   Nothing below could run: there were no URLs to check."
+            echo "   /sitemap.xml is server-rendered and reads the API, so check"
+            echo "   https://api.umastande.co.za/health before reading this as an SEO fault."
+            exit 1
+          fi
+
+          echo "✅ $SITEMAP returns 200 ($(wc -c < /tmp/sitemap.xml) bytes)"
+
+          LOCS=$(grep -o '<loc>[^<]*</loc>' /tmp/sitemap.xml | sed 's/<[^>]*>//g' || true)
+          COUNT=$(printf '%s' "$LOCS" | grep -c . || true)
+          if [ "${COUNT:-0}" -eq 0 ]; then
+            echo "❌ the sitemap returned 200 but contains no <loc> entries at all."
+            echo "   An empty sitemap is worse than none: it tells Google this site has no pages."
+            head -c 500 /tmp/sitemap.xml
+            exit 1
+          fi
+          echo "   $COUNT URL(s) listed"
+
+          BAD=$(printf '%s\n' "$LOCS" \
+            | xargs -P 8 -I {} sh -c 'code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "{}"); [ "$code" = "200" ] || echo "$code {}"' \
+            || true)
           if [ -n "$BAD" ]; then
             echo "❌ sitemap entries not returning 200:"
             echo "$BAD"
             exit 1
           fi
-          echo "✅ every sitemap URL returns 200"
+          echo "✅ all $COUNT sitemap URLs return 200"

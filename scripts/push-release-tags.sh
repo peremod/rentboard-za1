@@ -2562,6 +2562,65 @@ earlier. What changed is how often the instance is asleep when somebody
 arrives."
 
 
+tag_if_missing "v1.181.0" "5a9152bf0d521811992bfc54ee55b7e4461932a3" "2026-11-02T16:25:00+00:00" "v1.181.0 - plain words for a slow load, and no pitch to somebody signed in
+
+Two things reported from a phone, and a bug of my own that the drive caught
+while verifying them.
+
+── The slow-load notice told a room-seeker about our hosting, twice
+
+It read 'the board is hosted on a free plan that sleeps when nobody is using
+it'. True, and none of their business: somebody looking for a room in Springs
+does not need our hosting tier to decide whether to keep waiting. They need to
+know it is working and that reloading will not help.
+
+It also said it twice - the results heading above the filters swapped to the
+same sentence, so one phone screen carried it over the filters and again in
+the box three lines below.
+
+The internal names still describe the cause, because that is what the next
+person reading the file needs.
+
+── Signed in, the hero was still selling the site
+
+Eyebrow, alternating headline, sub-line and four statistics, all aimed at
+somebody who has not signed up. Collapsed to a heading and the actions:
+836px to 210px at 360 and 390, 600px to 195px at 1280.
+
+⚠️ The h1 STAYS, as a plain 'Browse rooms'. Dropping the block would leave the
+busiest page in the site with no h1 and make the results count its first
+heading. Proven, not assumed: with it removed the drive reports 'heading order
+is still h1 then h2 (H2 -> H2)'.
+
+Register is a dead end when signed in, so a landlord gets 'List a room' and a
+tenant gets nothing extra.
+
+── ⚠️ A guard that RACED the thing it guarded
+
+decideSplash() returns early when signed in, but it runs in afterNextRender
+and the startup token refresh can settle after it. The drive caught it on a
+run where it did: the compact hero measured 836px, the splash's full-screen
+height, identical to the signed-out one, on a change whose entire point is
+that it is shorter. Three identical runs of the timing version gave 0, 3, 0
+failures; the computed showSplash() gave 0 eight times - corroboration, not
+proof, since the unfixed version also gave five clean runs in a row. The
+argument for the fix is structural.
+
+⚠️ And the comparison check alone could not say so. It reported the failure as
+'836px vs 836px', which says the sizes match, not that a full-height class is
+still on the element. The drive names the class, the cue and a half-screen
+bound directly now.
+
+⚠️ One more of my own: git checkout -- <path> after a falsification mutation
+restored from HEAD and deleted the fix, which was uncommitted. Five clean runs
+reported after that were measuring the UNFIXED code. Second time in this
+session; the snapshot, not the checkout.
+
+76 checks in the new signed-in-hero-drive.mjs across the four widths, the
+slow-load drive extended with the heading and infrastructure-wording checks,
+23 frontend unit tests, 233 integration tests, 639 smoke assertions."
+
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
