@@ -98,6 +98,23 @@ application open on both sides. If the tenant's list is empty here, check §0
 first, then scroll to **Closed applications** — if it is filed there, that is
 a real bug worth reporting.
 
+### 4b. A room the tenant has already lived in once
+
+This is the sequence behind the second report, and it is worth running
+whenever a room has any history with the same person.
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 4b.1 | Let the room to the tenant, confirm the move-in, then end the tenancy | The tenant's dashboard shows it under **Past lettings** and opens a **Reviews** window. "None of your applications are still open" is correct at this point |
+| 4b.2 | Put the room back on the board and have the same tenant apply again | The new application shows as **Pending** on the tenant's dashboard |
+| 4b.3 | Shortlist them | ⚠️ **Both** screens must say Shortlisted. The tenant's dashboard must NOT say "None of your applications are still open" while the landlord is holding Accept and Reject |
+
+⚠️ **What was wrong:** the tenant's dashboard decided "still open" from the
+TENANCY, and the landlord's screen from the APPLICATION. Once a letting of
+that room had ended, a live application was filed under no section at all and
+the tenant could not see it. Fixed in v1.179.0 — if you ever see the two
+screens disagree again, this is the shape to check first.
+
 ⚠️ **Refresh, do not trust a page you left open.** These screens load their
 data once. A dashboard opened before the landlord acted will still show the
 old status until you pull to refresh.
