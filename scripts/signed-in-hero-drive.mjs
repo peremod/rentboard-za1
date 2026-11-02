@@ -41,7 +41,12 @@ import { registerUser, signIn, PASSWORD } from './lib/drive-session.mjs';
 const OUT = process.argv[2] ?? 'drive-output/signed-in-hero';
 const WEB = process.env.FRONTEND_URL ?? 'http://localhost:4200';
 const API = process.env.API_URL ?? 'http://localhost:3000';
-const WIDTHS = [360, 390, 768, 1280];
+/**
+ * The four widths CLAUDE.md names. WIDTHS=390 narrows it to one — for
+ * falsification runs, where the question is whether a check fails at all and
+ * four widths is the same answer four times. A real run uses all four.
+ */
+const WIDTHS = (process.env.WIDTHS ?? '360,390,768,1280').split(',').map(Number);
 /** WCAG 2.5.8. */
 const MIN_TARGET_PX = 44;
 
@@ -69,6 +74,9 @@ const readHero = (page) => page.evaluate(() => {
     h1Count: h1.length,
     h1Text: (h1[0]?.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40),
     heroHeight: Math.round(document.querySelector('.hero')?.getBoundingClientRect().height ?? 0),
+    splashClass: document.querySelector('.hero')?.classList.contains('hero--splash') ?? false,
+    scrollCue: q('.hero-scroll-cue'),
+    viewportH: window.innerHeight,
     // The first two headings in document order — the heading-order check.
     firstHeadings: [...document.querySelectorAll('h1,h2')].slice(0, 2).map((h) => h.tagName),
     scrollW: document.documentElement.scrollWidth,
@@ -137,6 +145,18 @@ for (const width of WIDTHS) {
   check(
     sin.heroHeight < signedOutHeights[width],
     `${width}px: the hero is shorter signed in (${sin.heroHeight}px vs ${signedOutHeights[width]}px)`,
+  );
+
+  // ⚠️ Named directly, because the comparison above is not enough on its own.
+  // It caught the splash race — the compact hero measured 836px, the splash's
+  // full-screen height, identical to the signed-out one — but it reported it
+  // as "836px vs 836px", which says the sizes match and not that a
+  // full-height class is still on the element. These two say which.
+  check(!sin.splashClass, `${width}px signed in: the full-height splash class is NOT applied`);
+  check(sin.scrollCue === 0, `${width}px signed in: and there is no "skip to rooms" cue to scroll past`);
+  check(
+    sin.heroHeight < sin.viewportH / 2,
+    `${width}px signed in: the hero is under half the screen (${sin.heroHeight}px of ${sin.viewportH}px)`,
   );
 
   await inPage.screenshot({ path: `${OUT}/hero-signed-in-${width}.png` });

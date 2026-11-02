@@ -52,7 +52,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
          That is a consequence of holding the token in memory rather than a
          defect here; sessionResolved() would delay the whole hero instead of
          flashing, which is the worse of the two on a slow phone. -->
-    <section class="hero" [class.hero--splash]="splash()" [class.hero--compact]="auth.isAuthenticated()">
+    <section class="hero" [class.hero--splash]="showSplash()" [class.hero--compact]="auth.isAuthenticated()">
       <div class="hero-inner">
         @if (!auth.isAuthenticated()) {
           <div class="hero-eyebrow">🇿🇦 {{ 'hero.eyebrow' | translate }}</div>
@@ -92,7 +92,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
         }
       </div>
 
-      @if (splash()) {
+      @if (showSplash()) {
         <!-- A cue, not an automatic jump. Auto-scrolling takes control away
              from someone who arrived meaning to search, and screen readers
              have no sensible way to follow it. -->
@@ -730,6 +730,23 @@ export class Home implements OnInit, OnDestroy {
    * throughout — this only changes how much room the hero takes.
    */
   splash = signal(false);
+
+  /**
+   * ⚠️ `splash()` AND signed out, as one expression rather than two decisions.
+   *
+   * decideSplash() runs in afterNextRender and returns early when
+   * isAuthenticated() is true — and that guard RACES the startup token
+   * refresh. Caught by signed-in-hero-drive.mjs on a run where the refresh
+   * settled second: the compact hero measured 836px, exactly the splash's
+   * full-screen height, identical to the signed-out one. The whole point of
+   * the change is that it is shorter, and on that run it was not. Three
+   * identical runs of the timing version gave 0, 3, 0 failures.
+   *
+   * A signal read cannot race: the moment the session resolves, the class and
+   * the cue both drop. The early return stays as well, so a signed-in
+   * first-time visitor does not silently consume the rb_seen_home flag.
+   */
+  showSplash = computed(() => this.splash() && !this.auth.isAuthenticated());
 
   /** Shown on the cue, so it says what is below rather than just 'scroll'. */
   roomCount = computed(() => this.rooms().length);

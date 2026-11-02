@@ -44,7 +44,12 @@ const OUT = process.argv[2] ?? 'drive-output/wake-notice';
 const BASE = process.env.FRONTEND_URL ?? 'http://localhost:4200';
 /** Must match Home.WAKE_NOTICE_MS. */
 const THRESHOLD_MS = 6000;
-const WIDTHS = [360, 390, 768, 1280];
+/**
+ * The four widths CLAUDE.md names. WIDTHS=390 narrows it to one — for
+ * falsification runs, where the question is whether a check fails at all and
+ * four widths is the same answer four times. A real run uses all four.
+ */
+const WIDTHS = (process.env.WIDTHS ?? '360,390,768,1280').split(',').map(Number);
 
 mkdirSync(OUT, { recursive: true });
 
