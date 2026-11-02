@@ -86,6 +86,48 @@ for (const [url, runs] of byUrl) {
     `   all CLS values: ${runs.map((r) => num(r, 'cumulative-layout-shift').toFixed(3)).join(', ')}`,
   );
 
+  /**
+   * ⚠️ WHICH audit cost the category its point.
+   *
+   * Added after the 2 November run failed `categories:seo >= 1` on all four
+   * URLs with `found: 0.92` and nothing else — no audit named, in the
+   * assertion output or in this summary. 0.92 cannot be read backwards
+   * either: one weight-1 audit failing gives 11.04/12.04 = 0.917, and
+   * `image-alt` becoming applicable and failing gives 12.04/13.04 = 0.923.
+   * Both round to 0.92, so the arithmetic does not identify it and neither
+   * did anything else the job printed.
+   *
+   * It is also not reproducible outside the runner: the same bundle, the same
+   * config, the same lhci 0.14 and its bundled Lighthouse 12.1 all score 1.00
+   * locally. A red that only happens where you cannot look is exactly the red
+   * that has to explain itself in the log.
+   *
+   * Every category, not just SEO, and every audit below 1 whatever its
+   * weight — a weight-0 audit cannot move the score, but it can be the thing
+   * a human needs to see, and leaving it out is how a diagnostic ends up
+   * unable to see its own subject.
+   */
+  for (const [catId, cat] of Object.entries(median.categories ?? {})) {
+    if (cat.score === null || cat.score >= 1) continue;
+    const failing = (cat.auditRefs ?? [])
+      .map((ref) => ({ ref, audit: median.audits?.[ref.id] }))
+      .filter(({ audit }) => audit && audit.score !== null && audit.score < 1);
+    if (!failing.length) {
+      console.log(`   ${catId} ${cat.score}: no audit in the category scored below 1 — nothing to attribute it to`);
+      continue;
+    }
+    console.log(`   ${catId} ${cat.score} — what it lost it on:`);
+    for (const { ref, audit } of failing) {
+      const weight = typeof ref.weight === 'number' ? ref.weight.toFixed(2) : '?';
+      console.log(`     · ${ref.id}  score ${audit.score}  weight ${weight}  ${audit.title ?? ''}`);
+      if (audit.explanation) console.log(`       ${String(audit.explanation).slice(0, 300)}`);
+      if (audit.errorMessage) console.log(`       errorMessage: ${audit.errorMessage}`);
+      for (const item of (audit.details?.items ?? []).slice(0, 3)) {
+        console.log(`       ${JSON.stringify(item).slice(0, 300)}`);
+      }
+    }
+  }
+
   const lcpEl = median.audits?.['largest-contentful-paint-element']?.details?.items ?? [];
   for (const item of lcpEl.slice(0, 1)) {
     const node = item.items?.[0]?.node ?? item.node;
