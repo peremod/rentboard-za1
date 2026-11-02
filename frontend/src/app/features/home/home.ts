@@ -32,30 +32,64 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
   imports: [PluralPipe, FormsModule, RouterLink, RoomCard, SkeletonCard, Icon, TranslatePipe, AdSlot],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="hero" [class.hero--splash]="splash()">
+    <!-- ⚠️ The hero is the PITCH, and a pitch is for somebody who has not
+         bought yet. Signed in, every line of it is spent telling a person who
+         already has an account what this site is: the eyebrow, the alternating
+         "rooms to rent / list your room" headline, the sub-line, and four
+         statistics they have no decision left to make about. They came to look
+         at rooms. So signed in it collapses to a heading and the actions, and
+         the board is one short scroll away instead of a screen and a half.
+
+         ⚠️ The h1 STAYS, as a plain one. Dropping the whole block would leave
+         this page with no h1 at all and make the results count the first
+         heading on it — an h2 under nothing, on the busiest page in the site.
+         That is the heading-order defect the board already had once, and the
+         accessibility drive checks for it.
+
+         ⚠️ And it is keyed off isAuthenticated(), which is false on the server
+         and false again until the startup refresh settles, so a signed-in
+         visitor is served the full hero and sees it collapse a moment later.
+         That is a consequence of holding the token in memory rather than a
+         defect here; sessionResolved() would delay the whole hero instead of
+         flashing, which is the worse of the two on a slow phone. -->
+    <section class="hero" [class.hero--splash]="splash()" [class.hero--compact]="auth.isAuthenticated()">
       <div class="hero-inner">
-        <div class="hero-eyebrow">🇿🇦 {{ 'hero.eyebrow' | translate }}</div>
-        <!-- Alternates between the two audiences. A board serving both needs
-             to speak to both; one fixed message tells half the visitors this
-             site is not for them. -->
-        <h1 class="hero-headline" [class.hero-headline--swap]="swapping()">
-          {{ heroMessage().title | translate }}<br/><em>{{ heroMessage().emphasis | translate }}</em>
-        </h1>
-        <p class="hero-sub hero-headline" [class.hero-headline--swap]="swapping()">
-          {{ heroMessage().sub | translate }}
-        </p>
+        @if (!auth.isAuthenticated()) {
+          <div class="hero-eyebrow">🇿🇦 {{ 'hero.eyebrow' | translate }}</div>
+          <!-- Alternates between the two audiences. A board serving both needs
+               to speak to both; one fixed message tells half the visitors this
+               site is not for them. -->
+          <h1 class="hero-headline" [class.hero-headline--swap]="swapping()">
+            {{ heroMessage().title | translate }}<br/><em>{{ heroMessage().emphasis | translate }}</em>
+          </h1>
+          <p class="hero-sub hero-headline" [class.hero-headline--swap]="swapping()">
+            {{ heroMessage().sub | translate }}
+          </p>
+        } @else {
+          <h1 class="hero-compact-title">{{ 'hero.signed_in_title' | translate }}</h1>
+        }
         <div class="hero-ctas">
           <a href="#board" class="btn btn-primary btn-lg" (click)="scrollToBoard($event)">
             {{ 'nav.browse_rooms' | translate }}
           </a>
-          <a routerLink="/auth/register" class="btn btn-ghost btn-lg">{{ 'hero.cta' | translate }}</a>
+          <!-- Register is a dead end for somebody already signed in. A
+               landlord gets the one action this page can usefully offer them
+               instead; a tenant gets nothing extra, because their dashboard is
+               already in the navbar and a second link to it here is noise. -->
+          @if (!auth.isAuthenticated()) {
+            <a routerLink="/auth/register" class="btn btn-ghost btn-lg">{{ 'hero.cta' | translate }}</a>
+          } @else if (auth.isLandlord()) {
+            <a routerLink="/landlord/rooms/new" class="btn btn-ghost btn-lg">+ List a room</a>
+          }
         </div>
-        <div class="hero-stats">
-          <div class="hero-stat"><strong>{{ total() }}</strong><span>{{ 'hero.stat_rooms' | translate }}</span></div>
-          <div class="hero-stat"><strong>{{ landlordCount() }}</strong><span>{{ 'hero.stat_landlords' | translate }}</span></div>
-          <div class="hero-stat"><strong>{{ 'hero.stat_free' | translate }}</strong><span>{{ 'hero.stat_to_apply' | translate }}</span></div>
-          <div class="hero-stat"><strong>9 provinces</strong><span>and growing</span></div>
-        </div>
+        @if (!auth.isAuthenticated()) {
+          <div class="hero-stats">
+            <div class="hero-stat"><strong>{{ total() }}</strong><span>{{ 'hero.stat_rooms' | translate }}</span></div>
+            <div class="hero-stat"><strong>{{ landlordCount() }}</strong><span>{{ 'hero.stat_landlords' | translate }}</span></div>
+            <div class="hero-stat"><strong>{{ 'hero.stat_free' | translate }}</strong><span>{{ 'hero.stat_to_apply' | translate }}</span></div>
+            <div class="hero-stat"><strong>9 provinces</strong><span>and growing</span></div>
+          </div>
+        }
       </div>
 
       @if (splash()) {
@@ -458,10 +492,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                The count is the heading: it is the visible text that names the
                region, so making it the heading beats inventing a hidden one. -->
           <h2 class="results-count">
-            @if (loading() && rooms().length === 0) {
-              @if (slowWake()) { {{ 'board.waking_title' | translate }} }
-              @else { Loading rooms… }
-            }
+            @if (loading() && rooms().length === 0) { Loading rooms… }
             @else { {{ 'found_rooms' | translate:{count: total()} }} }
           </h2>
 
@@ -504,8 +535,8 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
         </div>
 
         @if (loading() && rooms().length === 0) {
-          <!-- ⚠️ The waking notice, not a longer spinner. The API runs on a
-               free instance that suspends after ~15 minutes idle and takes
+          <!-- ⚠️ The slow-load notice, not a longer spinner. The API runs on
+               a free instance that suspends after ~15 minutes idle and takes
                30-60s to come back, so a first load after a quiet spell looks
                to a visitor exactly like a broken site. Six skeleton cards for
                a minute say "loading"; they do not say "this is expected and it
@@ -513,13 +544,26 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                page. It makes nothing faster — see docs/OUTSTANDING.md §102 for
                the fix that does.
 
+               ⚠️ The COPY does not say any of that, and the first version did.
+               It read "the board is hosted on a free plan that sleeps when
+               nobody is using it" — true, and none of a room-seeker's
+               business. Somebody looking for a room in Springs does not need
+               our hosting tier to decide whether to keep waiting; they need to
+               know it is working and that reloading will not help. The
+               internal names still describe the cause, because that is what
+               the next person reading this file needs.
+
+               It also said it twice: the results heading above swapped to the
+               same sentence, so the phone screen carried "Waking the server…"
+               once over the filters and again in the box.
+
                Browser-only: the timer is started behind isPlatformBrowser
                because an interval or timeout left running on the server is
                never cleared and holds the SSR render open. -->
           @if (slowWake()) {
             <div class="waking-notice" role="status">
-              <strong>{{ 'board.waking_title' | translate }}</strong>
-              <p>{{ 'board.waking_body' | translate }}</p>
+              <strong>{{ 'board.slow_title' | translate }}</strong>
+              <p>{{ 'board.slow_body' | translate }}</p>
             </div>
           }
           <div class="room-grid">
@@ -828,6 +872,11 @@ export class Home implements OnInit, OnDestroy {
   private decideSplash() {
     const isPhone = window.matchMedia('(max-width: 700px)').matches;
     if (!isPhone) return;
+    // ⚠️ And never signed in. The splash makes the hero exactly one screen
+    // tall, which is a brand moment for a stranger and a full phone screen of
+    // nothing for somebody who signed in to look at rooms — the compact hero
+    // has no headline, no sub-line and no statistics to fill it with.
+    if (this.auth.isAuthenticated()) return;
 
     try {
       const seen = localStorage.getItem('rb_seen_home');

@@ -302,6 +302,18 @@ img{display:block;max-width:100%}
   line-height:1.7;max-width:500px;margin-bottom:2rem;
 }
 .hero-ctas{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:3rem}
+/* Signed in: the pitch is gone, so the padding that framed it goes too.
+   Without this the band keeps 5rem of top padding around a single button. */
+.hero--compact{padding:2rem 1.5rem}
+.hero--compact .hero-ctas{margin-bottom:0}
+.hero-compact-title{
+  font-family:var(--font-display);
+  /* 1.5rem, not the clamp(2.4rem,5vw,3.8rem) of the pitch headline: this is a
+     page heading, not a billboard. On the scale, and it keeps the h1 that the
+     heading order needs without reinstating the thing we just removed. */
+  font-size:1.5rem;font-weight:900;color:var(--white);
+  line-height:1.1;margin-bottom:1.25rem;
+}
 .hero-stats{
   display:flex;gap:2.5rem;flex-wrap:wrap;
 }
