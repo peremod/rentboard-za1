@@ -1395,6 +1395,19 @@ img{display:block;max-width:100%}
   h2,h3{font-size:1.1rem;font-weight:700;color:var(--ink);margin-bottom:.5rem}
   p{font-size:.88rem;color:var(--slate);margin-bottom:1.25rem}
 }
+/* The free-instance waking notice above the board's skeleton cards. Sits in
+   the normal flow and wraps, so it cannot create horizontal scroll at 360px
+   or push the grid sideways. No min-width, no fixed height. */
+.waking-notice{
+  /* Every value on the scale the pre-commit token gate enforces: .75rem
+     spacing, .9rem and .8rem type. The first draft used .85rem padding and
+     .92/.82rem type and the hook refused the commit, which is the gate
+     working — three of those four were one step off an existing step. */
+  margin:0 0 1rem;padding:.75rem 1rem;
+  background:var(--cream2);border:1px solid var(--border);border-radius:var(--r8);
+  strong{display:block;font-size:.9rem;font-weight:700;color:var(--ink);margin-bottom:.25rem}
+  p{font-size:.8rem;line-height:1.45;color:var(--slate);margin:0}
+}
 .province-badge{
   display:inline-flex;align-items:center;gap:.35rem;
   padding:.22rem .6rem;border-radius:var(--r-full);

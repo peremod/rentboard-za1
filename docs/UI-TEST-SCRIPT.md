@@ -45,6 +45,27 @@ Write the two email addresses down. You will be switching often.
 | 1.5 | Open `/tenant/dashboard` directly in the address bar | Sent to sign in — **never** a blank screen or someone else's data |
 | 1.6 | Open `/landlord/dashboard` directly | Same |
 
+### 1b. The sleeping server — do this one FIRST THING in the morning
+
+The API is on a free Render instance that suspends after about fifteen minutes
+with nobody on the site, and takes 30-60 seconds to answer the first request
+after that. So this test only works when the site has genuinely been left
+alone — after lunch, or first thing. Opening the site twice in a row tests the
+warm path and will tell you nothing.
+
+| # | Do | Expect |
+| --- | --- | --- |
+| 1b.1 | After a few hours' gap, open the board and **watch it, do not reload** | Skeleton cards at first. After about six seconds, a notice: "Waking the server…" and a line saying the free plan sleeps and this can take up to a minute |
+| 1b.2 | Keep waiting | The rooms appear and the notice disappears. **It should never still be there once rooms are on screen** |
+| 1b.3 | Now reload straight away | Rooms appear in well under a second and the notice **never** shows. A notice that flashes on a fast load is worse than none |
+| 1b.4 | Read the notice | It must not promise a WhatsApp message, an email, or that anything will be faster. It explains, it does not apologise for a fault |
+
+⚠️ **What this does NOT cover.** On a sleeping server the rooms may appear,
+vanish back to skeletons for most of a minute, and then come back. That is a
+separate open defect — `docs/OUTSTANDING.md` §103, the board is fetched twice
+and the server's copy is thrown away — and the waking notice is what covers
+that window, not a fix for it. If you see it, it is known.
+
 ---
 
 ## 2. The landlord: listing a room

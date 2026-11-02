@@ -8683,3 +8683,167 @@ below the part I was reading. A reproduction that does not match the reported
 state proves nothing about the report, and saying "it does not reproduce"
 invites exactly the wrong conclusion. The UI script gained §4b so this
 sequence is run rather than reasoned about.
+
+## 102. Why the board takes forever: the keep-warm fires every 5.2 hours, not every 10 minutes — 2 November 2026
+
+Reported as "the site is taking forever to load rooms and data". Measured
+rather than guessed, and the application turned out not to be the cause at all.
+
+### What is NOT the cause
+
+The board endpoint, warm, against 1,127 rooms (584 of them active):
+
+```
+GET /api/rooms?page=1&limit=12            1.33s, 24ms, 18ms, 14ms, 12ms
+GET /api/rooms?province=…&maxRent=…       3.7ms, 2.8ms, 4.1ms
+```
+
+The 1.33s is Node and Prisma warming up on the first request of a process, not
+the query. There is no N+1 and no missing index at this scale. Server-side
+rendering is also fine: the development build's SSR output carries
+`584 rooms found` and room-card markup.
+
+⚠️ **I claimed the opposite first, and it was my own test setup.** The SSR
+output I measured said `0 rooms found / No rooms match your filters`, which
+looked like a serious defect — an empty board served to every visitor and to
+Google. It was a PRODUCTION bundle being served from this container, so its
+`apiUrl` is `https://api.umastande.co.za`, which the container cannot resolve:
+`getaddrinfo ENOTFOUND`. The fetch failed, the empty state rendered.
+`scripts/lib/drive-session.mjs` warns about this exact trap in its own
+comment — "the served bundle had been built for production, so the browser was
+calling https://api.umastande.co.za, which is not reachable from a development
+machine. Both times that cost a debugging session" — and it has now cost a
+third. Rebuilt as development, the same page renders the rooms.
+
+### What IS the cause
+
+🔴 **The keep-warm cron asks for a ping every ten minutes and gets one every
+5.2 hours.** Measured across 29 consecutive scheduled runs:
+
+```
+cron asks for     : every 10 min   (144 runs/day)
+observed rate     : 4.8 runs/day   (3.3% of what is asked)
+shortest gap      : 2.8 h
+longest gap       : 12.3 h
+mean gap          : 5.2 h
+gaps under 15 min : 0 of 29        <-- Render's sleep threshold
+```
+
+Not one gap in 29 was inside the window the job exists to stay inside. The
+workflow's own comment anticipated this — "GitHub's scheduled runners are
+best-effort and are frequently late under load" — but "late" understates it by
+a factor of thirty. The mitigation is not imperfect; for its stated purpose it
+is not working.
+
+So the Render web service is suspended before almost every ping, and certainly
+before almost every real visitor. The next request pays the 30–60 second cold
+start that `keep-warm.yml` describes: "the first person to open
+umastande.co.za after a quiet quarter-hour waits up to a minute for a room
+board to appear, on a cheap Android, on mobile data — which is the person this
+product exists for, and they close the tab."
+
+**And the database sleeps too, by design.** The ping targets `/health/live`
+precisely so it does not hold the Neon compute open and pay a second bill. So
+once the web service wakes, the first request that touches data also waits for
+Neon to resume. That is why the complaint is about "rooms and data"
+specifically rather than the page itself: the shell is on Vercel, which does
+not sleep, so the frame appears quickly and then the content does not.
+
+### What was NOT done, and why
+
+The clean fix is the cheapest paid Render instance. `render.yaml` and
+`keep-warm.yml` both already say so, and it would additionally restore
+`preDeployCommand` — making migrations automatic rather than the manual step
+that cost production an extra hour on 5 October (§5a).
+
+**That is a money decision, so it is flagged rather than taken.** The options,
+with what each costs:
+
+1. **Cheapest paid Render instance.** Removes the sleep entirely and fixes the
+   migration hazard as a side effect. Costs money every month.
+2. **An external uptime pinger** on a free tier, checking every five minutes.
+   Costs nothing and would actually keep the WEB SERVICE awake, which GitHub's
+   scheduler demonstrably will not. Needs a third-party account. Does nothing
+   for Neon.
+3. **Point a ping at `/health` instead of `/health/live`**, so Neon stays warm
+   too. This is the second bill the endpoint was split to avoid, and holding
+   the compute open around the clock would very likely exceed a free
+   allowance. Not free, despite looking like a one-word change.
+
+⚠️ **There is no GitHub-only fix.** Raising the cron frequency does not help:
+the schedule is already `*/10` and the drops are the scheduler's, not the
+cron's. Holding one run open to ping repeatedly for an hour would consume
+Actions minutes at a rate the free allowance will not carry.
+
+### Built: the waking notice (v1.180.0)
+
+The one change that costs nothing is to stop the wait looking like a fault.
+Asked for and shipped: after `WAKE_NOTICE_MS` (6s) a first load of the board
+says the server is waking and that this can take up to a minute on the free
+plan, instead of an indefinite spinner. **It makes nothing faster.** The fix
+that does is still one of the three money decisions above.
+
+Driven at 360 / 390 / 768 / 1280 (`scripts/wake-notice-drive.mjs`) and
+falsified: seven mutations of the implementation each fail at least one case in
+`frontend/src/app/features/home/home.spec.ts`, including deleting the
+`isPlatformBrowser` guard and deleting the `clearWakeNotice()` call from
+`fetchRooms`' own `next` handler.
+
+⚠️ The first seven cases could NOT see that second one. With
+`this.clearWakeNotice()` removed from the `next` handler — the live bug where
+a warm 20ms board shows the waking notice forever — all seven still passed,
+because each of them calls `clearWakeNotice()` itself. That is why the spec has
+a second block that drives the real `fetchRooms` with the service stubbed. The
+gap was measured, not reasoned about.
+
+## §103 — The board is fetched TWICE on every first visit, and the SSR copy is thrown away
+
+Found while verifying §102's waking notice, with a development SSR bundle
+served from this container (`node dist/mastande-frontend/server/server.mjs`)
+and Playwright holding `/api/rooms` open for 12s to imitate a waking instance.
+Sampling the DOM every 250ms:
+
+```
+t=  143ms cards=0  skeletons=0  waking=false
+t=  461ms cards=12 skeletons=0  waking=false  heading="584 rooms found"   <- SSR HTML
+t=  717ms cards=0  skeletons=6  waking=false  heading="Loading rooms…"    <- hydration
+t= 6588ms cards=0  skeletons=6  waking=true   heading="Waking the server…"
+t=12699ms cards=12 skeletons=0  waking=false  heading="584 rooms found"   <- browser fetch
+```
+
+The server renders the board, the rooms reach the browser inside the HTML, and
+then **Angular bootstraps with `rooms()` empty and asks for the same page
+again** — `REQ /api/rooms?page=1&limit=12&sortBy=newest`, confirmed on the
+wire. The board that was already on screen at 461ms is replaced by six
+skeletons at 717ms and the person waits for the second answer.
+
+This is not a cache miss for want of a cache. The response IS serialised into
+the page: `<script id="ng-state">` carries one HTTP transfer-cache entry keyed
+`2e1247629634a88e…` whose body is the rooms payload. `app.config.ts` registers
+`provideClientHydration(withEventReplay())`, which leaves the transfer cache on
+its default (enabled). The client nevertheless goes to the network, and why it
+does has not been established.
+
+**On a warm API this costs ~300ms and is invisible** — measured: one request,
+cards at 305ms, no skeleton flash at a 150ms sampling interval. **On a sleeping
+one it is the whole wait**, after the rooms had already arrived. So the free
+instance makes an existing defect visible; the defect is not the free instance.
+
+⚠️ Dates, against the report that "the rooms were rendering just fine before
+v1.179.0": nothing on this path has changed since **21 Oct** — `home.ts` at
+`10374c1`, `rooms.service.ts` at `10374c1`, `app.config.ts` at `d002bb9`, all
+2026-10-21, twelve days before v1.179.0, whose only frontend change is
+`tenant-dashboard.ts` (`git diff --stat d382801..dd80ad6 -- frontend/`). What
+changed in between is how often the instance is asleep when somebody arrives.
+
+**Not fixed here**, because the fix is a hydration change on the busiest page
+in the site and it wants its own pass: either the client stops re-fetching when
+the server already answered, or the transfer cache is made to serve the hit it
+has clearly stored.
+
+⚠️ **Proven against a DEVELOPMENT bundle only.** The production bundle cannot
+be driven from this container — it calls `api.umastande.co.za`, which does not
+resolve here — and `https://www.umastande.co.za/` is refused by this
+container's egress policy (`403 to CONNECT`, in the proxy's own
+`recentRelayFailures`). So the double fetch is confirmed in the shared code
+path and NOT confirmed on production.

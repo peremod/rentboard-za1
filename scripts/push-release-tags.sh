@@ -2471,6 +2471,50 @@ under a minute; section 0 is the shared-session trap that most often causes it.
 consumeFreeVerification (no caller), and the markViewed/shortlist races."
 
 
+tag_if_missing "v1.179.0" "dd80ad6fc1fc13865b8f0f2e42ec73a2715a8a4b" "2026-11-02T11:20:00+00:00" "v1.179.0 - a live application vanished once a past letting ended
+
+Reported from a phone with both screens side by side, and section 100 had
+called it FALSE. The scenario I tested - applied, shortlisted, viewing,
+no-show - reproduced clean. It was the wrong scenario.
+
+The detail that resolved it was in a part of the tenant's screenshot I had
+skimmed past: a Reviews section for the same room, 'Oct 2026 - Oct 2026,
+reviews close 7 Nov'. A review window only exists after a tenancy that ENDED.
+So this was a tenant who had been accepted, moved in, moved out, and then had
+a live application for that room again.
+
+The two screens were answering different questions. The landlord's applicants
+screen reads the APPLICATION's status; activeApplications() read the
+TENANCY's, and the clause applied to EVERY application status. Once a letting
+of that room had ended the application was suppressed for good, including
+after it went back to pending, viewed or shortlisted.
+
+⚠️ And it was filed nowhere else: closedApplications() wants
+archived/withdrawn/rejected and availableAgain() wants archived, so the row
+fell through every section of the dashboard and appeared NOWHERE AT ALL -
+while the landlord was holding Accept and Reject and waiting for an answer.
+
+The clause's own comment had anticipated this class and stopped one step
+short: 'that one covered active and went no further'. This one covered the
+tenancy and went no further.
+
+Measured, same tenant and same rows, rendered at 390px:
+
+  shortlisted + tenancy ended   filed nowhere  ->  under Your applications
+  accepted    + tenancy ended   not shown      ->  not shown (Phase D)
+  accepted    + tenancy active  not shown      ->  not shown
+  accepted    + tenancy pending shown          ->  shown
+
+tenant-dashboard.spec.ts is new - 12 assertions across five cases - and with
+the clause removed it fails on exactly the case that names the bug and nothing
+else. docs/UI-TEST-SCRIPT.md gained section 4b, the let-end-relist-reapply
+sequence.
+
+⚠️ What this says about the earlier call: 'did not reproduce' was true of what
+I ran and wrong as an answer. A reproduction that does not match the reported
+state proves nothing about the report."
+
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could

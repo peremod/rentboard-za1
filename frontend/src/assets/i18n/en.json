@@ -20,6 +20,8 @@
   "filters.guarantor_accepted": "Guarantor accepted",
   "filters.pets_allowed": "Pets allowed",
   "found_rooms": "{{count}} rooms found",
+  "board.waking_title": "Waking the server…",
+  "board.waking_body": "The board is hosted on a free plan that sleeps when nobody is using it. The first load after a quiet spell can take up to a minute. Nothing is wrong — the rooms will appear here.",
   "room.bills_included": "Bills incl.",
   "room.apply_now": "Apply free →",
   "room.application_sent": "Application sent",
