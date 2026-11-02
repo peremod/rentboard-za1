@@ -1,7 +1,8 @@
 import {
-  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, OnDestroy, OnInit, ViewChild, computed,
-  afterNextRender, inject, signal,
+  ChangeDetectionStrategy, Component, DestroyRef, ElementRef, Injector, OnDestroy, OnInit, PLATFORM_ID, ViewChild,
+  computed, afterNextRender, inject, signal,
 } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -457,7 +458,10 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
                The count is the heading: it is the visible text that names the
                region, so making it the heading beats inventing a hidden one. -->
           <h2 class="results-count">
-            @if (loading() && rooms().length === 0) { Loading rooms… }
+            @if (loading() && rooms().length === 0) {
+              @if (slowWake()) { {{ 'board.waking_title' | translate }} }
+              @else { Loading rooms… }
+            }
             @else { {{ 'found_rooms' | translate:{count: total()} }} }
           </h2>
 
@@ -500,6 +504,24 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
         </div>
 
         @if (loading() && rooms().length === 0) {
+          <!-- ⚠️ The waking notice, not a longer spinner. The API runs on a
+               free instance that suspends after ~15 minutes idle and takes
+               30-60s to come back, so a first load after a quiet spell looks
+               to a visitor exactly like a broken site. Six skeleton cards for
+               a minute say "loading"; they do not say "this is expected and it
+               will finish", which is the only thing that keeps somebody on the
+               page. It makes nothing faster — see docs/OUTSTANDING.md §102 for
+               the fix that does.
+
+               Browser-only: the timer is started behind isPlatformBrowser
+               because an interval or timeout left running on the server is
+               never cleared and holds the SSR render open. -->
+          @if (slowWake()) {
+            <div class="waking-notice" role="status">
+              <strong>{{ 'board.waking_title' | translate }}</strong>
+              <p>{{ 'board.waking_body' | translate }}</p>
+            </div>
+          }
           <div class="room-grid">
             @for (i of [1,2,3,4,5,6]; track i) { <app-skeleton-card/> }
           </div>
@@ -592,6 +614,11 @@ export class Home implements OnInit, OnDestroy {
   auth = inject(AuthService);
   private destroyRef = inject(DestroyRef);
   private injector = inject(Injector);
+  private platformId = inject(PLATFORM_ID);
+
+  /** How long a first load may run before the board explains itself. */
+  private static readonly WAKE_NOTICE_MS = 6000;
+  private wakeTimer?: ReturnType<typeof setTimeout>;
 
   rooms = signal<Room[]>([]);
   /** How the server read the typed phrase. Null when nothing was typed. */
@@ -599,6 +626,11 @@ export class Home implements OnInit, OnDestroy {
   total = signal(0);
   loading = signal(true);
   loadingMore = signal(false);
+  /**
+   * True once a first load has been outstanding for WAKE_NOTICE_MS. Drives the
+   * waking notice above the skeletons. Never set on the server.
+   */
+  slowWake = signal(false);
   hasMore = signal(true);
   page = 1;
   /** Mobile filter drawer. Ignored above 860px, where the panel is a sidebar. */
@@ -1071,6 +1103,7 @@ export class Home implements OnInit, OnDestroy {
     // Both were previously leaked on navigation away from the page.
     this.observer?.disconnect();
     clearTimeout(this.searchDebounce);
+    this.clearWakeNotice();
   }
 
   /** Picks a suggestion: fills the city and its province, then searches. */
@@ -1250,6 +1283,7 @@ export class Home implements OnInit, OnDestroy {
 
   private fetchRooms(append = false) {
     append ? this.loadingMore.set(true) : this.loading.set(true);
+    if (!append) this.startWakeNotice();
 
     this.roomsService.getRooms({
       search: this.searchTerm || undefined,
@@ -1284,6 +1318,7 @@ export class Home implements OnInit, OnDestroy {
       this.hasMore.set(res.hasMore);
       this.loading.set(false);
       this.loadingMore.set(false);
+      this.clearWakeNotice();
     },
     error: () => {
       // Without an error callback an API failure becomes an unhandled
@@ -1291,7 +1326,24 @@ export class Home implements OnInit, OnDestroy {
       this.loading.set(false);
       this.loadingMore.set(false);
       this.hasMore.set(false);
+      this.clearWakeNotice();
     },
     });
+  }
+
+  /**
+   * Arms the waking notice. Browser-only on purpose: a timeout created during
+   * SSR is never cleared, and it holds the render open for its whole duration.
+   */
+  private startWakeNotice() {
+    this.clearWakeNotice();
+    if (!isPlatformBrowser(this.platformId)) return;
+    this.wakeTimer = setTimeout(() => this.slowWake.set(true), Home.WAKE_NOTICE_MS);
+  }
+
+  private clearWakeNotice() {
+    clearTimeout(this.wakeTimer);
+    this.wakeTimer = undefined;
+    this.slowWake.set(false);
   }
 }

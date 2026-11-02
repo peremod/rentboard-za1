@@ -8775,10 +8775,75 @@ the schedule is already `*/10` and the drops are the scheduler's, not the
 cron's. Holding one run open to ping repeatedly for an hour would consume
 Actions minutes at a rate the free allowance will not carry.
 
-### Offered and not built
+### Built: the waking notice (v1.180.0)
 
-The one change that costs nothing is to stop the wait looking like a fault:
-after a few seconds the board could say the server is waking and that this can
-take up to a minute on the free plan, instead of an indefinite spinner. It
-makes nothing faster. It is user-facing copy and a product decision, so it is
-offered rather than written.
+The one change that costs nothing is to stop the wait looking like a fault.
+Asked for and shipped: after `WAKE_NOTICE_MS` (6s) a first load of the board
+says the server is waking and that this can take up to a minute on the free
+plan, instead of an indefinite spinner. **It makes nothing faster.** The fix
+that does is still one of the three money decisions above.
+
+Driven at 360 / 390 / 768 / 1280 (`scripts/wake-notice-drive.mjs`) and
+falsified: seven mutations of the implementation each fail at least one case in
+`frontend/src/app/features/home/home.spec.ts`, including deleting the
+`isPlatformBrowser` guard and deleting the `clearWakeNotice()` call from
+`fetchRooms`' own `next` handler.
+
+⚠️ The first seven cases could NOT see that second one. With
+`this.clearWakeNotice()` removed from the `next` handler — the live bug where
+a warm 20ms board shows the waking notice forever — all seven still passed,
+because each of them calls `clearWakeNotice()` itself. That is why the spec has
+a second block that drives the real `fetchRooms` with the service stubbed. The
+gap was measured, not reasoned about.
+
+## §103 — The board is fetched TWICE on every first visit, and the SSR copy is thrown away
+
+Found while verifying §102's waking notice, with a development SSR bundle
+served from this container (`node dist/mastande-frontend/server/server.mjs`)
+and Playwright holding `/api/rooms` open for 12s to imitate a waking instance.
+Sampling the DOM every 250ms:
+
+```
+t=  143ms cards=0  skeletons=0  waking=false
+t=  461ms cards=12 skeletons=0  waking=false  heading="584 rooms found"   <- SSR HTML
+t=  717ms cards=0  skeletons=6  waking=false  heading="Loading rooms…"    <- hydration
+t= 6588ms cards=0  skeletons=6  waking=true   heading="Waking the server…"
+t=12699ms cards=12 skeletons=0  waking=false  heading="584 rooms found"   <- browser fetch
+```
+
+The server renders the board, the rooms reach the browser inside the HTML, and
+then **Angular bootstraps with `rooms()` empty and asks for the same page
+again** — `REQ /api/rooms?page=1&limit=12&sortBy=newest`, confirmed on the
+wire. The board that was already on screen at 461ms is replaced by six
+skeletons at 717ms and the person waits for the second answer.
+
+This is not a cache miss for want of a cache. The response IS serialised into
+the page: `<script id="ng-state">` carries one HTTP transfer-cache entry keyed
+`2e1247629634a88e…` whose body is the rooms payload. `app.config.ts` registers
+`provideClientHydration(withEventReplay())`, which leaves the transfer cache on
+its default (enabled). The client nevertheless goes to the network, and why it
+does has not been established.
+
+**On a warm API this costs ~300ms and is invisible** — measured: one request,
+cards at 305ms, no skeleton flash at a 150ms sampling interval. **On a sleeping
+one it is the whole wait**, after the rooms had already arrived. So the free
+instance makes an existing defect visible; the defect is not the free instance.
+
+⚠️ Dates, against the report that "the rooms were rendering just fine before
+v1.179.0": nothing on this path has changed since **21 Oct** — `home.ts` at
+`10374c1`, `rooms.service.ts` at `10374c1`, `app.config.ts` at `d002bb9`, all
+2026-10-21, twelve days before v1.179.0, whose only frontend change is
+`tenant-dashboard.ts` (`git diff --stat d382801..dd80ad6 -- frontend/`). What
+changed in between is how often the instance is asleep when somebody arrives.
+
+**Not fixed here**, because the fix is a hydration change on the busiest page
+in the site and it wants its own pass: either the client stops re-fetching when
+the server already answered, or the transfer cache is made to serve the hit it
+has clearly stored.
+
+⚠️ **Proven against a DEVELOPMENT bundle only.** The production bundle cannot
+be driven from this container — it calls `api.umastande.co.za`, which does not
+resolve here — and `https://www.umastande.co.za/` is refused by this
+container's egress policy (`403 to CONNECT`, in the proxy's own
+`recentRelayFailures`). So the double fetch is confirmed in the shared code
+path and NOT confirmed on production.
