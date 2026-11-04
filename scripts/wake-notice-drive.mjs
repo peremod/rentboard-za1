@@ -71,7 +71,22 @@ for (const width of WIDTHS) {
     await route.continue();
   });
 
-  await page.goto(`${BASE}/`, { waitUntil: 'commit' });
+  // ⚠️ Arrive at the board from ANOTHER page, through the app's own router.
+  //
+  // A straight `goto('/')` no longer reaches this notice at all, and that is
+  // the fix in §103 working rather than a fault: the server renders the board
+  // and the browser now reads its copy out of the page, so a first load has
+  // rooms immediately and never shows the skeleton block the notice lives in.
+  //
+  // What is left is the case the notice was always for — a board that starts
+  // empty and has to wait for the network: an in-app navigation (the transfer
+  // cache is consumed once, so this one really does fetch), and a server-side
+  // render whose own fetch failed. This drives the first.
+  //
+  // The navbar's "Browse rooms" link is routerLink="/", so clicking it is a
+  // router navigation and no new document is requested.
+  await page.goto(`${BASE}/pricing`, { waitUntil: 'networkidle' });
+  await page.getByRole('link', { name: /browse rooms/i }).first().click();
   await page.waitForTimeout(500);
 
   const notice = page.locator('.waking-notice');
