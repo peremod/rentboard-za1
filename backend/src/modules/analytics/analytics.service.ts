@@ -18,6 +18,33 @@ export const TRACKED_EVENTS = [
 export type TrackedEvent = (typeof TRACKED_EVENTS)[number];
 
 /**
+ * The only segment values `record()` will store.
+ *
+ * ⚠️ The schema says this column is "'mobile', 'desktop', or 'all'. Never
+ * anything that could identify a person", and until now NOTHING ENFORCED IT.
+ * There is no DTO on POST /analytics/event — the body is an inline TypeScript
+ * type, which erases at runtime — so the only guard was
+ * `segment.length <= 24`, on a PUBLIC, UNAUTHENTICATED endpoint. Twenty-four
+ * characters is a phone number, an email prefix, an ID number.
+ *
+ * Reproduced before fixing, against the real API with no credentials:
+ *
+ *   POST /api/analytics/event {"event":"wizard.started","segment":"0821234567"}
+ *   → 204
+ *   select … from ux_counters → wizard.started | 0821234567 | 1
+ *
+ * The smoke suite said PASS throughout, because it asserts the 204 — which is
+ * the same answer a stored event gives.
+ *
+ * ⚠️ `ad.eligible` is NOT affected and must not be added here: ads.service.ts
+ * writes those rows directly rather than through record(), and its levels
+ * (national/province/city/suburb) are properties of a campaign, not of a
+ * person. This list is what the BROWSER may put in the column, and the
+ * browser sends exactly two things.
+ */
+export const SAFE_SEGMENTS = ['all', 'mobile', 'desktop'] as const;
+
+/**
  * Aggregate UX measurement.
  *
  * Deliberately counts, not journeys. Every method here either increments a
@@ -40,7 +67,14 @@ export class AnalyticsService {
     // 'all' rather than null: a nullable column in a compound unique index
     // never collides in Postgres, so the upsert would insert forever instead
     // of incrementing.
-    const safeSegment = segment && segment.length <= 24 ? segment : 'all';
+    //
+    // ⚠️ An ALLOWLIST, not a length limit. The old test was
+    // `segment.length <= 24`, which accepted any short string and stored it
+    // verbatim — see SAFE_SEGMENTS. Anything unrecognised becomes 'all', the
+    // same way an unrecognised EVENT is dropped above: the count is still
+    // worth having, the dimension is not worth a person's phone number.
+    const safeSegment =
+      segment && (SAFE_SEGMENTS as readonly string[]).includes(segment) ? segment : 'all';
 
     try {
       await this.prisma.uxCounter.upsert({
