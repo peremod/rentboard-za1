@@ -8835,6 +8835,89 @@ because each of them calls `clearWakeNotice()` itself. That is why the spec has
 a second block that drives the real `fetchRooms` with the service stubbed. The
 gap was measured, not reasoned about.
 
+## 104. §6's analytics and referrals, read rather than trusted — 9 November 2026
+
+§6's list said both had "refusal coverage only". Both were wrong, which makes
+it three times the list has been wrong about a domain, and its own warning —
+"read the checks rather than the list" — is the only part of it worth trusting.
+
+### 🔴 FIXED: an unauthenticated caller could store a phone number in ux_counters
+
+`POST /analytics/event` has **no DTO**. The body is an inline TypeScript type,
+which erases at runtime, so the only guard on `segment` was
+`segment.length <= 24` — on a public, unauthenticated endpoint writing to a
+column the schema describes as "Never anything that could identify a person".
+Twenty-four characters is a phone number, an email prefix, an ID number.
+
+Reproduced against the real API with no credentials:
+
+```
+POST {"event":"wizard.started","segment":"0821234567"}  -> 204
+select … from ux_counters -> wizard.started | 0821234567 | 1
+```
+
+Smoke §32 said PASS throughout, because its two relevant assertions read the
+204 — which is the same answer a stored event gives. `record()` takes an
+allowlist now (`all`, `mobile`, `desktop`, which is everything the browser
+sends); anything else becomes `all`, as an unrecognised EVENT is already
+dropped.
+
+⚠️ `ad.eligible` is unaffected and must stay that way: `ads.service.ts` writes
+those rows directly rather than through `record()`, and its levels
+(national/province/city/suburb) describe a campaign, not a person.
+
+### ⚠️ Two referral guards that cannot fire, and the abuse they are named for
+
+`recordSignup(refereeId, rawCode)` has exactly two callers —
+`auth.service.ts:103` and `phone-signup.service.ts:420` — and both pass the id
+of a user created moments earlier in the same method. So:
+
+```ts
+if (code.ownerId === refereeId) return null;                  // self-referral
+const existing = await …findUnique({ where: { refereeId } }); // one per person
+```
+
+compare a brand-new id against a pre-existing owner, and against a table that
+cannot yet hold a row for it. **Neither condition is reachable through the only
+paths that call this.** They are defensive rather than broken — but smoke §29's
+header named them as "the assertions that matter", and no assertion was made.
+
+⚠️ **The abuse they are named for is not stopped.** One person registering a
+SECOND account and using their own code is two different user ids, which no id
+comparison can see. Catching that needs identity — device, payment instrument,
+or the verified identity the R149 check already produces — and that is a
+product decision, not a bug fix. **Flagged, not invented.** The exposure is
+currently nil in rands, because §100's reward was removed and nothing is paid
+out; it becomes real the day redemption is wired up.
+
+### What now holds them
+
+`backend/test/analytics.int-spec.ts` (7) and `backend/test/referrals.int-spec.ts`
+(6), both reading the table rather than the reply, because both endpoints
+answer identically whether they stored anything or not.
+
+⚠️ **Two of my own cases could not fail, and both were caught by falsifying
+rather than by review.**
+
+1. "keeps the day only" posted an event and read the row back expecting
+   midnight. Commenting out `day.setUTCHours(0, 0, 0, 0)` left all seven
+   green: a Postgres `date` column truncates the time whatever the service
+   hands it. It was measuring Postgres. It asserts the column TYPE now.
+2. The referral helper polled `if (count) break`, already true once ANY
+   referral existed — so in the maximum-uses case the second registration
+   returned before its row could land, and the test passed with the `maxUses`
+   guard deleted. It waits for the count the registration SHOULD produce now,
+   and when that is zero it waits the whole window rather than returning
+   early: a row that will never appear is indistinguishable from one that has
+   not appeared yet unless you give it the same time.
+
+Smoke's two overclaiming labels were corrected rather than deleted: §32's
+"unknown event silently ignored, NOT STORED" now claims only what an HTTP
+driver can see, and §29's header no longer lists three guards it does not
+check.
+
+---
+
 ## §103 — The board is fetched TWICE on every first visit, and the SSR copy is thrown away
 
 Found while verifying §102's waking notice, with a development SSR bundle

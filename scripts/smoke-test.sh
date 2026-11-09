@@ -2535,8 +2535,18 @@ fi
 
 
 # -- 29. Referrals ---------------------------------------------------------
-# The assertions that matter are the abuse guards: self-referral, double
-# referral, and rewarding a signup that never did anything.
+# ⚠️ This header used to read "The assertions that matter are the abuse
+# guards: self-referral, double referral, and rewarding a signup that never
+# did anything" — and NONE OF THE THREE was asserted here. The nearest was
+# `pending >= 1`, which proves the signup landed, not that it stayed
+# unrewarded. A header naming checks a section does not make reads as coverage
+# from a distance, which is the same defect as a check that cannot see its
+# subject.
+#
+# What this section does, and does well: the happy path and the access rules.
+# The abuse guards are asserted against the referral table in
+# backend/test/referrals.int-spec.ts, because registration answers 201
+# whether the code was honoured or dropped — from here they are invisible.
 head_ "29. Referrals"
 req GET /api/referrals/mine "" "$LTOKEN"
 check "landlord gets a referral code" 200 "$STATUS" "$BODY"

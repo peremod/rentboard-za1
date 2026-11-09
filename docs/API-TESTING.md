@@ -239,11 +239,10 @@ Stated rather than implied, because a suite's silence reads as a pass.
 6. **The 236-route sweeps call every route with a sample UUID**, so for most of
    them the assertion is about *refusal*, not about the handler's work. The
    handler's work is covered for the domains with their own spec files; the
-   rest (referrals, surveys, storefront, analytics, places, SEO) have
-   refusal coverage only.
+   rest (surveys, storefront, SEO) have refusal coverage only.
 
-   ⚠️ **This list has been wrong twice, so read the checks rather than the
-   list.** Both notices (§97) and ads (§99) were described here as
+   ⚠️ **This list has been wrong THREE times, so read the checks rather than
+   the list.** Both notices (§97) and ads (§99) were described here as
    refusal-only and both already had substantial coverage — ads has a whole
    section of `scripts/smoke-test.sh` running in CI. What each was missing was
    narrower and more specific than "the handler's work": for notices, that the
@@ -277,6 +276,26 @@ Stated rather than implied, because a suite's silence reads as a pass.
    identical whether the table holds one row per day or one per viewer per day.
    ⚠️ This does **not** close `analytics`: that module is separate from view
    counting and nothing here touched it.
+
+   **Analytics and referrals came off the list — §104, 9 November 2026.**
+   Neither was refusal-only. Smoke §32 covers the analytics access rules and
+   §29 the referral happy path, both properly. What neither could do is see
+   what was STORED: `POST /analytics/event` and `POST /auth/register` each
+   answer the same whether they recorded anything or not — so "unknown event
+   silently ignored, not stored" passes with the allowlist deleted, and
+   "referral recorded as pending" proves the signup landed rather than that it
+   stayed unrewarded. ⚠️ Reading the row instead of the reply found a live
+   POPIA defect: an unauthenticated caller could store a phone number in
+   `ux_counters.segment`, a column documented as never holding anything
+   identifying. `backend/test/analytics.int-spec.ts` (7 cases) and
+   `backend/test/referrals.int-spec.ts` (6) hold both.
+
+   **Places is not refusal-only either.** Smoke drives `/api/places/resolve`
+   for two real cities and asserts an unknown place answers `null` rather than
+   an error — which is the handler's work, and what a filter depends on.
+
+   ⚠️ **Three of the six once on this list were wrong, so it now says so
+   twice.**
 
    ⚠️ **Read before trusting a domain's name on this list.** Notices already
    had `scripts/notices-drive.mjs`, nine checks, written for this exact
