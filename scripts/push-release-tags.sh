@@ -2621,6 +2621,71 @@ slow-load drive extended with the heading and infrastructure-wording checks,
 23 frontend unit tests, 233 integration tests, 639 smoke assertions."
 
 
+tag_if_missing "v1.182.0" "7837653cdb7f91723bd9ff02f73551304bda5a0a" "2026-11-09T07:05:00+00:00" "v1.182.0 - the board stops fetching itself twice
+
+Section 103, and the cause was one clone in the auth interceptor.
+
+The server renders the board and serialises the rooms into the page. The
+browser then asked for the same thing off the wire and replaced the rendered
+board with six skeletons while it waited. Warm, that costs about 300ms and
+nobody sees it; on a sleeping instance it was the entire wait, AFTER the
+rooms had already arrived.
+
+authInterceptor marks every BROWSER request withCredentials: true and
+deliberately does not on the server. Angular's transfer-cache interceptor
+sits at the root of the chain, so it sees the request AFTER that clone - and
+a credentialed response is never served from the transfer cache, by design,
+because it may be user-specific. The server stored an uncredentialed answer
+and the browser asked a credentialed question. Not the same request, so the
+cache missed a hit it was holding.
+
+  before                            after
+  t=  431ms cards=12  (SSR HTML)    t=  351ms cards=12
+  t=  917ms cards=0 skeletons=6     (nothing else happens)
+  t=13015ms cards=12                browser-side /api/rooms: 0
+
+⚠️ The first version of the fix would have shipped a regression. It reused
+isPublicRead, the predicate for what a server-side render may fetch, which
+matches by PREFIX - so it is also true for /reviews/mine, /ads/enquiries,
+/ads/advertisers, /ads/reach-analysis and /rooms/:id. A false positive costs
+nothing on the server, which has no token to omit, and silently signs the
+browser out. An owner would have got a 404 on their own draft room.
+
+⚠️ And nothing on the public board could have caught that: widening the
+predicate back leaves all five board checks green, because the board is
+public and the board is all they load. The drive signs in, opens a room page
+and reads the Authorization header off the wire; under that mutation it
+reports 0 requests to /rooms/:id, because the page renders the anonymous SSR
+answer from the cache and never asks with the token at all.
+
+── Two CI reds on the way, both UNCOVERED by the fix rather than caused
+
+⚠️ A room-page SEO test had been failing whenever it ran, and almost never
+ran: it skips when the board shows no room links, and the board blanking is
+exactly what removed them. Measured on the commit before the fix: 2 of 3
+runs failed, 1 skipped. The PAGE was correct throughout - SSR serves the
+rand figure in the title and a RealEstateListing. The TEST read the title
+straight after a client-side navigation, before it had been set, and
+asserted a Product where seo-drive.mjs asserts the opposite in as many
+words. Two checks disagreed and the one that ran was right.
+
+⚠️ And that test took its board from LIVE PRODUCTION, because the step runs
+the production bundle, whose API URL is the real one. On a runner that can
+reach it, the test's answer depended on whether a free instance that sleeps
+happened to be awake - and when a call failed, errorInterceptor put an alert
+dialog over the board and the click landed on the dialog. Tagged @local-api
+now and run against the local seeded database, where it runs EVERY time
+instead of skipping.
+
+Also in this release: the sitemap check that exited 1 printing nothing, and
+a Lighthouse summary that reported seo 0.92 and could not name the audit.
+Both have since run green - 33 sitemap URLs at 200, SEO 1 on all four pages
+- so the 0.92 has not recurred and remains unexplained.
+
+29 frontend unit tests, three board drives at 360/390/768/1280, 233
+integration tests, the smoke suite. CI run 364 green on all five jobs."
+
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could
