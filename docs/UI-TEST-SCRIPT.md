@@ -73,11 +73,18 @@ warm path and will tell you nothing.
 | 1c.5 | Sign out again | The full hero comes back: eyebrow, big headline, sub-line, four statistics, and on a first visit from a phone the one-screen hero with the "N rooms ⌄" cue |
 | 1c.6 | ⚠️ Signed in, on a phone, reload a few times | The hero must be short **every** time. If it is occasionally a full screen tall with just a heading in it, the splash race is back — see the checklist row |
 
-⚠️ **What this does NOT cover.** On a sleeping server the rooms may appear,
-vanish back to skeletons for most of a minute, and then come back. That is a
-separate open defect — `docs/OUTSTANDING.md` §103, the board is fetched twice
-and the server's copy is thrown away — and the waking notice is what covers
-that window, not a fix for it. If you see it, it is known.
+⚠️ **The rooms must never appear and then vanish.** They used to: the server
+rendered the board, and the browser threw it away and asked again, so on a
+sleeping instance you saw rooms, then skeletons for most of a minute, then the
+rooms back. That was §103 and it is fixed in v1.182.0. **If you ever see the
+board blank out after it has already shown rooms, that is a regression** —
+report it, do not wait for it to settle.
+
+⚠️ **And the notice has moved.** Because a first load of the board now has its
+rooms immediately, the "Still finding rooms…" notice no longer appears there.
+It appears when you arrive at the board FROM ANOTHER PAGE — open `/pricing`
+first, then tap "Browse rooms" in the menu. That is the test above; a straight
+reload of the board will not show it, and that is correct.
 
 ---
 

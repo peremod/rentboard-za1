@@ -8836,14 +8836,68 @@ v1.179.0": nothing on this path has changed since **21 Oct** — `home.ts` at
 `tenant-dashboard.ts` (`git diff --stat d382801..dd80ad6 -- frontend/`). What
 changed in between is how often the instance is asleep when somebody arrives.
 
-**Not fixed here**, because the fix is a hydration change on the busiest page
-in the site and it wants its own pass: either the client stops re-fetching when
-the server already answered, or the transfer cache is made to serve the hit it
-has clearly stored.
+### Fixed in v1.182.0 — and the cause was one line in the auth interceptor
 
-⚠️ **Proven against a DEVELOPMENT bundle only.** The production bundle cannot
-be driven from this container — it calls `api.umastande.co.za`, which does not
-resolve here — and `https://www.umastande.co.za/` is refused by this
-container's egress policy (`403 to CONNECT`, in the proxy's own
-`recentRelayFailures`). So the double fetch is confirmed in the shared code
-path and NOT confirmed on production.
+**The transfer cache was refusing to serve a hit it had.** `authInterceptor`
+clones every BROWSER request `withCredentials: true`, and deliberately does not
+on the server ("a public read carries no credentials — there are none to
+carry"). Angular's transfer-cache interceptor sits at the root of the chain, so
+it sees the request *after* that clone — and a credentialed response is never
+served from the transfer cache, by design, because it may be user-specific.
+
+So the server stored an uncredentialed response and the browser asked a
+credentialed question. Not the same request, hence the miss, hence the second
+fetch, hence the board blanking back to skeletons while the already-rendered
+rooms were thrown away.
+
+A public read now goes out from the browser exactly as the server sent it: no
+cookie, no token, and no waiting on `sessionReady()` either — a read that needs
+no session has nothing to wait for, and that wait was pushing the board's first
+request a whole refresh round trip later.
+
+Measured, with the browser's `/api/rooms` held open for 12s:
+
+```
+before                                   after
+t=  431ms cards=12   (SSR HTML)          t=  351ms cards=12
+t=  917ms cards=0 skeletons=6            (nothing else happens)
+t=13015ms cards=12                       browser-side /api/rooms: 0
+browser-side /api/rooms: 1
+```
+
+⚠️ **The first version of this fix was wrong, and would have shipped a
+regression.** It reused `isPublicRead`, the predicate that decides what a
+server-side render may fetch. That one matches by PREFIX, so it is also true
+for `/reviews/mine`, `/ads/enquiries`, `/ads/advertisers` and
+`/ads/reach-analysis` — every one behind `JwtAuthGuard` — and for `/rooms/:id`,
+which takes `OptionalJwtAuthGuard` and hands `user?.id` to `findOne`: an owner
+may fetch their own `draft` or `deleted` room, and the view counters only
+increment `if (!isOwner)`. Anonymous, a landlord opening their own draft gets a
+404 and a landlord opening their live room inflates their own view count.
+
+As "may SSR fetch this?" a false positive costs nothing, because the server has
+no token to omit. As "may the browser leave its credentials off?" every false
+positive silently signs a request out. `isViewerIndependentRead` is therefore
+an exact list, and every entry on it was checked against its controller.
+
+⚠️ **And nothing on the public board could have caught that.** Widening the
+predicate back to `isPublicRead` leaves all five board checks green, because
+the board is public and the board is all they load. The drive now signs in,
+opens a room page and reads the Authorization header off the wire; under that
+mutation it reports **0** requests to `/api/rooms/:id` — the room page silently
+renders the anonymous SSR answer and never asks with the token at all.
+
+**A consequence worth knowing:** the slow-load notice (§102) no longer appears
+on a first load of `/`, because the board is never empty there now. It still
+covers the case it was written for — an in-app navigation to the board, where
+the transfer cache has already been consumed — and `wake-notice-drive.mjs`
+drives that path instead. The case it covers and does NOT drive is a
+server-side render whose own fetch failed.
+
+⚠️ **Proven against a DEVELOPMENT bundle only**, both the defect and the fix.
+The production bundle cannot be driven from this container — it calls
+`api.umastande.co.za`, which does not resolve here — and
+`https://www.umastande.co.za/` is refused by this container's egress policy
+(`403 to CONNECT`, in the proxy's own `recentRelayFailures`). The interceptor,
+the hydration and the transfer cache are the same code in both, so the
+mechanism carries; the production bundle itself has not been watched doing it.
