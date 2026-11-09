@@ -130,6 +130,9 @@ test.describe('locale routing', () => {
   });
 });
 
+/** The route title for '/', and so the one a room page must not keep. */
+const SITE_DEFAULT_TITLE = 'Mastande — Rooms to Rent in South Africa, No Agent Fees';
+
 test.describe('SEO metadata is server-rendered', () => {
   test('a prerendered page carries its metadata in the HTML', async ({ page }) => {
     const res = await page.goto('/pricing');
@@ -176,21 +179,59 @@ test.describe('SEO metadata is server-rendered', () => {
     await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
   });
 
-  test('a room page sets its own title, not the site default', async ({ page }) => {
+  /**
+   * ⚠️ This test was wrong on two counts and almost never ran, so nobody saw.
+   *
+   * It skips when the board shows no room links — and until §103 the board
+   * rendered its rooms and then THREW THEM AWAY, back to skeletons, while the
+   * browser re-fetched a page the server had already sent. So the links were
+   * usually gone at the moment the locator counted them, and the test skipped.
+   * Fixing §103 made the board reliably populated, which un-skipped a test
+   * that had been failing all along. Measured on the commit BEFORE that fix:
+   * 2 of 3 runs failed, 1 skipped.
+   *
+   * What it got wrong:
+   *
+   *   1. It clicked through from the board and read page.title() straight
+   *      after toHaveURL. That is a CLIENT-SIDE navigation, so the title is
+   *      set once the room has loaded, and the read landed on the route's
+   *      default: "Room to rent — Mastande". A race, in a describe block
+   *      named "server-rendered", which never rendered on a server at all.
+   *   2. It asserted the first ld+json is a Product. The room is a
+   *      RealEstateListing and deliberately NOT a Product — scripts/seo-drive.mjs
+   *      asserts that in as many words, "a room let monthly is not retail
+   *      stock" — and the first block on the page is the site Organization
+   *      anyway. Two checks in this repository disagreed, and the one that
+   *      ran was right.
+   *
+   * So it now checks both halves properly: what a crawler is served with no
+   * JavaScript at all, and what the app puts there after a click.
+   */
+  test('a room page sets its own title, not the site default', async ({ page, request }) => {
     await page.goto('/');
     const firstRoom = page.locator('a[href^="/rooms/"]').first();
     test.skip((await firstRoom.count()) === 0, 'no rooms seeded in this environment');
+    const href = (await firstRoom.getAttribute('href'))!;
 
+    // ── What a crawler gets: the server's own HTML, unexecuted.
+    const html = await (await request.get(href)).text();
+    // The rand figure carries a non-breaking space, which is &nbsp; in source
+    // and \u00a0 once parsed. Decoded first so one regex covers both.
+    const ssrTitle = (/<title>([^<]*)<\/title>/.exec(html)?.[1] ?? '').replace(/&nbsp;/g, '\u00a0');
+    expect(ssrTitle).not.toBe(SITE_DEFAULT_TITLE);
+    expect(ssrTitle).toMatch(/R[\d\s,]+\/month/);
+
+    // ── And the listing markup a rich result is built from.
+    const types = [...html.matchAll(/"@type":\s*"([^"]+)"/g)].map((m) => m[1]);
+    expect(types).toContain('RealEstateListing');
+    expect(types).not.toContain('Product');
+
+    // ── And the app sets it too, after a click. toHaveTitle retries, so this
+    // asserts the end state rather than racing the fetch that produces it.
     await firstRoom.click();
     await expect(page).toHaveURL(/\/rooms\//);
-
-    const title = await page.title();
-    expect(title).not.toBe('Mastande — Rooms to Rent in South Africa, No Agent Fees');
-    expect(title).toMatch(/R[\d\s,]+\/month/);
-
-    // Product schema drives the rich result.
-    const ld = await page.locator('script[type="application/ld+json"]').first().textContent();
-    expect(JSON.parse(ld!)['@type']).toBe('Product');
+    await expect(page).not.toHaveTitle(SITE_DEFAULT_TITLE);
+    await expect(page).toHaveTitle(/R[\d\s,]+\/month/);
   });
 
   test('/rooms redirects to the board rather than 404ing', async ({ page }) => {
