@@ -239,9 +239,9 @@ Stated rather than implied, because a suite's silence reads as a pass.
 6. **The 236-route sweeps call every route with a sample UUID**, so for most of
    them the assertion is about *refusal*, not about the handler's work. The
    handler's work is covered for the domains with their own spec files; the
-   rest (surveys, storefront, SEO) have refusal coverage only.
+   rest (storefront, SEO) have refusal coverage only.
 
-   ⚠️ **This list has been wrong THREE times, so read the checks rather than
+   ⚠️ **This list has been wrong FOUR times, so read the checks rather than
    the list.** Both notices (§97) and ads (§99) were described here as
    refusal-only and both already had substantial coverage — ads has a whole
    section of `scripts/smoke-test.sh` running in CI. What each was missing was
@@ -294,7 +294,39 @@ Stated rather than implied, because a suite's silence reads as a pass.
    for two real cities and asserts an unknown place answers `null` rather than
    an error — which is the handler's work, and what a filter depends on.
 
-   ⚠️ **Three of the six once on this list were wrong, so it now says so
+   **Surveys came off the list — §105, 9 November 2026.** Not refusal-only
+   either: smoke lines 4437-4540 drive both roles properly, and CI derives
+   `ADMIN_TOKEN`, so even the admin section runs. A part-answered set is
+   accepted, answers merge across steps, an unfinished set comes back
+   resumable at 2 of 7, a tenant gets their own survey and a 404 on the
+   landlord's, an unknown question id is dropped, and results are refused to a
+   non-admin. What none of it could see is the guarantee the feature is sold
+   on: the admin aggregate "never returns who said what" — the service's words
+   and the controller's — rests entirely on the `select` list of one query.
+   Adding `userId` there, or a `user: { select: { fullName } }` "for context",
+   produces a payload that still answers 200 with a `segmentQuestionId`, which
+   is all the smoke looks at. §6 is explicit about the stakes: the open text is
+   things landlords said about their tenants. `backend/test/surveys.int-spec.ts`
+   (10 cases) pins that over the whole serialised payload and over the CSV, and
+   fixes the column and key lists exactly so an added field cannot pass as a
+   subset. It also drives three ⚠️-marked decisions nothing had driven — the
+   newest edition is chosen by `version` and not by which row was written last,
+   a dismissal is honoured for 30 days AND THEN EXPIRES, and a finished set is
+   not reopened by a later partial submit.
+
+   ⚠️ **And one of the guarantees was false.** `matchesAudience` carries the
+   note that eligibility cannot be a client-side check because "a client that
+   decides its own eligibility can be asked to lie about it by anyone".
+   `promptFor` honoured it; `submit` never called it. The audience held for
+   people who asked politely what to answer and a crafted POST wrote straight
+   past it. Latent rather than live — neither shipped survey sets `minRooms`,
+   and the `role` half is enforced by `findForRole` — which is exactly why the
+   first survey that narrowed by size would have found it in the numbers
+   instead of in an error. Fixed in `surveys.service.ts`; two of the ten cases
+   are the pair that proves it, one refusing and one accepting, because a guard
+   that refuses everybody is not a guard either.
+
+   ⚠️ **Four of the six once on this list were wrong, so it now says so
    twice.**
 
    ⚠️ **Read before trusting a domain's name on this list.** Notices already
