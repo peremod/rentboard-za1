@@ -9,9 +9,15 @@ type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tena
 /**
  * Referral panel for both dashboards.
  *
- * The copy is deliberately honest about the reward: landlords earn a free
- * verification, tenants earn nothing but a better board. Implying a payout we
- * cannot fund would cost more trust than the referrals are worth.
+ * ⚠️ The copy names NO reward, for landlords or tenants. It used to tell
+ * landlords their R149 identity check was covered by a referral; nothing in
+ * the product could spend that credit (§100), so the panel was making a
+ * monetary promise the platform did not keep. The R149 is a verification fee,
+ * not a referral reward.
+ *
+ * The principle in the old comment was right and is why this is now one line
+ * rather than two branches: implying a payout we cannot fund costs more trust
+ * than the referrals are worth.
  */
 @Component({
   selector: 'app-referral-panel',
@@ -36,29 +42,32 @@ type ShareKind = 'landlord_to_landlord' | 'landlord_to_tenant' | 'tenant_to_tena
           </button>
         </div>
 
-        @if (isLandlord()) {
-          @if (d.summary.freeVerificationsAvailable > 0) {
-            <div class="insight-banner" style="background:rgba(61,112,64,.08);border-color:rgba(61,112,64,.2)">
-              <app-icon name="gift"/>
-              <span>
-                You have <strong>{{ d.summary.freeVerificationsAvailable }}</strong>
-                free verification{{ d.summary.freeVerificationsAvailable === 1 ? '' : 's' }} earned.
-                It covers the R149 identity check.
-              </span>
-            </div>
-          } @else {
-            <p class="muted">
-              When a landlord you invite publishes their first room, your R149
-              verification is covered. Nothing is owed for a signup alone.
-            </p>
-          }
-        } @else {
-          <p class="muted">
-            There's no cash reward for inviting people — we'd rather not promise
-            one we can't fund. More tenants and landlords simply means more rooms
-            and faster replies for everyone.
-          </p>
-        }
+        <!-- ⚠️ One line for everybody, and NO reward named. See §100.
+             This used to tell a landlord "You have N free verifications
+             earned. It covers the R149 identity check." and, before they had
+             earned one, "your R149 verification is covered". Driven end to
+             end against the real API: the credit is granted, counted and
+             displayed, and NOTHING SPENDS IT. consumeFreeVerification() has
+             no caller anywhere in the codebase, and requiresPayment(type,
+             role) cannot see a credit even in principle. So the screen made
+             a specific promise in rands that the product could not keep.
+
+             The R149 is the identity VERIFICATION fee — a charge for a
+             service, described honestly on /legal/terms, the privacy policy
+             and the verification screen. It is not a referral reward, and
+             tying the two together was the mistake. Referrals are
+             attribution now, and say so.
+
+             ⚠️ The backend still grants and counts the credit; only the
+             promise is gone. That is deliberate: nothing is taken away from
+             anyone who already earned one, and wiring redemption up later
+             (§100, option 1) needs no migration. Until then nothing on
+             screen offers it. -->
+        <p class="muted">
+          There's no cash reward for inviting people — we'd rather not promise
+          one we can't fund. More tenants and landlords simply means more rooms
+          and faster replies for everyone.
+        </p>
 
         <h2 class="dash-section-title" style="margin-top:1.25rem">Share</h2>
         <div class="referral-share">
@@ -172,7 +181,12 @@ export class ReferralPanel implements OnInit {
     return {
       pending: 'Signed up',
       qualified: 'Active',
-      rewarded: 'Reward earned',
+      // ⚠️ Was 'Reward earned', and there is no reward to earn — see the
+      // template comment and §100. The backend's status is still `rewarded`,
+      // because the credit is still granted; what a person READS must not
+      // claim they are owed something nothing can pay. This names what
+      // actually happened: they joined and put a room up.
+      rewarded: 'Listed a room',
       void: 'Not counted',
     }[status] ?? status;
   }

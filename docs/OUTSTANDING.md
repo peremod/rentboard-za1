@@ -8497,9 +8497,48 @@ This is CLAUDE.md's own list with a new entry: a `MAX_ATTEMPTS` nothing read, a
 notice channel nobody could read, a rent-reminder control on a screen with no
 route — and now a reward nobody can spend.
 
-**Not fixed here, deliberately.** Honouring it is a billing change, and
+### Resolved by the owner, 9 November 2026 — option 2, stop promising it
+
+**The owner's decision, in their words: "stop promising it for now… it's a
+Verification not referral."** That names the error precisely. The R149 is a
+charge for identity verification — a service — and /legal/terms, the privacy
+policy and the verification screen are all right to name it. It is not a
+referral reward, and tying the two together is what produced a promise the
+product could not keep.
+
+Removed from `referral-panel.ts`: the earned-credit banner, the
+"your R149 verification is covered" sentence, and the
+`freeVerificationsAvailable` figure. Landlords and tenants now read the same
+line, which names no reward at all.
+
+⚠️ **And one layer down, found after those two sentences were already gone:**
+the status list still labelled a completed referral **"Reward earned"**. The
+headline promise was gone and the chip went on telling people they were owed
+something. Now "Listed a room", which is what actually happened.
+
+⚠️ **The backend still grants and counts the credit.** Only the promise is
+gone. Deliberate: nothing is taken from anyone who already earned one, and
+wiring redemption up later needs no migration. Nothing on screen offers it in
+the meantime.
+
+`scripts/referral-promise-lint.mjs` holds it, in CI. Four rules, matched
+against template sources with COMMENTS STRIPPED — so the paragraphs explaining
+this decision cannot satisfy their own rule, which the first draft did. Proven
+able to fail three ways: each original sentence restored turns it red and
+names the rule; the same claim placed inside a comment correctly does not
+count.
+
+⚠️ This is a lint and not a drive on purpose. §99's house advertiser was a
+database row, where no source check could have seen it. This promise IS the
+source — a sentence in a template is exactly what a source check can hold.
+Rendered as a landlord at 390px as well: none of "R149", "free verification",
+"is covered" or "Reward earned" appears, and nothing scrolls sideways.
+
+### The three answers, as they stood
+
+**Not fixed at the time, deliberately.** Honouring it is a billing change, and
 CLAUDE.md says to stop and flag rather than proceed at anything touching money.
-There are three defensible answers and they are the owner's to pick:
+There were three defensible answers and they were the owner's to pick:
 
 1. **Wire it up** — `requiresPayment` grows a third input, or the submit path
    consumes a credit before deciding `needsPayment`. The R149 then really is
