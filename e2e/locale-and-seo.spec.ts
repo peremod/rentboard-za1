@@ -207,7 +207,20 @@ test.describe('SEO metadata is server-rendered', () => {
    * So it now checks both halves properly: what a crawler is served with no
    * JavaScript at all, and what the app puts there after a click.
    */
-  test('a room page sets its own title, not the site default', async ({ page, request }) => {
+  /**
+   * ⚠️ @local-api, and the tag is load-bearing. CI runs this FILE against the
+   * production build, whose bundle calls api.umastande.co.za — so on that
+   * server the board is filled from LIVE PRODUCTION, and this test's outcome
+   * depended on whether a free instance that sleeps (§102) happened to be
+   * awake. Worse than flaky: when one of those calls fails, errorInterceptor
+   * raises an alert dialog over the board, and run 363 failed with
+   * "<app-dialog> subtree intercepts pointer events" on the click.
+   *
+   * A check of this commit must not depend on a third party's uptime, so the
+   * workflow runs this one against the DEVELOPMENT build, where the board is
+   * the local seeded database, and excludes it from the production pass.
+   */
+  test('a room page sets its own title, not the site default @local-api', async ({ page, request }) => {
     await page.goto('/');
     const firstRoom = page.locator('a[href^="/rooms/"]').first();
     test.skip((await firstRoom.count()) === 0, 'no rooms seeded in this environment');

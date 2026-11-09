@@ -699,6 +699,14 @@ jobs:
       # and after pass 2, because the two builds disagree about the things it
       # reads: only production emits canonical and the real site URL, and only
       # development can serve a room from the database this job seeded.
+      # The half of locale-and-seo.spec.ts that needs a board with rooms on
+      # it. Here, against the development build, those rooms are the local
+      # seeded database rather than live production — so it RUNS, every time,
+      # and its answer is about this commit. See the tag's comment in the spec.
+      - name: E2E — a room page's own metadata, development build
+        if: ${{ !cancelled() }}
+        run: npx playwright test --project=desktop e2e/locale-and-seo.spec.ts --grep @local-api
+
       - name: SEO — served metadata, development build
         if: ${{ !cancelled() }}
         env:
@@ -728,9 +736,18 @@ jobs:
           for i in $(seq 1 30); do curl -sf http://localhost:4200/ >/dev/null && break; sleep 2; done
           curl -sf http://localhost:4200/ >/dev/null || { echo "::error::frontend never came up"; cat /tmp/fe-prod.log; exit 1; }
 
+      # ⚠️ --grep-invert @local-api. This runs against the PRODUCTION build,
+      # whose bundle calls api.umastande.co.za, so anything needing a board
+      # with rooms in it would be reading LIVE PRODUCTION from a CI runner —
+      # a free instance that sleeps (OUTSTANDING §102). Run 363 failed exactly
+      # there: a production API call errored, errorInterceptor put an alert
+      # dialog over the board, and the click hit the dialog. The @local-api
+      # test runs earlier, against the development build. Everything here is
+      # about prerendering, locale routing and served metadata, which the
+      # local server answers on its own.
       - name: E2E — locale routing and server-rendered SEO
         if: ${{ !cancelled() }}
-        run: npx playwright test --project=desktop e2e/locale-and-seo.spec.ts
+        run: npx playwright test --project=desktop e2e/locale-and-seo.spec.ts --grep-invert @local-api
 
       # The same drive against the build Lighthouse and production serve. The
       # room section states a skip here — a production bundle fetches from
