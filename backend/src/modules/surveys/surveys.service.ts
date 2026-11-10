@@ -183,6 +183,27 @@ export class SurveysService {
     if (!survey) throw new NotFoundException('No such survey for this account.');
     if (!survey.active) throw new BadRequestException('That survey is closed.');
 
+    /**
+     * ⚠️ The audience applies to the WRITE path too, and did not.
+     *
+     * `matchesAudience` carries the note that eligibility cannot be a
+     * client-side check because "a client that decides its own eligibility
+     * can be asked to lie about it by anyone". `promptFor` honoured it and
+     * this method never called it, so the filter held only for people who
+     * asked politely what to answer: a crafted POST wrote straight past it.
+     *
+     * Latent rather than live — neither shipped survey sets `minRooms`, and
+     * the `role` half is enforced by `findForRole` above. Which is exactly
+     * why it would have been found by the first survey that narrowed by size,
+     * in the numbers rather than in an error.
+     *
+     * 404, the same as a survey for the other role: the answer must not
+     * confirm which surveys exist.
+     */
+    if (!(await this.matchesAudience(user.id, survey.audience as unknown as SurveyAudience))) {
+      throw new NotFoundException('No such survey for this account.');
+    }
+
     const questions = survey.questions as unknown as SurveyQuestion[];
     const known = new Set(questions.map((q) => q.id));
     const cleaned: Record<string, unknown> = {};

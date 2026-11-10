@@ -2535,8 +2535,18 @@ fi
 
 
 # -- 29. Referrals ---------------------------------------------------------
-# The assertions that matter are the abuse guards: self-referral, double
-# referral, and rewarding a signup that never did anything.
+# ⚠️ This header used to read "The assertions that matter are the abuse
+# guards: self-referral, double referral, and rewarding a signup that never
+# did anything" — and NONE OF THE THREE was asserted here. The nearest was
+# `pending >= 1`, which proves the signup landed, not that it stayed
+# unrewarded. A header naming checks a section does not make reads as coverage
+# from a distance, which is the same defect as a check that cannot see its
+# subject.
+#
+# What this section does, and does well: the happy path and the access rules.
+# The abuse guards are asserted against the referral table in
+# backend/test/referrals.int-spec.ts, because registration answers 201
+# whether the code was honoured or dropped — from here they are invisible.
 head_ "29. Referrals"
 req GET /api/referrals/mine "" "$LTOKEN"
 check "landlord gets a referral code" 200 "$STATUS" "$BODY"
@@ -2745,11 +2755,29 @@ else
 fi
 
 # An allowlist, so an injected event name cannot create arbitrary rows.
+# ⚠️ This said "unknown event silently ignored, NOT STORED", and it could not
+# know. The endpoint answers 204 whether it stores the row or drops it, so a
+# stored event and a dropped one are identical from here — delete the
+# allowlist in record() and this still passes. The label now claims only what
+# an HTTP driver can see. Whether the row lands is asserted against the table
+# in backend/test/analytics.int-spec.ts, which fails on exactly that mutation.
 req POST /api/analytics/event '{"event":"totally.made.up","segment":"x"}'
 if [[ "$STATUS" == "204" ]]; then
-  green "  PASS  unknown event silently ignored, not stored"; PASS=$((PASS+1))
+  green "  PASS  unknown event is refused quietly, not with an error  (204)"; PASS=$((PASS+1))
 else
   red "  FAIL  unknown event returned $STATUS"; FAIL=$((FAIL+1))
+fi
+
+# ⚠️ Nor can this suite see what a SEGMENT becomes. There is no endpoint that
+# reads ux_counters back — funnels aggregates by event — so the one thing worth
+# asserting over HTTP is that a public caller posting an identifier is not
+# rewarded with an error that tells them something. The column it lands in, and
+# the fact that it lands as 'all', are in the integration spec.
+req POST /api/analytics/event '{"event":"wizard.started","segment":"0821234567"}'
+if [[ "$STATUS" == "204" ]]; then
+  green "  PASS  an identifier offered as a segment is taken without complaint  (204)"; PASS=$((PASS+1))
+else
+  red "  FAIL  identifier-as-segment returned $STATUS"; FAIL=$((FAIL+1))
 fi
 
 req GET /api/analytics/funnels "" "$TTOKEN"

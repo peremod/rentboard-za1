@@ -2686,6 +2686,61 @@ Both have since run green - 33 sitemap URLs at 200, SEO 1 on all four pages
 integration tests, the smoke suite. CI run 364 green on all five jobs."
 
 
+tag_if_missing "v1.183.0" "f0c2ac02a7a615f91edb5dd3431a83a515e4731b" "2026-11-09T10:25:00+00:00" "v1.183.0 - stop promising an R149 the platform never paid
+
+Section 100, and the owner's call. Their framing names the error exactly: it
+is a Verification, not a referral.
+
+referral-panel.ts told a landlord:
+
+  'You have N free verifications earned. It covers the R149 identity check.'
+  'When a landlord you invite publishes their first room, your R149
+   verification is covered. Nothing is owed for a signup alone.'
+
+Driven end to end against the real API when section 100 was written: the
+credit is granted by qualify(), counted by /referrals/mine and rendered by
+the panel - and NOTHING SPENDS IT. consumeFreeVerification() has no caller
+anywhere in the codebase, and requiresPayment(type, role) takes only a type
+and a role, so the verification flow cannot see a credit even in principle.
+The screen made a specific promise in rands that the product could not keep.
+
+⚠️ The R149 is the identity VERIFICATION fee - a charge for a service,
+described honestly on /legal/terms, the privacy policy and the verification
+screen, all of which are untouched. It is not a referral reward, and tying
+the two together was the mistake.
+
+Gone: the banner, the sentence, and the freeVerificationsAvailable figure.
+Landlords and tenants read the same line now, which names no reward at all.
+
+⚠️ And one layer down, found AFTER those two sentences were already out: the
+status list still labelled a completed referral 'Reward earned'. The headline
+promise had been removed and the chip went on telling people they were owed
+something. It reads 'Listed a room' now - what actually happened.
+
+⚠️ The backend still grants and counts the credit. Only the promise is gone:
+nothing is taken from anyone who already earned one, and wiring redemption up
+later (option 1 in that section) needs no migration.
+
+scripts/referral-promise-lint.mjs holds it, in CI. Four rules over template
+sources with COMMENTS STRIPPED, because the first draft passed on its own
+explanatory paragraphs - they quote the banned sentences. Proven able to fail
+three ways:
+
+  the earned-credit banner restored     4 findings
+  the before-you-earn sentence restored 3 findings
+  'Reward earned' restored              1 finding
+  the same claim inside a comment       0 - correctly not counted
+
+⚠️ A lint and not a drive on purpose. Section 99's house advertiser was a
+database row, where no source check could have seen it; this promise IS the
+source, and a sentence in a template is what a source check can hold.
+Rendered as a landlord at 390px as well: none of the four strings on screen,
+and nothing scrolls sideways.
+
+29 frontend unit tests, production build, env parity. CI run 367 green on all
+five jobs."
+
+
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run
 # stopped early — which `set -e` makes possible and which the old summary could

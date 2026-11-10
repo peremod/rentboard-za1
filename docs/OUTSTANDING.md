@@ -8835,6 +8835,174 @@ because each of them calls `clearWakeNotice()` itself. That is why the spec has
 a second block that drives the real `fetchRooms` with the service stubbed. The
 gap was measured, not reasoned about.
 
+## 104. §6's analytics and referrals, read rather than trusted — 9 November 2026
+
+§6's list said both had "refusal coverage only". Both were wrong, which makes
+it three times the list has been wrong about a domain, and its own warning —
+"read the checks rather than the list" — is the only part of it worth trusting.
+
+### 🔴 FIXED: an unauthenticated caller could store a phone number in ux_counters
+
+`POST /analytics/event` has **no DTO**. The body is an inline TypeScript type,
+which erases at runtime, so the only guard on `segment` was
+`segment.length <= 24` — on a public, unauthenticated endpoint writing to a
+column the schema describes as "Never anything that could identify a person".
+Twenty-four characters is a phone number, an email prefix, an ID number.
+
+Reproduced against the real API with no credentials:
+
+```
+POST {"event":"wizard.started","segment":"0821234567"}  -> 204
+select … from ux_counters -> wizard.started | 0821234567 | 1
+```
+
+Smoke §32 said PASS throughout, because its two relevant assertions read the
+204 — which is the same answer a stored event gives. `record()` takes an
+allowlist now (`all`, `mobile`, `desktop`, which is everything the browser
+sends); anything else becomes `all`, as an unrecognised EVENT is already
+dropped.
+
+⚠️ `ad.eligible` is unaffected and must stay that way: `ads.service.ts` writes
+those rows directly rather than through `record()`, and its levels
+(national/province/city/suburb) describe a campaign, not a person.
+
+### ⚠️ Two referral guards that cannot fire, and the abuse they are named for
+
+`recordSignup(refereeId, rawCode)` has exactly two callers —
+`auth.service.ts:103` and `phone-signup.service.ts:420` — and both pass the id
+of a user created moments earlier in the same method. So:
+
+```ts
+if (code.ownerId === refereeId) return null;                  // self-referral
+const existing = await …findUnique({ where: { refereeId } }); // one per person
+```
+
+compare a brand-new id against a pre-existing owner, and against a table that
+cannot yet hold a row for it. **Neither condition is reachable through the only
+paths that call this.** They are defensive rather than broken — but smoke §29's
+header named them as "the assertions that matter", and no assertion was made.
+
+⚠️ **The abuse they are named for is not stopped.** One person registering a
+SECOND account and using their own code is two different user ids, which no id
+comparison can see. Catching that needs identity — device, payment instrument,
+or the verified identity the R149 check already produces — and that is a
+product decision, not a bug fix. **Flagged, not invented.** The exposure is
+currently nil in rands, because §100's reward was removed and nothing is paid
+out; it becomes real the day redemption is wired up.
+
+### What now holds them
+
+`backend/test/analytics.int-spec.ts` (7) and `backend/test/referrals.int-spec.ts`
+(6), both reading the table rather than the reply, because both endpoints
+answer identically whether they stored anything or not.
+
+⚠️ **Two of my own cases could not fail, and both were caught by falsifying
+rather than by review.**
+
+1. "keeps the day only" posted an event and read the row back expecting
+   midnight. Commenting out `day.setUTCHours(0, 0, 0, 0)` left all seven
+   green: a Postgres `date` column truncates the time whatever the service
+   hands it. It was measuring Postgres. It asserts the column TYPE now.
+2. The referral helper polled `if (count) break`, already true once ANY
+   referral existed — so in the maximum-uses case the second registration
+   returned before its row could land, and the test passed with the `maxUses`
+   guard deleted. It waits for the count the registration SHOULD produce now,
+   and when that is zero it waits the whole window rather than returning
+   early: a row that will never appear is indistinguishable from one that has
+   not appeared yet unless you give it the same time.
+
+Smoke's two overclaiming labels were corrected rather than deleted: §32's
+"unknown event silently ignored, NOT STORED" now claims only what an HTTP
+driver can see, and §29's header no longer lists three guards it does not
+check.
+
+---
+
+## 105. §6's surveys, and an audience enforced on the read path only — 9 November 2026
+
+Fourth domain on §6's list to turn out not to be refusal-only. Smoke lines
+4437-4540 drive both roles properly and CI derives `ADMIN_TOKEN`, so even the
+admin section runs rather than printing `skipped`: merge across steps, resume
+at 2 of 7, a tenant's own survey, a 404 on the other role's, an unknown
+question id dropped, 403 to a non-admin, 200 and a `segmentQuestionId` for an
+admin.
+
+### 🔴 FIXED: the survey audience was a filter on the prompt and nothing else
+
+`matchesAudience` carries this, in the source, as the reason it reads the room
+count from the database instead of taking it from the request:
+
+> the whole point of targeting by size is to reach people whose situation the
+> product does not know, so a client that decides its own eligibility can be
+> asked to lie about it
+
+`promptFor` calls it. `submit` did not. So the audience was enforced for
+whoever asked politely what to answer, and a POST straight at
+`/api/surveys/:slug/responses` wrote past it — the shape this repository keeps
+finding, a control that only looks like a control.
+
+⚠️ **Latent, not live.** Neither shipped survey sets `minRooms`
+(`backend/prisma/surveys.ts` — the landlord one says so explicitly: "Narrowing
+to 2+ rooms would exclude exactly the people question 3 exists to count"), and
+the `role` half of the audience is enforced by `findForRole` above the gap. So
+nothing was mis-targeted. It is written up because the first survey that
+narrowed by size would have found it in the NUMBERS rather than in an error:
+out-of-audience answers counted beside in-audience ones, with nothing on any
+screen to say so.
+
+`submit` now calls `matchesAudience` and throws the same 404 as a survey for
+the other role, so the answer does not confirm which surveys exist.
+
+### What the aggregate's POPIA claim rested on
+
+One `select` list. The service says the aggregate "[n]ever returns who said
+what" and the controller repeats it over the CSV route — and both are true
+only because of:
+
+```ts
+select: { answers: true, source: true, role: true, completedAt: true, createdAt: true },
+```
+
+Add `userId`, or a `user: { select: { fullName: true } }` for context, and the
+payload still answers 200 with a `segmentQuestionId`, which is the whole of
+what smoke asserts. §6 of `docs/API-TESTING.md` is explicit about why that
+matters here rather than in the abstract: the open-text answers are things
+landlords said about their tenants.
+
+### What now holds it
+
+`backend/test/surveys.int-spec.ts`, 10 cases. The two POPIA ones assert over
+the whole serialised payload rather than over the keys the test happens to
+know — a respondent can be named inside a nested object a future field adds —
+and then fix the key list and the CSV column list EXACTLY, the same reasoning
+as the column assertion in `view-counting.int-spec.ts`: `toContain` passes
+happily on a payload that has gained a `respondents` array, which is the only
+failure those two tests exist to catch.
+
+The other eight drive what was decided and never checked: finished sets only
+unless `includePartial`, with a completion rate that stays 1-of-2 either way;
+the newest EDITION chosen by `version` and not by which row was written last
+(the seed is deliberately written version 2 first, so `createdAt desc` and
+`updatedAt desc` both name the wrong one and only `version desc` is right); an
+inactive higher version ignored; a dismissal honoured and THEN EXPIRING, the
+second half backdated 31 days rather than waited out; a finished set not
+reopened by a late `complete: false` submit while still merging its answer;
+and the audience pair above.
+
+**Each of the six guarantees was falsified before being believed** — the fix
+reverted, `version desc` changed to `createdAt desc`, the 30-day window
+removed, `completedAt` forced to null, a `respondent` column added to the CSV
+header, and the aggregate made to publish `{ id, name, email }` per respondent.
+One named case failed each time, two for the last (the identity assertion and
+the key list, which is what the pair is for).
+
+`scripts/smoke-test.sh` is unchanged: the behaviour that changed is reachable
+only through a survey with `minRooms`, which the seed does not create, and the
+existing "POST a survey response -> 201" line is what would catch the fix
+refusing somebody it should not.
+
+---
+
 ## §103 — The board is fetched TWICE on every first visit, and the SSR copy is thrown away
 
 Found while verifying §102's waking notice, with a development SSR bundle
