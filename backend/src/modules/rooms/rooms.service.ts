@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { NoticeRouter } from '../notifications/notice-router.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { PUBLIC_USER } from '../../common/prisma/account-visibility';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AlertsService } from '../alerts/alerts.service';
 import { ReferralsService } from '../referrals/referrals.service';
@@ -343,6 +344,47 @@ export class RoomsService {
     // A draft has never been public.
     if (room.status === 'draft' && !isOwner) {
       throw new NotFoundException(`Room ${id} not found`);
+    }
+
+    /**
+     * 🔴 The listing of a landlord the public should not see.
+     *
+     * `PUBLIC_USER` exists because this rule was written three times and the
+     * copies disagreed; its own doc names the three things that must go dark
+     * when an account is paused, suspended or ended — "their public page,
+     * their storefront and their rooms". The storefront read and the sitemap
+     * apply it. This route, the only public read of a single room, never did.
+     *
+     * Measured rather than assumed: with a landlord suspended by an admin,
+     * the board returned 0 rooms and the sitemap dropped both the room and
+     * the storefront (which answered 404) — and GET /api/rooms/:id answered
+     * 200 to an anonymous caller with the full listing, the landlord's name,
+     * their avatar, their rating and their verification badge. Those three
+     * surfaces hold only because suspending or deactivating an account pauses
+     * every `active` room, so they filter on `status` and never had to ask
+     * about the person. That is the incidental kind of correctness this
+     * constant was introduced to replace.
+     *
+     * It is the link that matters: a room reaches people on WhatsApp, so the
+     * URL is exactly what outlives the board. A suspension for a suspected
+     * scam took the listing off the board and left it live where the link
+     * pointed.
+     *
+     * A primary-key lookup, and only for a non-owner — the owner must keep
+     * reaching their own room while their account is paused, or reactivating
+     * would be a trapdoor.
+     *
+     * ⚠️ This route carries `Cache-Control: public, s-maxage=300`, so a page
+     * already at the CDN edge can outlive the suspension by up to five
+     * minutes. Named rather than fixed: shortening the cache on the busiest
+     * public route is a separate decision.
+     */
+    if (!isOwner) {
+      const visible = await this.prisma.user.findFirst({
+        where: { id: room.landlordId, ...PUBLIC_USER },
+        select: { id: true },
+      });
+      if (!visible) throw new NotFoundException(`Room ${id} not found`);
     }
 
     if (!isOwner) {

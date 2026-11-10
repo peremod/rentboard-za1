@@ -9003,6 +9003,145 @@ refusing somebody it should not.
 
 ---
 
+## 106. A suspended landlord's room stayed live at its URL — 10 November 2026
+
+Last two names on `docs/API-TESTING.md` §6, and the list was wrong about both.
+It is empty now, and it never once described a domain correctly.
+
+### 🔴 FIXED: the board went dark, the sitemap went dark, the room URL did not
+
+`common/prisma/account-visibility.ts` exists because this rule was written
+three times and the copies disagreed. Its own doc names what must go dark when
+an account is paused by its owner, suspended by an admin, or ended:
+
+> their public page, their storefront and their rooms
+
+Measured, with a landlord suspended through the real admin route:
+
+```
+board                     0 rooms           ✅
+sitemap, the room          gone             ✅
+sitemap, the storefront    gone             ✅
+GET /api/storefronts/:slug 404              ✅
+GET /api/rooms/:id         200              🔴  the full listing, to anyone
+```
+
+The 200 carried the listing, the landlord's name, their avatar, their rating
+and their verification badge, to a caller with no token at all.
+
+⚠️ **And the three that held do so by accident.** Suspending or deactivating an
+account PAUSES every `active` and `reserved` room, so the board and the sitemap
+filter on `status` and never have to ask about the person. That is exactly the
+incidental correctness `PUBLIC_USER` was introduced to replace — three separate
+code paths keeping one invariant true, where a change to any of them leaks.
+`PUBLIC_USER` was applied in two files: the storefront read and the sitemap's
+storefront query. The sitemap's ROOM query still has no landlord filter, and
+needs none only because of that pausing.
+
+`findOne` had grown two refusals, each after a defect:
+
+```ts
+if (room.status === 'deleted' && !isOwner) throw new NotFoundException(...);
+if (room.status === 'draft'   && !isOwner) throw new NotFoundException(...);
+```
+
+The first carries its own history — "It was still returning 200 to anyone
+holding the id, so a tenant's saved room kept rendering normally after the
+landlord took it down." The same sentence is true of a suspended landlord, and
+nobody asked about the person.
+
+**It is the link that makes it matter.** A room reaches people on WhatsApp, so
+the URL is the thing that outlives the board. A suspension for a suspected
+deposit scam took the listing off the board and left it live exactly where the
+link pointed.
+
+Fixed with one primary-key lookup, for non-owners only, beside the other two
+refusals. ⚠️ **Owner access had to survive**, or the control is a trapdoor: a
+landlord who PAUSED their own account can still sign in, so `isOwner` holds and
+they keep reaching their own room. A SUSPENDED landlord gets 404 even holding
+their token, and that answer was **measured, not assumed** — the first version
+of the smoke assertion allowed 200, 401 or 403 and failed on the real one.
+Suspension revokes authentication, so the optional guard yields no viewer and
+the public read is the only read there is. Correct, and nothing is lost: an
+operator restoring the account restores the room with it.
+
+⚠️ **Named rather than fixed:** this route carries
+`Cache-Control: public, s-maxage=300`, so a page already at the CDN edge can
+outlive a suspension by up to five minutes. Shortening the cache on the busiest
+public route is a separate decision.
+
+### 🔴 The storefront drive existed, was good, and nothing ran it
+
+`scripts/storefront-drive.mjs` is 31 assertions and the opposite of
+`notices-drive.mjs` (§97): every subject is created through the real endpoints
+rather than staged with a direct INSERT. Slug minted on first read and stable
+across reads, OFF by default, unpublished and never-existed answering 404 with
+identical bodies, publishing, unpublishing taking it down again, collisions
+across three landlords all called the same thing, a draft staying off the page,
+the count matching the list, no email on it, every badge carrying its basis, no
+verified badge for an unverified landlord, 403 to a tenant, 401 to a stranger,
+and the sitemap entry at priority 0.6.
+
+**It was in no workflow.** And `scripts/smoke-test.sh:4092` points at it by
+name for the cases the smoke suite deliberately does not duplicate — "Slug
+collisions and the sitemap entry are checked properly in
+scripts/storefront-drive.mjs". So for the whole of Phase 5b those cases were
+covered by a file nobody executed, and the smoke suite was citing it as the
+reason not to cover them itself. That is worse than absent coverage: absence
+is visible.
+
+It passes 31/31 on the first run against this build, and it is in CI now.
+
+### What the drive and the smoke suite still could not see
+
+`backend/test/storefront.int-spec.ts`, 9 cases.
+
+The visibility set above, asserted as a SET — board, detail, storefront, both
+sitemap entries, in one object — for an admin suspension, for an owner's own
+pause (with the reactivation half: the storefront comes back, the room stays
+off the board on purpose), and for a closed account. Plus: a suspended
+landlord's room 404 says only the id the caller supplied, so it cannot be told
+from an invented one.
+
+And the trust page's figures, where the existing checks could not see their
+subject:
+
+- **Two answered applications must quote nothing.** Both the smoke assertion
+  and the drive read `typicalResponseHours` off a brand-new landlord with ZERO
+  applications, where deleting the rule still leaves the value falsy. At two,
+  the rule is the only thing returning null. Driven at 2 → null and 3 → 4
+  hours, so it has to stop withholding as well as start.
+- **The median, not the mean.** 1, 2, 3 and 600 hours: the mean is over 150,
+  the median 2.5.
+- **The fast-reply badge withheld from somebody who is not fast.** 30, 40 and
+  50 hours publishes the figure — a reader can weigh 40 hours — and awards no
+  badge. "Usually replies in 40 hours" is a warning, not a badge.
+- **A let room off the page**, which the drive's own header claims and then
+  only tests for a draft. It is the case every successful listing reaches.
+
+Six mutations, six named failures: the visibility lookup removed (3 cases), the
+three-observation floor lowered, the median replaced with a mean, the badge's
+24-hour ceiling dropped, `let` added back to the storefront's room query, and
+`PUBLIC_USER` taken out of the sitemap's storefront query (2 cases).
+
+⚠️ One honest limit: the closed-account case does NOT fail when the fix is
+reverted, because the deletion path already takes the listings down by status.
+It is asserted anyway — the same reason the visibility set is asserted whole.
+
+### SEO, the sixth name
+
+Not refusal-only either. `scripts/seo-drive.mjs` runs in CI twice, against the
+development and the production bundle, and reads the served bytes rather than
+the hydrated DOM. Exactly one Organization and one WebSite; the Organization
+invents nothing and names Umastande (Pty) Ltd; the SearchAction's `?q=` URL is
+fetched and must answer 200; a room is a `RealEstateListing` and not a
+`Product`; no `aggregateRating`, no `priceValidUntil`; `LeaseOut` in ZAR; no
+`streetAddress`. It also refuses to pass vacuously, announcing a skip when the
+board server-renders no room links. The one cross-cutting hole was the room URL
+above, and the storefront spec holds it from both ends in the same object.
+
+---
+
 ## §103 — The board is fetched TWICE on every first visit, and the SSR copy is thrown away
 
 Found while verifying §102's waking notice, with a development SSR bundle
