@@ -239,6 +239,12 @@ export type UpcomingReason = 'lease_ending' | 'notice_given';
  */
 export interface UpcomingLease {
   tenancyId: string;
+  /**
+   * The TENANCY's status, not the room's. `pending` means nobody has moved in
+   * yet, and the API refuses notice, renewal and "let it roll" on one — so the
+   * panel must not offer them. See the note on `status` in LeaseService.upcoming.
+   */
+  status: 'pending' | 'active' | 'ended' | 'cancelled';
   room: { id: string; title: string; status: string };
   tenant: { id: string; fullName: string };
   rentCents: number;

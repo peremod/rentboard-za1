@@ -72,8 +72,28 @@ import { DialogService } from '../../../core/services/dialog.service';
                         (click)="renew(row)">Renew for a year</button>
                 <button type="button" class="link-btn" [disabled]="busy() === row.tenancyId"
                         (click)="letItRoll(row)">Let it roll on</button>
-                <button type="button" class="link-btn" [disabled]="busy() === row.tenancyId"
-                        (click)="theyAreLeaving(row)">They are leaving</button>
+                <!-- ⚠️ Only once somebody has moved in. giveNotice() refuses a
+                     pending tenancy — "This tenancy has not started yet. If it
+                     has fallen through, mark it as such instead" — while the
+                     panel's own query deliberately INCLUDES pending rows, and
+                     LeaseService.upcoming() selected the status without
+                     returning it. So this button was offered on every pending
+                     row and could only ever fail, and the panel's error handler
+                     then blamed the person's connection.
+
+                     Renew and "let it roll" are not gated with it: those edit
+                     lease terms, which the API allows before move-in on
+                     purpose, and both are driven green by lease-ui-drive.
+
+                     Confirming or cancelling a move-in is the lifecycle panel
+                     on the dashboard, so that is where a pending row points. -->
+                @if (row.status === 'pending') {
+                  <a class="link-btn" routerLink="/landlord/dashboard"
+                     title="Nobody has moved in yet">Confirm or cancel the move-in</a>
+                } @else {
+                  <button type="button" class="link-btn" [disabled]="busy() === row.tenancyId"
+                          (click)="theyAreLeaving(row)">They are leaving</button>
+                }
               } @else {
                 <a class="btn btn-sm btn-sage" [routerLink]="['/landlord/rooms', row.room.id, 'edit']">
                   Get it back on the board
@@ -174,6 +194,28 @@ export class LeasePanel implements OnInit {
     this.apply(row, { leaseEndDate: null });
   }
 
+  /**
+   * The server's own sentence, when it wrote one.
+   *
+   * ⚠️ All three handlers here used to set "That did not save. Check your
+   * connection and try again." for EVERY failure, including the ones the API
+   * explains in words written for a person. A landlord tapping "They are
+   * leaving" on a tenancy that had not started got a 400 saying "This tenancy
+   * has not started yet. If it has fallen through, mark it as such instead" —
+   * and was told to check their connection. The signal was fine; the message
+   * was wrong, and it sent them to the one place the fault was not.
+   *
+   * The connection line is kept for the case it was written for: no response
+   * at all (status 0), or a 5xx with nothing useful in it.
+   */
+  private whyItFailed(err: unknown): string {
+    const e = err as { status?: number; error?: { message?: string | string[] } } | null;
+    const msg = e?.error?.message;
+    const text = Array.isArray(msg) ? msg[0] : msg;
+    if (typeof text === 'string' && text.trim() && (e?.status ?? 0) < 500) return text;
+    return 'That did not save. Check your connection and try again.';
+  }
+
   private apply(row: UpcomingLease, body: { leaseEndDate: string | null }) {
     this.busy.set(row.tenancyId);
     this.error.set(null);
@@ -182,9 +224,9 @@ export class LeasePanel implements OnInit {
         this.busy.set(null);
         this.load();
       },
-      error: () => {
+      error: (err: unknown) => {
         this.busy.set(null);
-        this.error.set('That did not save. Check your connection and try again.');
+        this.error.set(this.whyItFailed(err));
       },
     });
   }
@@ -211,9 +253,9 @@ export class LeasePanel implements OnInit {
         this.busy.set(null);
         this.load();
       },
-      error: () => {
+      error: (err: unknown) => {
         this.busy.set(null);
-        this.error.set('That did not save. Check your connection and try again.');
+        this.error.set(this.whyItFailed(err));
       },
     });
   }
@@ -225,9 +267,9 @@ export class LeasePanel implements OnInit {
         this.busy.set(null);
         this.load();
       },
-      error: () => {
+      error: (err: unknown) => {
         this.busy.set(null);
-        this.error.set('That did not save. Check your connection and try again.');
+        this.error.set(this.whyItFailed(err));
       },
     });
   }

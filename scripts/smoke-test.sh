@@ -1841,6 +1841,36 @@ if [[ -n "$TEN_ROOM" ]]; then
       req POST "/api/tenancies/$TEN_ID/end" '{}' "$TTOKEN"
       check "cannot end a tenancy that never started" 400 "$STATUS" "$BODY"
 
+      # ⚠️ …and neither can notice be given on one. The refusal is not new; what
+      # is new is that the SCREEN knows about it. `LeaseService.upcoming()`
+      # deliberately lists pending tenancies, so the lease panel offered "They
+      # are leaving" on a row where this 400 was the only possible answer — and
+      # then reported it as "That did not save. Check your connection and try
+      # again." Found by lease-ui-drive, whose own fixture had never confirmed a
+      # move-in, so it had been driving that dead button for four releases.
+      req POST "/api/tenancies/$TEN_ID/notice" '{"givenBy":"tenant"}' "$TTOKEN"
+      check "cannot give notice on a tenancy that never started" 400 "$STATUS" "$BODY"
+
+      # The payload the lease panel reads. `status` is what lets it tell a
+      # pending row from a live one; without it the panel cannot help offering
+      # the button above.
+      #
+      # ⚠️ A lease end date is set first on purpose: `upcoming()` lists a
+      # tenancy only when a fixed term is inside the lead window or notice has
+      # been given, so asking before this would answer an empty array and the
+      # assertion below would pass without ever seeing a row.
+      req PATCH "/api/tenancies/$TEN_ID/lease" "{\"leaseEndDate\":\"$(date -u -d '+10 days' +%Y-%m-%d)\"}" "$LTOKEN"
+      check "landlord sets a lease end date" 200 "$STATUS" "$BODY"
+
+      req GET /api/tenancies/upcoming "" "$LTOKEN"
+      check "the landlord can read what is coming up" 200 "$STATUS" "$BODY"
+      UPC_STATUS=$(echo "$BODY" | jq -r --arg t "$TEN_ID" '[.[]? | select(.tenancyId==$t)][0].status // empty')
+      if [[ "$UPC_STATUS" == "pending" ]]; then
+        green "  PASS  …and each row carries the tenancy status the panel gates on"; PASS=$((PASS+1))
+      else
+        red "  FAIL  upcoming row status is '$UPC_STATUS', expected pending"; FAIL=$((FAIL+1))
+      fi
+
       req POST "/api/tenancies/$TEN_ID/confirm-start" '{}' "$ITOKEN"
       check "outsider CANNOT confirm a tenancy" 403 "$STATUS" "$BODY"
 

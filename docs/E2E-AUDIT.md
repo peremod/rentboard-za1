@@ -45,8 +45,8 @@ was tried first and is useless: it flags 42 of them, because most write
 
 | Bucket | At baseline | After the first two repairs |
 | --- | --- | --- |
-| Sound and green | 30 | **32** |
-| Sound and red — real signal | 9 | **7** |
+| Sound and green | 30 | **33** |
+| Sound and red — real signal | 9 | **6** |
 | Could not fail | 2 | 2 (1 fixed, 1 open) |
 | Not measured in this pass | 1 | 1 |
 
@@ -94,7 +94,6 @@ is a working check reporting something. Three different things, though:
 
 | Drive | ❌ | What it says |
 | --- | --- | --- |
-| `lease-ui-drive` | 2 | Notice attribution missing after logging it; relist action missing — then a 30s click timeout |
 | `assisted-signup-ui-drive` | 2 | No confirmation after starting an assisted sign-up; no assisted row created for the admin |
 | `notes-calendar-drive` | 1 | No notes toggle on the applicant card |
 | `services-ui-drive` | 1 | The recorded check did not appear on the row |
@@ -207,3 +206,56 @@ own. Its verdict is unknown here; it passes in CI on every push.
   API failure) are untouched by any of this.
 - Nothing about the 9 reds **as product bugs**. Six are candidates. A drive
   being sound means its complaint is worth reading, not that it is right.
+
+### `lease-ui-drive`: the one that found a product bug
+
+Two failures and a 30-second timeout, all downstream of one thing: after the
+drive confirmed "Yes, they gave notice", the panel showed
+**"That did not save. Check your connection and try again."**
+
+The request behind it answered `400 This tenancy has not started yet. If it has
+fallen through, mark it as such instead.`
+
+Two defects, both real:
+
+1. **A control that could only fail.** `LeaseService.upcoming()` deliberately
+   lists `pending` tenancies — a short let that has not started still needs
+   relisting attention — and it *selected* `status` without *returning* it. So
+   the panel could not tell a row nobody had moved into from a live one, and
+   offered "They are leaving" on both, where `giveNotice()` refuses a pending
+   tenancy outright.
+2. **An error message that blamed the wrong thing.** All three handlers in the
+   panel set the same connection line for every failure, including the ones the
+   API explains in a sentence written for a person. The signal was fine; the
+   message sent the landlord to the one place the fault was not.
+
+The gate is deliberately narrow: **renew and "let it roll on" are not hidden**
+on a pending row. The API allows lease terms to be edited before move-in on
+purpose, and both drive green — hiding them would have been a product decision
+the evidence did not support.
+
+The drive's own fixture was also wrong: it never confirmed a move-in, so it had
+been driving that dead button for four releases. It now confirms the start and
+checks the pending state first, which is where the three new assertions live.
+
+**Proven, not assumed.** 12 checks → 22, and each fix falsified separately:
+
+| Mutation | Result |
+| --- | --- |
+| the button ungated (shown on pending rows again) | ❌ "'They are leaving' offered on a pending tenancy"; ❌ "no move-in action offered on a pending row" |
+| the error handler reverted to the constant string | ❌ "the refusal was not surfaced — the panel said: 'That did not save…'"; ❌ "a 400 is reported as a connection problem" |
+| **`status: t.status` removed from the backend alone** | ❌ the first two — so the server half is load-bearing, not decoration |
+| both halves restored | 22 passed, exit 0 |
+
+The refusal wording is provoked the way it actually happens: notice is given,
+the row renders its undo, and the notice is then withdrawn behind the screen's
+back — a second tab, or the tenant — so the stale "Notice was a mistake"
+answers 400 "No notice has been given on this tenancy."
+
+`scripts/smoke-test.sh` gained the matching API-level checks: that notice is
+refused on a tenancy that never started, and that each `upcoming` row carries
+the status the panel gates on. ⚠️ The second sets a lease end date first,
+because `upcoming()` lists a tenancy only when a fixed term is inside the lead
+window or notice has been given — without that the array comes back empty and
+the assertion passes having seen nothing.
+
