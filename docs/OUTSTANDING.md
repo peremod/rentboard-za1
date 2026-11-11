@@ -8725,6 +8725,23 @@ sequence is run rather than reasoned about.
 
 ## 102. Why the board takes forever: the keep-warm fires every 5.2 hours, not every 10 minutes — 2 November 2026
 
+> **DECIDED by the owner, 11 November 2026: no paid Render instance for now.**
+> So the cold start stays, and everything below is the standing explanation
+> rather than an open question about which option to take. What this closes
+> is the choice; what it leaves open is the symptom.
+>
+> Measured on that day's production deploy: **about two minutes** from the
+> deploy landing to `/health` answering 1.186.0, and the deployment check
+> polled eight times at fifteen-second intervals before the version changed.
+> That is the cost a first visitor pays on a cold instance.
+>
+> ⚠️ **The waking notice is what the free tier buys us**, and it is already
+> built and shipped (v1.180.0, reshaped in v1.181.0): the board says something
+> truthful while the instance comes up rather than looking broken. An external
+> pinger remains available and unchosen — it is free, it is not a Render
+> decision, and nothing here depends on it.
+
+
 Reported as "the site is taking forever to load rooms and data". Measured
 rather than guessed, and the application turned out not to be the cause at all.
 
