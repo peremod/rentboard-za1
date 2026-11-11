@@ -51,8 +51,34 @@ const API = 'http://localhost:3000';
 const WEB = process.env.WEB ?? 'http://localhost:4200';
 const WIDTHS = [360, 390, 768, 1280];
 
-/** --border, the token all fourteen now point at. */
-const BORDER = 'rgb(224, 213, 196)';
+/**
+ * --border, the token all fourteen now point at — resolved FROM THE PAGE, not
+ * hardcoded here.
+ *
+ * ⚠️ It was hardcoded as `rgb(224, 213, 196)` (#E0D5C4) and that cost a full
+ * audit cycle. 0ea8874 ("white surfaces") deliberately moved --border to
+ * #E5E0D7, and from then on this drive printed TWENTY red lines reading
+ * "… is var(--border) (rgb(229, 224, 215))" across both screens at all four
+ * widths. Every one of those borders was painted, with the right token, the
+ * whole time. A check that goes red on a deliberate palette change is not
+ * measuring what it claims to measure — it is measuring the palette, and it
+ * teaches whoever reads it to discount the colour.
+ *
+ * What the drive actually claims is "this border is drawn in the border
+ * token", so the token is read off the live document and the comparison is
+ * between two values the browser normalised itself. A palette change is then
+ * invisible here, which is correct; a border drawn in some OTHER colour still
+ * fails, which is the point.
+ */
+const resolveBorderToken = (page) => page.evaluate(() => {
+  const probe = document.createElement('span');
+  probe.style.display = 'none';
+  probe.style.color = 'var(--border)';
+  document.body.appendChild(probe);
+  const resolved = getComputedStyle(probe).color;
+  probe.remove();
+  return { resolved, bodyColor: getComputedStyle(document.body).color };
+});
 
 let pass = 0;
 const failures = [];
@@ -143,6 +169,24 @@ const borderOf = (page, sel, side) =>
 async function measure(page, width, screen, cases) {
   await page.setViewportSize({ width, height: 900 });
   await page.waitForTimeout(250);
+
+  /**
+   * ⚠️ Guarded, because resolving the token from the page has its own vacuous
+   * mode. If --border stopped being defined, `color: var(--border)` is invalid
+   * at computed-value time and the probe falls back to the inherited text
+   * colour — and an UNPAINTED border's border-color is `currentcolor`, i.e.
+   * that same text colour. The colour comparison would then pass on exactly
+   * the bug this drive exists to catch. (The painted check below would still
+   * fail, so the drive would not go green; but one of its two claims would
+   * have quietly stopped being a claim.) So: the token must resolve, and must
+   * resolve to something other than the body text colour.
+   */
+  const token = await resolveBorderToken(page);
+  check(
+    Boolean(token.resolved) && token.resolved !== token.bodyColor,
+    `${screen} @${width}: --border resolves to a colour of its own (${token.resolved || 'nothing'}, body ${token.bodyColor})`,
+  );
+  const BORDER = token.resolved;
 
   const overflow = await page.evaluate(() => ({
     scrollW: document.documentElement.scrollWidth,

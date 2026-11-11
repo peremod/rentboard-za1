@@ -43,12 +43,17 @@ was tried first and is useless: it flags 42 of them, because most write
 
 ## Results
 
-| Bucket | Count |
-| --- | --- |
-| Sound and green | 30 |
-| Sound and red — real signal | 9 |
-| Could not fail | 2 |
-| Not measured in this pass | 1 |
+| Bucket | At baseline | After the first two repairs |
+| --- | --- | --- |
+| Sound and green | 30 | **32** |
+| Sound and red — real signal | 9 | **7** |
+| Could not fail | 2 | 2 (1 fixed, 1 open) |
+| Not measured in this pass | 1 | 1 |
+
+`token-render-drive` (20 red) and `nav-sheet-drive` (9 red) were the two biggest
+reds and **neither was a product bug**. Both are now green, and every assertion
+changed or added was proven to fail when the thing it guards is broken. See
+"The two biggest reds" below.
 
 ### Could not fail (2)
 
@@ -71,7 +76,7 @@ was tried first and is useless: it flags 42 of them, because most write
 Every one of these exited non-zero with its failures named in its log, so each
 is a working check reporting something. Three different things, though:
 
-**Drive is stale against a deliberate product decision (3)**
+**Drive is stale against a deliberate product decision (5, of which 2 are repaired)**
 
 - `messages-inbox-ui-drive` — throws `WHATSAPP_APP_SECRET is not set in
   backend/.env` before it opens a browser. It cannot run with WhatsApp off,
@@ -89,17 +94,105 @@ is a working check reporting something. Three different things, though:
 
 | Drive | ❌ | What it says |
 | --- | --- | --- |
-| `token-render-drive` | 20 | Every failure is `… is var(--border)` — storefront section rules, storefront footer note, badge box, applicant notes left bar, note rules — at all four widths (360/390/768/1280) |
-| `nav-sheet-drive` | 9 | The close control is not inside the mobile nav sheet at all, and focus does not move into the sheet when it opens — repeated at three widths. A11y, WCAG |
 | `lease-ui-drive` | 2 | Notice attribution missing after logging it; relist action missing — then a 30s click timeout |
 | `assisted-signup-ui-drive` | 2 | No confirmation after starting an assisted sign-up; no assisted row created for the admin |
 | `notes-calendar-drive` | 1 | No notes toggle on the applicant card |
 | `services-ui-drive` | 1 | The recorded check did not appear on the row |
 | `search-drive` | 1 | No removable chip rendered for a search read |
 
-`notes-calendar`'s missing notes toggle and `token-render`'s applicant-notes
-failures both point at the applicant notes UI, so they may share one cause.
-Unverified.
+`notes-calendar`'s missing notes toggle is now the only red touching the
+applicant notes UI — `token-render`'s applicant-notes failures, which looked
+like they might share a cause, turned out to be the stale palette value.
+
+## The two biggest reds — both false alarms
+
+### `token-render-drive`: 20 red lines, every border painted correctly
+
+The drive hardcoded `const BORDER = 'rgb(224, 213, 196)'` (#E0D5C4). Commit
+`0ea8874` ("white surfaces") deliberately moved `--border` to #E5E0D7, which is
+`rgb(229, 224, 215)` — exactly what the drive measured and reported as a
+failure, twenty times, across both screens at all four widths. Its companion
+`painted` check (`border-style: solid`, width ≥ 1px) was green throughout: the
+borders this drive exists to protect have been drawn, in the right token, the
+whole time.
+
+A check that goes red on a deliberate palette change is measuring the palette,
+not the thing it claims to measure, and it teaches whoever reads it to discount
+the colour. So the token is now resolved **from the live document** — a hidden
+probe element given `color: var(--border)`, read back as the browser's own
+normalised rgb — and compared against the measured border colour. A palette
+change is invisible here, which is right. A border drawn in some other colour
+still fails.
+
+That introduced its own vacuous mode, so it is guarded: if `--border` stopped
+being defined, `color: var(--border)` is invalid at computed-value time, the
+probe falls back to the inherited text colour, and an **unpainted** border's
+`border-color` is `currentcolor` — the same text colour. The comparison would
+have passed on precisely the bug the drive was written for. The new assertion
+is that `--border` resolves at all and resolves to something other than the body
+text colour. That is 8 assertions added (two screens × four widths); the drive
+went from 51 checks to 59.
+
+**Proven, not assumed.** Both mutations were applied to the served bundle and
+the drive re-run each time:
+
+| Mutation | Result |
+| --- | --- |
+| `.store-section` border → `var(--line)` (the original 2026 bug: a dangling custom property) | ❌ `is painted (none 0px)` at all four widths, exit 1 |
+| `--border` renamed out of the served stylesheet | ❌ `--border resolves to a colour of its own (rgb(28, 22, 14), body rgb(28, 22, 14))` ×8, exit 1 |
+| bundle restored byte-identical | 59 passed, 0 failed, exit 0 |
+
+⚠️ The first falsification attempt was void and is worth recording: the edit was
+made to `frontend/src/...` and the drive stayed green. :4200 is served by a
+**prebuilt SSR bundle** (`node dist/mastande-frontend/server/server.mjs`), not
+`ng serve` — there is no watcher, so source edits are invisible. Same shape of
+mistake as the rate-limiter pass. The mutations above were applied to the built
+artefact, which is what the browser actually loads.
+
+### `nav-sheet-drive`: 9 red lines, all from one button that was removed on purpose
+
+Three assertions, each failing at three widths. All three depended on
+`.nav-sheet-close` existing:
+
+1. `and a close inside it, reachable by a thumb that has scrolled`
+2. `the close is not in the sheet at all` (the contrast loop)
+3. `focus moves into the sheet when it opens` — which asserted that
+   `document.activeElement` carried the class `nav-sheet-close`
+
+`navbar.ts` records why the button is gone: **removed at the owner's request
+after they saw it on a phone.** The sheet opens at the top with the burger a
+thumb's width above it, already showing an ✕ and already labelled "Close menu";
+the scrim closes it and Escape closes it. Four ways out, one of which took the
+first screen of the menu and pushed the links people came for further down.
+
+Failure 3 was the damaging one — it reported "focus does not move into the
+sheet", a real WCAG failure, when nothing of the kind was happening. Measured in
+Chromium: `activeElement` is the sheet's first link, "Browse rooms", inside
+`#nav-sheet`.
+
+Repaired to match the decision and to keep each claim falsifiable:
+
+- the close assertion is **reversed** — `.nav-sheet-close` must be absent at
+  mobile width too. Not hypothetical in either direction: that button once
+  shipped unconditional for a commit and a red "✕ Close" sat in the desktop
+  header beside the logo. The desktop section already guarded that leak; this is
+  the same guard where the person who asked for its removal would see it.
+- the contrast loop no longer looks for it.
+- the focus assertion checks **both** halves: focus is inside `#nav-sheet` *and*
+  is the sheet's first link. "Inside" alone would pass on the legal links at the
+  bottom; "first link" alone would pass on an element outside the open sheet.
+
+**Proven, not assumed.** Both mutations applied to the served bundle:
+
+| Mutation | Result |
+| --- | --- |
+| the class `nav-sheet-close` added to an element inside the sheet (the button coming back) | ❌ the new mobile assertion ×3 **and** the existing desktop-leak assertion, exit 1 |
+| focus-on-open neutralised (`firstFocusable()?.focus()` → `?.blur()`) | ❌ `focus moves into the sheet … (BUTTON)` ×3, exit 1 |
+| bundle restored byte-identical | all checks passed, exit 0 |
+
+The second mutation also took the focus-trap assertion ("20 Tabs later it has
+not escaped") red with it — so that check was never vacuous either; it works
+because focus enters the sheet first.
 
 ### Not measured (1)
 
