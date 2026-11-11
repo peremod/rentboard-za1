@@ -165,3 +165,14 @@ if (reg.status !== 201) {
 await page.context().close();
 await browser.close();
 console.log(fail ? `\n❌ ${fail} failure(s)` : '\n✅ the admin screen says whose handset, and whose consent');
+
+/**
+ * ⚠️ This line was missing until 11 November, and the drive was therefore a
+ * check that could not fail: it counted failures in `fail`, printed
+ * "❌ N failure(s)", and exited 0 regardless — so anything running it, CI
+ * included, read a clean pass. Found by cross-referencing each drive's exit
+ * code against the ❌ count in its own log while auditing all 42 for the E2E
+ * work; it was the only drive of the 41 that ran where the two disagreed.
+ * Its sound sibling scripts/services-ui-drive.mjs had this exact line.
+ */
+process.exit(fail ? 1 : 0);
