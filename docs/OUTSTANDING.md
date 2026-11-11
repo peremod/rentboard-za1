@@ -9128,6 +9128,34 @@ three-observation floor lowered, the median replaced with a mean, the badge's
 reverted, because the deletion path already takes the listings down by status.
 It is asserted anyway — the same reason the visibility set is asserted whole.
 
+### ⚠️ And the spec passed here and failed in CI — four 500s on the sitemap
+
+Caught by run 373, on the release commit, before it reached `master`.
+
+`storefront.int-spec.ts` is the first integration test to fetch
+`/sitemap.xml`, and `seo.controller.ts` throws by name when `SITE_URL` is
+unset. Locally `backend/.env` supplies it. CI's integration step sets
+DATABASE_URL, DIRECT_URL, JWT_SECRET and NODE_ENV and nothing else, and a
+runner has no `.env` — so the four cases that read the sitemap answered 500
+and the suite came back `4 failed | 261 passed`, taking the smoke suite and
+all four drives with it as skips, **including the storefront drive this
+section exists to put in CI**. It still has not run there.
+
+Reproduced here exactly, and the first attempt at reproducing it was wrong:
+removing `backend/.env` outright makes the app fail to boot on `JWT_SECRET`,
+which is not CI's condition at all. Removing only the `SITE_URL=` line
+reproduces all four, by name.
+
+Fixed in `vitest.integration.mts` rather than in the workflow, so the suite is
+self-sufficient wherever it runs: a test that needs an untracked file to pass
+is a test only its author can run. Verified with `SITE_URL` still absent from
+`.env` — 9 passed — and `.env` then restored byte-identical to a backup, which
+is checked rather than assumed, because `git checkout` on a file holding
+uncommitted work is how this repository lost an afternoon once already.
+
+⚠️ The next variable like this one will fail the same way, in CI and not here,
+unless it is added alongside. Named in the config.
+
 ### SEO, the sixth name
 
 Not refusal-only either. `scripts/seo-drive.mjs` runs in CI twice, against the
