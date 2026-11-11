@@ -21,6 +21,14 @@ playwright-report/
 blob-report/
 .playwright/
 
+# Screenshots the browser drives write, by default into drive-output/<drive>/
+# (scripts/wake-notice-drive.mjs:43, scripts/signed-in-hero-drive.mjs:41, and
+# any drive taking an output directory as argv[2]). Same reasoning as the four
+# above: large, binary, regenerated on every run, and meaningless outside the
+# run that produced them. Noticed while running all 42 drives for the E2E
+# audit, when they appeared as untracked files mid-run.
+drive-output/
+
 # A nested backend/backend or frontend/frontend means npm install ran from the
 # wrong directory. Ignoring them stops the mistake reaching a commit.
 backend/backend/
