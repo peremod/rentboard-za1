@@ -1061,6 +1061,19 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
   req GET /api/admin/stats "" "$ADMIN_TOKEN"
   check "admin reads stats" 200 "$STATUS" "$BODY"
 
+  # ⚠️ What this deployment can actually DO, not what it has code for. The
+  # admin dashboard offers assisted sign-up, which sends the code over
+  # WhatsApp — and with WHATSAPP_ENABLED off it was offering to send a message
+  # nobody would receive, the admin finding out only after typing a real
+  # landlord's number. CLAUDE.md: "Nothing on screen may promise a WhatsApp
+  # message while it is off." A boolean either way; the VALUE depends on the
+  # deployment, so only its presence and type can be asserted here.
+  if echo "$BODY" | jq -e '.capabilities.phoneCodes | type == "boolean"' >/dev/null 2>&1; then
+    green "  PASS  …and says whether phone codes can be sent at all"; PASS=$((PASS+1))
+  else
+    red "  FAIL  stats carries no boolean capabilities.phoneCodes — the admin screen cannot tell"; FAIL=$((FAIL+1))
+  fi
+
   req GET /api/verification/pending "" "$ADMIN_TOKEN"
   check "admin reads the verification queue" 200 "$STATUS" "$BODY"
 

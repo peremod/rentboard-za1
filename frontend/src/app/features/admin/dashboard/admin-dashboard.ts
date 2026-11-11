@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DatePipe, LowerCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -191,29 +191,56 @@ import { Icon } from '../../../shared/components/icon/icon';
           }
         </h2>
 
-        <div class="insight-banner">
-          <app-icon name="smartphone"/>
-          <span>
-            For a landlord sitting with you who has a phone and no email address.
-            <strong>The code goes to their handset, not yours</strong> — ask them to
-            read it out or type it in. They have to accept the Terms themselves on
-            the last step; you cannot do that part for them.
-          </span>
-        </div>
+        <!-- The code is sent over WhatsApp, and WHATSAPP_ENABLED is normally
+             off because Meta bills per message. With it off the API refuses
+             with a 503 — so the form below offered to send a message nobody
+             would receive, and an admin found out only after typing a real
+             landlord's number in front of them.
 
-        <div class="form-row">
-          <label for="assist-phone">Their mobile number</label>
-          <input id="assist-phone" type="tel" inputmode="tel" [(ngModel)]="assistPhone"
-                 placeholder="e.g. 082 123 4567" autocomplete="off"/>
-        </div>
-        <button type="button" class="btn btn-outline"
-                [disabled]="assisting() || assistPhone.trim().length < 10"
-                (click)="startAssisted()">
-          {{ assisting() ? 'Sending…' : 'Send them a code' }}
-        </button>
+             Worse, the refusal they then read is written for the person
+             signing in: "Use your email address — and if you do not have one
+             on your account, ask us to add it." The admin has an email and an
+             account. It is the landlord who cannot get in.
 
-        @if (assistMessage()) { <p class="field-hint">{{ assistMessage() }}</p> }
-        @if (assistError()) { <p class="field-error" role="alert">{{ assistError() }}</p> }
+             CLAUDE.md: "Nothing on screen may promise a WhatsApp message while
+             it is off." The landing page had to be fixed for the same reason.
+             Found by assisted-signup-ui-drive, which had been reporting it as
+             two failures while exiting 0. -->
+        @if (phoneCodes()) {
+          <div class="insight-banner">
+            <app-icon name="smartphone"/>
+            <span>
+              For a landlord sitting with you who has a phone and no email address.
+              <strong>The code goes to their handset, not yours</strong> — ask them to
+              read it out or type it in. They have to accept the Terms themselves on
+              the last step; you cannot do that part for them.
+            </span>
+          </div>
+
+          <div class="form-row">
+            <label for="assist-phone">Their mobile number</label>
+            <input id="assist-phone" type="tel" inputmode="tel" [(ngModel)]="assistPhone"
+                   placeholder="e.g. 082 123 4567" autocomplete="off"/>
+          </div>
+          <button type="button" class="btn btn-outline"
+                  [disabled]="assisting() || assistPhone.trim().length < 10"
+                  (click)="startAssisted()">
+            {{ assisting() ? 'Sending…' : 'Send them a code' }}
+          </button>
+
+          @if (assistMessage()) { <p class="field-hint">{{ assistMessage() }}</p> }
+          @if (assistError()) { <p class="field-error" role="alert">{{ assistError() }}</p> }
+        } @else {
+          <div class="insight-banner" id="assist-off">
+            <app-icon name="smartphone"/>
+            <span>
+              <strong>Paused.</strong> Assisted sign-up sends the code over WhatsApp,
+              and that channel is switched off — so no code can reach anybody right
+              now. Do not take a landlord's number expecting one to arrive. Somebody
+              with no email address has no way in until it is back on.
+            </span>
+          </div>
+        }
 
         @if (assisted().length) {
           <!-- Stored is not readable. This codebase has shipped a notice
@@ -320,6 +347,16 @@ export class AdminDashboard implements OnInit {
   private payments = inject(PaymentsService);
 
   stats = signal<AdminStats | null>(null);
+
+  /**
+   * Whether a phone code can be sent at all — WHATSAPP_ENABLED, read from
+   * `/admin/stats`.
+   *
+   * ⚠️ `=== true`, so an older API that does not send `capabilities` reads as
+   * OFF. The safe direction: the screen stops offering assisted sign-up rather
+   * than promising a message it cannot send.
+   */
+  phoneCodes = computed(() => this.stats()?.capabilities?.phoneCodes === true);
   kpis = signal<AdminKpis | null>(null);
   loading = signal(true);
   users = signal<AdminUser[]>([]);

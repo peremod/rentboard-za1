@@ -45,9 +45,9 @@ was tried first and is useless: it flags 42 of them, because most write
 
 | Bucket | At baseline | After the first two repairs |
 | --- | --- | --- |
-| Sound and green | 30 | **33** |
+| Sound and green | 30 | **34** |
 | Sound and red — real signal | 9 | **6** |
-| Could not fail | 2 | 2 (1 fixed, 1 open) |
+| Could not fail | 2 | **1** (`font-paint-drive`) |
 | Not measured in this pass | 1 | 1 |
 
 `token-render-drive` (20 red) and `nav-sheet-drive` (9 red) were the two biggest
@@ -258,4 +258,62 @@ the status the panel gates on. ⚠️ The second sets a lease end date first,
 because `upcoming()` lists a tenancy only when a fixed term is inside the lead
 window or notice has been given — without that the array comes back empty and
 the assertion passes having seen nothing.
+
+## The drive that was red in its own log
+
+`assisted-signup-ui-drive` printed `❌ 2 failure(s)` and exited 0 for as long as
+WhatsApp has been switched off. Both failures — "no confirmation after starting
+one" and "no assisted row was created for this admin" — were the API refusing
+with `503`, which is correct: assisted sign-up delivers the code over WhatsApp,
+and `WHATSAPP_ENABLED` is off because Meta bills per message.
+
+So the drive was stale, like the other two WhatsApp drives. **But the reason it
+was stale was itself a defect**, and a standing-rule one:
+
+> Nothing on screen may promise a WhatsApp message while it is off.
+
+The admin dashboard offered the assisted sign-up form unconditionally, promising
+in bold that *"The code goes to their handset, not yours"*. An admin sitting
+with a landlord typed their real number, pressed send, and only then learned the
+feature was off — from a message addressed to the wrong person entirely:
+
+> Signing in with a phone number is not available yet. Use your email address —
+> and if you do not have one on your account, ask us to add it.
+
+The admin has an email and an account. It is the landlord who cannot get in.
+This is the same fault the landing page had to be fixed for when it advertised
+"WhatsApp Notifications" to every visitor.
+
+### The fix
+
+`GET /admin/stats` now reports `capabilities.phoneCodes`, read through
+`WhatsappService.isEnabled()` so there is one answer rather than a second look
+at the environment variable. With it false the dashboard shows a notice in place
+of the form — naming that the channel is switched off, and saying plainly that
+somebody with no email address has no way in until it is back on. The flag is
+read as `=== true`, so an older API that does not send `capabilities` reads as
+OFF: the screen stops offering rather than promises.
+
+The drive asks the **API** for the capability, not the screen — the screen is
+the thing under test — and then checks the state that actually applies. 23
+checks → 28 with codes on, 19 with codes off, and the skipped section names its
+reason rather than vanishing.
+
+**Both branches were run.** 28 green with `WHATSAPP_ENABLED=true` (the whole
+assisted flow works end to end, including that the six digits never reach the
+admin's screen), 19 green with it off. A branch that is never executed is not
+coverage.
+
+| Mutation | Result |
+| --- | --- |
+| the form ungated (shown with codes off) | ❌ 8 — all four off-state assertions, plus "2 assisted control(s) still on screen" at each of the four widths |
+| `capabilities` removed from the backend alone, with WhatsApp genuinely ON | ❌ "stats carries no capabilities.phoneCodes", and the screen reads OFF while the API is on — the safe direction, and still a loss of truth |
+| both restored | 28 green (on) / 19 green (off) |
+
+⚠️ **Falsification caught one of my own assertions being worthless.** "…naming
+the reason" was written as a test over the whole page text, and with the fix
+reverted it stayed GREEN while the three assertions beside it went red: the
+admin dashboard contains the words "paused" and "switched off" elsewhere, so it
+was never evidence about this notice. It reads `#assist-off`'s own text now, and
+fails with the fix reverted.
 
