@@ -67,11 +67,52 @@ for m in $minors; do
   fi
   prev=$m
 done
-if [[ -n "$missing" ]]; then
-  echo "⚠️  No entry for:$missing"
-  echo "    Those releases were tagged in a container that was reclaimed before the"
-  echo "    entry was written. The tag is lost; the commits are not. Nothing here"
-  echo "    guesses which commit it was, because guessing would invent history."
+# ⚠️ The gap is TWO different things, and saying so is the point.
+#
+# This report used to name all nineteen under one cause - "tagged in a
+# container that was reclaimed" - which is true of exactly one of them and
+# false of the other eighteen. It is where the phrase "the 19-release tag gap"
+# came from, and it was repeated as fact until somebody went and looked.
+#
+# v1.116.0 to v1.133.0 were never releases. Nothing was ever tagged for them
+# and no commit was ever assigned to them: fff6d9d, the commit that repaired
+# the numbering, says so in its own message - "the intermediate labels v1.116.0
+# to v1.133.0 were never assigned to commits and no tag is invented for them" -
+# and chose 1.134.0 over 1.116.0 for that reason. The remote tag sequence stops
+# dead at v1.115.0, which is the other half of the evidence.
+#
+# ⚠️ What does NOT prove it: package.json. The bump convention lapsed at
+# 1.81.0, so master's first-parent line runs 1.81.0 straight to 1.134.0 and
+# carries no version for v1.82.0-v1.115.0 either - and those were real,
+# tagged releases. The absence of a bump says nothing on its own.
+#
+# Check it rather than trust this comment:
+#   git ls-remote --tags origin | sed 's#.*refs/tags/##' | sort -V | tail
+NEVER_RELEASED=" v1.116.x v1.117.x v1.118.x v1.119.x v1.120.x v1.121.x v1.122.x v1.123.x v1.124.x v1.125.x v1.126.x v1.127.x v1.128.x v1.129.x v1.130.x v1.131.x v1.132.x v1.133.x"
+lost=""
+phantom=""
+for m in $missing; do
+  case "$NEVER_RELEASED" in
+    *" $m"*) phantom="$phantom $m" ;;
+    *)       lost="$lost $m" ;;
+  esac
+done
+
+if [[ -n "$lost" ]]; then
+  echo "⚠️  Tagged once, and the tag is lost:$lost"
+  echo "    Tagged in a container that was reclaimed before the entry was"
+  echo "    written. The tag is gone; the commits are not. Nothing here guesses"
+  echo "    which commit it was, because guessing would invent history - for"
+  echo "    v1.84.0 there are three phase merges between its neighbours (5a/5d,"
+  echo "    5b/5h, 5e/5f) and nothing in the repository says which one it was."
+  echo
+fi
+if [[ -n "$phantom" ]]; then
+  echo "ℹ️  Never a release, so there is nothing to tag:$phantom"
+  echo "    Documentation labels that were never assigned to any commit. See"
+  echo "    fff6d9d, which repaired the numbering and deliberately chose"
+  echo "    1.134.0 over 1.116.0: 'no tag is invented for them'. The remote tag"
+  echo "    sequence stops at v1.115.0. This is not a gap to be filled."
   echo
 fi
 
