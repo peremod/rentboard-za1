@@ -2782,6 +2782,68 @@ guarantee was falsified before being believed, including two of my own that
 could not fail until they were corrected. Full suite 18 files, 256 tests.
 CI run 370 green on all five jobs; production verified serving 1.184.0."
 
+tag_if_missing "v1.185.0" "5604f826fa6b4d289e3c4fffa532f60ed9dacfec" "2026-11-11T07:35:00+00:00" "v1.185.0 - a suspended landlord's room stayed live at its URL
+
+common/prisma/account-visibility.ts names what must go dark when an account is
+paused by its owner, suspended by an admin or ended: their public page, their
+storefront and their rooms. Measured through the real admin route:
+
+  board                       0 rooms   ok
+  sitemap, the room            gone     ok
+  sitemap, the storefront      gone     ok
+  GET /api/storefronts/:slug   404      ok
+  GET /api/rooms/:id           200      the full listing, to anyone
+
+The 200 carried the listing, the landlord name, the avatar, the rating and the
+verification badge, to a caller with no token.
+
+The three that held do so by accident: suspending or deactivating an account
+PAUSES every active room, so the board and the sitemap filter on status and
+never have to ask about the person - the incidental correctness PUBLIC_USER
+was introduced to replace. findOne had grown a refusal for a deleted room and
+one for a draft, each after a defect, and asked nothing about the landlord.
+The first carries its own history in a comment: a tenant saved room kept
+rendering normally after the landlord took it down. The same sentence was true
+of a suspended one.
+
+It is the link that makes it matter. A room reaches people on WhatsApp, so the
+URL is what outlives the board, and a suspension for a suspected deposit scam
+took the listing off the board and left it live where the link pointed.
+
+One primary-key lookup, for non-owners only. Owner access survives: a landlord
+who paused their own account can still sign in, so reactivating is not a
+trapdoor. A suspended one gets 404 even holding their token, measured rather
+than assumed - the first smoke assertion allowed 200, 401 or 403 and failed on
+the real answer, because suspension revokes authentication.
+
+Named rather than fixed: the route carries Cache-Control s-maxage=300, so a
+page already at the CDN edge can outlive a suspension by up to five minutes.
+
+Also closes storefront and SEO on docs/API-TESTING.md section 6. The list is
+empty, and it never once described a domain correctly: every one of the six it
+named turned out to have real coverage, and the real gap was narrower and more
+specific each time.
+
+scripts/storefront-drive.mjs existed, was good, and nothing ran it - 31
+assertions with every subject created through the real endpoints, in no
+workflow, while smoke-test.sh line 4092 cited it by name as the reason not to
+duplicate slug collisions and the sitemap entry. Worse than absent coverage,
+because absence is visible. It ran on a runner for the first time in CI run
+374 and passed.
+
+backend/test/storefront.int-spec.ts, 9 cases. Six mutations, six named
+failures.
+
+And the specs passed locally and failed in CI - run 373, caught on the release
+commit before it reached master. This is the first integration test to fetch
+sitemap.xml and the suite never provided SITE_URL, which the app demands at
+boot; a runner has no .env. The four sitemap cases answered 500 and took the
+smoke suite and all four drives with them as skips. Fixed in the vitest config
+rather than the workflow, so the suite is self-sufficient wherever it runs.
+
+CI run 374 green on all five jobs; production verified serving 1.185.0."
+
+
 
 
 echo
