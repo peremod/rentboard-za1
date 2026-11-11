@@ -67,3 +67,18 @@ node scripts/icon-lint.mjs
 # Compares resolved COLOUR, not the text of the declaration: the gold pair
 # was written two different ways.
 node scripts/badge-lint.mjs
+
+# ⚠️ Needs PostgreSQL, unlike every gate above it, so it is the one that skips.
+#
+# It replays all 39 migrations into a disposable shadow database and compares
+# the result with schema.prisma. The two disagreeing is P2022 in production —
+# "The column rooms.listerType does not exist in the current database",
+# docs/OUTSTANDING.md §5, an hour of downtime on 5 October — and nothing
+# compared them until the data-integrity brief's step 5.
+#
+# SKIP_IF_NO_DB because Postgres stops on its own in this container, three
+# times in one session, and a hook that fails on that teaches people to pass
+# --no-verify. The skip names itself and the command to re-run; CI runs the
+# same script WITHOUT the variable, so a runner with no database fails there
+# rather than skipping, and drift cannot reach master through this door.
+SKIP_IF_NO_DB=1 node scripts/migration-drift-check.mjs

@@ -490,6 +490,39 @@ jobs:
       # "test", and refuses a remote host outright. Proved by pointing it at
       # a development database: it stopped before the first test and the 660
       # rooms there were still 660 afterwards.
+      - name: Migrations and schema.prisma describe the same database
+        # 🔴 Added with the data-integrity brief's step 5, which had no test at
+        # all: 39 migrations and nothing comparing them to the datamodel. The
+        # two can disagree in both directions and each has hurt this project.
+        # A model edited without a migration is P2022 in production - "The
+        # column rooms.listerType does not exist in the current database",
+        # docs/OUTSTANDING.md §5, an hour of downtime on 5 October.
+        #
+        # Replays every migration into a DISPOSABLE shadow database and drops
+        # it again; it refuses to run against a remote host. It found one real
+        # difference on its first run, explained and baselined in the script,
+        # and fails on anything new.
+        run: node scripts/migration-drift-check.mjs
+        env:
+          DRIFT_ADMIN_URL: postgresql://postgres:test@localhost:5432/postgres
+      - name: The survey migration keeps the answers it moves
+        # 🔴 The data-integrity brief's step 5, second half: no migration had
+        # ever been APPLIED to a populated database in a test.
+        #
+        # 20261016090000_survey_per_user_and_version is the only migration
+        # here that moves data rather than reshaping columns, it is
+        # hand-written, and its header makes two claims about real people's
+        # answers — that a database with answers in it keeps them, and that a
+        # row it cannot place STOPS the migration rather than being deleted.
+        # Neither had ever been checked.
+        #
+        # Applies history in two stages with rows seeded in between, in a
+        # disposable database, and asserts both claims. The second is the one
+        # that matters: everything else would pass against a migration that
+        # quietly deleted what it could not place.
+        run: node scripts/migration-data-survival-check.mjs
+        env:
+          DRIFT_ADMIN_URL: postgresql://postgres:test@localhost:5432/postgres
       - name: Integration tests (create the database)
         run: |
           PGPASSWORD=test psql -h localhost -U postgres -c \

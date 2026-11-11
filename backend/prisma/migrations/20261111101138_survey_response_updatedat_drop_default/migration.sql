@@ -1,0 +1,37 @@
+-- Bring `survey_responses.updatedAt` into line with the datamodel.
+--
+-- Found by scripts/migration-drift-check.mjs on its first run: the column
+-- carries a database default that `schema.prisma` does not declare.
+--
+-- ⚠️ The drift was CORRECT when it was created, and this is not a criticism of
+-- it. `20261016090000_survey_per_user_and_version` adds `updatedAt` to a table
+-- that already had rows, and adding a NOT NULL column to a populated table
+-- requires a default or the ALTER fails. The default did its job — backfilling
+-- every existing answer — and then had nothing left to do, because the
+-- datamodel declares `updatedAt DateTime @updatedAt`: Prisma writes the value
+-- itself on every create and every update.
+--
+-- ── What this changes in practice: nothing
+--
+-- Prisma is the only writer. There is no raw INSERT into `survey_responses`
+-- anywhere in `backend/src` or `scripts`, so the default has not been reached
+-- since the backfill and cannot be after this.
+--
+-- ── What it changes in principle
+--
+-- `schema.prisma` and the migrations become one description again instead of
+-- two that disagree, so the drift check can demand zero differences rather
+-- than carry a baseline. A gate that accepts one known exception is one
+-- rewrite away from accepting two.
+--
+-- ── Safety
+--
+-- Metadata only. DROP DEFAULT rewrites no rows, scans no table and holds the
+-- ACCESS EXCLUSIVE lock for the duration of a catalogue update — microseconds
+-- on any table size. Nothing is dropped, nothing is backfilled, no column
+-- changes type or nullability, and the existing values are untouched.
+--
+-- Reversible in one line if it ever needs to be:
+--   ALTER TABLE "survey_responses"
+--     ALTER COLUMN "updatedAt" SET DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "survey_responses" ALTER COLUMN "updatedAt" DROP DEFAULT;
