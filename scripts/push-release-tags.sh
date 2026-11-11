@@ -2740,6 +2740,49 @@ and nothing scrolls sideways.
 29 frontend unit tests, production build, env parity. CI run 367 green on all
 five jobs."
 
+tag_if_missing "v1.184.0" "5465616e0ec11d5c0e386949b4860150f4c269d9" "2026-11-10T16:40:00+00:00" "v1.184.0 - three section 6 fixes, found by reading what was stored
+
+docs/API-TESTING.md section 6 lists the domains whose routes are only ever
+asserted to REFUSE. Three came off it, and the gap was the same shape in each:
+the endpoint answers identically whether it stored anything or not, so every
+check made over HTTP passed with the control deleted.
+
+1. An unauthenticated caller could store a phone number in ux_counters.segment,
+   a column the schema describes as never holding anything identifying.
+   POST /analytics/event has no DTO - the body is an inline TypeScript type,
+   which erases at runtime - so the only guard was a length of 24. That is a
+   phone number, an email prefix, an ID number. record() takes an allowlist
+   now: all, mobile, desktop, which is everything the browser sends.
+
+2. Two referral abuse guards that a smoke header named as the assertions that
+   matter, and that nothing checked. From the only two callers that exist,
+   both compare an id created moments earlier against rows that cannot yet
+   mention it, so neither can fire. Defensive rather than broken; the header
+   no longer claims them. The abuse they are named for - a second account
+   using your own code - is two user ids and needs identity to catch.
+   Flagged, not invented.
+
+3. The survey audience was enforced on the prompt and not on the answer.
+   matchesAudience carries the note that eligibility cannot be a client-side
+   check because a client that decides its own eligibility can be asked to lie
+   about it. promptFor called it; submit did not, so a crafted POST wrote
+   straight past it. Latent - no shipped survey sets minRooms - which is
+   exactly why the first one that narrowed by size would have found it in the
+   numbers rather than in an error.
+
+⚠️ And the survey aggregate's POPIA claim - never returns who said what, in
+the service and again in the controller over the CSV route - rested entirely
+on the select list of one query. Adding userId there, or a user fullName for
+context, produces a payload that still answers 200 with a segmentQuestionId,
+which is the whole of what the smoke suite looks at. Section 6 is explicit
+about the stakes: the open text is things landlords said about their tenants.
+
+23 new integration cases - analytics 7, referrals 6, surveys 10 - and every
+guarantee was falsified before being believed, including two of my own that
+could not fail until they were corrected. Full suite 18 files, 256 tests.
+CI run 370 green on all five jobs; production verified serving 1.184.0."
+
+
 
 echo
 # ⚠️ created + skipped must equal the entry count. If it does not, the run

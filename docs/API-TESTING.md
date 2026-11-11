@@ -238,11 +238,13 @@ Stated rather than implied, because a suite's silence reads as a pass.
    copy.
 6. **The 236-route sweeps call every route with a sample UUID**, so for most of
    them the assertion is about *refusal*, not about the handler's work. The
-   handler's work is covered for the domains with their own spec files; the
-   rest (storefront, SEO) have refusal coverage only.
+   handler's work is covered for the domains with their own spec files.
 
-   ⚠️ **This list has been wrong FOUR times, so read the checks rather than
-   the list.** Both notices (§97) and ads (§99) were described here as
+   🔴 **The list is now empty, and it was wrong about every single domain it
+   ever named.** Read the checks, never the list. What follows is the record of
+   each one, kept because the pattern is the finding: "refusal coverage only"
+   was a guess written once and then trusted for months, and the real gap was
+   narrower and more specific every time. Both notices (§97) and ads (§99) were described here as
    refusal-only and both already had substantial coverage — ads has a whole
    section of `scripts/smoke-test.sh` running in CI. What each was missing was
    narrower and more specific than "the handler's work": for notices, that the
@@ -326,8 +328,56 @@ Stated rather than implied, because a suite's silence reads as a pass.
    are the pair that proves it, one refusing and one accepting, because a guard
    that refuses everybody is not a guard either.
 
-   ⚠️ **Four of the six once on this list were wrong, so it now says so
-   twice.**
+   **Storefront came off the list — §106, 10 November 2026. The coverage
+   existed, it was good, and nothing ran it.** `scripts/storefront-drive.mjs`
+   is 31 assertions, every subject created through the real endpoints rather
+   than staged with SQL — and it was in no workflow, while
+   `scripts/smoke-test.sh:4092` pointed at it by name for the cases the smoke
+   suite deliberately does not duplicate: "Slug collisions and the sitemap
+   entry are checked properly in scripts/storefront-drive.mjs". So for the
+   whole of Phase 5b those cases were covered by a file nobody executed, and
+   the smoke suite was citing it. It passes 31/31 on the first run against
+   this build, and it is in CI now.
+
+   🔴 **And the one thing neither it nor the smoke suite could see was a live
+   leak.** `PUBLIC_USER` (`common/prisma/account-visibility.ts`) names what
+   must go dark when an account is paused, suspended or ended: "their public
+   page, their storefront and their rooms." Measured with a landlord suspended
+   by an admin — board 0 rooms, room gone from the sitemap, storefront gone
+   from the sitemap, `GET /storefronts/:slug` 404 … and **`GET /rooms/:id`
+   answering 200 to an anonymous caller** with the full listing, the
+   landlord's name, their avatar, their rating and their verification badge.
+   The three that held do so by accident: suspending or deactivating an
+   account PAUSES every active room, so the board and the sitemap filter on
+   `status` and never have to ask about the person, which is the incidental
+   correctness that constant was introduced to replace. `findOne` refused a
+   `deleted` room and a `draft` one and asked nothing about the landlord.
+   It is the link that makes it matter: a room reaches people on WhatsApp, so
+   the URL is what outlives the board, and a suspension for a suspected scam
+   took the listing off the board and left it live where the link pointed.
+   Fixed, with `backend/test/storefront.int-spec.ts` (9 cases) and a smoke
+   section holding it.
+
+   **SEO is the last name on the list, and it is not refusal-only either.**
+   `scripts/seo-drive.mjs` runs in CI **twice**, against the development and
+   the production bundle, and reads the bytes the server sends rather than the
+   hydrated DOM — "a check that reads the hydrated DOM cannot tell the two
+   apart". It asserts exactly one Organization and one WebSite, that the
+   Organization invents nothing and names the real registered company, that
+   the SearchAction points at a `?q=` URL **that is then fetched and must
+   answer 200**, that a room is a `RealEstateListing` and not a `Product`,
+   that no `aggregateRating` or `priceValidUntil` is attached, that the offer
+   states `LeaseOut` in ZAR, and that no `streetAddress` is published. It also
+   guards its own vacuous-pass mode, announcing a skip when the board
+   server-renders no room links instead of reading absence as a pass, and
+   `e2e/locale-and-seo.spec.ts` covers locale routing and the served metadata.
+   The one cross-cutting hole in it was the room URL above, which the
+   storefront spec now holds from both ends: the room leaves the sitemap AND
+   the URL goes dark, asserted together so a later change that fixes one and
+   breaks the other is still caught.
+
+   ⚠️ **Five of the six were wrong, and the sixth had its drive running in CI
+   twice. The list never once described a domain correctly.**
 
    ⚠️ **Read before trusting a domain's name on this list.** Notices already
    had `scripts/notices-drive.mjs`, nine checks, written for this exact

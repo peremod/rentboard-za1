@@ -549,6 +549,20 @@ jobs:
         env:
           API: http://localhost:3000
           DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_test
+      - name: The storefront publishes only when asked
+        # 🔴 Added with §106, because this drive EXISTED and nothing ran it.
+        # scripts/smoke-test.sh:4092 points at it by name for the cases the
+        # smoke suite deliberately does not duplicate — "Slug collisions and
+        # the sitemap entry are checked properly in
+        # scripts/storefront-drive.mjs" — and it was in no workflow, so for
+        # the whole of Phase 5b those cases were covered by a file nobody
+        # executed. 31 assertions, every subject created through the real
+        # endpoints rather than staged with SQL, and it passes on the first
+        # run against this build: the coverage was good and dead, which is
+        # worse than absent, because the smoke suite was citing it.
+        #
+        # No env: the script hardcodes localhost:3000 and talks only HTTP.
+        run: node scripts/storefront-drive.mjs
       - name: One rotation, one credential
         # Section 96a. refresh() minted a token per in-flight request, so one
         # rotation left two valid refresh tokens and the browser only ever held

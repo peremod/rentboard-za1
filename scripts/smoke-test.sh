@@ -1075,6 +1075,67 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
     '{"isActive":false,"reason":"probe"}' "$ADMIN_TOKEN"
   check "suspending an unknown user returns 404" 404 "$STATUS" "$BODY"
 
+  # ── A suspended landlord's room URL — section 106 ────────────────────────
+  #
+  # Its OWN landlord, registered here and suspended at the end, because the
+  # suite's $LTOKEN landlord is asked questions by a dozen sections below this
+  # one. Nothing after this block refers to the account it creates.
+  #
+  # 🔴 The defect: the board, the sitemap and the storefront all went dark
+  # when an account was suspended, and GET /rooms/:id answered 200 with the
+  # full listing to an anonymous caller. The first three hold because
+  # suspending an account PAUSES every active room, so they filter on status
+  # and never ask about the person; findOne refused a draft and a deleted room
+  # and asked nothing. A room reaches people on WhatsApp, so the URL is the
+  # thing that outlives the board.
+  SUSP_EMAIL="suspended+${STAMP}@mastande.test"
+  req POST /api/auth/register \
+    "{\"email\":\"$SUSP_EMAIL\",\"password\":\"$PASSWORD\",\"fullName\":\"Suspended Landlord\",\"role\":\"LANDLORD\"}"
+  SUSP_TOKEN=$(echo "$BODY" | jq -r '.accessToken // empty')
+  SUSP_ID=$(echo "$BODY" | jq -r '.user.id // empty')
+
+  if [[ -n "$SUSP_TOKEN" && -n "$SUSP_ID" ]]; then
+    req POST /api/properties \
+      '{"name":"Suspension probe yard","city":"Johannesburg","province":"Gauteng","suburb":"Tembisa"}' "$SUSP_TOKEN"
+    SUSP_PROP=$(echo "$BODY" | jq -r '.id // empty')
+    req POST /api/rooms \
+      "{\"title\":\"Room of a landlord about to be suspended\",\"description\":\"A private back room with its own entrance and a separate gate key. Shared kitchen and outside tap, close to the taxi rank.\",\"roomType\":\"shared_house\",\"rentCents\":320000,\"province\":\"Gauteng\",\"city\":\"Johannesburg\",\"locationDisplay\":\"Tembisa, Johannesburg\",\"availableFrom\":\"2026-06-01\",\"propertyId\":\"$SUSP_PROP\"}" "$SUSP_TOKEN"
+    SUSP_ROOM=$(echo "$BODY" | jq -r '.id // empty')
+    req PATCH "/api/rooms/$SUSP_ROOM" '{"heroImagePath":"/smoke-placeholder.jpg"}' "$SUSP_TOKEN"
+    req POST "/api/rooms/$SUSP_ROOM/publish" '{}' "$SUSP_TOKEN"
+
+    # ⚠️ The baseline first. Every assertion below is "this went dark", which
+    # passes on a page that was never lit.
+    req GET "/api/rooms/$SUSP_ROOM" "" ""
+    check "a published room answers at its URL to a stranger" 200 "$STATUS" "$BODY"
+
+    req PATCH "/api/admin/users/$SUSP_ID/active" \
+      '{"isActive":false,"reason":"Smoke probe: the room URL must go with the board."}' "$ADMIN_TOKEN"
+    check "an admin suspends the landlord" 200 "$STATUS" "$BODY"
+
+    req GET "/api/rooms/$SUSP_ROOM" "" ""
+    check "and the room URL goes dark with the board" 404 "$STATUS" "$BODY"
+
+    # ⚠️ Dark to the holder of the suspended token too, and that answer was
+    # MEASURED rather than assumed - the first version of this assertion
+    # allowed 200, 401 or 403 and failed on the real one.
+    #
+    # A suspended account does not authenticate at all, so the optional guard
+    # on this route yields no viewer, the owner branch is never taken, and the
+    # public read is the only read there is. Correct: an account locked out by
+    # us is locked out, and nothing is lost because an operator restoring it
+    # restores the room with it.
+    #
+    # The OTHER half - a landlord who paused their own account keeping access
+    # to their own room, so reactivating is not a trapdoor - cannot be driven
+    # here, because deactivation needs a password the suite would then have to
+    # reuse in sections below. backend/test/storefront.int-spec.ts asserts it.
+    req GET "/api/rooms/$SUSP_ROOM" "" "$SUSP_TOKEN"
+    check "and dark to the suspended token as well - suspension revokes auth" 404 "$STATUS" "$BODY"
+  else
+    skipped "the suspended-landlord room URL — registration did not return a token"
+  fi
+
   # ── Ending an account on its owner's request — Phase 7i.
   #
   # NOTHING here sends a valid closure: it is irreversible, and a smoke suite
