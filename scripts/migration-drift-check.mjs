@@ -4,8 +4,8 @@
  *
  *   node scripts/migration-drift-check.mjs
  *
- * ⚠️ Needs a DISPOSABLE database. It creates a shadow database, replays all
- * 39 migrations into it, compares the result against the datamodel, and drops
+ * ⚠️ Needs a DISPOSABLE database. It creates a shadow database, replays every
+ * migration into it, compares the result against the datamodel, and drops
  * it again. It never touches the database in DATABASE_URL, and it refuses to
  * run against a remote host at all — see `assertLocal` below.
  *
@@ -38,35 +38,33 @@
  * spacing.
  */
 import { execFileSync } from 'node:child_process';
+import { readdirSync } from 'node:fs';
 
 const SHADOW_DB = 'mastande_migration_drift_shadow';
 
 /**
- * The one difference that is expected, with its cause.
+ * Nothing is expected. The gate demands zero differences.
  *
- * `20261016090000_survey_per_user_and_version` adds `updatedAt` to
- * `survey_responses`, a table that already had rows. Adding a NOT NULL column
- * to a populated table REQUIRES a default or the ALTER fails, so the
- * migration says `NOT NULL DEFAULT CURRENT_TIMESTAMP`. `schema.prisma`
- * declares `updatedAt DateTime @updatedAt` with no `@default`, because Prisma
- * sets the value itself on every create and update.
+ * There was one, found on this check's first run:
+ * `survey_responses.updatedAt` carried a database default the datamodel does
+ * not declare, because the migration that added the column backfilled a NOT
+ * NULL on a populated table and that requires a default. It was correct when
+ * it was written and had nothing left to do afterwards, since Prisma sets
+ * `@updatedAt` itself on every write.
  *
- * ⚠️ Effect: none. Prisma is the only writer — there is no raw INSERT into
- * `survey_responses` anywhere in `backend/src` or `scripts` — so the default
- * is never reached. It would only matter to a hand-written INSERT, which
- * would succeed against the migrated database and fail against one built
- * from the datamodel.
+ * It was baselined here for one commit and then CLEARED, by
+ * `20261111101138_survey_response_updatedat_drop_default` — a metadata-only
+ * DROP DEFAULT that rewrites no rows. A gate that accepts one known
+ * exception is one rewrite away from accepting two, so the exception was
+ * removed rather than kept.
  *
- * The clean fix is a one-line migration, `ALTER TABLE "survey_responses"
- * ALTER COLUMN "updatedAt" DROP DEFAULT`, which changes no rows and takes no
- * table lock worth naming. It is NOT done here: adding a migration means the
- * next deploy runs it against production, and this repository's rule is that
- * migrations are deliberate. Flagged for a decision rather than taken.
+ * ⚠️ If a future migration has to leave drift behind — and a NOT NULL
+ * backfill on a populated table is the case that will — add it here WITH its
+ * cause and its effect, the way that one was, rather than loosening the
+ * comparison. The check also fails when a baselined difference disappears,
+ * so a stale allowance cannot sit here unnoticed.
  */
-const BASELINE = [
-  '[*] Changed the `survey_responses` table',
-  '[*] Altered column `updatedAt` (default changed from `Some(Now)` to `None`)',
-];
+const BASELINE = [];
 
 const red   = (s) => `\x1b[31m${s}\x1b[0m`;
 const green = (s) => `\x1b[32m${s}\x1b[0m`;
@@ -96,6 +94,40 @@ const base =
   process.env.DRIFT_ADMIN_URL ??
   'postgresql://rentboard:rentboard@localhost:5432/postgres';
 assertLocal(base);
+
+/**
+ * ⚠️ SKIP, by name, when there is no database — and only then.
+ *
+ * This runs in the pre-commit hook as well as in CI, and the hook must not
+ * fail on a machine with Postgres stopped: in this container it stops on its
+ * own, repeatedly, which CLAUDE.md records and which happened four times
+ * while this check was being written. But a skip that says nothing is how a
+ * gate disappears, so it prints the reason and the command to re-run — and
+ * it REFUSES to skip unless SKIP_IF_NO_DB is set, which only the hook sets.
+ * CI runs the same script without it, so a runner with a broken database
+ * fails there rather than passing quietly.
+ */
+try {
+  execFileSync('psql', [base, '-tAc', 'select 1'], { stdio: ['ignore', 'pipe', 'pipe'] });
+} catch {
+  if (!process.env.SKIP_IF_NO_DB) {
+    console.log('── Migrations vs schema.prisma ─────────────────────────────');
+    console.error(red('  ❌ no database at the admin URL, and SKIP_IF_NO_DB is not set.'));
+    console.error('     A failure rather than a skip: in CI the database is always');
+    console.error('     there, so its absence means a broken runner, not a clean tree.');
+    process.exit(1);
+  }
+  console.log('── Migrations vs schema.prisma ─────────────────────────────');
+  console.log(grey('  ⏭  SKIPPED — no PostgreSQL at the admin URL.'));
+  console.log(grey('     This replays every migration into a disposable database, so'));
+  console.log(grey('     it needs one. Start it and re-run:'));
+  console.log(grey('       sudo pg_ctlcluster 16 main restart'));
+  console.log(grey('       node scripts/migration-drift-check.mjs'));
+  console.log(grey('     It runs unskippably in CI, so this cannot hide drift.'));
+  console.log('════════════════════════════════════════════════════════════');
+  process.exit(0);
+}
+
 const shadowUrl = base.replace(/\/[^/?]+(\?|$)/, `/${SHADOW_DB}$1`);
 
 const psql = (sql) =>
@@ -147,7 +179,11 @@ try {
   const unexpected = differences.filter((l) => !BASELINE.includes(l));
   const missing = BASELINE.filter((l) => !differences.includes(l));
 
-  console.log(grey(`  39 migration(s) replayed into a disposable database.`));
+  // Counted, not written down. The first version of this line said 39 and was
+  // stale within the hour, when the migration that cleared the baseline landed.
+  const migrationCount = readdirSync('backend/prisma/migrations')
+    .filter((n) => n !== 'migration_lock.toml').length;
+  console.log(grey(`  ${migrationCount} migration(s) replayed into a disposable database.`));
 
   if (unexpected.length) {
     console.log(red(`  ❌ ${unexpected.length} unexpected difference(s):`));
