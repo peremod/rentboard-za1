@@ -45,9 +45,9 @@ was tried first and is useless: it flags 42 of them, because most write
 
 | Bucket | At baseline | After the first two repairs |
 | --- | --- | --- |
-| Sound and green | 30 | **37** |
+| Sound and green | 30 | **38** |
 | Sound and red — real signal | 9 | **3** — all three stale against the WhatsApp-off decision |
-| Could not fail | 2 | **1** (`font-paint-drive`) |
+| Could not fail | 2 | **0** |
 | Not measured in this pass | 1 | 1 |
 
 `token-render-drive` (20 red) and `nav-sheet-drive` (9 red) were the two biggest
@@ -69,7 +69,8 @@ changed or added was proven to fail when the thing it guards is broken. See
   and cannot fail. Either it asserts the things it says it *can* answer —
   whether font requests begin before the headline paints, and whether a variant
   is really the variant it claims to be — or it is not a check and must never
-  sit in a gate pretending to be one.
+  sit in a gate pretending to be one. **It asserts them now**; see
+  "`font-paint-drive`: 39 seconds, no verdict" below.
 
 ### Sound and red (9)
 
@@ -401,9 +402,9 @@ checked with `diff` rather than assumed.
 
 | | |
 | --- | --- |
-| Sound and green | **37** |
+| Sound and green | **38** |
 | Sound and red, and correct about the product | **3** — `messages-inbox-ui`, `phone-signup-ui`, `phone-only-ui`, all three the WhatsApp-off decision and §29 |
-| Cannot fail | **1** — `font-paint-drive`, which asserts nothing |
+| Cannot fail | **0** |
 | Not measured here | **1** — `a11y-drive`, ~13½ minutes, green in CI on every push |
 
 Of the nine reds and two unfalsifiable drives the baseline found, **one was a
@@ -411,4 +412,53 @@ product defect** (the lease panel's dead button, and the error message that
 blamed the connection) and **one was a standing-rule violation** (the admin
 screen promising a WhatsApp code with the channel off). The other nine were
 checks that had stopped measuring what they claimed.
+
+## `font-paint-drive`: 39 seconds, no verdict
+
+The last of the two that could not fail. No `✅`, no `❌`, no `PASS`, no `FAIL`,
+and the process ended on whatever code Node chose — while it sat in the drive
+list being counted as a check.
+
+It is right that the numbers are not a check: the box cannot adjudicate a
+300ms LCP difference and the script says so in its own output. But it also says
+what it *can* answer — "whether the font requests begin before the headline
+paints, and whether a variant is really the variant it claims to be" — and
+neither of those was asserted either.
+
+So the numbers stay a report and the **structure** became the check. Every
+assertion added is something that was already wrong once while the harness was
+being written, recorded in its own comments:
+
+- all three variants ran, and the largest paint is still `H1.hero-headline` —
+  the premise of the entire measurement;
+- the control is a control: with every `@font-face` stripped, **zero** font
+  requests. It once made two, because the strip had silently failed and the
+  variant was a duplicate of the one above it;
+- the other two really load fonts, and the request begins before the first
+  paint in every run;
+- the strip empties the document's **inlined** `@font-face`. It once reported
+  4 → 0 and still made two requests, because only the external stylesheet was
+  being rewritten and Angular SSR inlines the critical CSS.
+
+### ⚠️ The precondition it had never stated
+
+`optimization.styles.inlineCritical` is set under the **production**
+configuration only — `development` sets `optimization: false`. So against a
+development build the served document carries no `@font-face`, `faceCount`
+reads `0 -> 0`, and the inlined-critical-CSS finding this harness exists to
+record is **not exercised at all**. The E2E audit ran it against a development
+build and that line printed a bare "0 -> 0" with nothing to say it meant "not
+measured". It now skips that half by name and points at the configuration.
+
+**Run on both builds.** Development: 9 assertions pass, the inlined half
+skipped with its reason. Production: 10 pass, and the inlined half measures
+`4 -> 0` — exactly the figure the comment recorded historically.
+
+| Mutation | Result |
+| --- | --- |
+| the `@font-face` strip made a no-op (the silent failure that happened) | ❌ "really has no webfont: 2 font request(s)" **and** "the strip empties … (4 -> 4)" |
+| only the external stylesheet rewritten, document route skipped (the other historical bug) | ❌ "really has no webfont: 2 font request(s)", and the inlined half correctly reports itself not measured |
+| clean | 10 pass on production, 9 on development, exit 0 |
+
+**No drive in the repository is now unfalsifiable.**
 

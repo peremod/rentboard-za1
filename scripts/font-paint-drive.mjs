@@ -290,4 +290,91 @@ console.log('     spread within a single variant is wider than the gap between')
 console.log('     variants. What it DOES answer is ordering and structure — whether');
 console.log('     the font requests begin before the headline paints, and whether a');
 console.log('     variant is really the variant it claims to be.');
+
+/**
+ * ── What this drive ASSERTS, as opposed to what it reports
+ *
+ * 🔴 Until 12 November it asserted nothing at all. Thirty-nine seconds of
+ * measurement, no ✅, no ❌, no PASS, no FAIL, and `process.exit` reached with
+ * whatever code Node felt like — so it could not pass and could not fail, and
+ * it sat in the drive list being counted as a check. CLAUDE.md: "A check that
+ * cannot fail is not a check." Found by running all 42 drives for the E2E
+ * audit and noticing this one had no verdict of any kind.
+ *
+ * The paragraph above already says what is adjudicable here and what is not,
+ * so the numbers stay a report and the STRUCTURE becomes the check. Each
+ * assertion below is something that was wrong at least once while this harness
+ * was being written, and is recorded in the comments above:
+ *
+ *   · the "no webfont at all" variant made two font requests, because the
+ *     strip had silently failed — a control that was not a control;
+ *   · it reported 4 -> 0 @font-face and STILL made two requests, because only
+ *     the external stylesheet was being rewritten and Angular SSR inlines the
+ *     critical CSS into the document.
+ *
+ * Both of those would now fail rather than print.
+ */
+console.log('\n── and what it asserts ────────────────────────────────────');
+let fail = 0;
+const ok = (m) => console.log(`  ✅ ${m}`);
+const bad = (m) => { console.log(`  ❌ ${m}`); fail++; };
+const check = (c, m) => (c ? ok(m) : bad(m));
+
+check(rows.length === VARIANTS.length,
+  `all ${VARIANTS.length} variants ran (${rows.length})`);
+
+for (const r of rows) {
+  check(r.lcpEl === 'H1.hero-headline',
+    `${r.name}: the largest paint is still the headline (${r.lcpEl}) — the premise of the whole measurement`);
+}
+
+/**
+ * The control is a control. With every @font-face gone there is nothing to
+ * fetch, so a single request means the strip did not happen and the variant is
+ * silently a duplicate of the one above it.
+ */
+if (none) {
+  check(none.fontStarts.length === 0,
+    `"no webfont at all" really has no webfont: ${none.fontStarts.length} font request(s)`);
+} else {
+  bad('the "no webfont at all" variant did not run, so there is no control');
+}
+
+/** …and the other two really do load fonts, or they are measuring the control. */
+for (const r of [optional, swap].filter(Boolean)) {
+  check(r.fontStarts.length > 0,
+    `${r.name}: really loads webfonts (${r.fontStarts.length} request(s))`);
+  check(r.startedBeforePaint === RUNS,
+    `${r.name}: the font request begins before the first paint in every run (${r.startedBeforePaint}/${RUNS})`);
+}
+
+/**
+ * ⚠️ The inlined-critical-CSS half, and the one precondition this drive has
+ * never stated.
+ *
+ * `inlineCritical: true` lives under the PRODUCTION configuration only —
+ * development sets `optimization: false` — so against a development build the
+ * document carries no @font-face, `faceCount` is 0 -> 0, and the finding this
+ * harness exists to record (that the inliner governs the first paint) is not
+ * exercised at all. The E2E audit ran it against a development build and the
+ * line read "0 -> 0" with nothing to say that meant "not measured".
+ *
+ * So: when the document DOES inline them, the strip must take them to zero.
+ * When it does not, that is reported as a named gap rather than as a zero.
+ */
+const inlined = rows.some((r) => r.faceCount.before > 0);
+if (!inlined) {
+  console.log('  ⏭  SKIP the inlined-critical-CSS half — the served document carries no');
+  console.log('      @font-face, which is what a DEVELOPMENT build looks like: angular.json');
+  console.log('      sets optimization.styles.inlineCritical only under `production`. Run');
+  console.log('      this against a production build to exercise it.');
+} else if (none) {
+  check(none.faceCount.before > 0 && none.faceCount.after === 0,
+    `the strip empties the document's inlined @font-face (${none.faceCount.before} -> ${none.faceCount.after})`);
+}
+
+console.log(fail
+  ? `\n❌ ${fail} failure(s) — the measurement above cannot be trusted`
+  : '\n✅ every variant is the variant it claims to be, and the headline is still the largest paint');
 console.log('════════════════════════════════════════════════════════════\n');
+process.exit(fail ? 1 : 0);
