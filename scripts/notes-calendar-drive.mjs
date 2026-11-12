@@ -239,10 +239,48 @@ const header = lp.locator('.applicant-card__header').first();
 if (await header.count()) {
   await header.click();
   await lp.waitForTimeout(900);
-  const toggle = lp.getByRole('button', { name: /private notes about/i }).first();
-  (await toggle.count())
-    ? ok('the notes toggle names whose notes they are')
-    : bad('no notes toggle on the applicant card');
+  /**
+   * ⚠️ Found by the visible label, then checked against WCAG 2.5.3 — not by a
+   * regex over the accessible name.
+   *
+   * This asked for a button named /private notes about/i and reported "no
+   * notes toggle on the applicant card" when it found none. The toggle was
+   * there the whole time. Its accessible name USED to read "Show your private
+   * notes about Thandi", and the Label in Name fix deliberately changed it to
+   * start with the visible text — so it is now one of "Add a private note
+   * about X", "My notes (n) about X" or "Hide my notes about X", and none of
+   * those matches the plural "private notes about". The drive was asserting
+   * the old copy and calling the control missing.
+   *
+   * What the check is actually for survives, and is asserted as the rule
+   * rather than as a sentence: the accessible name must CONTAIN the visible
+   * text (2.5.3, so voice control can say what it can read) and must name the
+   * person (six open cards needed disambiguating, which is why the name is
+   * there at all). That holds whichever of the three labels is showing.
+   */
+  const toggle = lp.locator('.notes-block > button').first();
+  if (!(await toggle.count())) {
+    bad('no notes toggle on the applicant card');
+  } else {
+    const visible = ((await toggle.textContent()) ?? '').trim();
+    const named = (await toggle.getAttribute('aria-label')) ?? '';
+    visible.length > 0
+      ? ok(`the notes toggle has a visible label ("${visible}")`)
+      : bad('the notes toggle has no visible text');
+    named.toLowerCase().includes(visible.toLowerCase())
+      ? ok('…and its accessible name contains that visible text (WCAG 2.5.3)')
+      : bad(`accessible name "${named}" does not contain the visible "${visible}" — voice control cannot say what it reads`);
+    /**
+     * The name registerUser gives a TENANT — see scripts/lib/drive-session.mjs,
+     * which builds it as `Drive ${role[0]}${role.slice(1).toLowerCase()}`. Named
+     * here rather than guessed from the DOM, so this fails if the screen stops
+     * naming the person rather than passing on whatever it happens to show.
+     */
+    const APPLICANT_NAME = 'Drive Tenant';
+    named.includes(APPLICANT_NAME)
+      ? ok(`…and names whose notes they are ("${named}")`)
+      : bad(`accessible name "${named}" does not name the applicant — six open cards look identical`);
+  }
   if (await toggle.count()) {
     await toggle.click();
     await lp.waitForTimeout(700);

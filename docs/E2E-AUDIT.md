@@ -45,8 +45,8 @@ was tried first and is useless: it flags 42 of them, because most write
 
 | Bucket | At baseline | After the first two repairs |
 | --- | --- | --- |
-| Sound and green | 30 | **34** |
-| Sound and red — real signal | 9 | **6** |
+| Sound and green | 30 | **37** |
+| Sound and red — real signal | 9 | **3** — all three stale against the WhatsApp-off decision |
 | Could not fail | 2 | **1** (`font-paint-drive`) |
 | Not measured in this pass | 1 | 1 |
 
@@ -99,9 +99,11 @@ is a working check reporting something. Three different things, though:
 | `services-ui-drive` | 1 | The recorded check did not appear on the row |
 | `search-drive` | 1 | No removable chip rendered for a search read |
 
-`notes-calendar`'s missing notes toggle is now the only red touching the
-applicant notes UI — `token-render`'s applicant-notes failures, which looked
-like they might share a cause, turned out to be the stale palette value.
+**Every one of these four was investigated and none was a product bug in the
+sense its message claimed.** `assisted-signup` exposed a real rule violation
+behind the refusal (below); the other three were drives asserting a sentence
+instead of a behaviour (also below). The reds that remain are the three stale
+against the WhatsApp-off decision, which are correct about the product.
 
 ## The two biggest reds — both false alarms
 
@@ -316,4 +318,97 @@ reverted it stayed GREEN while the three assertions beside it went red: the
 admin dashboard contains the words "paused" and "switched off" elsewhere, so it
 was never evidence about this notice. It reads `#assist-off`'s own text now, and
 fails with the fix reverted.
+
+## The last three candidates — none of them the product
+
+Three drives, one failure each, three different ways of asserting a sentence
+instead of a behaviour.
+
+### `search-drive`: the assertion depended on what other drives had left behind
+
+`❌ no removable chip rendered for "rooms to rent in Sandton"`.
+
+`knownPlaces()` groups by the city of **active** rooms, so a city with no live
+listing is not a recognised place, no city is parsed out of the phrase, and no
+chip renders. That is deliberate, and the service says so: it "degrades to the
+old behaviour rather than to nothing".
+
+Hardcoding Sandton therefore made the check depend on the database. ⚠️ **It
+passed four times running for me and failed on the fresh one — which is the
+database CI gets, so the one run that mattered was the red one.** And the
+message named a missing control rather than an absent fixture.
+
+The city now comes off the live board, and the assertion is the invariant:
+**if the API parsed a city, the screen must offer a way to remove it.** The
+premise is checked rather than assumed. 33 checks → 34.
+
+| Mutation | Result |
+| --- | --- |
+| a city the board does not have | ❌ "the API parses … it answered city=null", and the chip itself is skipped with its reason |
+| the chip's class renamed in the served bundle (the control gone) | ❌ "the API parsed the city 'Sandton' and the screen rendered no removable chip for it" |
+
+⚠️ Falsification improved the fix: the first version reported **two** failures
+for one cause, the second of them untrue — claiming the API had parsed a city
+when it had parsed nothing. The chip is now asserted only once the premise
+holds.
+
+### `notes-calendar-drive`: the check was testing the violation, not the fix
+
+`❌ no notes toggle on the applicant card`. The toggle was there the whole time.
+
+Its accessible name used to read "Show your private notes about Thandi". A WCAG
+2.5.3 (Label in Name) fix deliberately changed it to start with the **visible**
+text, so it is now one of "Add a private note about X", "My notes (n) about X"
+or "Hide my notes about X". The drive asked for `/private notes about/i` —
+plural — and matched none of them.
+
+🔴 **So the old check passed on the accessibility violation and failed on the
+fix.** It was pointing the wrong way round.
+
+What the check is for survives, asserted as the rule rather than the sentence:
+the accessible name must contain the visible text, and must name the person
+(six open cards needed disambiguating, which is why the name is there). 1
+assertion → 3; measured name: `Add a private note about Drive Tenant`.
+
+| Mutation | Result |
+| --- | --- |
+| `" about " + tenantName()` dropped from the label | ❌ "does not name the applicant" — and the 2.5.3 check correctly still passes |
+| the pre-fix label restored (`"Show your private notes about …"`) | ❌ "accessible name … does not contain the visible 'Add a private note'" — and the naming check correctly still passes |
+
+### `services-ui-drive`: it was looking for a character that became an icon
+
+`❌ the recorded check did not appear on the row`. The button works perfectly.
+
+The assertion looked for a literal `✓` in the checks list. That tick stopped
+being a character in `78cd8bc` ("clear the emoji backlog — 226 down to 1"): it
+is `<app-icon name="check"/>` now, an SVG with no text content. The check had
+been red since that commit while naming a control that was never broken.
+
+The row's actual state is asserted instead — what a person sees: "Record it"
+goes, a tick appears, the row stops being marked missing, and the date it was
+recorded shows. A tick rendered as an icon, a character or a word all pass; the
+recording failing to stick does not. 1 assertion → 4.
+
+| Mutation | Result |
+| --- | --- |
+| `this.load()` dropped from `recordCheck`'s success path (the write lands, the screen never reflects it) | ❌ all four |
+
+**No product code changed for any of the three.** Every mutation was applied to
+the served bundle, and all six touched chunks were restored byte-identical,
+checked with `diff` rather than assumed.
+
+## Where the baseline stands
+
+| | |
+| --- | --- |
+| Sound and green | **37** |
+| Sound and red, and correct about the product | **3** — `messages-inbox-ui`, `phone-signup-ui`, `phone-only-ui`, all three the WhatsApp-off decision and §29 |
+| Cannot fail | **1** — `font-paint-drive`, which asserts nothing |
+| Not measured here | **1** — `a11y-drive`, ~13½ minutes, green in CI on every push |
+
+Of the nine reds and two unfalsifiable drives the baseline found, **one was a
+product defect** (the lease panel's dead button, and the error message that
+blamed the connection) and **one was a standing-rule violation** (the admin
+screen promising a WhatsApp code with the channel off). The other nine were
+checks that had stopped measuring what they claimed.
 

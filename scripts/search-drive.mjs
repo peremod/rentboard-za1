@@ -14,6 +14,7 @@
 import { chromium } from 'playwright';
 
 const BASE = process.env.BASE_URL ?? 'http://localhost:4200';
+const API = process.env.API_URL ?? 'http://localhost:3000';
 const WIDTHS = [360, 390, 768, 1280];
 
 let pass = 0, fail = 0;
@@ -115,7 +116,50 @@ async function main() {
 
   // ── 5. The chip removes the location ───────────────────────────────────
   console.log('\n── Removing the location chip ──────────────────');
-  await page.goto(`${BASE}/?q=${encodeURIComponent('rooms to rent in Sandton')}`, { waitUntil: 'networkidle' });
+  /**
+   * ⚠️ The city is taken from the LIVE BOARD, not hardcoded as "Sandton".
+   *
+   * `knownPlaces()` groups by the city of ACTIVE rooms — so a city with no
+   * live listing is not a recognised place, no city is parsed out of the
+   * phrase, and no chip renders. That is deliberate and the service says so:
+   * it "degrades to the old behaviour rather than to nothing".
+   *
+   * Hardcoding Sandton therefore made this check depend on what happened to be
+   * in the database. It passed for me four times running on a database other
+   * drives had filled, and FAILED on the fresh one — which is the database CI
+   * gets, so the one run that mattered was the red one. The log read "no
+   * removable chip rendered", which names a missing control rather than an
+   * absent fixture.
+   *
+   * So: ask the board which city it actually has rooms in, then assert the
+   * invariant that matters — IF THE API PARSED A CITY, THE SCREEN MUST OFFER A
+   * WAY TO REMOVE IT. The premise is checked rather than assumed, and a city
+   * the API fails to recognise is reported by name instead of being skipped.
+   */
+  const board = await fetch(`${API}/api/rooms?limit=1`).then((r) => r.json()).catch(() => null);
+  const city = board?.data?.[0]?.city;
+  if (!city) {
+    bad('the board has no active room to take a city from — section 5 cannot run');
+  } else {
+  const phrase = `rooms to rent in ${city}`;
+  const parsed = await fetch(`${API}/api/rooms?search=${encodeURIComponent(phrase)}`)
+    .then((r) => r.json()).catch(() => null);
+  const cityParsed = parsed?.search?.city === city;
+  check(cityParsed,
+        `the API parses "${city}" out of the phrase as a city`,
+        `it answered city=${JSON.stringify(parsed?.search?.city)} — a city whose first listing went up in the last five minutes is not in the places cache yet`);
+
+  /**
+   * ⚠️ The chip is only asserted once the PREMISE holds. Without this the
+   * drive reported two failures for one cause, the second of them untrue — "the
+   * API parsed the city X and the screen rendered no removable chip" when the
+   * API had parsed nothing. Caught by falsifying this section with a city the
+   * board does not have, which is the state that produced the original red.
+   */
+  if (!cityParsed) {
+    console.log('  ⏭  SKIP the chip itself — the API did not parse a city, so there is nothing for it to remove');
+  } else {
+  await page.goto(`${BASE}/?q=${encodeURIComponent(phrase)}`, { waitUntil: 'networkidle' });
   await settle(page);
   const withPlace = await totalShown(page);
   const chip = page.locator('.search-chip:not(.search-chip--word)').first();
@@ -123,12 +167,14 @@ async function main() {
     await chip.click();
     await settle(page);
     const q = new URL(page.url()).searchParams.get('q') ?? '';
-    check(!/sandton/i.test(q), 'the chip removed the place from the typed phrase', `?q=${q}`);
+    check(!new RegExp(city, 'i').test(q), 'the chip removed the place from the typed phrase', `?q=${q}`);
     const without = await totalShown(page);
     check(without > withPlace,
           `removing the place widened the result set (${withPlace} -> ${without} rooms)`);
   } else {
-    bad('no removable chip rendered for "rooms to rent in Sandton"');
+    bad(`the API parsed the city "${city}" and the screen rendered no removable chip for it`);
+  }
+  }
   }
 
   // ── 6. A phrase understood but matching nothing ────────────────────────
