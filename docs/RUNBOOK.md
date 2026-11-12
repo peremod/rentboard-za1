@@ -240,6 +240,39 @@ the window to 0, the tenant answering the unpaid month, and the portal nav
 compared across four screens per role. 49 checks. It skips with a message
 rather than failing if either server is down.
 
+### All of them at once
+
+`phase-drive` is one of thirty-eight browser drives. The other thirty-seven run
+as a suite, and CI runs the same suite on every push:
+
+```bash
+# the API on :3000, a DEVELOPMENT build on :4200, a migrated seeded database
+export DATABASE_URL=postgresql://rentboard:rentboard@localhost:5432/rentboard_dev
+export DIRECT_URL=$DATABASE_URL JWT_SECRET=... ADMIN_EMAIL=... ADMIN_PASSWORD=...
+bash scripts/ui-drives.sh
+
+ONLY=nav-sheet-drive,logo-drive bash scripts/ui-drives.sh   # just those two
+```
+
+About 22 minutes for all of them. The list is `scripts/ui-drives.txt`, one name
+per line, and it records why each excluded drive is excluded.
+
+⚠️ **It restarts the API between drives, and that is not tidiness.**
+`/auth/register` allows 60 an hour counted in memory, each drive registers
+three to eight throwaway accounts, and without a restart every drive after the
+twelfth or so dies on `register LANDLORD failed: 429` — which reads exactly
+like a broken registration endpoint. The first attempt at running the suite
+reported 31 of 41 drives failing and the whole result was void. The limiter is
+not raised or disabled for the suite's convenience.
+
+⚠️ Because it restarts the API, it needs the environment the API was started
+with. Without `DATABASE_URL` the API would fall back to `backend/.env`, come up
+healthy against a different database, and every drive would be about the wrong
+data — so the script refuses to start rather than letting that happen.
+
+`docs/E2E-AUDIT.md` records what the first full run found, which is the reason
+the suite exists.
+
 ---
 
 ## Tags

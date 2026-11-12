@@ -1,0 +1,78 @@
+# The browser drives, run as a suite — one name per line.
+#
+# ⚠️ WHY THIS FILE EXISTS, and it is not tidiness.
+#
+# Until 12 November none of these ran anywhere. They were written one at a time
+# beside the feature each covers, and "the drives pass" was an assumption
+# nobody had tested: running all 42 against a fresh stack for the first time
+# found two that could not fail at all, nine red, and — among the red — one
+# live product defect and one standing-rule violation. The other nine reds were
+# checks that had quietly stopped measuring what they claimed, several of them
+# for months. docs/E2E-AUDIT.md is the whole account.
+#
+# A drive that is in the repository and in no workflow is worse than no drive,
+# because the checklist row claiming its coverage is claiming a gate that does
+# not exist. So the list lives here, in one reviewable place, and
+# scripts/ui-drives.sh fails if a name in it has no file.
+#
+# ── NOT in this list, and why
+#
+#   a11y-drive            runs already, as the four-width sweep (a11y-widths.sh)
+#   phase-drive           runs already, its own step
+#   seo-drive             runs already, both builds
+#   storefront-drive      runs already (§106)
+#   refund-drive          )
+#   double-let-drive      ) run already in the integration job, which has the
+#   refresh-race-drive    ) payment rows and the second database they need
+#   inbox-race-drive      )
+#
+#   messages-inbox-ui-drive   🔴 these three are RED and CORRECT. They need
+#   phone-signup-ui-drive     WhatsApp, which is switched off (Meta bills per
+#   phone-only-ui-drive       message), and phone sign-up is unreachable in
+#                             practice — docs/OUTSTANDING.md §29. They are not
+#                             listed because they would fail every run; they
+#                             are not deleted because the day the channel comes
+#                             back they are the coverage for it.
+#
+# ── Ordering
+#
+# Longest first, so a failure in the slow ones surfaces early rather than after
+# eighteen minutes of fast ones.
+
+layout-ui-drive
+tenancy-lifecycle-drive
+nav-ui-drive
+lease-ui-drive
+account-lifecycle-ui-drive
+font-paint-drive
+dashboard-ui-drive
+templates-ui-drive
+survey-drive
+messages-layout-drive
+lease-docs-ui-drive
+wake-notice-drive
+search-drive
+viewings-ui-drive
+onboarding-drive
+admin-closure-ui-drive
+services-ui-drive
+contractor-leads-ui-drive
+yard-layout-drive
+inbox-ui-drive
+assisted-signup-ui-drive
+signed-in-hero-drive
+mobile-drive
+contractor-checks-ui-drive
+storefront-ui-drive
+hints-drive
+double-fetch-drive
+room-grouping-drive
+move-in-date-drive
+notes-calendar-drive
+nav-sheet-drive
+token-render-drive
+properties-ui-drive
+logo-drive
+sublet-ui-drive
+lost-number-ui-drive
+google-removal-drive
