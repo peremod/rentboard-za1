@@ -101,7 +101,14 @@ start_api() {
   [[ -n "${NO_API_RESTART:-}" ]] && return 0
   pkill -f "node dist/main.js" 2>/dev/null
   sleep 1
-  ( cd backend && node dist/main.js > "$API_LOG" 2>&1 & )
+  # `setsid`, so the API is not in this shell's process group.
+  #
+  # ⚠️ A bare "Terminated" line may still appear between rows of the table:
+  # that is bash reporting the PREVIOUS API being killed by the restart above,
+  # and it is the restart working, not a fault. Worth knowing before somebody
+  # reads it in a CI log as a crash. `set +m` does not suppress it and neither
+  # does redirecting pkill, so it is documented rather than chased.
+  ( cd backend && setsid node dist/main.js > "$API_LOG" 2>&1 & )
   for _ in $(seq 1 40); do
     curl -sf http://localhost:3000/health >/dev/null && return 0
     sleep 1

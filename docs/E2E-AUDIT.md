@@ -462,3 +462,60 @@ skipped with its reason. Production: 10 pass, and the inlined half measures
 
 **No drive in the repository is now unfalsifiable.**
 
+## The suite, and what the first full run of it said
+
+All thirty-seven are now one step in CI's browser job, run by
+`scripts/ui-drives.sh` from the list in `scripts/ui-drives.txt`.
+
+**The first complete run of the repaired suite: 37 of 37 green, and zero `❌`
+lines across all thirty-seven logs** — 1,800-odd assertions. The per-drive
+counts are the ones quoted throughout this document (`tenancy-lifecycle` 298,
+`layout-ui` 259, `logo` 97, `nav-ui` 79, `nav-sheet` 71, `token-render` 60,
+`lease-ui` 23 …).
+
+⚠️ **Honest limit on that number.** The run was stopped at its background time
+limit moments after the last drive finished, so the runner's own summary line
+and exit code were lost with the stopped process. Every drive's log survived
+and is the evidence above; the runner's own green/red reporting was proven
+separately, end to end, on a four-drive subset (`ONLY=…`), which exercises the
+restart loop, the table, the ran-equals-listed count and the exit code.
+
+### The runner cannot pass vacuously
+
+Five guards, each one driven rather than assumed:
+
+| Guard | What it printed |
+| --- | --- |
+| empty list | "lists no drives — nothing would have run" |
+| a listed name with no file | names the ghost entry |
+| `ONLY=` matching nothing | "matched nothing in scripts/ui-drives.txt" |
+| API not answering on :3000 | "the drives cannot run" |
+| **`DATABASE_URL` unset while it restarts the API** | refuses, naming the fallback |
+
+That last one is the one that matters. The runner restarts the API between
+drives, and without `DATABASE_URL` the API falls back to `backend/.env`, comes
+up **healthy** against a different database, and all thirty-seven drives run
+against the wrong data with nothing on screen to say so.
+
+It also compares drives-executed against drives-listed at the end, because a
+runner that silently runs nothing is the same defect as a drive that asserts
+nothing.
+
+### Why the restarts
+
+`/auth/register` allows 60 an hour, counted in memory (v1.86.0), and each drive
+registers three to eight throwaway accounts. Without a restart between them
+every drive past the twelfth or so dies on `register LANDLORD failed: 429` —
+which reads exactly like a broken registration endpoint, and is how the first
+pass of this audit came to report 31 of 41 failing. **The limiter is not raised
+or disabled for the suite's convenience**: it is a deliberate control, and a
+harness that switches off the thing under test is not a harness. The restarts
+cost about two minutes across the suite, against roughly twenty of drives.
+
+### One drive still narrows itself
+
+`lost-number-ui-drive` ends on `⏭ SKIP the admin sections — no phone_signups
+row` and asserts only 5 things. It is green and it is not lying, but most of
+what it covers did not run. That is the same shape as the fixture problems
+found above and is **recorded here as open**, not fixed.
+
