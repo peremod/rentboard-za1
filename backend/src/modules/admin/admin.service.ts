@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccountLifecycleService } from '../account/account-lifecycle.service';
+import { WhatsappService } from '../whatsapp/whatsapp.service';
 
 /**
  * Admin oversight.
@@ -18,6 +19,7 @@ export class AdminService {
   constructor(
     private prisma: PrismaService,
     private lifecycle: AccountLifecycleService,
+    private whatsapp: WhatsappService,
   ) {}
 
   /** Counts for the admin dashboard. One query set, no per-row work. */
@@ -43,6 +45,19 @@ export class AdminService {
       rooms: { active: activeRooms, let: letRooms, draft: draftRooms },
       applications: { total: totalApplications },
       moderation: { pendingVerifications },
+      /**
+       * What this deployment can actually do, as opposed to what it has code
+       * for — so a screen can stop offering something before somebody tries it.
+       *
+       * ⚠️ `phoneCodes` false means WHATSAPP_ENABLED is off, which is the
+       * normal state: Meta bills per message and this product is free to list
+       * and free to apply. The admin dashboard's assisted sign-up sends the
+       * code over WhatsApp, so with this false the form was offering to send a
+       * message nobody would receive, and the admin found out only after
+       * typing a real landlord's number — then got a 503 whose wording is
+       * addressed to the person signing in, not to them.
+       */
+      capabilities: { phoneCodes: this.whatsapp.isEnabled() },
     };
   }
 

@@ -11,6 +11,15 @@ export interface AdminStats {
   rooms: { active: number; let: number; draft: number };
   applications: { total: number };
   moderation: { pendingVerifications: number };
+  /**
+   * What this deployment can do, not what it has code for.
+   *
+   * `phoneCodes` is WHATSAPP_ENABLED, which is normally off — Meta bills per
+   * message. Optional because a deployment running an older API will not send
+   * it, and a screen that reads `undefined` as "off" is the safe way round:
+   * it stops offering something rather than promising it.
+   */
+  capabilities?: { phoneCodes: boolean };
 }
 
 export interface AdminUser {

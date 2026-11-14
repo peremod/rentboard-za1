@@ -352,6 +352,21 @@ export class LeaseService {
 
       return {
         tenancyId: t.id,
+        /**
+         * ⚠️ Returned because the screen cannot do its job without it, and for
+         * four releases it was not.
+         *
+         * `where` above deliberately includes `pending` — a short let that has
+         * not started yet still needs relisting attention. But `giveNotice()`
+         * REFUSES a pending tenancy ("This tenancy has not started yet. If it
+         * has fallen through, mark it as such instead"), and the panel had no
+         * way to know which rows those were. So it offered "Renew for a year",
+         * "Let it roll on" and "They are leaving" on every row, and on a
+         * pending one all three were controls that could only fail. Found by
+         * lease-ui-drive, whose own fixture never confirmed the start, so it
+         * drove the pending row and got the refusal.
+         */
+        status: t.status,
         room: t.room,
         tenant: t.tenant,
         rentCents: t.rentCents,

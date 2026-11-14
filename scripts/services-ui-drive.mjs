@@ -91,11 +91,36 @@ const switchBtn = admin.getByRole('button',{name:'Switch on'}).first();
   ? ok('…and the reason is on the screen, not only in a title attribute')
   : bad('nothing on screen says why the provider cannot be listed');
 
-await admin.locator('.svc-checks li').filter({hasText:'Rang the number'}).locator('button:has-text("Record it")').click();
+const rangRow = admin.locator('.svc-checks li').filter({hasText:'Rang the number'}).first();
+await rangRow.locator('button:has-text("Record it")').click();
 await admin.waitForTimeout(2200);
-((await admin.locator('.svc-checks').first().textContent()) ?? '').includes('✓')
-  ? ok('recording the call ticks it off on the row')
-  : bad('the recorded check did not appear on the row');
+/**
+ * ⚠️ Asserted on the ROW's state, not on a '✓' character.
+ *
+ * This looked for a literal ✓ in the checks list, and that tick stopped being
+ * a character in 78cd8bc ("clear the emoji backlog — 226 down to 1"): it is
+ * `<app-icon name="check"/>` now, an SVG with no text content. So the check
+ * had been red since that commit while the button it exercises worked
+ * perfectly, and "the recorded check did not appear on the row" named a broken
+ * control that was never broken.
+ *
+ * The three things that actually change are checked instead, which is what a
+ * person sees: the "Record it" button goes, the date it was recorded appears,
+ * and the row stops being marked missing. A tick rendered as an icon, a
+ * character or a word all pass; the recording failing to stick does not.
+ */
+(await rangRow.locator('button:has-text("Record it")').count()) === 0
+  ? ok('recording the call takes "Record it" off that row')
+  : bad('the "Record it" button is still on the row after recording the call');
+(await rangRow.locator('app-icon, svg').count()) > 0
+  ? ok('…and the row is ticked')
+  : bad('nothing marks the row as done');
+!(await rangRow.evaluate((el) => el.classList.contains('svc-checks--missing')))
+  ? ok('…and it is no longer marked missing')
+  : bad('the row is still marked missing after the call was recorded');
+/\d/.test((await rangRow.textContent()) ?? '')
+  ? ok(`…and carries the date it was recorded ("${((await rangRow.textContent()) ?? '').replace(/\s+/g,' ').trim().slice(0,60)}")`)
+  : bad('the row does not say when the call was recorded');
 
 await admin.getByRole('button',{name:'Switch on'}).first().click();
 await admin.waitForTimeout(2200);

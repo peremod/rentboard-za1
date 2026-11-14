@@ -241,7 +241,11 @@ console.log('\n── 6. Inside the portal, a landlord can get back ────
     : bad('the portal copy has no portal nav — the landlord is stranded again');
 
   await page.locator('.tpl-card').first().click();
-  await page.waitForTimeout(1500);
+  // ⚠️ Wait for the URL, not a fixed delay. A delay is the right tool when the
+  // assertion is that NOTHING happened; when it is that something did, it is a
+  // bet on how fast the box is — and search-drive lost that bet on the first CI
+  // run of the suite while passing here every time.
+  await page.waitForURL(/\/landlord\/templates\/.+/, { timeout: 15000 }).catch(() => {});
   page.url().includes('/landlord/templates/')
     ? ok('…opening a template keeps them inside the portal')
     : bad(`opening a template left the portal: ${new URL(page.url()).pathname}`);
@@ -251,7 +255,7 @@ console.log('\n── 6. Inside the portal, a landlord can get back ────
     ? ok('…the document offers a way back to the list')
     : bad('no "All templates" link on the document');
   await back.click();
-  await page.waitForTimeout(1500);
+  await page.waitForURL((u) => new URL(u).pathname === '/landlord/templates', { timeout: 15000 }).catch(() => {});
   new URL(page.url()).pathname === '/landlord/templates'
     ? ok('…and it returns to the portal list, not the public one')
     : bad(`"All templates" went to ${new URL(page.url()).pathname}, outside the portal`);

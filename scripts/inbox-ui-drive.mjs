@@ -192,7 +192,11 @@ hrefs.some((h) => h.includes('#'))
 const applicantAction = panel.locator('.inbox-action').filter({ hasText: /Open the application/i }).first();
 if (await applicantAction.count()) {
   await applicantAction.click();
-  await lp.waitForTimeout(2400);
+  // ⚠️ Wait for the URL, not a fixed delay. A delay is the right tool when the
+  // assertion is that NOTHING happened; when it is that something did, it is a
+  // bet on how fast the box is — and search-drive lost that bet on the first CI
+  // run of the suite while passing here every time.
+  await lp.waitForURL(/\/applicants/, { timeout: 15000 }).catch(() => {});
   /\/applicants/.test(lp.url())
     ? ok('following the applicant action lands on that room’s applicants')
     : bad(`landed on ${lp.url()}`);

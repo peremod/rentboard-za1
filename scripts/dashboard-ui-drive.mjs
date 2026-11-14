@@ -226,7 +226,60 @@ scopeA.includes(propA.name)
  * above caught the deliberate break. A formatted currency string has to be
  * parsed, not matched.
  */
-const randOf = (text) => (text.match(/R\s?([\d,]+)/)?.[1] ?? '').replace(/,/g, '');
+/**
+ * ⚠️ Grouping-agnostic, and that is what the first CI run of the drive suite
+ * caught.
+ *
+ * It used to be `/R\s?([\d,]+)/` — digits and COMMAS. South Africa groups
+ * thousands with a SPACE and uses the comma as the decimal separator, so
+ * `R 3 000,00` gave the regex `R`, one optional space, then "3", and the
+ * check reported `property A's "rent marked paid" is R3`. It had passed every
+ * local run and failed the first time it met a runner, and only the runner was
+ * right.
+ *
+ * ⚠️ It cannot be reproduced on this container, and the reason is worth
+ * recording: Playwright's Chromium here answers `R 3,000.00` for
+ * `(3000).toLocaleString('en-ZA', …)` even though
+ * `Intl.NumberFormat('en-ZA').resolvedOptions().locale` says `en-ZA` — the
+ * build's ICU data for the locale is not there, so it formats with en-US
+ * patterns whatever it is asked for. Pinning Playwright's `locale: 'en-ZA'`
+ * changes `navigator.language` and NOT the output, which was checked rather
+ * than assumed: it would have been a line that does nothing under a comment
+ * claiming it mattered.
+ *
+ * So the parser is proven by the cases below instead of by the environment,
+ * on every run, in whichever format the browser happens to produce.
+ */
+const randOf = (text) => {
+  const m = String(text ?? '').match(/R[\s\u00a0\u202f]*([\d.,\s\u00a0\u202f]*\d)/);
+  if (!m) return '';
+  const digits = m[1]
+    .replace(/[\s\u00a0\u202f]/g, '')   // 3 000 and 3 000 (NBSP, narrow NBSP)
+    .replace(/[.,](\d{2})$/, '');       // ,00 or .00 — the decimals, not a group
+  return digits.replace(/[.,]/g, '');
+};
+
+/**
+ * The parser's own cases, asserted here rather than in a test file, because
+ * this drive is the only thing that uses it and a helper proven somewhere else
+ * is a helper nobody re-checks when the format changes.
+ */
+for (const [text, want] of [
+  ['R 3,000.00', '3000'],   // en-US grouping: this container's Chromium
+  ['R 3 000,00', '3000'],   // en-ZA grouping: a runner, and a South African phone
+  ['R 3 000', '3000'],
+  ['R3,000', '3000'],
+  ['R 7 500,00', '7500'],
+  ['R0', '0'],
+  ['R 0,00', '0'],
+  ['Rent marked paid R 3 000,00 this month', '3000'],
+  ['no money here', ''],
+]) {
+  const got = randOf(text);
+  got === want
+    ? ok(`the rand parser reads ${JSON.stringify(text)} as ${JSON.stringify(want)}`)
+    : bad(`the rand parser read ${JSON.stringify(text)} as ${JSON.stringify(got)}, expected ${JSON.stringify(want)}`);
+}
 
 /**
  * ⚠️ Waits for the FIGURE, not for the box around it.

@@ -44,6 +44,21 @@ jobs:
         # occurrences only; the 22 it already found are listed as UNTRIAGED,
         # which is a queue rather than a pass, and the run says so each time.
         run: node scripts/check-then-write-lint.mjs
+      - name: A click that expects a navigation waits for the URL
+        # The first CI run of the drive suite failed on exactly this:
+        # search-drive clicked a room card, waited with
+        # waitForLoadState('networkidle') — which can resolve at once, because
+        # after a click the router handles there is no document load and the
+        # network was already idle — and then read page.url() mid-navigation.
+        # It passed on a developer's container every time. Three more
+        # assertions failed behind it, one quoting the previous section's
+        # search, which read like a second bug.
+        #
+        # Asserting that something DID navigate means waiting for the URL;
+        # asserting that nothing did means a delay, because there is no event.
+        # The gate cannot tell those apart, so the second kind is allowlisted
+        # in the script with a reason per file.
+        run: node scripts/wait-lint.mjs
       # §100: the panel told landlords a referral covered their R149 identity
       # check, and nothing in the product could spend that credit. The claim
       # is the source, so a source check can hold it. Comments are stripped,
@@ -766,6 +781,71 @@ jobs:
         env:
           BASE: http://localhost:4200
         run: node scripts/seo-drive.mjs
+
+      # 🔴 THE BROWSER DRIVES, which until now ran NOWHERE. Thirty-seven of them
+      # when this step was added; the list is the count.
+      #
+      # They were written one at a time beside the feature each covers, and
+      # "the drives pass" was an assumption nobody had tested. Running all 42
+      # against a fresh stack for the first time found two that could not fail
+      # at all, nine red, and — among the red — one live product defect (a
+      # lease-panel button the API could only refuse, reported to the landlord
+      # as "check your connection") and one standing-rule violation (the admin
+      # screen promising a WhatsApp code with the channel off). The other nine
+      # reds were checks that had quietly stopped measuring what they claimed,
+      # several for months. docs/E2E-AUDIT.md is the account.
+      #
+      # ⚠️ One of those nine is the reason this step is not optional. search
+      # -drive asserted against a hardcoded "Sandton" and so depended on what
+      # other drives had left in the database: it passed four times running on
+      # a filled database and FAILED on a fresh one — which is the database
+      # this job has. A drive suite that only ever runs on a developer's
+      # machine is a suite whose verdict is about that machine.
+      #
+      # ⚠️ Cost, stated rather than discovered: about 22 minutes. Roughly 20 of
+      # drives and 2 of API restarts. The restarts are not optional either —
+      # /auth/register allows 60 an hour counted in memory, each drive
+      # registers three to eight accounts, and without a restart between them
+      # every drive after the twelfth or so dies on "register LANDLORD failed:
+      # 429", which reads as a broken endpoint. The limiter is a deliberate
+      # control and is NOT raised for the suite's convenience; the runner's own
+      # header explains this at length.
+      #
+      # The list is scripts/ui-drives.txt, one name per line, with the reason
+      # recorded there for each drive that is NOT in it — the three that need
+      # WhatsApp are red and correct, and stay out until the channel is back.
+      # The runner fails if the list is empty, if a name has no file, if the
+      # API will not come back, or if the number of drives it ran does not
+      # match the number in the list.
+      - name: The browser drives — 40 of them, development build
+        if: ${{ !cancelled() }}
+        env:
+          # The runner RESTARTS the API between drives, so it needs the
+          # environment the API was started with. Without DATABASE_URL the API
+          # would fall back to backend/.env, come up healthy against another
+          # database, and every drive would be about the wrong data — the
+          # runner refuses rather than letting that happen.
+          JWT_SECRET: test-secret-minimum-32-characters-long-ok
+          JWT_EXPIRES_IN: 15m
+          NODE_ENV: development
+          APP_ENV: development
+          SITE_URL: http://localhost:4200
+          FRONTEND_URL: http://localhost:4200
+          API_URL: http://localhost:3000
+          PORT: '3000'
+          ADMIN_EMAIL: ci-admin@mastande.test
+          ADMIN_PASSWORD: CiSmokeAdmin123
+          DRIVE_LOG_DIR: /tmp/ui-drives
+        run: bash scripts/ui-drives.sh
+
+      - name: The browser drives' logs, when any of them failed
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-drive-logs
+          path: /tmp/ui-drives
+          if-no-files-found: ignore
+          retention-days: 7
 
       # Pass 2 — production build, the only one that emits canonical.
       - name: Build frontend (production) and serve

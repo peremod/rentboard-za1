@@ -14,6 +14,7 @@
 import { chromium } from 'playwright';
 
 const BASE = process.env.BASE_URL ?? 'http://localhost:4200';
+const API = process.env.API_URL ?? 'http://localhost:3000';
 const WIDTHS = [360, 390, 768, 1280];
 
 let pass = 0, fail = 0;
@@ -80,18 +81,48 @@ async function main() {
   const firstLink = page.locator('app-room-card a').first();
   if (await firstLink.count()) {
     await firstLink.click();
-    await page.waitForLoadState('networkidle');
+    /**
+     * ⚠️ Wait for the URL, not for the network.
+     *
+     * This was `waitForLoadState('networkidle')`, and that is the wrong thing
+     * to wait for after a click the ROUTER handles: there is no document load,
+     * and `networkidle` can resolve at once because the network was already
+     * idle. So the assertion read `page.url()` while the navigation was still
+     * in flight.
+     *
+     * It passed here every time and failed the first CI run of the suite at
+     * exactly this line — `a room page opened —
+     * http://localhost:4200/?q=Accommodation%20in%20Johannesburg`, the search
+     * page it had never left. ⚠️ Not reproducible on this container: it passes
+     * against the e2e database and against a freshly seeded one, so the
+     * trigger is inferred to be a slower box rather than proven. What IS
+     * certain is that the old wait could not keep its promise, and the new one
+     * waits for the thing being asserted.
+     */
+    await page.waitForURL(/\/rooms\//, { timeout: 15000 }).catch(() => {});
     const onRoom = /\/rooms\//.test(page.url());
     check(onRoom, 'a room page opened', page.url());
-    await page.goBack({ waitUntil: 'networkidle' });
-    await settle(page);
-    const back = new URL(page.url());
-    check(back.searchParams.get('q') === 'Accommodation in Johannesburg',
-          'going back restores the search in the URL', `?q=${back.searchParams.get('q')}`);
-    check((await page.locator('.search-input').inputValue()) === 'Accommodation in Johannesburg',
-          'going back restores the text in the search box');
-    const after = await cards(page);
-    check(after === before, `going back restores the same results (${before} -> ${after})`);
+    /**
+     * ⚠️ One cause, one failure. The three checks below are about coming BACK,
+     * and none of them can pass if the room never opened — CI reported four
+     * failures for one defect, with the second of them ("going back restores
+     * the search in the URL — ?q=studio in Pretoria") naming the previous
+     * section's search, which is noise that reads like a second bug.
+     */
+    if (!onRoom) {
+      // Named, and scoped to this section only — sections 4 to 8 below still run.
+      console.log('  ⏭  SKIP coming back — the room never opened, so there is nothing to come back from');
+    } else {
+      await page.goBack({ waitUntil: 'networkidle' });
+      await settle(page);
+      const back = new URL(page.url());
+      check(back.searchParams.get('q') === 'Accommodation in Johannesburg',
+            'going back restores the search in the URL', `?q=${back.searchParams.get('q')}`);
+      check((await page.locator('.search-input').inputValue()) === 'Accommodation in Johannesburg',
+            'going back restores the text in the search box');
+      const after = await cards(page);
+      check(after === before, `going back restores the same results (${before} -> ${after})`);
+    }
   } else {
     bad('no room card link to open');
   }
@@ -115,20 +146,69 @@ async function main() {
 
   // ── 5. The chip removes the location ───────────────────────────────────
   console.log('\n── Removing the location chip ──────────────────');
-  await page.goto(`${BASE}/?q=${encodeURIComponent('rooms to rent in Sandton')}`, { waitUntil: 'networkidle' });
+  /**
+   * ⚠️ The city is taken from the LIVE BOARD, not hardcoded as "Sandton".
+   *
+   * `knownPlaces()` groups by the city of ACTIVE rooms — so a city with no
+   * live listing is not a recognised place, no city is parsed out of the
+   * phrase, and no chip renders. That is deliberate and the service says so:
+   * it "degrades to the old behaviour rather than to nothing".
+   *
+   * Hardcoding Sandton therefore made this check depend on what happened to be
+   * in the database. It passed for me four times running on a database other
+   * drives had filled, and FAILED on the fresh one — which is the database CI
+   * gets, so the one run that mattered was the red one. The log read "no
+   * removable chip rendered", which names a missing control rather than an
+   * absent fixture.
+   *
+   * So: ask the board which city it actually has rooms in, then assert the
+   * invariant that matters — IF THE API PARSED A CITY, THE SCREEN MUST OFFER A
+   * WAY TO REMOVE IT. The premise is checked rather than assumed, and a city
+   * the API fails to recognise is reported by name instead of being skipped.
+   */
+  const board = await fetch(`${API}/api/rooms?limit=1`).then((r) => r.json()).catch(() => null);
+  const city = board?.data?.[0]?.city;
+  if (!city) {
+    bad('the board has no active room to take a city from — section 5 cannot run');
+  } else {
+  const phrase = `rooms to rent in ${city}`;
+  const parsed = await fetch(`${API}/api/rooms?search=${encodeURIComponent(phrase)}`)
+    .then((r) => r.json()).catch(() => null);
+  const cityParsed = parsed?.search?.city === city;
+  check(cityParsed,
+        `the API parses "${city}" out of the phrase as a city`,
+        `it answered city=${JSON.stringify(parsed?.search?.city)} — a city whose first listing went up in the last five minutes is not in the places cache yet`);
+
+  /**
+   * ⚠️ The chip is only asserted once the PREMISE holds. Without this the
+   * drive reported two failures for one cause, the second of them untrue — "the
+   * API parsed the city X and the screen rendered no removable chip" when the
+   * API had parsed nothing. Caught by falsifying this section with a city the
+   * board does not have, which is the state that produced the original red.
+   */
+  if (!cityParsed) {
+    console.log('  ⏭  SKIP the chip itself — the API did not parse a city, so there is nothing for it to remove');
+  } else {
+  await page.goto(`${BASE}/?q=${encodeURIComponent(phrase)}`, { waitUntil: 'networkidle' });
   await settle(page);
   const withPlace = await totalShown(page);
   const chip = page.locator('.search-chip:not(.search-chip--word)').first();
   if (await chip.count()) {
     await chip.click();
+    // The chip's whole job is to change ?q=, so wait for that rather than for
+    // a fixed 1400ms — the same correction as the room click above.
+    await page.waitForURL((u) => !new RegExp(city, 'i').test(new URL(u).searchParams.get('q') ?? ''),
+                          { timeout: 15000 }).catch(() => {});
     await settle(page);
     const q = new URL(page.url()).searchParams.get('q') ?? '';
-    check(!/sandton/i.test(q), 'the chip removed the place from the typed phrase', `?q=${q}`);
+    check(!new RegExp(city, 'i').test(q), 'the chip removed the place from the typed phrase', `?q=${q}`);
     const without = await totalShown(page);
     check(without > withPlace,
           `removing the place widened the result set (${withPlace} -> ${without} rooms)`);
   } else {
-    bad('no removable chip rendered for "rooms to rent in Sandton"');
+    bad(`the API parsed the city "${city}" and the screen rendered no removable chip for it`);
+  }
+  }
   }
 
   // ── 6. A phrase understood but matching nothing ────────────────────────

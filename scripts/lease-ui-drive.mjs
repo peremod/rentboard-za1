@@ -68,6 +68,49 @@ body1.includes('Lease ending soon room') ? ok('and names the room') : bad('room 
 const rows1 = await page.locator('.lease-row').count();
 rows1===1 ? ok('the rolling tenancy is not listed') : bad(`${rows1} rows — a month-to-month tenancy is being listed`);
 
+/**
+ * ⚠️ Both tenancies are still PENDING here, and that is the state this drive
+ * spent four releases in without noticing.
+ *
+ * Accepting an application opens a tenancy with status `pending`; nothing in
+ * the fixture above confirmed a move-in. `LeaseService.upcoming()` includes
+ * pending rows on purpose, so the panel rendered — but `giveNotice()` REFUSES
+ * a pending tenancy ("This tenancy has not started yet. If it has fallen
+ * through, mark it as such instead"), so the notice half of this drive was
+ * driving a button that could not work. It read as three product failures and
+ * a 30-second timeout.
+ *
+ * It was a real defect as well as a fixture bug: the button was offered, and
+ * the panel answered every failure with "That did not save. Check your
+ * connection and try again." Both are fixed, so both are now checked — here,
+ * while the rows are genuinely pending.
+ */
+{
+  const pendingText = (await page.locator('.lease-row').first().textContent()) ?? '';
+  !/They are leaving/i.test(pendingText)
+    ? ok('a tenancy nobody has moved into does not offer "They are leaving" — the API refuses it')
+    : bad('"They are leaving" offered on a pending tenancy, where giveNotice() answers 400');
+  /They are leaving|Confirm or cancel the move-in/i.test(pendingText) && /Confirm or cancel the move-in/i.test(pendingText)
+    ? ok('…it points at the move-in instead, which is the thing that is actually waiting')
+    : bad('no move-in action offered on a pending row — the landlord is given nothing to do');
+  // Renew and "let it roll" are NOT gated: the API allows lease terms to be
+  // edited before move-in, and both are driven green below.
+  /Renew for a year/i.test(pendingText) && /Let it roll on/i.test(pendingText)
+    ? ok('…while renew and "let it roll on" stay, because the API allows them before move-in')
+    : bad('renew or "let it roll on" disappeared from a pending row — over-gated');
+}
+
+/**
+ * Somebody moves in. Everything below is the lease of a LIVE tenancy, which is
+ * what the rest of this drive was always written for.
+ */
+for (const t of [fixed, rolling]) {
+  const started = await apiCall(API,'POST',`/api/tenancies/${t.id}/confirm-start`,{},T);
+  if (started.status >= 300) { bad(`confirm-start failed: ${started.status} ${JSON.stringify(started.body).slice(0,160)}`); }
+}
+await page.reload({waitUntil:'domcontentloaded'});
+await page.waitForTimeout(2500);
+
 // Renew.
 await page.getByRole('button',{name:/Renew for a year/i}).first().click();
 await page.waitForTimeout(2000);
@@ -100,6 +143,41 @@ await page.getByRole('button',{name:/Notice was a mistake/i}).first().click();
 await page.waitForTimeout(2200);
 ((await page.locator('body').textContent()) ?? '').includes('They gave notice') === false
   ? ok('undoing notice puts it back to a lease decision') : bad('notice still shown after undo');
+
+/**
+ * ⚠️ What the panel SAYS when the API refuses.
+ *
+ * Every error handler here used to set "That did not save. Check your
+ * connection and try again." for every failure, including the ones the API
+ * explains in a sentence written for a person. That is how the pending-tenancy
+ * bug above stayed invisible: the server said "This tenancy has not started
+ * yet. If it has fallen through, mark it as such instead" and the screen told
+ * the landlord to check their signal.
+ *
+ * Provoked the way it actually happens — the screen going stale. Notice is
+ * given, the row renders its undo, and the notice is then withdrawn behind the
+ * screen (a second tab, or the tenant). The stale "Notice was a mistake" then
+ * answers 400 "No notice has been given on this tenancy."
+ */
+{
+  await apiCall(API,'POST',`/api/tenancies/${rolling.id}/notice`,{givenBy:'tenant'},T);
+  await page.reload({waitUntil:'domcontentloaded'});
+  await page.waitForTimeout(2500);
+  // …and now it is withdrawn behind the screen's back.
+  const gone = await apiCall(API,'POST',`/api/tenancies/${rolling.id}/notice/withdraw`,{},T);
+  if (gone.status >= 300) bad(`could not withdraw behind the screen: ${gone.status}`);
+  await page.getByRole('button',{name:/Notice was a mistake/i}).first().click();
+  await page.waitForTimeout(2200);
+  const shown = (await page.locator('.field-error').textContent().catch(() => '')) ?? '';
+  shown.includes('No notice has been given on this tenancy')
+    ? ok('a refusal is reported in the API\'s own words')
+    : bad(`the refusal was not surfaced — the panel said: "${shown.trim().slice(0,120)}"`);
+  !/check your connection/i.test(shown)
+    ? ok('…and does not blame the connection for a 400')
+    : bad('a 400 is reported as a connection problem');
+  await page.reload({waitUntil:'domcontentloaded'});
+  await page.waitForTimeout(2000);
+}
 
 // ── Accessibility of the panel itself ─────────────────────────────────────
 //

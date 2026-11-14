@@ -84,8 +84,26 @@ for (const width of [360, 390, 768]) {
     'the sheet is a dialog while it is open');
   check(await page.locator('.nav-scrim').count() === 1,
     'there is a scrim behind it');
-  check(await page.locator('.nav-sheet-close').count() === 1,
-    'and a close inside it, reachable by a thumb that has scrolled');
+  /**
+   * ⚠️ ZERO, not one — and this assertion is the reverse of what it was.
+   *
+   * It asserted `count() === 1` and went red nine times across three widths
+   * from the day the button was removed, taking two other assertions with it.
+   * The button is not missing: it was taken out AT THE OWNER'S REQUEST after
+   * they saw it on a phone, and navbar.ts carries the reasoning — the sheet
+   * opens at the top with the burger a thumb's width above it, already showing
+   * an ✕ and already labelled "Close menu", and the scrim and Escape close it
+   * too. Four ways out, one of which took the first screen of the menu.
+   *
+   * So the thing worth checking is that it has not come BACK, which is not
+   * hypothetical in either direction: it shipped unconditional for one commit
+   * and a red "✕ Close" sat in the desktop header beside the logo. The desktop
+   * section below already checks for that leak; this is the same check at
+   * mobile width, where the button would actually be visible to the person who
+   * asked for it to go.
+   */
+  check(await page.locator('.nav-sheet-close').count() === 0,
+    'no close button inside the sheet — the burger above it is the ✕ (removed at the owner\'s request)');
 
   // ── 2. the page is held still ──────────────────────────────────────────
   check(await page.evaluate(() => document.body.style.overflowY) === 'hidden',
@@ -102,7 +120,7 @@ for (const width of [360, 390, 768]) {
   // ── 6. the sheet's own controls are legible ON THE SHEET ───────────────
   const sheetBg = await sheet.evaluate((e) => getComputedStyle(e).backgroundColor);
   for (const [sel, name] of [
-    ['.nav-sheet-close', 'the close'],
+    // ['.nav-sheet-close', 'the close'] — gone with the button itself; see above.
     ['.nav-links.open > a', 'a nav link'],
     ['.nav-links__legal a', 'a legal link'],
     ['.nav-links-lang button', 'the language switcher'],
@@ -123,8 +141,30 @@ for (const width of [360, 390, 768]) {
     `Privacy/Terms/Disclaimer are demoted, not removed (${legalSize}px vs ${navSize}px)`);
 
   // ── 4. focus is inside, and stays inside ───────────────────────────────
-  check(await page.evaluate(() => document.activeElement?.className?.includes?.('nav-sheet-close')),
-    'focus moves into the sheet when it opens');
+  /**
+   * ⚠️ This asked whether focus had landed on `.nav-sheet-close`, so it died
+   * with the button and reported "focus does not move into the sheet" — a
+   * false alarm about the one thing here that would be a real WCAG failure.
+   * Measured in Chromium with the button gone: activeElement is the sheet's
+   * first link, "Browse rooms", and it is inside #nav-sheet.
+   *
+   * Asserted as both halves on purpose. "Inside the sheet" alone would pass if
+   * focus landed on the legal links or the language switcher at the bottom,
+   * which is the sheet scrolled past what the person came for; "the first link"
+   * alone would pass on an element that matched the selector while sitting
+   * outside the open sheet.
+   */
+  const landed = await page.evaluate(() => {
+    const el = document.activeElement;
+    const sheet = document.getElementById('nav-sheet');
+    return {
+      inside: !!sheet?.contains(el),
+      first: el === sheet?.querySelector('a'),
+      what: (el?.textContent ?? '').trim().slice(0, 30) || el?.tagName,
+    };
+  });
+  check(landed.inside && landed.first,
+    `focus moves into the sheet when it opens, onto its first link (${landed.what})`);
   for (let i = 0; i < 20; i++) await page.keyboard.press('Tab');
   check(await page.evaluate(() =>
     !!document.getElementById('nav-sheet')?.contains(document.activeElement)),

@@ -2884,6 +2884,69 @@ rather than the workflow, so the suite is self-sufficient wherever it runs.
 
 CI run 374 green on all five jobs; production verified serving 1.185.0."
 
+tag_if_missing "v1.186.0" "f25ffb4ff19604eff371f3c377fa095c8e6f92a2" "2026-11-11T12:00:00+00:00" "v1.186.0 - finish the data-integrity brief
+
+Tests, gates and documentation, plus one metadata-only migration. Nothing
+user-facing.
+
+The brief asked for six things. Four were already covered and are listed in
+docs/DATA-INTEGRITY-BRIEF.md rather than re-done; two were not.
+
+SEPARATE TENANCIES. Nothing checked that records of separate tenancies stay
+apart when one tenant or one landlord is in several - the one test that looked
+like it is about two acceptances of ONE application.
+backend/test/tenancy-separation.int-spec.ts, 7 cases, including the hard one
+the suite had no fixture for: the same tenant and the same room, twice, let,
+ended, relisted, re-accepted, where every id but the tenancy is identical. In
+a market of single back rooms that is a normal Tuesday.
+
+RentPeriod is keyed unique on tenancyId and periodStart, so the schema is
+right, which is exactly what makes the application worth testing: every leak
+of this kind comes from a QUERY keyed on the room, the tenant or the landlord
+instead, and a constraint that is never violated proves nothing about what a
+handler returns. Falsified four ways.
+
+MIGRATIONS. 39 of them and no test at all.
+
+scripts/migration-drift-check.mjs asks whether the migrations and
+schema.prisma describe the same database, by replaying every migration into a
+disposable shadow database. It found real drift on its first run:
+survey_responses.updatedAt carried a database default the datamodel does not
+declare, because the migration that added the column backfilled a NOT NULL on
+a populated table and that requires one. Effect nil - Prisma is the only
+writer - and cleared by 20261111101138, metadata only, so the gate now demands
+ZERO differences instead of carrying a baseline.
+
+scripts/migration-data-survival-check.mjs applies history in two stages with
+rows seeded in between, against the only migration here that MOVES data.
+Its header makes two claims about real people's answers and neither had ever
+been checked: that a database with answers in it keeps them, and that a row it
+cannot place STOPS the migration rather than being deleted. Both hold. The
+second is the one that matters - everything else would pass against a
+migration that quietly deleted what it could not place.
+
+Three traps found building that one, each recorded in the file: staging the
+schema in a temp directory makes npx resolve prisma 8 instead of this
+project's 6, where migrate deploy has MOVED; the first seed invented a column
+that does not exist at that point in history; and both falsification runs
+CRASHED instead of naming a failure, which is this repository's own recurring
+defect turning up in the thing built to catch it.
+
+Both checks refuse a remote host and any admin URL that is not localhost, the
+same refusal as test-app.ts and migrate-remote.sh. Both run in CI, and the
+drift check also runs in the pre-commit hook with a skip that names itself,
+because Postgres stops on its own in this container.
+
+docs/DATA-INTEGRITY-BRIEF.md is the deliverable, with six remaining risks
+stated rather than implied - among them that 38 of the 39 migrations still
+have no data-survival test, and that nothing here tests a migration against
+production-scale data, where correct and slow is still an outage.
+
+Integration suite 20 files, 272 tests. Drift zero. Survival 14/14. CI run 380
+green on all five jobs, with both new migration checks running on a runner for
+the first time; production verified serving 1.186.0."
+
+
 
 
 
