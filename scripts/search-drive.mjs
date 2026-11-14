@@ -81,18 +81,48 @@ async function main() {
   const firstLink = page.locator('app-room-card a').first();
   if (await firstLink.count()) {
     await firstLink.click();
-    await page.waitForLoadState('networkidle');
+    /**
+     * ⚠️ Wait for the URL, not for the network.
+     *
+     * This was `waitForLoadState('networkidle')`, and that is the wrong thing
+     * to wait for after a click the ROUTER handles: there is no document load,
+     * and `networkidle` can resolve at once because the network was already
+     * idle. So the assertion read `page.url()` while the navigation was still
+     * in flight.
+     *
+     * It passed here every time and failed the first CI run of the suite at
+     * exactly this line — `a room page opened —
+     * http://localhost:4200/?q=Accommodation%20in%20Johannesburg`, the search
+     * page it had never left. ⚠️ Not reproducible on this container: it passes
+     * against the e2e database and against a freshly seeded one, so the
+     * trigger is inferred to be a slower box rather than proven. What IS
+     * certain is that the old wait could not keep its promise, and the new one
+     * waits for the thing being asserted.
+     */
+    await page.waitForURL(/\/rooms\//, { timeout: 15000 }).catch(() => {});
     const onRoom = /\/rooms\//.test(page.url());
     check(onRoom, 'a room page opened', page.url());
-    await page.goBack({ waitUntil: 'networkidle' });
-    await settle(page);
-    const back = new URL(page.url());
-    check(back.searchParams.get('q') === 'Accommodation in Johannesburg',
-          'going back restores the search in the URL', `?q=${back.searchParams.get('q')}`);
-    check((await page.locator('.search-input').inputValue()) === 'Accommodation in Johannesburg',
-          'going back restores the text in the search box');
-    const after = await cards(page);
-    check(after === before, `going back restores the same results (${before} -> ${after})`);
+    /**
+     * ⚠️ One cause, one failure. The three checks below are about coming BACK,
+     * and none of them can pass if the room never opened — CI reported four
+     * failures for one defect, with the second of them ("going back restores
+     * the search in the URL — ?q=studio in Pretoria") naming the previous
+     * section's search, which is noise that reads like a second bug.
+     */
+    if (!onRoom) {
+      // Named, and scoped to this section only — sections 4 to 8 below still run.
+      console.log('  ⏭  SKIP coming back — the room never opened, so there is nothing to come back from');
+    } else {
+      await page.goBack({ waitUntil: 'networkidle' });
+      await settle(page);
+      const back = new URL(page.url());
+      check(back.searchParams.get('q') === 'Accommodation in Johannesburg',
+            'going back restores the search in the URL', `?q=${back.searchParams.get('q')}`);
+      check((await page.locator('.search-input').inputValue()) === 'Accommodation in Johannesburg',
+            'going back restores the text in the search box');
+      const after = await cards(page);
+      check(after === before, `going back restores the same results (${before} -> ${after})`);
+    }
   } else {
     bad('no room card link to open');
   }

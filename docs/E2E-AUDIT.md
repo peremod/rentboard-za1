@@ -785,3 +785,45 @@ verdict depends on a fresh database**, which is what CI gives it and what a
 developer's long-lived dev database does not. The same lesson `search-drive`
 taught from the other direction.
 
+## Run 386: 39 of 40, and a wait for the wrong thing
+
+The repaired suite, with the two new Phase 3 drives in it. One red, and a
+different drive: `search-drive`, four failures.
+
+```
+❌ a room page opened — http://localhost:4200/?q=Accommodation%20in%20Johannesburg
+❌ going back restores the search in the URL — ?q=studio in Pretoria
+❌ going back restores the text in the search box
+❌ going back restores the same results (11 -> 0)
+```
+
+**One cause, four failures.** The click on a room card was followed by
+`waitForLoadState('networkidle')` — the wrong thing to wait for after a click
+the *router* handles. There is no document load, and `networkidle` can resolve
+at once because the network was already idle, so the assertion read
+`page.url()` while the navigation was still in flight. The three checks after
+it are about coming *back*, and none of them can pass if the room never opened;
+the second even quotes the previous section's search, `?q=studio in Pretoria`,
+which reads like a second bug and is not.
+
+It waits for the URL it is asserting now, and the three back-checks are skipped
+by name when the room did not open — so one cause reports as one failure, and
+sections 4 to 8 still run. Proven by forcing the never-opened state: **1
+failure and the skip, where it used to be 4.**
+
+⚠️ **Not reproducible on this container.** It passes against the e2e database
+and against a freshly created, migrated and seeded one. The trigger is inferred
+to be a slower, busier box, not proven. What is certain is that the old wait
+could not keep its promise.
+
+⚠️ The artifact could not be read from here either — `blob.core.windows.net` is
+refused by this container's egress policy — so the diagnosis came from the job
+log's own `❌` lines rather than from the full drive log.
+
+### What the two CI runs together say about the suite
+
+Both reds were drives whose verdict depended on the machine rather than on the
+product: a money format that only this container produces, and a wait that only
+this container was fast enough to satisfy. Neither could have been found here.
+That is the argument for the step, made twice in two runs.
+
