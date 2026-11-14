@@ -656,8 +656,66 @@ they were the old `dist`, because I had not restarted the API. The same
 stale-artefact mistake as the `ng serve` one earlier in this document, from the
 other direction.
 
-## Still to write
+## `api-failure-drive` — a request that fails after the page rendered
 
-- **a browser-side API failure** — a request that fails *after* the page has
-  rendered, and whether the screen says so or sits on a spinner
+`error.interceptor.ts` makes a distinction that was paid for:
+
+> "Something went wrong on our end. Please try again shortly." was the answer
+> to every status at or above 500, and it is three different situations wearing
+> one sentence.
+
+The three: the phone losing its connection (status 0), the platform answering
+instead of the API because it was asleep (502/503/504 — this deployment's API
+sleeps when idle, reported on a landlord dashboard **at 04:38**, exactly the
+hour it would be cold), and the API itself throwing (a real 500, which will not
+fix itself on a retry). "Try again shortly" is right for the first two and
+wrong for the third.
+
+🔴 **Nothing asserted any of it.** The strings "No connection", "Waking up" and
+"quote this" appeared nowhere outside the interceptor — not a drive, not a
+spec, not a smoke line. So the distinction could collapse back into one
+sentence with every gate still green, and the next 04:38 report would be
+unreadable again.
+
+**26 assertions, and the product is right in all three cases.** Measured after
+the dashboard had rendered, which is the case that matters: a screen that never
+loaded is obviously broken, while one that looks fine and then quietly fails to
+fetch gets reported as "it does not work" with no detail.
+
+| Forced | Shown | Console |
+| --- | --- | --- |
+| `route.abort('connectionfailed')` — a genuine status 0 | **No connection** — "could not reach Mastande. Check your data or wi-fi" | `[http] GET /api/properties/dashboard failed with 0` |
+| `503` | **Waking up** — "idle and is starting up. Wait a few seconds" | `… failed with 503` |
+| `500` | **Server error** — and it quotes `GET /api/properties/dashboard (500)` | `… failed with 500` |
+
+Each case also asserts it is **not** either of the other two titles, and a
+final section asserts the three messages are pairwise different — because the
+defect being guarded is one sentence for three situations, and without that the
+three could collapse back while every other assertion still passed.
+
+The console line is asserted too. It is the half of the fix a person never
+sees and the half a report depends on: "the one line that would have turned a
+screenshot into a diagnosis."
+
+**Falsified by committing the original defect**: `describeServerFailure`
+collapsed to a single "Server error / try again shortly" and rebuilt → **10
+named failures**, including all three "told apart" assertions.
+
+⚠️ The failures are faked in the browser, because a cold start cannot be
+arranged on demand and a dropped connection even less so. The interceptor
+branches on the status, so a status is a status however it arrived, and
+`route.abort('connectionfailed')` produces a real status 0 rather than a
+simulation of one.
+
+## Phase 3 is complete
+
+Three gaps named at the start, three drives, **57 assertions**, and the suite
+is 40 drives. Two of the three found the product already sound and locked it
+in; one found a real defect:
+
+| Gap | Drive | Outcome |
+| --- | --- | --- |
+| session expiry mid-task | `session-expiry-drive` (15) | sound — and `error.interceptor.ts` had no spec at all |
+| duplicate submission | `duplicate-submission-drive` (16) | 🔴 a racing duplicate apply answered **500**; now 409 |
+| a browser-side API failure | `api-failure-drive` (26) | sound — and nothing had ever asserted the three-way distinction |
 

@@ -46,6 +46,7 @@ lease-ui-drive
 account-lifecycle-ui-drive
 session-expiry-drive
 duplicate-submission-drive
+api-failure-drive
 font-paint-drive
 dashboard-ui-drive
 templates-ui-drive
