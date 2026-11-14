@@ -767,7 +767,8 @@ jobs:
           BASE: http://localhost:4200
         run: node scripts/seo-drive.mjs
 
-      # 🔴 THE THIRTY-SEVEN BROWSER DRIVES, which until now ran NOWHERE.
+      # 🔴 THE BROWSER DRIVES, which until now ran NOWHERE. Thirty-seven of them
+      # when this step was added; the list is the count.
       #
       # They were written one at a time beside the feature each covers, and
       # "the drives pass" was an assumption nobody had tested. Running all 42
@@ -801,7 +802,7 @@ jobs:
       # The runner fails if the list is empty, if a name has no file, if the
       # API will not come back, or if the number of drives it ran does not
       # match the number in the list.
-      - name: The browser drives — 37 of them, development build
+      - name: The browser drives — 38 of them, development build
         if: ${{ !cancelled() }}
         env:
           # The runner RESTARTS the API between drives, so it needs the

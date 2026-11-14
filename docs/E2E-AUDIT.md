@@ -519,3 +519,80 @@ row` and asserts only 5 things. It is green and it is not lying, but most of
 what it covers did not run. That is the same shape as the fixture problems
 found above and is **recorded here as open**, not fixed.
 
+---
+
+# Phase 3 — the coverage that did not exist
+
+Phases 0 to 2 audited, repaired and gated what was already written. This part
+is the gaps: journeys with no test of any kind.
+
+## `session-expiry-drive` — a session running out mid-task
+
+Nothing covered it. `refresh-race-drive` counts refresh tokens in the
+**database** under a concurrent rotation; `auth.interceptor.spec.ts` covers
+which reads may travel without credentials. The browser journey — a 401
+arriving while somebody is working, and what they are shown — had no test, and
+`error.interceptor.ts`, which decides all of it, **has no spec at all**.
+
+It matters most for the person this product is built for: a cheap Android on a
+connection that drops for a second, with four back rooms to let.
+
+**15 assertions, three sections, and the product is sound in all three.**
+
+| Section | What was measured |
+| --- | --- |
+| a 401 on a guarded read mid-journey | they stay on the page, are not told they are signed out, and the refused read is re-issued once and succeeds (`landlord/calendar: 401, 200`) |
+| arriving at a guarded URL with the session gone | sent to `/auth/login?returnUrl=/landlord/properties`, not nested, and logging in puts them back on that page |
+| a save refused mid-edit | they stay on the form, **what they typed is still in the field**, the save is re-issued once and goes through, and no false "signed out" message |
+
+### What falsification changed about the drive itself
+
+Three times, and each one is the reason to do it:
+
+1. **The retry assertion passed with the retry removed from the interceptor.**
+   It 401'd whichever guarded read went first — `landlord/health`, which the
+   dashboard requests *twice* a load — and then asserted "some call to that
+   path came back 200". A later unrelated call satisfied it. Now it targets a
+   single-request path (`landlord/calendar`, measured) and asserts the exact
+   sequence `401, 200`: two requests, nothing but a retry can produce that.
+2. **The mid-form section had no subject and passed while forcing no 401 at
+   all.** `window.dispatchEvent(new Event('focus'))` provokes nothing.
+3. **A mutation killed the drive instead of being reported.** Section 2's own
+   `signIn` threw, and the run ended there with sections 2 and 3 silent. Each
+   section is wrapped now, so one failure reports and the rest still run.
+
+### A finding about the listing wizard
+
+The mid-form section was first aimed at the listing wizard, on the theory that
+a background poll could 401 while somebody was half way through it. **Measured,
+and the theory is wrong**: the wizard makes its guarded reads on load and then
+nothing at all — no autosave, no polling, no refetch on focus or
+`visibilitychange`, across 45 seconds of waiting. It holds the form in memory
+and talks to the API only when the person acts.
+
+That moves the risk rather than removing it: the dangerous moment is the
+action, not a background read. Hence the refused save.
+
+### ⚠️ What it does not cover
+
+- The expired-arrival section exercises the **route guard**, not
+  `error.interceptor.ts`'s own `redirectToLogin`. Proven: dropping the
+  returnUrl from the interceptor changes nothing there, while dropping it from
+  the guard reds two assertions. Two pieces of code build that returnUrl and
+  only one is under test.
+- The interceptor's "Signed out — your session has expired" **alert** branch is
+  not exercised. It fires only when `restoreSession()` returns no user, and
+  with a live in-memory session that call returns the cached user without going
+  near the network, so a synthetic 401 cannot reach it. Driving it needs a dead
+  refresh cookie and a dead access token at the same moment, which this drive
+  cannot arrange without its own server configuration.
+
+Named rather than left to be assumed covered — that is the §6 mistake this
+repository has made six times.
+
+## Still to write
+
+- **duplicate submission** — a double-tap on apply, accept, or give notice
+- **a browser-side API failure** — a request that fails *after* the page has
+  rendered, and whether the screen says so or sits on a spinner
+

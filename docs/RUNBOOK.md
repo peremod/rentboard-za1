@@ -242,8 +242,9 @@ rather than failing if either server is down.
 
 ### All of them at once
 
-`phase-drive` is one of thirty-eight browser drives. The other thirty-seven run
-as a suite, and CI runs the same suite on every push:
+`phase-drive` is one of the browser drives. The others run as a suite — 38 of
+them at the time of writing, and `scripts/ui-drives.txt` is the count — and CI
+runs the same suite on every push:
 
 ```bash
 # the API on :3000, a DEVELOPMENT build on :4200, a migrated seeded database
@@ -254,7 +255,7 @@ bash scripts/ui-drives.sh
 ONLY=nav-sheet-drive,logo-drive bash scripts/ui-drives.sh   # just those two
 ```
 
-About 22 minutes for all of them. The list is `scripts/ui-drives.txt`, one name
+About 23 minutes for all of them. The list is `scripts/ui-drives.txt`, one name
 per line, and it records why each excluded drive is excluded.
 
 ⚠️ **It restarts the API between drives, and that is not tidiness.**
