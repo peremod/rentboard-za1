@@ -827,3 +827,72 @@ product: a money format that only this container produces, and a wait that only
 this container was fast enough to satisfy. Neither could have been found here.
 That is the argument for the step, made twice in two runs.
 
+---
+
+# After the sweep: a unit test, and a gate for the wait
+
+## The apply guard, tested where the browser cannot see it
+
+`duplicate-submission-drive` proves the outcome — one application from two taps
+— but could not isolate the mechanism, and says so: removing
+`[disabled]="applying()"` and rebuilding changed nothing at thumb speed,
+measured three ways, because the label becomes "Sending…" and a re-queried
+button no longer matches.
+
+`room-detail.spec.ts` closes the half a browser cannot reach. `apply()` is
+exercised directly, the way `tenant-dashboard.spec.ts` exercises
+`activeApplications()`: four cases, on the signal the binding depends on.
+
+- busy from the moment it is pressed until the answer arrives — asserted with a
+  `Subject`, not `of(...)`, because `of` completes synchronously and the window
+  this guard exists for would never be observable
+- **not** busy after a failure, which matters more than the success path: a
+  guard stuck true after an error is a button that never comes back
+- its own message when the server explains nothing
+- a previous error cleared when they press again
+
+Falsified both ways: dropping `applying.set(false)` from the error path reds two
+cases; dropping `applying.set(true)` reds the first. 29 frontend tests → 33.
+
+⚠️ **It still does not cover that the template binds `[disabled]` to
+`applying()`.** The drive cannot see the binding and the spec never renders.
+What is covered is that the signal is true for exactly as long as the request
+is in flight — if it were stuck, a second application would be refused for
+ever; if it never went true, the binding would have nothing to act on.
+
+## `wait-lint.mjs` — the sweep, made permanent
+
+The sweep found the `search-drive` defect was **unique**:
+`waitForLoadState('networkidle')` appears in no other drive. But fourteen
+clicks across the scripts are followed by a URL read, and the question for each
+is which of two things it means:
+
+| the assertion | the right wait |
+| --- | --- |
+| something **did** navigate | wait for the URL |
+| **nothing** navigated | a delay — there is no event to wait for |
+
+Four were the first kind and waiting on a clock: opening a template card,
+"All templates" back to the list, following an inbox action to `/applicants`,
+and the returnUrl round trip in `session-expiry-drive`. A fifth, the search
+chip, waits for `?q=` to change now. All five wait for the URL; all four
+touched drives re-run green.
+
+Three files are the second kind and are allowlisted with their reason in the
+source — a wrong password must *leave* you on `/account/close`, marking rent
+paid must keep you on the yard, a refused save must leave you on the form.
+
+### 🔴 The lint was wrong first, and falsification is the only reason I know
+
+Version one sliced the next six **raw** lines after a click. Reintroducing the
+exact defect it exists for reported **green** — because the ⚠️ comment
+explaining the fix now sat between the click and the assertion and pushed the
+`.url()` read out of the window.
+
+**So the better a site was documented, the less the gate could see it.** A gate
+with that incentive is worse than none. It drops comments and blank lines
+before taking the window now, and with the defect back it fails by name.
+
+It also fails if nothing matches at all, because a gate that has stopped being
+able to see its subject is the family this repository keeps finding.
+

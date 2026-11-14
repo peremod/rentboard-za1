@@ -195,6 +195,10 @@ async function main() {
   const chip = page.locator('.search-chip:not(.search-chip--word)').first();
   if (await chip.count()) {
     await chip.click();
+    // The chip's whole job is to change ?q=, so wait for that rather than for
+    // a fixed 1400ms — the same correction as the room click above.
+    await page.waitForURL((u) => !new RegExp(city, 'i').test(new URL(u).searchParams.get('q') ?? ''),
+                          { timeout: 15000 }).catch(() => {});
     await settle(page);
     const q = new URL(page.url()).searchParams.get('q') ?? '';
     check(!new RegExp(city, 'i').test(q), 'the chip removed the place from the typed phrase', `?q=${q}`);

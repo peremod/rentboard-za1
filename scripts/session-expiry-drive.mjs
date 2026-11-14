@@ -202,7 +202,10 @@ await section('They open a bookmark the next morning', async () => {
   await page.fill('input[type="email"]', landlord.email);
   await page.fill('input[type="password"]', PASSWORD);
   await page.click('button[type="submit"]');
-  await page.waitForTimeout(5000);
+  // Wait for the URL the returnUrl promises, not a fixed delay — see the note
+  // in templates-ui-drive: a delay is a bet on how fast the box is.
+  await page.waitForURL((u) => new URL(u).pathname === WANTED, { timeout: 20000 }).catch(() => {});
+  await page.waitForTimeout(500);
   check(new URL(page.url()).pathname === WANTED,
     `…and logging in puts them back on it (${new URL(page.url()).pathname})`);
 

@@ -44,6 +44,21 @@ jobs:
         # occurrences only; the 22 it already found are listed as UNTRIAGED,
         # which is a queue rather than a pass, and the run says so each time.
         run: node scripts/check-then-write-lint.mjs
+      - name: A click that expects a navigation waits for the URL
+        # The first CI run of the drive suite failed on exactly this:
+        # search-drive clicked a room card, waited with
+        # waitForLoadState('networkidle') — which can resolve at once, because
+        # after a click the router handles there is no document load and the
+        # network was already idle — and then read page.url() mid-navigation.
+        # It passed on a developer's container every time. Three more
+        # assertions failed behind it, one quoting the previous section's
+        # search, which read like a second bug.
+        #
+        # Asserting that something DID navigate means waiting for the URL;
+        # asserting that nothing did means a delay, because there is no event.
+        # The gate cannot tell those apart, so the second kind is allowlisted
+        # in the script with a reason per file.
+        run: node scripts/wait-lint.mjs
       # §100: the panel told landlords a referral covered their R149 identity
       # check, and nothing in the product could spend that credit. The claim
       # is the source, so a source check can hold it. Comments are stripped,
