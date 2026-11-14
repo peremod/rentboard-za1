@@ -719,3 +719,69 @@ in; one found a real defect:
 | duplicate submission | `duplicate-submission-drive` (16) | 🔴 a racing duplicate apply answered **500**; now 409 |
 | a browser-side API failure | `api-failure-drive` (26) | sound — and nothing had ever asserted the three-way distinction |
 
+---
+
+# The first CI run of the suite, and what it caught
+
+Run 385 on `develop`, 14 November. The suite ran on a runner for the first
+time: **21 minutes 41 seconds, 37 of 38 drives green, one red.** Every other
+step in the job passed, including the a11y sweep, `phase-drive`, and both SEO
+passes. The Chromium install that had failed the previous run took 17 seconds
+this time, so that was infrastructure flake rather than anything structural.
+
+The one failure is the reason the step exists.
+
+```
+❌ property A's "rent marked paid" is R3 — expected its own 3000, not the portfolio's 7500
+❌ property B shows R000 — it is being handed somebody else's money
+```
+
+Those read like a scoping bug — one property showing another's money — and they
+are not. `dashboard-ui-drive` parsed the rendered figure with
+
+```js
+const randOf = (text) => (text.match(/R\s?([\d,]+)/)?.[1] ?? '').replace(/,/g, '');
+```
+
+digits and **commas**. South Africa groups thousands with a **space** and uses
+the comma as the decimal separator, so `R 3 000,00` gives the regex `R`, one
+optional space, and then `3`. The parser had never met that format, because it
+had only ever run here.
+
+**It passed every local run and failed the first time it met a runner, and only
+the runner was right.** A drive asserting on money, in a product for South
+Africans, had been checking an American format for its whole life.
+
+### ⚠️ It cannot be reproduced on this container, and that is the finding
+
+Playwright's Chromium here answers `R 3,000.00` for
+`(3000).toLocaleString('en-ZA', { style: 'currency', currency: 'ZAR' })` — even
+though `Intl.NumberFormat('en-ZA').resolvedOptions().locale` reports `en-ZA`.
+The build's ICU data for the locale is not there, so it formats with en-US
+patterns whatever it is asked for. Node in the same container, with full ICU,
+gives `R 3 000,00`.
+
+Pinning Playwright's `locale: 'en-ZA'` changes `navigator.language` and
+**nothing else** — checked rather than assumed, and it is why that line is not
+in the fix. It would have been a line that does nothing under a comment
+claiming it mattered.
+
+So the parser is grouping-agnostic now, and it is proven **by its own cases on
+every run** rather than by the environment: nine of them, covering both
+groupings, NBSP and narrow-NBSP spacing, the no-decimals form, zero, an amount
+inside a sentence, and text with no money in it. Whichever format the browser
+produces, the parser is under test.
+
+### And five failures that were not real
+
+Re-running the repaired drive here produced five *different* failures,
+including the `R0` its own comment already names as a timing flake it had added
+a wait for. They were **local database pollution** — a session of heavy drive
+runs, and this drive writes directly with SQL. Against a freshly created,
+migrated and seeded database it is green at 43 assertions.
+
+Worth recording as a property of the suite rather than of the drive: **its
+verdict depends on a fresh database**, which is what CI gives it and what a
+developer's long-lived dev database does not. The same lesson `search-drive`
+taught from the other direction.
+
