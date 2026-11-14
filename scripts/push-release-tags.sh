@@ -2969,3 +2969,43 @@ if [ "$created" -gt 0 ]; then
 else
   echo "Nothing to push."
 fi
+
+tag_if_missing "v1.187.0" "d71397276cf94e6c6187190c986277f115b51045" "2026-11-14T15:00:00+00:00" "v1.187.0 - three defects the drives had never been run to find
+
+The 42 browser drives existed, and no workflow ran any of them. Run as a suite
+for the first time: two could not fail at all, nine were red, and nine of those
+eleven findings were checks that had quietly stopped measuring what they
+claimed. Three were the product.
+
+THE LEASE PANEL offered \"They are leaving\" on a tenancy nobody had moved into,
+where giveNotice() can only refuse it, and reported the refusal as \"That did
+not save. Check your connection and try again.\" The API's own sentence - \"This
+tenancy has not started yet. If it has fallen through, mark it as such
+instead\" - never reached the person, and the signal was never the problem.
+upcoming() deliberately lists pending tenancies and selected the status without
+returning it, so the screen could not tell a pending row from a live one.
+
+THE ADMIN DASHBOARD promised a WhatsApp code with the channel switched off, so
+an admin sitting with a landlord typed their real number, pressed send, and
+only then met a 503 addressed to the wrong person: \"Use your email address -
+and if you do not have one on your account, ask us to add it.\" No capability
+flag existed anywhere; /admin/stats carries one now.
+
+A RACING DUPLICATE APPLICATION answered 500 instead of 409. create() read with
+findUnique and wrote with create, so two requests both read \"not applied\" and
+one hit the unique constraint. The data was never wrong; what the person was
+told was.
+
+40 drives run as one CI step now, with a runner that restarts the API between
+them because the rate limiter is real and counted in memory - the first pass
+of the audit reported 31 of 41 failing and was void for exactly that reason.
+Phase 3 added session expiry mid-task, duplicate submission, and a request
+failing after the page rendered: 57 assertions, two of the three finding the
+product already sound.
+
+The first two CI runs each caught a drive whose verdict depended on the machine
+rather than the product - a money format only a developer's container produces,
+and a wait only a developer's container was fast enough to satisfy. Neither was
+findable locally.
+
+No drive in the repository is unfalsifiable now. No migration for this release."
