@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import { NoticeRouter } from '../notifications/notice-router.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -87,17 +88,49 @@ export class ApplicationsService {
       throw new ConflictException('You have already applied for this room');
     }
 
-    const [application, tenant] = await Promise.all([
-      this.prisma.application.create({
-        data: {
-          roomId: dto.roomId,
-          tenantId,
-          cycle: room.relistCount,
-          coverNote: dto.coverNote ? sanitizeText(dto.coverNote) : dto.coverNote,
-        },
-      }),
-      this.prisma.user.findUniqueOrThrow({ where: { id: tenantId } }),
-    ]);
+    /**
+     * ⚠️ The unique constraint, doing the job the `findUnique` above cannot do
+     * without a lock — §95's shape, on the action a tenant takes most.
+     *
+     * The check is a read and the create is a write, so two applications
+     * arriving together both read "not applied yet", both insert, one wins and
+     * the other violates `roomId_tenantId_cycle`. Nothing caught that, so the
+     * Prisma error escaped as a **500 Internal server error**.
+     *
+     * 🔴 Measured, not theorised: a DOUBLE TAP on "Apply free →" sends two
+     * POSTs, and the pair answers 201 then 500. The data was never wrong — the
+     * constraint held and exactly one application existed — but the person was
+     * told the server had broken, when what happened was that they had already
+     * applied, which this service has a sentence for one branch above. And a
+     * 500 in the log is indistinguishable from a real fault, which is the
+     * reasoning `rooms.controller.ts` already records for turning a bad
+     * `?placement=` from a 500 into a 400.
+     *
+     * A double tap is not an edge case on a cheap Android with a laggy screen.
+     * It is Tuesday.
+     */
+    let application;
+    let tenant;
+    try {
+      [application, tenant] = await Promise.all([
+        this.prisma.application.create({
+          data: {
+            roomId: dto.roomId,
+            tenantId,
+            cycle: room.relistCount,
+            coverNote: dto.coverNote ? sanitizeText(dto.coverNote) : dto.coverNote,
+          },
+        }),
+        this.prisma.user.findUniqueOrThrow({ where: { id: tenantId } }),
+      ]);
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        // The same answer the sequential path gives, so the two cannot be told
+        // apart by the caller — because to the caller they are the same thing.
+        throw new ConflictException('You have already applied for this room');
+      }
+      throw e;
+    }
 
     await this.prisma.room.update({ where: { id: room.id }, data: { applicationCount: { increment: 1 } } });
 

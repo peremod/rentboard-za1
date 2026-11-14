@@ -590,9 +590,74 @@ action, not a background read. Hence the refused save.
 Named rather than left to be assumed covered — that is the §6 mistake this
 repository has made six times.
 
+## `duplicate-submission-drive` — the second tap, and a 500 that should have been a 409
+
+`double-let-drive` races two acceptances of the same **room** — two different
+applicants — because that is the expensive one. What nothing covered was one
+person pressing one button twice, which is the common one: a cheap Android with
+a laggy screen, a tap that does not seem to have registered, so you tap again.
+
+🔴 **It found a real defect.**
+
+| | before | after |
+| --- | --- | --- |
+| sequential duplicate apply | `409 You have already applied for this room` | unchanged |
+| **two applies arriving together** | **`500 Internal server error`** | **`409`, the same sentence** |
+
+`applications.service.ts create()` read "has this tenant applied?" with
+`findUnique` and then wrote with `create`. Two requests both read "no", both
+inserted, one won, and the other violated `roomId_tenantId_cycle` — and nothing
+caught the Prisma error.
+
+The data was never wrong: the constraint held and exactly one application
+existed. But the tenant was told the server had broken when what had happened
+was that they had already applied — **a situation this service has a sentence
+for one branch above**. And a 500 in the log is indistinguishable from a real
+fault, which is the reasoning `rooms.controller.ts` already records for turning
+a bad `?placement=` into a 400.
+
+Fixed with the pattern the codebase already uses for this —
+`phone-signup.service.ts`'s `P2002` catch, whose comment calls it "doing the
+job the check above cannot do without a lock". Verified: 201 and 409, one
+application, and `applicationCount: 1`, so the losing request does not count an
+applicant the room does not have.
+
+**The sibling was checked and is already right.** Two concurrent accepts of one
+application answer `200` and `400 This application has already been decided`,
+with one tenancy — `accept` uses a conditional write. So this was one instance,
+not a pattern, and the drive asserts both so it stays that way. 16 assertions.
+
+### ⚠️ What section 1 does not isolate, and why I stopped
+
+It asserts the **outcome** — one application from two taps — not which
+mechanism produces it. Removing `[disabled]="applying()"` from the apply button
+and rebuilding changes nothing at thumb speed: still one POST, measured three
+ways (a held element reference, a re-queried element, and two ordinary
+Playwright clicks 80ms apart). Something else in `room-detail.ts` is doing the
+work — the label becomes "Sending…", so a re-queried button no longer matches,
+and the component renders more than one apply control.
+
+Measured at three speeds, for the record:
+
+| | POSTs |
+| --- | --- |
+| two clicks in one JS task | 2 — the signal has not been rendered to the attribute yet |
+| 80ms apart (a real thumb) | 1 |
+| 250ms apart | 1 |
+
+The end-to-end claim is the one a person cares about and it is true. Anybody
+reading this drive for "the disabled binding is under test" would be wrong, and
+isolating that needs a component unit test rather than a browser drive.
+
+### One of my own traps, recorded
+
+I restored the backend source, rebuilt, and read three failures as a finding —
+they were the old `dist`, because I had not restarted the API. The same
+stale-artefact mistake as the `ng serve` one earlier in this document, from the
+other direction.
+
 ## Still to write
 
-- **duplicate submission** — a double-tap on apply, accept, or give notice
 - **a browser-side API failure** — a request that fails *after* the page has
   rendered, and whether the screen says so or sits on a spinner
 
