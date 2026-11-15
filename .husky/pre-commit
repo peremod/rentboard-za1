@@ -3,6 +3,12 @@
 # scripts/workflow-lint.mjs.
 node scripts/workflow-lint.mjs
 
+# A schedule that cannot be afforded is a workflow-file problem too, and this
+# is where workflow files are checked. Render suspends every free service in
+# the workspace once the shared 750 instance hours are spent, so a cadence
+# tightened past the budget is an outage with a green tick in the Actions tab.
+node scripts/keep-warm-budget.mjs
+
 # 🔴 Added 20 October, after `echo "   `prisma migrate deploy` migrates…"` was
 # written into scripts/migrate-remote.sh — on the refusal path whose next
 # sentence is "Nothing has been written". Backticks in a double-quoted bash

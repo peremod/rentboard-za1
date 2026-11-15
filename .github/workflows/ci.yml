@@ -30,6 +30,16 @@ jobs:
         # a routerLink to nowhere, or an endpoint under /admin without AdminGuard.
         run: node scripts/route-audit.mjs
 
+      - name: Keep-warm fits the free instance-hour allowance
+        # 🔴 The ten-minute schedule this workflow carried until 15 November
+        # 2026 projects 731 instance hours a month against a 750-hour
+        # allowance SHARED with staging — and Render answers an exhausted
+        # allowance by suspending every free service until the next month.
+        # So the gate that mattered was never "is the ping working", it was
+        # "can the ping be afforded", and nothing asked it. Every keep-warm
+        # run has succeeded, which is why months of this went unseen.
+        run: node scripts/keep-warm-budget.mjs
+
       - name: Fragment links point at anchors that exist
         # A link to an anchor nothing renders does NOTHING when tapped. The
         # tenant inbox pointed at /tenant/dashboard#viewings since Phase 8n and
