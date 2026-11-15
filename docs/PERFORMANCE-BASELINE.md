@@ -1,5 +1,16 @@
 # Performance baseline — 14 November 2026
 
+> **Updated 15 November 2026.** Steps 1 and 2 were accepted and three of the
+> four follow-ups were carried out: the keep-warm schedule, the API
+> instrumentation, and the search cliff measured offline. Those are written
+> into the sections below, each marked `[15 Nov]`. **The load test in §3 has
+> still not been run and still needs authorisation.**
+>
+> ⚠️ One recommendation in §4 was WRONG and is corrected there: an external
+> pinger firing reliably would have exhausted Render's shared free
+> instance-hour allowance and suspended production. The arithmetic was not
+> done when that recommendation was written.
+
 Step 1 and 2 of the performance brief: a read-only assessment and the
 measurements that can be taken without load. **No load test has been run.** The
 plan for that is at the end and needs a decision before anything is executed.
@@ -79,6 +90,88 @@ real first visitor** — the exact cost `render.yaml` describes.
 
 ⚠️ It is also invisible: the job is green on every run, and nothing compares
 its own cadence to the sleep window. A control that only looks like a control.
+
+#### [15 Nov] Re-measured on fresh data, and the cause identified
+
+Re-run against the latest 60 runs (31 Oct – 15 Nov), which also confirms the
+finding is not an artefact of the window first sampled:
+
+| | |
+| --- | --- |
+| Total runs ever | 122 |
+| Last 60 runs span | 31 Oct → 15 Nov, **15 days** |
+| Runs a 10-minute schedule would produce | **2,160** |
+| Runs actually fired | **60** |
+| Gaps between consecutive runs | 170–616 min, median **389** |
+| Gaps inside the 15-minute sleep window | **0 of 59** |
+| Runs cancelled or skipped | **0** |
+
+Two things are now settled that were inference before.
+
+**It is not `concurrency: cancel-in-progress` eating deliveries.** Not one run
+in 122 has any conclusion other than `success` — a cancelled run would say so.
+
+**It is GitHub's scheduler running hours behind for this repository, not
+dropped jobs.** The weekly Lighthouse cron (`0 5 * * 1`) in the same repository
+fires **every single Monday without a miss** — eight consecutive Mondays
+sampled, 21 Sep through 9 Nov — but between **5h20m and 8h31m late** every
+time. That is the same magnitude as the keep-warm gaps. The scheduler is
+delivering this repository's schedules roughly once every six and a half hours
+whatever the expression says. **So no cron expression fixes this**, and
+tightening the number would have changed what the file claims and not what
+happens.
+
+#### [15 Nov] 🔴 And the real finding: the workaround is arithmetically impossible
+
+`keep-warm.yml`'s own cost note 2 warned that a service kept awake around the
+clock runs ~730 instance hours a month against an allowance of 750, and asked
+for the number to be verified. It is now verified against Render's own
+documentation: **750 free instance hours per workspace per calendar month,
+shared across every free service in it** — and this blueprint has two, staging
+and production, both `plan: free`. Exceeding the allowance **suspends the
+services for the rest of the month**. There is no overage bill; there is an
+outage.
+
+Which inverts the whole finding:
+
+- A ping every ten minutes covers the sleep window completely and costs **731
+  hours a month** — the entire allowance, with nothing left for staging.
+- **The broken schedule is the only reason production has not been suspended.**
+- Covering the window *means* being awake continuously, and being awake
+  continuously *costs the whole allowance*. **There is no cadence that does
+  both.** The workaround is not merely broken; on this plan it cannot exist.
+
+This also retires the external-pinger recommendation (§4.1 as first written):
+an external pinger would fire reliably and therefore cause exactly the
+suspension the broken GitHub schedule has been preventing. The cost is in the
+instance hours, not in who sends the request.
+
+#### [15 Nov] What was changed
+
+The schedule is now **hourly**, with the arithmetic written into the workflow:
+~183 hours a month, and at most 25% of the day covered if GitHub ever fires on
+time. That is a worse promise, honestly stated — chosen because it is strictly
+safer than what was there. Today it behaves identically (GitHub fires neither),
+and if GitHub's backlog ever clears, hourly keeps running while `*/10` would
+have taken production down mid-month.
+
+`scripts/keep-warm-budget.mjs` is the gate, in CI and in `.husky/pre-commit`
+(where workflow files are checked, because a workflow GitHub cannot parse never
+runs). It models the declared cron, computes coverage and projected instance
+hours, and **fails** when the cadence does not fit the budget. Falsified four
+ways, exit codes checked rather than eyeballed:
+
+| state | result |
+| --- | --- |
+| declared hourly | exit 0 |
+| `*/20` (548 h/month) | **exit 1** |
+| `*/10` (731 h/month) | **exit 1** |
+| cron line deleted | **exit 1** — "a gate with no input is not a gate" |
+| `0 5 * * 1` (unmodellable shape) | **exit 1** — it refuses rather than guessing |
+
+The model carries six self-check cases with hand-computable answers and five
+malformed expressions it must reject, so the arithmetic that produces the
+verdict is itself checked.
 
 ### 2b. Local API latency — healthy at this scale
 
@@ -171,6 +264,115 @@ Not measured, and I want to be plain about why rather than imply otherwise:
 - **Production latency** is unreachable from here: `api.umastande.co.za` is
   refused by this container's egress policy. Every number above is local.
 
+### 2f. [15 Nov] 🔴 Every Prisma warning and error went nowhere
+
+Found while reading `prisma.service.ts` to add the slow-query log. The client
+was constructed with:
+
+```ts
+log: process.env.NODE_ENV === 'production'
+  ? [{ emit: 'event', level: 'error' }]
+  : [{ emit: 'event', level: 'warn' }, { emit: 'event', level: 'error' }],
+```
+
+`emit: 'event'` means *do not print this, hand it to a listener*. **No `$on`
+call existed anywhere in `backend/src/`** — checked across the whole tree. So
+every database warning and every database error this client produced, from the
+day it was written, went to a listener that was never registered.
+
+It reads like a deliberate decision about log verbosity in production, and it
+was a channel nobody could hear: the same shape as the `Message.readAt` nobody
+wrote and the nineteen `@Throttle` decorators with no guard. It also means the
+"existing monitoring" column of this assessment was emptier than §1 said — the
+API did not merely lack *new* instrumentation, the instrumentation it appeared
+to have was inert.
+
+**Proven rather than argued.** With the subscriber removed and the log levels
+left exactly as configured — `warn`, `error` *and* `query` all named — a board
+request produced **zero** log lines. Restoring the subscriber produced them
+immediately. Same mechanism, same silence, so the warn and error channels were
+dead by construction.
+
+### 2g. [15 Nov] The board at scale — measured, and it is not the ILIKE
+
+`scripts/search-scale-probe.mjs` seeds 1k / 10k / 100k synthetic rooms into a
+local database (four rooms per landlord, half the landlords id-verified,
+adjectives and places cycling on different moduli so searches actually match),
+measures the real HTTP endpoint, `EXPLAIN ANALYZE`s the statements, and deletes
+everything it inserted. It refuses any host that is not local.
+
+**`GET /api/rooms` as a visitor experiences it**, median of 5, local 4-CPU box
+with a local Postgres:
+
+| active rooms | unfiltered board | full phrase | one broad word | its matches |
+| --- | --- | --- | --- | --- |
+| 1,000 | 8–19 ms | 10 ms | 11 ms | 250 |
+| 10,000 | 21–24 ms | 17 ms | 29 ms | 2,500 |
+| 100,000 | **135–175 ms** | 89 ms | **190–216 ms** | 25,000 |
+
+A **single broad word** is both the worst case and the likeliest thing somebody
+types. A full phrase is *faster* at 100k than the unfiltered board, because
+ANDing a place with a describing word narrows the unbounded query below.
+
+**Which statement is responsible** — this is the new slow-query log doing the
+job it was added for, at 100k rooms:
+
+| statement | unfiltered | one broad word |
+| --- | --- | --- |
+| verified-landlord scan (no `LIMIT`) | **110 ms** | **189 ms** |
+| the page of 12 rooms | 83 ms | 114 ms |
+| `count` | 32 ms | 182 ms |
+| `knownPlaces()` — `city, province` for every active room | — | 17 ms |
+| **request total** | **199 ms** | **216 ms** |
+
+They run under `Promise.all`, so the request costs the slowest rather than the
+sum. Three findings fall out, and the one everybody expected is third.
+
+**1. The page of 12 rooms cannot use any index on `rooms`, and that is
+structural.** The board's first `orderBy` key is
+`{ landlord: { openFlagCount: 'asc' } }` — a column in a **different table**.
+Postgres therefore joins `rooms` to `users` and sorts **every matching row** to
+return twelve:
+
+```
+Limit -> Gather Merge -> Sort (Sort Key: u."openFlagCount", r."isFeatured" DESC, r."publishedAt" DESC)
+           -> Parallel Hash Left Join -> Parallel Seq Scan on rooms (33,333 rows × 3 workers)
+```
+
+A composite index on `rooms (status, isFeatured DESC, publishedAt DESC)` was
+created and measured: **the planner ignored it**, exactly as predicted, because
+the leading sort key is not in the table. That ordering is a deliberate product
+decision with a good reason written beside it — a bought boost must not
+outrank an open deposit complaint — so the fix is not to change the ordering.
+
+Denormalising that one counter onto `rooms` and indexing
+`(status, flagCount ASC, isFeatured DESC, publishedAt DESC)` was then measured
+on the same 100k rows:
+
+| | plan | execution |
+| --- | --- | --- |
+| today | Parallel Seq Scan + Sort of 100k rows | 83–114 ms |
+| denormalised + indexed | **Index Scan, no Sort node** | **0.045 ms** |
+
+O(active rooms) per page view becomes O(page size). Both the column and the
+index were dropped again afterwards; nothing is committed.
+
+**2. The verified-landlord figure is the single largest cost, and it is
+unbounded.** It runs `findMany` over every row matching the search, selecting
+`landlordId` with no `LIMIT`, and de-duplicates in JavaScript. A page of twelve
+is paginated; this is not. It runs on the unfiltered board too, because the
+default `where` is just `status: 'active'`. `knownPlaces()` has the same shape
+on every search.
+
+**3. The ILIKE is real but it is not the first thing to break.** One broad
+token across the five text columns: 1.9 ms at 1k, 19.6 ms at 10k, **169 ms at
+100k** — linear, `Seq Scan`, as expected with no `pg_trgm` and no `tsvector`.
+Worth fixing, but after the two above.
+
+⚠️ Every number here is a local 4-CPU box with a local Postgres. Render's free
+instance and a pooled Neon connection are a fraction of that, so treat these as
+the **optimistic** end.
+
 ---
 
 ## 3. Proposed load-test plan — needs a decision before anything runs
@@ -237,25 +439,102 @@ field — which is how a cold start is detectable from outside.
 
 ## 4. Recommendations, in the order I would do them
 
-1. 🔴 **Fix keep-warm, or stop relying on it.** It delivers 3% of its schedule.
-   An external pinger (cron-job.org or similar, free) at 10-minute intervals
-   would actually fire; `docs/OUTSTANDING.md` §102 already lists one as
-   "available and unchosen". **Measured, not theoretical: production is cold
-   for nearly every first visitor today.**
-2. **Make the job able to notice.** It should compare the gap since its own
-   previous run against the sleep window and fail — otherwise the next
-   regression is just as invisible.
-3. **Add a request-timing interceptor** logging method, path, status and
-   duration, with a slow threshold. One file, and it turns every production
-   problem from a guess into a number. Prisma can log `query` with duration in
-   staging for the same reason.
-4. **Widen the Lighthouse URL list.** It covers `/`, `/pricing`,
+> **[15 Nov] Three of these are done. One was wrong.** Items marked ✅ were
+> carried out on 15 November; the detail is in §2a, §2f and §2g.
+
+1. ❌ **CORRECTION — "fix keep-warm, or stop relying on it", and specifically
+   "an external pinger would actually fire".** That recommendation was wrong,
+   and wrong in the dangerous direction. The arithmetic had not been done: a
+   pinger that fires reliably every ten minutes holds production awake around
+   the clock, which is **731 of the 750 free instance hours a workspace gets
+   per month, shared with staging** — and Render answers an exhausted
+   allowance by suspending every free service until the next month. An
+   external pinger would have caused the outage that GitHub's broken scheduler
+   has been preventing. **There is no cadence that both covers the sleep
+   window and fits the free plan.** See §2a.
+
+   ✅ What was done instead: the schedule is hourly and honest about covering
+   at most a quarter of the day, and `scripts/keep-warm-budget.mjs` fails any
+   cadence that does not fit the allowance — so the next person to "fix" the
+   cron cannot take production down with it. **The real fix remains the
+   cheapest paid instance**, which also restores `preDeployCommand` and makes
+   migrations automatic rather than the manual step that cost production an
+   hour on 5 October (`docs/OUTSTANDING.md` §5a). That is a cost decision and
+   it is the owner's.
+
+2. ✅ **Make the job able to notice.** Done as an affordability gate rather
+   than a cadence gate, which is the better version: a cadence gate would go
+   red every run over a condition nobody has chosen to fix, and this
+   repository already has gates nobody reads for exactly that reason. The
+   budget gate is green today and fails on the change that would cause an
+   outage.
+
+3. ✅ **Add request timing and a slow-query log.** Both added, both off by
+   default (`SLOW_REQUEST_MS`, `SLOW_QUERY_MS` — unset means silent, because a
+   threshold of 0 read as "log everything" is the one default that could turn
+   instrumentation into an outage on a 512 MB instance). Documented in
+   `backend/.env.example` and `docs/DEPLOYMENT.md`; `env-parity.mjs` passes at
+   36 keys. **It paid for itself immediately** — §2g's attribution table is
+   this log, and it is what showed that the board's largest cost is the
+   unbounded verified-landlord query rather than the ILIKE everyone expected.
+
+   POPIA, deliberately: the request log records the route **template** and
+   never the resolved path (`/api/rooms/:id`, proven on a 404), no query
+   string, no body, no IP, no user id. The query log records the statement and
+   **never Prisma's `params`**, which hold email addresses, phone numbers,
+   password hashes and one-time codes — the obvious one-liner would have
+   turned the application log into a copy of the user table.
+
+   Also fixed while in there: the Prisma `warn` and `error` channels that had
+   never had a subscriber (§2f).
+
+4. **Bound the two unbounded board queries.** Now the top of the list, and it
+   was not on the original one. The verified-landlord count and
+   `knownPlaces()` both scan every matching row on every board view. A cached
+   or periodically-recomputed figure would remove the largest single cost at
+   100k rooms. ⚠️ The count is a **trust** figure with a documented history of
+   being wrong — it was computed in the browser from the current page and grew
+   as a visitor scrolled — so any change here must keep it honest or stop
+   showing it. Not a silent optimisation.
+
+5. **Decide about the board's ordering.** Denormalising `openFlagCount` onto
+   `rooms` plus a composite index takes the page query from 83–114 ms to
+   **0.045 ms** at 100k rooms (§2g), because no index on `rooms` can serve an
+   `orderBy` whose leading key lives in `users`. It is a migration plus
+   keeping a denormalised counter in sync, so it is a real decision rather
+   than a tidy-up — but it is the largest measured win available and it
+   preserves the ordering's intent exactly.
+
+6. **Widen the Lighthouse URL list.** It covers `/`, `/pricing`,
    `/how-it-works`, `/zu/pricing` — **not a room detail page, not a board with
    a search, not an authenticated portal screen.** The room page is where every
-   shared WhatsApp link lands.
-5. **Decide about the search cliff on evidence** once (1) above is measured.
-   `pg_trgm` with a GIN index is the smallest change that keeps the current
-   query shape; Postgres full-text is the larger one.
-6. **Set `UV_THREADPOOL_SIZE` deliberately** rather than inheriting 4, once the
-   instance size is known — it is the ceiling on concurrent logins.
-7. **Collect INP from the field.** Nothing measures it; TBT is a lab proxy.
+   shared WhatsApp link lands. Unchanged from the original list and still
+   worth doing.
+
+7. **Then the search cliff itself.** `pg_trgm` with a GIN index is the
+   smallest change that keeps the current query shape; Postgres full-text is
+   the larger one. Measured at 169 ms per broad token at 100k rooms — real,
+   but third in line behind items 4 and 5.
+
+8. **Set `UV_THREADPOOL_SIZE` deliberately** rather than inheriting 4, once
+   the instance size is known — it is the ceiling on concurrent logins.
+
+9. **Collect INP from the field.** Nothing measures it; TBT is a lab proxy.
+
+---
+
+## 5. [15 Nov] What is still not measured
+
+Unchanged from §2e and worth repeating so the gaps are not read as covered:
+
+- **Production latency, resource consumption and error rates.** This container
+  cannot reach `api.umastande.co.za` (egress policy) or the Render dashboard,
+  and no error aggregation exists anywhere.
+- **The load test in §3 has not been run.** It needs authorisation and a
+  confirmed-safe staging target. Nothing in this document was produced by
+  sending load anywhere.
+- **Login throughput at the real instance size.** The local probe gives ~12
+  logins/s on 4 CPUs with `UV_THREADPOOL_SIZE` at its default of 4. That is
+  not capacity and must not be quoted as one.
+- **The 100k-room measurements are local.** Render free plus pooled Neon will
+  be worse; by how much is unmeasured.
