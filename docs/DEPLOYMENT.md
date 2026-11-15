@@ -229,6 +229,16 @@ PAYFAST_MERCHANT_KEY=
 PAYFAST_PASSPHRASE=
 PAYFAST_SANDBOX=true
 
+# Performance instrumentation. Milliseconds; 0 or unset means OFF, and off is
+# the default because a threshold of 0 read as "log everything" would write a
+# line per request and per SQL statement on a 512 MB instance. Suggested
+# starting points once you want them: SLOW_REQUEST_MS=500, SLOW_QUERY_MS=100.
+# Neither log records anything identifying a person — route templates, not
+# resolved paths, and never Prisma's query params. See
+# docs/PERFORMANCE-BASELINE.md.
+SLOW_REQUEST_MS=0
+SLOW_QUERY_MS=0
+
 # WhatsApp Business API. Optional — email notifications never depend on it —
 # but three features are dark without it: rent reminders, previous-landlord
 # reference requests, and listing a room over WhatsApp.
