@@ -322,7 +322,7 @@ job it was added for, at 100k rooms:
 | verified-landlord scan (no `LIMIT`) | **110 ms** | **189 ms** |
 | the page of 12 rooms | 83 ms | 114 ms |
 | `count` | 32 ms | 182 ms |
-| `knownPlaces()` — `city, province` for every active room | — | 17 ms |
+| `knownPlaces()` — cold cache only; see the correction below | — | 17 ms |
 | **request total** | **199 ms** | **216 ms** |
 
 They run under `Promise.all`, so the request costs the slowest rather than the
@@ -361,8 +361,30 @@ index were dropped again afterwards; nothing is committed.
 unbounded.** It runs `findMany` over every row matching the search, selecting
 `landlordId` with no `LIMIT`, and de-duplicates in JavaScript. A page of twelve
 is paginated; this is not. It runs on the unfiltered board too, because the
-default `where` is just `status: 'active'`. `knownPlaces()` has the same shape
-on every search.
+default `where` is just `status: 'active'`.
+
+That the de-duplication happens in the client is **observed, not inferred**:
+the SQL the slow-query log captured carries **no `DISTINCT`** and selects
+`rooms.id` alongside `rooms."landlordId"` — Prisma fetching every matching row
+and reducing them in JavaScript. Every matching row crosses into the heap,
+which is what §5c turns into a memory problem rather than only a slow one.
+
+> ❌ **CORRECTION, 16 November.** The sentence that stood here said
+> "`knownPlaces()` has the same shape on every search". **That was wrong on
+> two counts, and it would have sent somebody to fix something already fixed.**
+>
+> `knownPlaces()` is **already cached in-process with a five-minute TTL**, so
+> it does not run per search — and it is a **`groupBy`**, which compiles to a
+> SQL `GROUP BY` returning roughly fifteen city/province pairs rather than
+> 100,000 rows. The 17 ms above is the **cold-cache path**: the first search
+> after a restart. It still scans to do the grouping, so it is not free, but it
+> is bounded in memory, amortised over five minutes of traffic, and **not** an
+> instance of the unbounded pattern.
+>
+> I had read the emitted SQL and not the method — and §1 of this very document
+> already recorded that `knownPlaces` is held in memory for five minutes, so
+> this contradicted a page I had written myself. **The one genuinely unbounded
+> query on this path is the verified-landlord count, and it is the only one.**
 
 **3. The ILIKE is real but it is not the first thing to break.** One broad
 token across the five text columns: 1.9 ms at 1k, 19.6 ms at 10k, **169 ms at
@@ -375,7 +397,51 @@ the **optimistic** end.
 
 ---
 
-## 3. Proposed load-test plan — needs a decision before anything runs
+## 3. Proposed load-test plan — NOT RUN, and now withdrawn as written
+
+> **[16 Nov] Decision: no load test, against staging or anywhere.** The owner
+> was asked and chose not to run one. The plan below is kept as the record of
+> what was proposed, but §3a explains why the staging version of it should not
+> be revived in its current form even if somebody later says yes.
+
+### 3a. [16 Nov] 🔴 Why a staging load test is not the safe option it looks like
+
+The plan assumed staging was the harmless target. It is not, because staging
+shares two resource pools with production and the failure mode of exhausting
+either is **production going down**.
+
+| | pool | scope | when it runs out |
+| --- | --- | --- | --- |
+| Render instance hours | **750 / month** | **per workspace** — staging *and* production | every free service suspended until next month |
+| Neon compute | **100 CU-hours / month** | **per project**, shared by all branches | compute suspended until the next billing period |
+
+Both verified against the providers' own documentation on 15–16 November 2026,
+not recalled.
+
+**The data is safely separated** — `scripts/migrate-targets.json` records two
+distinct endpoints, `ep-flat-flower-…` for staging and `ep-royal-hill-…` for
+production — so load against staging cannot write to production rows. The
+`render.yaml` production block calls one of them "the production Neon
+**branch**", which is what puts them in one project and therefore one compute
+pool.
+
+To be accurate about the magnitude rather than alarmist: **one bounded hour of
+load is about 1 of 750 instance hours, which is negligible.** The tight pool is
+Neon's 100 CU-hours, because load makes compute scale up and the multiplier is
+not 1. So the gating question was never permission — it was *how much of this
+month's 100 CU-hours production has already spent*, which is visible only in
+the Neon dashboard and cannot be read from this container. Running the test
+without that number is the thing the brief rules out: a test that could exhaust
+production resources.
+
+**And staging is a faithful proxy, which is the argument the other way.** Both
+services are `plan: free`, so both are 0.1 CPU / 512 MB — testing staging would
+genuinely measure production's capacity, not a toy's. That is why this is
+written as "withdrawn as proposed" rather than "a bad idea": with the Neon
+figure in hand and hard stop conditions, a bounded run would be defensible.
+Without it, it is not.
+
+### 3b. The plan as proposed on 14 November
 
 ### Where
 
@@ -441,6 +507,11 @@ field — which is how a cold start is detectable from outside.
 
 > **[15 Nov] Three of these are done. One was wrong.** Items marked ✅ were
 > carried out on 15 November; the detail is in §2a, §2f and §2g.
+>
+> **[16 Nov] The order changed.** Item 4 is now first: §5c works out that the
+> unbounded board query is an out-of-memory risk on a 512 MB instance and not
+> merely a slow one. Item 8 is answered and needed no change. The load test
+> was declined, so §5 carries predicted ceilings labelled as arithmetic.
 
 1. ❌ **CORRECTION — "fix keep-warm, or stop relying on it", and specifically
    "an external pinger would actually fire".** That recommendation was wrong,
@@ -488,11 +559,17 @@ field — which is how a cold start is detectable from outside.
    Also fixed while in there: the Prisma `warn` and `error` channels that had
    never had a subscriber (§2f).
 
-4. **Bound the two unbounded board queries.** Now the top of the list, and it
-   was not on the original one. The verified-landlord count and
-   `knownPlaces()` both scan every matching row on every board view. A cached
-   or periodically-recomputed figure would remove the largest single cost at
-   100k rooms. ⚠️ The count is a **trust** figure with a documented history of
+4. 🔴 **Bound the unbounded board query — singular. [16 Nov] This is now
+   first, ahead of everything else on this list.** (It read "the two" until
+   today; `knownPlaces()` turned out to be already cached and already a
+   `groupBy` — correction in §2g.) §5c works out what that query
+   costs in MEMORY rather than time: ~10 MB of heap per in-flight request at
+   100k active rooms, so a few dozen simultaneous visitors to an unfiltered
+   board is an out-of-memory kill on a 512 MB instance with one replica and no
+   scaling — a restart and a cold start for everybody, not a slow page. That
+   is arithmetic and not measurement, and it is still the most likely way this
+   site falls over first. A cached or periodically-recomputed figure would
+   remove the largest single cost at 100k rooms. ⚠️ The count is a **trust** figure with a documented history of
    being wrong — it was computed in the browser from the current page and grew
    as a visitor scrolled — so any change here must keep it honest or stop
    showing it. Not a silent optimisation.
@@ -516,14 +593,113 @@ field — which is how a cold start is detectable from outside.
    the larger one. Measured at 169 ms per broad token at 100k rooms — real,
    but third in line behind items 4 and 5.
 
-8. **Set `UV_THREADPOOL_SIZE` deliberately** rather than inheriting 4, once
-   the instance size is known — it is the ceiling on concurrent logins.
+8. ✅ **`UV_THREADPOOL_SIZE` — answered, and the answer is to leave it alone.**
+   The instance size is known now: 0.1 CPU. The threadpool was the binding
+   constraint in the local probe because there were four spare cores for it to
+   use; on a tenth of a core a bigger pool cannot create CPU and costs memory
+   on a 512 MB box. **The constraint moved from the pool to the CPU** — about
+   0.35 logins a second, §5a. Revisit only if the instance grows.
 
 9. **Collect INP from the field.** Nothing measures it; TBT is a lab proxy.
 
 ---
 
-## 5. [15 Nov] What is still not measured
+## 5. [16 Nov] Predicted free-tier ceilings — ARITHMETIC, NOT MEASUREMENT
+
+⚠️ **Read the label.** Every number in this section is derived from the local
+measurements in §2 scaled to the published free-instance spec. **None of it was
+measured on a 0.1-CPU instance.** It is here because the owner declined the
+load test and arithmetic beats silence — but a derived number is a hypothesis,
+and the whole point of §2f and §2g is that this repository has shipped
+confident numbers nobody checked. Treat these as predictions to be falsified,
+and if one turns out wrong, the assumption below is where to look first.
+
+**The spec**: Render's free web service is **0.1 CPU, 512 MB**, one instance,
+no scaling, spin-down after 15 idle minutes with a cold start of about a
+minute. Confirmed against Render's compute-plans table, 15 November 2026.
+Production and staging are both on it.
+
+**The load-bearing assumption**, stated so it can be attacked: *0.1 CPU means a
+CFS quota of 10% of one core, so CPU-bound work takes ~10× the wall time it
+takes on a full core here, and the instance can perform 0.1 core-seconds of
+work per wall second.* If Render's 0.1 CPU is implemented as something other
+than a hard 10% quota — a burstable share, say — every figure below is wrong in
+the optimistic direction.
+
+### 5a. Authentication is the capacity ceiling
+
+| | measured here (full core) | predicted on 0.1 CPU |
+| --- | --- | --- |
+| one login, no contention | **286 ms** | **~2.9 s** |
+| sustained login throughput | ~12/s (threadpool-bound) | **~0.35/s, about 21 a minute** |
+
+`bcrypt` at `SALT_ROUNDS = 12` costs ~0.286 core-seconds per hash and that cost
+is irreducible — it is the point of the setting. At 0.1 core-seconds of budget
+per second, **about one login every three seconds is the arithmetic ceiling**,
+and a queue forms above that. A sign-in that takes three seconds on a cheap
+Android on mobile data is the experience this product is built around.
+
+This also **answers recommendation 8** without needing the instance: raising
+`UV_THREADPOOL_SIZE` above its default of 4 would do nothing here. The
+threadpool was the binding constraint locally because there were four spare
+cores for it to use; on a tenth of a core it cannot create CPU, and a larger
+pool costs memory on a 512 MB box. **Leave it at the default — the constraint
+moved from the pool to the CPU.** Set it deliberately only if the instance ever
+grows.
+
+### 5b. Reads, and why the network dominates them anyway
+
+Reads measured 1–13 ms locally, most of which is waiting on the database rather
+than burning CPU. Scaled pessimistically at ~2 core-ms each, 0.1 CPU allows on
+the order of **50 reads a second** — comfortable, and not the thing to worry
+about. What a visitor actually feels is dominated by two costs this arithmetic
+cannot touch: the Frankfurt region's round trip to a South African phone, and
+Neon's pooled connection. Both are unmeasured (§2e).
+
+### 5c. 🔴 The unbounded query is a MEMORY risk on 512 MB, not just a slow one
+
+This is the prediction worth acting on, and it is new — §2g measured the
+unbounded verified-landlord query as a latency problem on a machine with 16 GB.
+On 512 MB it is a different and worse problem.
+
+That query selects `landlordId` for **every row matching the search** and
+de-duplicates in JavaScript. Each matching row therefore becomes a Prisma row
+object in the heap. At 100,000 active rooms, a single unfiltered board view
+materialises 100,000 of them — on the order of **10 MB of heap per in-flight
+request**, before Prisma's own engine overhead.
+
+| concurrent board views | predicted heap for this one query |
+| --- | --- |
+| 1 | ~10 MB |
+| 10 | ~100 MB |
+| 25 | ~250 MB |
+
+Against 512 MB shared with Node's own baseline, the Prisma query engine and
+everything else the process is doing, **a few dozen simultaneous visitors to an
+unfiltered board at that size is an out-of-memory kill, not a slow page.** And
+a free instance has one replica and no scaling, so an OOM is a restart and a
+cold start for everybody.
+
+It does not need 100,000 rooms to matter either — it needs *active rooms ×
+concurrent board views* to get large, and the board is the most-visited page on
+the site.
+
+**This moves recommendation 4 from "an optimisation" to "the thing most likely
+to take the site down first", and it is still a prediction.** Falsifying it
+needs either the container test that was declined or a bounded staging run.
+
+### 5d. What this section is NOT
+
+- Not a capacity statement anybody should quote. It is scaled arithmetic with
+  one named assumption carrying all of it.
+- Not a substitute for the load test. The cheapest way to check every figure
+  above is to run the repo's own production image locally under
+  `--cpus=0.1 --memory=512m`, which touches no shared pool and needs no
+  authorisation. That was offered and declined for now; the offer stands.
+
+---
+
+## 6. [15 Nov] What is still not measured
 
 Unchanged from §2e and worth repeating so the gaps are not read as covered:
 
