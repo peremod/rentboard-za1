@@ -141,10 +141,37 @@ for (const width of WIDTHS) {
     let trapped = false;
     for (let i = 0; i < MAX; i++) {
       await page.keyboard.press('Tab');
-      // Tab scrolls the new control into view, and `scroll-behavior: smooth`
-      // means the rect read immediately after is mid-flight — which put
-      // controls at coordinates they were only passing through.
-      await page.waitForTimeout(90);
+      /**
+       * 🔴 Wait for the scroll to STOP, rather than for a fixed 90ms.
+       *
+       * `html` has `scroll-behavior: smooth`, so Tab's scroll-into-view
+       * animates for a few hundred milliseconds. A fixed 90ms wait measured
+       * controls at coordinates they were only passing through.
+       *
+       * This bit twice, in opposite directions. First it produced 2.4.11
+       * verdicts about transient positions. Then, once the fix was corrected
+       * to act after the scroll settles, the drive was still measuring at 90ms
+       * and reported TEN failures where there had been two — not a regression
+       * in the product, but the instrument and the fix disagreeing about when
+       * "focused" is finished. A verdict belongs to the resting state.
+       */
+      await page.evaluate(() => new Promise((resolve) => {
+        let last = -1, still = 0;
+        const tick = () => {
+          const y = Math.round(window.scrollY);
+          still = y === last ? still + 1 : 0;
+          last = y;
+          // Three identical frames, or give up — a page that never settles
+          // must not hang the drive.
+          if (still >= 3) resolve(undefined);
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        setTimeout(() => resolve(undefined), 900);
+      }));
+      // And the fix itself waits for scrollend before correcting, so allow
+      // for that too. 420ms is its fallback timeout; this must exceed it.
+      await page.waitForTimeout(520);
       const stop = await page.evaluate(() => {
         const el = document.activeElement;
         if (!el || el === document.body) return null;
@@ -160,9 +187,23 @@ for (const width of WIDTHS) {
          * rect: if every one of them returns some other element, nothing of
          * this control is visible, and whatever came back is what is on top.
          */
+        /**
+         * The EDGES as well as the middle.
+         *
+         * 🔴 This sampled 15%, 50% and 85% of width and height — nine points
+         * that all sit inside the element, none at its rim. A 167px-tall CTA
+         * panel on the board overlapped the notice by 160px, leaving its top
+         * 7px visible, and every one of the nine points fell in the covered
+         * part. The drive called it "ENTIRELY hidden" when it was not, which
+         * is the difference between failing 2.4.11 (Minimum, AA) and failing
+         * only 2.4.12 (Enhanced, AAA).
+         *
+         * 2% and 98% rather than 0% and 100%: a point exactly on the boundary
+         * hit-tests unpredictably, and a 1px inset is still the rim.
+         */
         const pts = [];
-        for (const fx of [0.15, 0.5, 0.85]) {
-          for (const fy of [0.15, 0.5, 0.85]) {
+        for (const fx of [0.02, 0.15, 0.5, 0.85, 0.98]) {
+          for (const fy of [0.02, 0.15, 0.5, 0.85, 0.98]) {
             pts.push([r.left + r.width * fx, r.top + r.height * fy]);
           }
         }
@@ -209,6 +250,13 @@ for (const width of WIDTHS) {
           probedPoints: probed,
           coveredBy,
           id: `${el.tagName}.${String(el.className ?? '')}#${el.id}:${(el.textContent ?? '').slice(0, 20)}`,
+          // The geometry at the moment of the verdict, so a 2.4.11 failure can
+          // be read rather than re-derived. Two cases survived the fix and my
+          // follow-up probes could not reproduce them, because a probe that
+          // calls .focus() does not scroll the way Tab does — so the probe was
+          // looking at different geometry from the verdict.
+          geom: { t: Math.round(r.top), b: Math.round(r.bottom), l: Math.round(r.left), rt: Math.round(r.right) },
+          scrollY: Math.round(scrollY),
         };
       });
       if (stop === null) break;                       // focus left the document
@@ -247,7 +295,8 @@ for (const width of WIDTHS) {
       for (const o of obscured.slice(0, 4)) {
         const by = o.coveredBy;
         const culprit = by ? `${by.fixedCls ?? by.cls ?? by.tag} (position: ${by.position})` : 'unknown';
-        bad(`2.4.11 "${o.name || o.tag}" is ENTIRELY hidden when focused — covered by ${culprit}`);
+        bad(`2.4.11 "${o.name || o.tag}" is ENTIRELY hidden when focused — covered by ${culprit}` +
+            ` [rect ${o.geom.l},${o.geom.t}→${o.geom.rt},${o.geom.b} at scrollY ${o.scrollY}; ${o.visiblePoints}/${o.probedPoints} points visible]`);
       }
       if (obscured.length > 4) note(`…and ${obscured.length - 4} more`);
     }
@@ -274,6 +323,21 @@ for (const width of WIDTHS) {
      * honest version, and it needs no second pass.
      */
     const resting = await page.evaluate(() => {
+      /**
+       * 🔴 Blur first.
+       *
+       * This snapshot is taken AFTER the Tab walk, and the walk leaves focus
+       * on whichever control it stopped at — so that control's FOCUSED styles
+       * were being recorded as its resting styles. Compared against itself,
+       * they matched, and it was reported as having no focus indicator.
+       *
+       * That is why the finding was always exactly one control, and a
+       * different one per page: it was whatever Tab happened to stop on. On
+       * the board it was the footer's "Create account" link, which sent me
+       * looking for a missing `.footer-col a:focus-visible` rule that was
+       * never the problem.
+       */
+      document.activeElement?.blur?.();
       const out = {};
       for (const el of document.querySelectorAll('a[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])')) {
         if (el.offsetParent === null) continue;
@@ -353,7 +417,30 @@ for (const width of WIDTHS) {
        */
       await page.fill('input[type="email"]', `nobody-${Date.now()}@example.invalid`);
       await page.locator('input[type="password"]').first().fill('definitely-not-the-password');
+      /**
+       * 🔴 WAIT for the button to enable; do not test it once.
+       *
+       * The button is `[disabled]="form.invalid || loading()"`, and Angular
+       * settles form validity asynchronously after the input events `fill`
+       * dispatches. Checking immediately made this whole section flake: the
+       * identical build reported the error path three times in a row and then,
+       * on the next run, "the submit button stayed disabled" at 1280px and
+       * three cascading failures behind it. A check that answers differently
+       * on the same code is not a check.
+       *
+       * Blur first, because a form configured `updateOn: 'blur'` would never
+       * validate otherwise, then poll. If it genuinely never enables, that is
+       * still reported — it just is not reported on a race.
+       */
+      await page.keyboard.press('Tab');
       const submit = page.locator('button[type="submit"]').first();
+      try {
+        await submit.waitFor({ state: 'visible', timeout: 5000 });
+        await page.waitForFunction(
+          () => { const b = document.querySelector('button[type="submit"]'); return !!b && !b.disabled; },
+          null, { timeout: 5000 },
+        );
+      } catch { /* fall through to the explicit check below, which reports it */ }
       if (await submit.isDisabled()) {
         bad('3.3.1 the submit button stayed disabled on a well-formed sign-in, so the error path was not reached');
       } else {

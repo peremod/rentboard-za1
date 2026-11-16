@@ -161,31 +161,43 @@ export class CookieConsentBanner implements OnInit {
        * because 'nearest' considers an already-visible element to need no
        * movement, which is the exact blind spot above.
        */
+      /**
+       * 🔴 Checked AFTER the scroll settles, not on the focusin itself.
+       *
+       * This is the fourth and last thing that was wrong with this fix, and
+       * the most instructive. `html` has `scroll-behavior: smooth`, so when
+       * Tab moves focus to a control below the fold the browser's own
+       * scroll-into-view ANIMATES. `focusin` fires at the start of that
+       * animation, so the rect this handler read was the control's position
+       * before it had moved — usually off-screen, which overlaps nothing. The
+       * handler correctly decided there was nothing to do, the animation then
+       * settled with the control at the bottom edge under the notice, and the
+       * drive measured it there.
+       *
+       * Two controls survived the first three fixes for exactly this reason,
+       * and three probes failed to reproduce it because calling .focus()
+       * directly does not scroll the way Tab does.
+       *
+       * `scrollend` is the precise signal; the timeout is the fallback for
+       * the case where no scroll happens at all (the control was already in
+       * view), since then no scrollend ever fires.
+       */
+      const settle = (fn: () => void) => {
+        let done = false;
+        const run = () => { if (!done) { done = true; this.doc.removeEventListener('scrollend', run); fn(); } };
+        this.doc.addEventListener('scrollend', run, { once: true });
+        setTimeout(run, 420);
+      };
+
       const clearFocusFromNotice = (event: Event) => {
         const el = event.target;
         if (!(el instanceof HTMLElement)) return;
-        const notice = this.doc.querySelector('.cookie-notice');
-        if (!notice || notice.contains(el)) return;
-        const a = el.getBoundingClientRect();
-        const b = notice.getBoundingClientRect();
-        const overlaps = a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
-        if (!overlaps) return;
-        /**
-         * 🔴 'instant', NOT 'auto'.
-         *
-         * `behavior: 'auto'` does not mean "jump" — it means "use the CSS
-         * `scroll-behavior` value", and this app sets `scroll-behavior:
-         * smooth` on html. So the first version of this animated the scroll
-         * over several hundred milliseconds, and every measurement taken just
-         * after focus read the element still sitting under the notice. I spent
-         * four probes concluding the scroll was a no-op when it was merely
-         * unfinished.
-         *
-         * 'instant' is also the right behaviour on its own merits: a page that
-         * glides when you Tab is disorienting, and a keyboard user moving
-         * quickly would outrun the animation.
-         */
-        el.scrollIntoView({ block: 'center', behavior: 'instant' });
+        settle(() => {
+          // Focus may have moved on while we waited — a fast Tab outruns the
+          // animation — so re-check that this is still the focused control.
+          if (this.doc.activeElement !== el) return;
+          this.clearIfCovered(el);
+        });
       };
       this.doc.addEventListener('focusin', clearFocusFromNotice);
 
@@ -211,6 +223,32 @@ export class CookieConsentBanner implements OnInit {
       });
       if (this.doc.body) mo.observe(this.doc.body, { childList: true, subtree: true });
     });
+  }
+
+  /**
+   * Scroll `el` clear of the notice, if the notice is covering it.
+   *
+   * `behavior: 'instant'`, NOT 'auto'. 'auto' does not mean "jump" — it means
+   * "use the CSS `scroll-behavior` value", which is `smooth` here. An earlier
+   * version passed 'auto', so this scroll animated too and every measurement
+   * taken just after it read the element still under the notice; four probes
+   * went into concluding the scroll was a no-op when it was unfinished.
+   * 'instant' is also right on its own merits: a page that glides when you Tab
+   * is disorienting, and a fast keyboard user outruns the animation.
+   *
+   * `block: 'center'` rather than 'nearest', because 'nearest' considers an
+   * already-visible element to need no movement — and an element under the
+   * notice is visible, merely covered. That blind spot is the whole reason
+   * `scroll-padding-bottom` alone does not satisfy 2.4.11.
+   */
+  private clearIfCovered(el: HTMLElement) {
+    const notice = this.doc.querySelector('.cookie-notice');
+    if (!notice || notice.contains(el)) return;
+    const a = el.getBoundingClientRect();
+    const b = notice.getBoundingClientRect();
+    const overlaps = a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    if (!overlaps) return;
+    el.scrollIntoView({ block: 'center', behavior: 'instant' });
   }
 
   ngOnInit() {
