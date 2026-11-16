@@ -148,16 +148,37 @@ for (const path of PAGES) {
         };
         const controls = [...document.querySelectorAll('button, a[href], input, select')]
           .filter(visible).filter((e) => !positioned(e));
+        /**
+         * 🔴 getClientRects(), one rect per LINE BOX — not
+         * getBoundingClientRect().
+         *
+         * An inline link that wraps onto two lines has a bounding box that is
+         * the UNION of both line boxes, so it spans the full column width and
+         * swallows anything inline near it. On /auth/register at 360px that
+         * reported `a over a (34×16px)`: the "Privacy Policy" link wraps, its
+         * bounding box reads 62→317, and it therefore "overlapped" the
+         * "Terms" link sitting at 216→249 on the first line. Two links in a
+         * sentence, side by side, perfectly fine.
+         *
+         * Line boxes do not have that problem: each is a real painted
+         * rectangle, so two of them overlapping is two controls genuinely on
+         * top of one another.
+         */
+        const boxes = controls.map((e) => [...e.getClientRects()]);
         for (let i = 0; i < controls.length && out.overlaps.length < 4; i++) {
           for (let j = i + 1; j < controls.length && out.overlaps.length < 4; j++) {
-            const a = controls[i].getBoundingClientRect(), c = controls[j].getBoundingClientRect();
             if (controls[i].contains(controls[j]) || controls[j].contains(controls[i])) continue;
-            const ox = Math.min(a.right, c.right) - Math.max(a.left, c.left);
-            const oy = Math.min(a.bottom, c.bottom) - Math.max(a.top, c.top);
-            // More than a hairline in BOTH axes is a real overlap.
-            if (ox > 3 && oy > 3) {
-              out.overlaps.push(`${describe(controls[i])} over ${describe(controls[j])} (${Math.round(ox)}×${Math.round(oy)}px)`);
+            let hit = null;
+            for (const a of boxes[i]) {
+              for (const c of boxes[j]) {
+                const ox = Math.min(a.right, c.right) - Math.max(a.left, c.left);
+                const oy = Math.min(a.bottom, c.bottom) - Math.max(a.top, c.top);
+                // More than a hairline in BOTH axes is a real overlap.
+                if (ox > 3 && oy > 3) { hit = `${Math.round(ox)}×${Math.round(oy)}`; break; }
+              }
+              if (hit) break;
             }
+            if (hit) out.overlaps.push(`${describe(controls[i])} over ${describe(controls[j])} (${hit}px)`);
           }
         }
         return out;
