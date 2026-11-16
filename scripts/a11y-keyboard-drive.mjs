@@ -169,10 +169,7 @@ for (const width of WIDTHS) {
         requestAnimationFrame(tick);
         setTimeout(() => resolve(undefined), 900);
       }));
-      // And the fix itself waits for scrollend before correcting, so allow
-      // for that too. 420ms is its fallback timeout; this must exceed it.
-      await page.waitForTimeout(520);
-      const stop = await page.evaluate(() => {
+      const measureStop = () => page.evaluate(() => {
         const el = document.activeElement;
         if (!el || el === document.body) return null;
         const r = el.getBoundingClientRect();
@@ -259,6 +256,27 @@ for (const width of WIDTHS) {
           scrollY: Math.round(scrollY),
         };
       });
+      let stop = await measureStop();
+
+      /**
+       * The 520ms settle is paid ONLY by a control that looks obscured.
+       *
+       * The cookie-notice fix waits for `scrollend` before it corrects, with a
+       * 420ms fallback, so a verdict taken earlier can catch a control before
+       * the correction lands. The first version of this therefore waited 520ms
+       * after EVERY Tab press — about 1.4s per control, 120 controls per page,
+       * two widths: fine for a one-off audit and far too slow to be a gate.
+       *
+       * Almost no control is obscured, so almost none needs the wait. Measure
+       * cheaply, and only re-measure the ones that come back covered. A false
+       * "obscured" costs one extra 520ms; a real one is still caught.
+       */
+      if (stop && stop.onScreen && stop.probedPoints > 0 && stop.visiblePoints === 0) {
+        await page.waitForTimeout(520);
+        const again = await measureStop();
+        if (again && again.id === stop.id) stop = again;
+      }
+
       if (stop === null) break;                       // focus left the document
       if (seen.length && stop.id === seen[0].id) break; // cycled back to the start
       seen.push(stop);
