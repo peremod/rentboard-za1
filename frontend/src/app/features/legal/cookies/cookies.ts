@@ -13,38 +13,40 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
         </header>
         <section>
           <h2>1. What Cookies We Use</h2>
-          <table class="legal-table">
-            <thead><tr><th>Category</th><th>Purpose</th><th>Consent required?</th></tr></thead>
-            <tbody>
-              <tr>
-                <td>Strictly necessary</td>
-                <td>
-                  One cookie, <code>rb_refresh</code>, which keeps you signed in.
-                  It is httpOnly, so scripts cannot read it, and restricted to the
-                  refresh endpoint.
-                </td>
-                <td>No — it is required for the site to work</td>
-              </tr>
-              <tr>
-                <td>Analytics</td>
-                <td><strong>None.</strong> We measure usage with daily counts that carry no
-                    identifier of any kind, so no cookie is involved.</td>
-                <td>Not applicable</td>
-              </tr>
-              <tr>
-                <td>Advertising</td>
-                <td><strong>None.</strong> Adverts are matched to the page you are viewing,
-                    not to you. No advertiser script runs on this site.</td>
-                <td>Not applicable</td>
-              </tr>
-              <tr>
-                <td>Third-party trackers</td>
-                <td><strong>None.</strong> No Google Analytics, no Meta Pixel, no session
-                    recording.</td>
-                <td>Not applicable</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-scroll" tabindex="0" role="group" aria-label="Cookie categories, scrolls sideways">
+            <table class="legal-table">
+              <thead><tr><th>Category</th><th>Purpose</th><th>Consent required?</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Strictly necessary</td>
+                  <td>
+                    One cookie, <code>rb_refresh</code>, which keeps you signed in.
+                    It is httpOnly, so scripts cannot read it, and restricted to the
+                    refresh endpoint.
+                  </td>
+                  <td>No — it is required for the site to work</td>
+                </tr>
+                <tr>
+                  <td>Analytics</td>
+                  <td><strong>None.</strong> We measure usage with daily counts that carry no
+                      identifier of any kind, so no cookie is involved.</td>
+                  <td>Not applicable</td>
+                </tr>
+                <tr>
+                  <td>Advertising</td>
+                  <td><strong>None.</strong> Adverts are matched to the page you are viewing,
+                      not to you. No advertiser script runs on this site.</td>
+                  <td>Not applicable</td>
+                </tr>
+                <tr>
+                  <td>Third-party trackers</td>
+                  <td><strong>None.</strong> No Google Analytics, no Meta Pixel, no session
+                      recording.</td>
+                  <td>Not applicable</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
         <section>
           <h2>2. Your Choices</h2>

@@ -78,29 +78,31 @@ import { Icon } from '../../../shared/components/icon/icon';
             <div class="stat-box"><div class="val">{{ g.signups.year }}</div><div class="lbl">This year</div></div>
           </div>
 
-          <table class="growth-table">
-            <thead>
-              <tr><th>Role</th><th>Today</th><th>Week</th><th>Month</th><th>Year</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Tenants</td>
-                <td>{{ g.signups.tenants.today }}</td>
-                <td>{{ g.signups.tenants.week }}</td>
-                <td>{{ g.signups.tenants.month }}</td>
-                <td>{{ g.signups.tenants.year }}</td>
-                <td><strong>{{ g.totals.tenants }}</strong></td>
-              </tr>
-              <tr>
-                <td>Landlords</td>
-                <td>{{ g.signups.landlords.today }}</td>
-                <td>{{ g.signups.landlords.week }}</td>
-                <td>{{ g.signups.landlords.month }}</td>
-                <td>{{ g.signups.landlords.year }}</td>
-                <td><strong>{{ g.totals.landlords }}</strong></td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-scroll" tabindex="0" role="group" aria-label="Growth by role, scrolls sideways">
+            <table class="growth-table">
+              <thead>
+                <tr><th>Role</th><th>Today</th><th>Week</th><th>Month</th><th>Year</th><th>Total</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Tenants</td>
+                  <td>{{ g.signups.tenants.today }}</td>
+                  <td>{{ g.signups.tenants.week }}</td>
+                  <td>{{ g.signups.tenants.month }}</td>
+                  <td>{{ g.signups.tenants.year }}</td>
+                  <td><strong>{{ g.totals.tenants }}</strong></td>
+                </tr>
+                <tr>
+                  <td>Landlords</td>
+                  <td>{{ g.signups.landlords.today }}</td>
+                  <td>{{ g.signups.landlords.week }}</td>
+                  <td>{{ g.signups.landlords.month }}</td>
+                  <td>{{ g.signups.landlords.year }}</td>
+                  <td><strong>{{ g.totals.landlords }}</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
           <p class="muted">
             A room board needs both sides. If landlords stall while tenants grow,

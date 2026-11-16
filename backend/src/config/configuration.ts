@@ -122,4 +122,36 @@ export default () => ({
      */
     graphBaseUrl: process.env.WHATSAPP_GRAPH_BASE_URL?.trim() || undefined,
   },
+
+  /**
+   * Performance instrumentation. Both are thresholds in milliseconds, and
+   * both default to OFF (0), which is deliberate in two different ways.
+   *
+   * The API measured nothing at all before these existed — no request timing,
+   * no slow-query log, no latency budget — while the frontend had Lighthouse
+   * CI on every pull request and again weekly against production. That gap is
+   * why a slow endpoint could only ever be discovered by somebody noticing on
+   * their phone.
+   *
+   * Why they default to off rather than to a sensible number:
+   *
+   *   · Render's free plan gives no log retention worth the name and the
+   *     instance has 512 MB. A log line per slow request is cheap; the point
+   *     at which it stops being cheap depends on traffic nobody has measured
+   *     yet, so the number is an operator's decision per environment rather
+   *     than a constant compiled in.
+   *   · A threshold of 0 would log EVERY request and EVERY statement, so
+   *     treating "unset" as "log everything" is the one default that could
+   *     turn instrumentation into an outage. Unset means silent.
+   *
+   * Suggested starting points, from the local measurements in
+   * docs/PERFORMANCE-BASELINE.md: SLOW_REQUEST_MS=500 (everything except
+   * login answered in 1-13 ms locally, and login is ~286 ms because of bcrypt
+   * at 12 rounds, so 500 catches a real regression without logging the login
+   * path on every sign-in), SLOW_QUERY_MS=100.
+   */
+  perf: {
+    slowRequestMs: parseInt(process.env.SLOW_REQUEST_MS ?? '0', 10),
+    slowQueryMs: parseInt(process.env.SLOW_QUERY_MS ?? '0', 10),
+  },
 });

@@ -177,6 +177,50 @@
   body:has(.filter-panel.open) { overflow: hidden; }
 }
 
+/**
+ * ── ≥769px — the desktop nav must not push the page ─────────────────────
+ *
+ * 🔴 Measured: horizontal page scroll on EVERY page, continuously from 769px
+ * to 904px — 135px of it at 769px, falling to 3px at 901px. The desktop nav
+ * needs 904px (logo + 441px of links + 270px of actions) and the mobile nav
+ * only takes over at ≤768px, so a 136px-wide band showed a nav too wide to
+ * fit. CLAUDE.md's first mobile check, broken on every page, at widths its
+ * own prescribed set (360 / 390 / 768 / 1280) brackets without ever landing
+ * in.
+ *
+ * ⚠️ Fixed by letting the links shrink rather than by moving the breakpoint,
+ * for two reasons.
+ *
+ * The drawer's styling — the sheet, the scrim, the close button, the scroll
+ * lock — all lives inside the ≤768px block below. Moving only
+ * `.nav-links { display: none }` and the burger up to the existing 900px
+ * breakpoint would open an unstyled drawer between 769 and 900px: a dark
+ * panel on a dark hero with no way out, which is the exact state that block's
+ * own comment says was fixed once already.
+ *
+ * And no fixed breakpoint can be right. The nav needs 904px in English and
+ * 906px at 930px wide, because the link text changes — this product ships
+ * eleven languages, so a width chosen against one of them is wrong in the
+ * others. Shrinking is content-independent.
+ *
+ * The scroller only engages when the links genuinely do not fit, which today
+ * is a 4px band, so there is no visible change in English. It is the same
+ * pattern `.portal-nav` already uses below 900px, for the same reason.
+ */
+@media (min-width: 769px) {
+  .nav-links {
+    // flex:1 already lets it grow; min-width:0 is what lets it SHRINK. A flex
+    // item's default min-width:auto is its min-content width, which for a row
+    // of nowrap links is the full 441px — so without this the links refuse to
+    // give up a pixel and the overflow lands on the page instead.
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+  }
+}
+
 // ── ≤768px — tablet / large phone ────────────────────────────────────────
 @media (max-width: 768px) {
   // Nav
@@ -351,7 +395,23 @@
   // Filters and Sort stayed stacked on a phone.
 
   // Two columns at this size, one below
-  .room-grid { grid-template-columns: 1fr 1fr; }
+  /**
+   * 🔴 `1fr 1fr` forced TWO columns all the way down to 481px, and a room
+   * card's min-content width is 282px — so the grid demanded 564px plus the
+   * gap inside a 449px box and the PAGE scrolled sideways by 119px, the first
+   * item on CLAUDE.md's mobile list.
+   *
+   * Measured by scripts/responsive-drive.mjs: broken continuously from 481px
+   * to 599px on the board. Invisible at every prescribed width — 360 and 390
+   * are below the 480 breakpoint where a single column takes over, and 768
+   * and 1280 are above where two columns genuinely fit.
+   *
+   * auto-fit with the card's real minimum, so the column count follows the
+   * space available instead of being asserted. Two columns where two fit, one
+   * where they do not, and no breakpoint to keep in step with the card's
+   * width.
+   */
+  .room-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 
   // Portal
   .portal-wrap { grid-template-columns: 1fr; min-height: auto; }
@@ -586,11 +646,29 @@
   .nav-actions .btn { padding: .45rem .7rem; font-size: .78rem; }
 
   .legal-page { padding: 2rem 1rem; }
-  // Scrolls sideways, but the cells still wrap. `white-space: nowrap` was
-  // right for the short rate-card tables and wrong for the PAIA inventory,
-  // whose cells are sentences — it turned each one into a single line
-  // hundreds of characters wide, on the phones most of this market uses.
-  .legal-table { display: block; overflow-x: auto; }
+  // 🔴 The scroll moved to a WRAPPER — `.table-scroll` — and `display: block`
+  // came off the table. Two reasons, and the second is the one that was
+  // silently costing people the content.
+  //
+  //   1. WCAG 2.1.1/2.1.3. A region that scrolls must be reachable by
+  //      keyboard, and axe's `scrollable-region-focusable` flagged these on
+  //      nine pages at 360 and 390px only — the widths where this rule
+  //      applies. A keyboard user could not scroll the table at all, so the
+  //      columns past the right edge were simply unreachable. `tabindex="0"`
+  //      cannot go on the `<table>` itself without the wrapper, because the
+  //      role that makes it announce as a scroller would destroy the table
+  //      semantics.
+  //   2. `display: block` on a `<table>` drops it out of the table layout
+  //      box, and with it the row/column relationships several screen readers
+  //      derive from that box. So the mobile adaptation that made the PAIA
+  //      inventory swipeable also risked turning it from a table into a run
+  //      of unrelated cells — at exactly the widths this market uses.
+  //
+  // The cells still wrap. `white-space: nowrap` was right for the short
+  // rate-card tables and wrong for the PAIA inventory, whose cells are
+  // sentences — it turned each one into a single line hundreds of characters
+  // wide, on the phones most of this market uses.
+  .table-scroll { overflow-x: auto; }
 
   /**
    * ⚠️ The same treatment, and /admin/analytics needed it: a six-column
@@ -607,7 +685,9 @@
    * it either until the sweep ran with admin credentials: without them it
    * prints "SKIP the admin screens" and reports clean.
    */
-  .growth-table { display: block; overflow-x: auto; }
+  // Wrapped in `.table-scroll` too, for the reasons above — the scroll and the
+  // keyboard access both belong to the wrapper now, so this needs no rule.
+  // `display: block` is gone; see the note on `.legal-table`.
   .legal-table td, .legal-table th { white-space: normal; min-width: 11rem; }
   // The first column is short labels, so it does not need the prose width.
   .legal-table td:first-child, .legal-table th:first-child { min-width: 7rem; }
@@ -1018,8 +1098,11 @@
 
 @media (max-width: 700px) {
   // Four price columns will not fit; scroll rather than shrink the type to
-  // something unreadable.
-  .rate-table { display: block; overflow-x: auto; white-space: nowrap; }
+  // something unreadable. The scroll is on the `.table-scroll` wrapper so a
+  // keyboard can reach it and the table keeps its semantics — see the note on
+  // `.legal-table`.
+  .table-scroll { overflow-x: auto; }
+  .rate-table { white-space: nowrap; }
 }
 
 // Rate-verdict badges on the advertising reach table.

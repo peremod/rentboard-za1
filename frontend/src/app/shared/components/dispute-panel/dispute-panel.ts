@@ -152,7 +152,27 @@ export class DisputePanel implements OnInit {
   private auth = inject(AuthService);
 
   /** 'landlord' or 'tenant' — decides which reasons are offered. */
-  readonly role = input.required<'landlord' | 'tenant'>();
+  /**
+   * Which side of the tenancy is looking at this panel.
+   *
+   * 🔴 NOT named `role`, and that is not a style preference.
+   *
+   * It was `role`, and the call sites read `<app-dispute-panel role="landlord"/>`.
+   * Angular consumes a static attribute matching an input AND leaves it in the
+   * DOM, so every instance rendered `role="landlord"` or `role="tenant"` — an
+   * INVALID ARIA ROLE on the landlord and tenant dashboards, the two busiest
+   * portal screens. A screen reader was handed a role it does not recognise
+   * (WCAG 4.1.2).
+   *
+   * Nothing in this repository could see it. a11y-drive checks accessible
+   * names and heading order, never role validity, and axe ran there with
+   * `runOnly: ['color-contrast']`. The full-ruleset sweep in
+   * scripts/a11y-scan.mjs found it on its first run, at all four widths.
+   *
+   * Any input on a component is a DOM attribute waiting to happen, so an input
+   * must not be named after a global ARIA or HTML attribute.
+   */
+  readonly party = input.required<'landlord' | 'tenant'>();
 
   /**
    * Ended tenancies only. `cancelled` is not "ended": nobody moved in, so
@@ -163,7 +183,7 @@ export class DisputePanel implements OnInit {
     () => this.tenancies.myFlags().filter((f) => f.status === 'open').length,
   );
   readonly reasons = computed(() =>
-    this.role() === 'landlord' ? LANDLORD_FLAG_REASONS : TENANT_FLAG_REASONS,
+    this.party() === 'landlord' ? LANDLORD_FLAG_REASONS : TENANT_FLAG_REASONS,
   );
 
   openFor = signal<string | null>(null);
@@ -197,7 +217,7 @@ export class DisputePanel implements OnInit {
   counterpartyName(t: Tenancy) {
     const me = this.auth.user()?.id;
     const other = t.landlordId === me ? t.tenant : t.landlord;
-    return other?.fullName ?? (this.role() === 'landlord' ? 'Your tenant' : 'Your landlord');
+    return other?.fullName ?? (this.party() === 'landlord' ? 'Your tenant' : 'Your landlord');
   }
 
   flagFor(tenancyId: string) {

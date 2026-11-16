@@ -165,17 +165,19 @@ import { Icon } from '../../../shared/components/icon/icon';
             Tribunal in your province hears it for free. You do not need a lawyer and you
             do not need the owner's permission to approach them.
           </p>
-          <table class="legal-table">
-            <thead><tr><th>Where</th><th>Contact</th></tr></thead>
-            <tbody>
-              <tr><td>Gauteng Rental Housing Tribunal</td><td>011 355 4000</td></tr>
-              <tr><td>Western Cape</td><td>021 483 5020</td></tr>
-              <tr><td>KwaZulu-Natal</td><td>031 336 5300</td></tr>
-              <tr><td>Eastern Cape</td><td>040 609 3200</td></tr>
-              <tr><td>Legal Aid SA (all provinces, free)</td><td>0800 110 110</td></tr>
-              <tr><td>SAPS (emergency)</td><td>10111</td></tr>
-            </tbody>
-          </table>
+          <div class="table-scroll" tabindex="0" role="group" aria-label="Sub-letting rules, scrolls sideways">
+            <table class="legal-table">
+              <thead><tr><th>Where</th><th>Contact</th></tr></thead>
+              <tbody>
+                <tr><td>Gauteng Rental Housing Tribunal</td><td>011 355 4000</td></tr>
+                <tr><td>Western Cape</td><td>021 483 5020</td></tr>
+                <tr><td>KwaZulu-Natal</td><td>031 336 5300</td></tr>
+                <tr><td>Eastern Cape</td><td>040 609 3200</td></tr>
+                <tr><td>Legal Aid SA (all provinces, free)</td><td>0800 110 110</td></tr>
+                <tr><td>SAPS (emergency)</td><td>10111</td></tr>
+              </tbody>
+            </table>
+          </div>
           <p>
             If you believe a listing is dishonest about who is letting it, report it from
             the room page or email safety&#64;umastande.co.za. We read every report.

@@ -30,6 +30,16 @@ jobs:
         # a routerLink to nowhere, or an endpoint under /admin without AdminGuard.
         run: node scripts/route-audit.mjs
 
+      - name: Keep-warm fits the free instance-hour allowance
+        # 🔴 The ten-minute schedule this workflow carried until 15 November
+        # 2026 projects 731 instance hours a month against a 750-hour
+        # allowance SHARED with staging — and Render answers an exhausted
+        # allowance by suspending every free service until the next month.
+        # So the gate that mattered was never "is the ping working", it was
+        # "can the ping be afforded", and nothing asked it. Every keep-warm
+        # run has succeeded, which is why months of this went unseen.
+        run: node scripts/keep-warm-budget.mjs
+
       - name: Fragment links point at anchors that exist
         # A link to an anchor nothing renders does NOTHING when tapped. The
         # tenant inbox pointed at /tenant/dashboard#viewings since Phase 8n and
@@ -584,6 +594,25 @@ jobs:
       # A diagnostics step must never add a failure row of its own: when the
       # API was never started the log does not exist, `cat` exits 1, and the
       # job grows a fourth red step that says nothing about the real fault.
+      - name: The hero's verified-landlord figure is bounded AND honest
+        # This stat has been false once already: computed in the browser from
+        # the loaded rooms, so it counted unverified landlords and grew as a
+        # visitor scrolled. It was then changed a SECOND time for performance —
+        # the server-side count was a findMany({ distinct }), and Prisma
+        # applies distinct in the CLIENT, so every matching row crossed into
+        # the heap: ~10 MB per in-flight request at 100k active rooms, on a
+        # 512 MB instance with one replica. It is a groupBy with a LIMIT now.
+        #
+        # A performance change to a trust figure is exactly the change that can
+        # quietly make it lie again, so the drive asserts the three ways it
+        # could: counting unverified landlords, counting landlords the search
+        # excludes, or clamping to 200 without saying so. Each mutation was
+        # reintroduced and each turned it red.
+        run: node scripts/verified-count-drive.mjs
+        env:
+          API: http://localhost:3000
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_test
+
       - name: One room, let once
         # §93 and the gap docs/API-TESTING.md §6.5 names in its own words:
         # "No test races two acceptances of the same room". It did not, and
@@ -753,6 +782,39 @@ jobs:
         run: |
           set -o pipefail
           bash scripts/a11y-widths.sh 2>&1 | tee /tmp/a11y.log
+
+      - name: Keyboard, focus and authentication — the criteria axe cannot reach
+        if: ${{ !cancelled() }}
+        # axe is a static-DOM inspector: it cannot press Tab, so the step above
+        # reporting zero says nothing about keyboard operability. This drives
+        # 2.4.1 Bypass Blocks, 2.1.1 Keyboard, 2.1.2 No Keyboard Trap, 2.4.7
+        # Focus Visible, 2.4.11 Focus Not Obscured (new in WCAG 2.2), 3.3.8
+        # Accessible Authentication and 3.3.1 Error Identification, with real
+        # key presses, at 390 and 1280px.
+        #
+        # It found three things the whole existing suite could not see: no skip
+        # link on any page, 21 controls focused and entirely invisible under the
+        # fixed cookie notice, and a sign-in error announced but tied to no
+        # field. See docs/ACCESSIBILITY-AUDIT.md §4a.
+        #
+        # ⚠️ It REFUSES to measure a page with a dialog over it, and says to
+        # check the API. An earlier version read 32 findings off a page whose
+        # "No connection" dialog it had caused by the API being down.
+        run: node scripts/a11y-keyboard-drive.mjs
+
+      - name: Responsive — every declared breakpoint, at ±1px
+        if: ${{ !cancelled() }}
+        # CLAUDE.md names three breakpoints and prescribes four test widths.
+        # The stylesheets declare ELEVEN, so 600, 640, 700 and 860 were never
+        # crossed and min-width:1600 was never exercised at all. Both defects
+        # this drive found lived in those gaps: the desktop nav needed 904px
+        # while the mobile nav took over at 768, giving 135px of horizontal
+        # page scroll on EVERY page from 769 to 904px; and the board grid
+        # asserted two columns down to 481px, giving 119px.
+        #
+        # Horizontal page scroll is the first item on CLAUDE.md's mobile list,
+        # and both bands sat between the widths anyone tested. 174 layouts.
+        run: node scripts/responsive-drive.mjs
 
       - name: The three phases, driven in a browser
         if: ${{ !cancelled() }}
