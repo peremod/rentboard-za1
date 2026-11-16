@@ -281,13 +281,80 @@ Both were invisible at every prescribed width: 360/390 sit below the 480
 breakpoint where one column takes over, 768/1280 above where the nav and two
 columns genuinely fit.
 
-### 4d. Verification
+### 4d. 🔴 A third nav defect, found only because CI's fonts are not these
+
+The two defects above were found here and fixed here. The third was found by
+**CI failing a gate that passes on this machine**, which makes it the most
+useful result in this document.
+
+`responsive-drive.mjs` reported, on CI, 20px of horizontal page scroll at
+**481px** on four of the six pages, with `button.nav-burger` reaching 501px in
+a 481px viewport. Driven here against the same commit and the same SSR
+development build, all 174 layouts were clean.
+
+**The cause, and it is not a CI quirk.** The burger appears at
+`max-width: 768px`. Every tightening the nav needs — most of all moving the
+language switcher out of the header and into the drawer — sat in
+`@media (max-width: 480px)`. So across the whole band **481–768px** the header
+carried the logo, the language switcher, Log in, Get started *and* the burger,
+with none of the tightening applied to any of them:
+
+| | before | after |
+| --- | --- | --- |
+| free space between logo and actions, 481px | **16px** | **92px** |
+| burger right edge, 481px viewport | 475px (501px on CI) | 457px |
+| tightest point in the whole burger band | 16px @ 481px | 53px @ 359px |
+
+Sixteen pixels of slack. Which side of the line that layout fell on depended
+on the machine measuring the text — so the layout was never correct here
+either, and a gate that only asks "does it overflow" was always going to say
+yes on one runner and no on another. The fix moves the two rules into the
+`max-width: 768px` block, beside the rule that reveals the burger. Nothing is
+lost: `.nav-links-lang` puts the switcher in the drawer, which is where the
+original comment always claimed it went.
+
+**So the drive now measures the margin, not just the breach.** `.nav-actions`
+has `margin-left: auto`, so the burger sits flush against the right padding at
+every width that fits, and the right edge looks identical at 93px of headroom
+and at 1px. The only number that tells them apart is the free space between
+the logo and the actions, and the drive now requires at least **40px** of it
+while the burger is shown — below the 53px the nav was hand-fitted to at
+359px, far above the 16px that shipped.
+
+That change is what makes the check deterministic: with the old stylesheet it
+now fails **on this machine**, at 481px, reading 16px, exit 1 — rather than
+only on a runner whose fonts differ.
+
+### 4e. The scroll-lock check was asking the wrong element
+
+CI also failed `nav-sheet-drive` — three assertions, all
+*"without dropping the overflow-x the body already had"* — and it reproduced
+here immediately. Not a new defect: the check's **subject** had moved. §4b put
+`overflow-x: hidden` on `html` instead of `body`, so reading
+`getComputedStyle(document.body).overflowX` asked an element that no longer
+carries the clamp, on a page that was correct.
+
+It reads `html` now, and it gained the assertion that matters more: that the
+lock has **not** written the `overflow` shorthand onto body — because doing
+that would make body a scroll container again and silently reintroduce the
+inert-`scrollIntoView` defect of §4b. The original check could not have seen
+that. Falsified by writing the shorthand: the html assertion stays green and
+the new one turns red, three times, exit 1.
+
+⚠️ Worth naming: §4b's fix was verified against the drives that existed, and
+this check still broke. A change to where a clamp lives invalidates every
+assertion written against its old home, and nothing in this repository
+connects the two.
+
+### 4f. Verification
 
 | | |
 | --- | --- |
-| responsive, after | **174 / 174 layouts clean** |
-| keyboard, after | **0 findings, stable across two consecutive runs** |
-| falsified | reverting returned 119px, 135px and 44px at the exact original magnitudes; a forced control overlap is caught at 33×6px |
+| responsive, after | **174 / 174 layouts clean**, including the new 40px nav-headroom floor |
+| keyboard, after | **0 findings, stable across two consecutive runs** (see §5c for the one data-dependent false positive on a populated board) |
+| nav drives, after | `nav-sheet-drive`, `nav-ui-drive`, `nav-audit`, `mobile-drive` all exit 0 |
+| axe sweep, after | 10 public + 23 portal pages at 360 / 390 / 768 / 1280 — clean |
+| falsified | reverting returned 119px, 135px and 44px at the exact original magnitudes; a forced control overlap is caught at 33×6px; the 481px nav reads 16px against a 40px floor; the `overflow` shorthand turns the new scroll-lock assertion red |
 
 ---
 
@@ -339,6 +406,26 @@ screen reader settles.
 On the board it finds 43 distinct controls and is still finding more. The drive
 reports this as a note rather than a pass, but **the far end of that page is
 unmeasured** for 2.4.11 and 2.4.7.
+
+⚠️ **And on a populated database the cap misreports a trap.** On CI's seeded
+database the board's tab ring closes inside 120 presses and 2.1.2 passes. On
+this container's database — 49 active rooms, 24 cards on the first screen, 60
+focusable controls at load — the walk runs the full 120, the last twenty stops
+are all controls it had already seen, and the `allRevisited` heuristic
+concludes `trapped`. So the drive reports **"2.1.2 no keyboard trap"** as a
+failure on a page that has no trap.
+
+Established, not inferred: the same failure appears with this branch's
+stylesheet changes stashed and the frontend rebuilt, so it predates them, and
+CI passes the same assertion on the same page at the same width. It is the
+instrument, not the page.
+
+Left as it is rather than fixed, because it is outside what this branch was
+for and the fix needs its own falsification: the honest repair is to let the
+walk's budget scale with the number of focusable controls found at load, so
+"ran out of presses" and "cycling among a subset" stop being the same
+observation. Recorded here so the next person to run this drive locally
+against real data does not read it as a defect in the board.
 
 ### 5d. Three criteria were not assessed
 
@@ -398,3 +485,5 @@ be read as cross-browser evidence.
 7. **Drive 320px** for 1.4.10 Reflow (§5d).
 8. **Delete the `.cookie-banner` rules** (§3b) — five dead rules that read as
    coverage.
+9. **Scale the Tab walk's press budget** to the controls a page actually has
+   (§5c), so a long board stops reading as a keyboard trap.

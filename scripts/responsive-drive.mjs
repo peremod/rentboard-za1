@@ -48,6 +48,10 @@ const WIDTHS = process.env.WIDTHS
 
 const PAGES = (process.env.PAGES ?? '/,/pricing,/advertise,/legal/terms,/auth/login,/auth/register').split(',');
 
+// The margin of safety the header must keep while the burger is shown.
+// Derived from measurement, not taste — see the long note at the point of use.
+const NAV_HEADROOM_MIN = 40;
+
 let fail = 0;
 const bad = (t) => { console.log(`    \u001b[31m❌\u001b[0m ${t}`); fail++; };
 const note = (t) => console.log(`    \u001b[90m·  ${t}\u001b[0m`);
@@ -70,7 +74,7 @@ for (const path of PAGES) {
 
       const r = await page.evaluate(() => {
         const vw = document.documentElement.clientWidth;
-        const out = { vw, hScroll: document.documentElement.scrollWidth - vw, spills: [], clipped: [], overlaps: [] };
+        const out = { vw, hScroll: document.documentElement.scrollWidth - vw, spills: [], clipped: [], overlaps: [], navHeadroom: null };
 
         const describe = (e) => {
           // getAttribute, not .className: on an SVG element className is an
@@ -123,6 +127,41 @@ for (const path of PAGES) {
           if (e.scrollWidth > e.clientWidth + 2 && /hidden|clip/.test(s.overflowX) &&
               (e.textContent ?? '').trim().length > 0 && out.clipped.length < 6) {
             out.clipped.push(`${describe(e)} clips ${e.scrollWidth - e.clientWidth}px of its content`);
+          }
+        }
+
+        /* ── How close the header is to overflowing, not just whether it has ──
+         *
+         * 🔴 Why this exists, measured rather than reasoned: the navbar at
+         * 481px had SIX pixels of slack on this container and overflowed by
+         * 20px on CI's runner, from the same commit and the same build. The
+         * elements are the same; the text metrics are not. So "no overflow
+         * here" said nothing about any other machine, and the gate was
+         * passing on this one while the layout was broken on that one.
+         *
+         * `.nav-actions` has `margin-left: auto`, so the burger is flush
+         * against the right padding at every width that fits. The right edge
+         * therefore looks identical at 93px of headroom and at 1px, and the
+         * only number that distinguishes them is the free space between the
+         * logo and the actions. That is what this measures.
+         *
+         * Measured floor after the fix: 53px at 359px — the deliberately
+         * tight phone case the nav was hand-fitted for — and 92px at 481px.
+         * The broken state read 16px. 40px sits below every real value and
+         * well above the broken one, so this fails on the old stylesheet on
+         * THIS machine rather than only on a runner whose fonts differ.
+         *
+         * Only while the burger is shown. Above 768px `.nav-links` fills the
+         * middle of the header on purpose and the gap means nothing.
+         */
+        const burger = document.querySelector('button.nav-burger');
+        if (burger && visible(burger)) {
+          const logo = document.querySelector('a.logo');
+          const actions = document.querySelector('.nav-actions');
+          if (logo && actions && visible(logo) && visible(actions)) {
+            out.navHeadroom = Math.round(
+              actions.getBoundingClientRect().left - logo.getBoundingClientRect().right,
+            );
           }
         }
 
@@ -184,7 +223,12 @@ for (const path of PAGES) {
         return out;
       });
 
-      const problems = r.hScroll > 2 || r.spills.length || r.clipped.length || r.overlaps.length;
+      // See the note beside the measurement: the floor is 40px because the
+      // tightest width the nav was deliberately fitted for measures 53px and
+      // the state that shipped broken measured 16px.
+      const tightNav = r.navHeadroom !== null && r.navHeadroom < NAV_HEADROOM_MIN;
+      const problems =
+        r.hScroll > 2 || r.spills.length || r.clipped.length || r.overlaps.length || tightNav;
       if (!problems) {
         console.log(`    \u001b[32m·\u001b[0m ${String(width).padStart(4)}px clean`);
       } else {
@@ -193,6 +237,12 @@ for (const path of PAGES) {
         for (const s of r.spills) bad(`${width}px ${path}: ${s} (viewport ${r.vw}px)`);
         for (const c of r.clipped) bad(`${width}px ${path}: ${c}`);
         for (const o of r.overlaps) bad(`${width}px ${path}: ${o}`);
+        if (tightNav)
+          bad(
+            `${width}px ${path}: the header has only ${r.navHeadroom}px between the logo and ` +
+              `its actions (floor ${NAV_HEADROOM_MIN}px) — it fits here but not on a machine ` +
+              `whose text measures wider`,
+          );
       }
     } catch (e) {
       bad(`${width}px ${path}: could not be measured — ${e.message.split('\n')[0].slice(0, 90)}`);

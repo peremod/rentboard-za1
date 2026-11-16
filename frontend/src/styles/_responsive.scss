@@ -230,6 +230,30 @@
   .nav-burger { display: flex; order: 3; }
   .nav-inner { gap: 1rem; position: relative; }
 
+  // ── The language switcher leaves the header for the WHOLE burger band ───
+  //
+  // 🔴 These two rules lived in `@media (max-width: 480px)` under the comment
+  // "Nav is tight here: the language switcher moves into the drawer". The nav
+  // is tight for the whole band in which the burger is shown — which starts
+  // at 769px, not 481 — so from 481 to 768px the header carried the logo, the
+  // language switcher, Log in, Get started AND the burger, with none of the
+  // tightening below applied to any of them.
+  //
+  // At 481px that came to a 475px right edge on a 481px viewport: six pixels
+  // of slack. CI measured the same layout at 501px and reported 20px of
+  // horizontal page scroll on four pages — the first item on CLAUDE.md's
+  // mobile list — because its font metrics are not this container's. The
+  // layout was never correct here either; it was one text measurement away
+  // from overflowing, and which side of the line it fell on depended on the
+  // machine. scripts/responsive-drive.mjs found it at 481px, a width nothing
+  // in this repository had crossed before that drive existed.
+  //
+  // Nothing is lost: `.nav-links-lang` below puts the switcher in the drawer,
+  // which is where the original comment always claimed it went. Moving the
+  // pair here recovers ~94px and takes the 481px right edge to 381px.
+  .nav-actions app-lang-switcher { display: none; }
+  .nav-links-lang { display: block; margin-top: .25rem; }
+
   // ⚠️ The drawer was a dark panel on a dark hero with no scrim, no close,
   // no scroll lock and no way out but the burger. It is a sheet now, and
   // it is WHITE: ink-on-ink meant the boundary between the menu and the
@@ -566,9 +590,9 @@
   .app-card { flex-direction: column; align-items: stretch; }
   .app-thumb { width: 100%; height: 120px; font-size: 2rem; }
 
-  // Nav is tight here: the language switcher moves into the drawer.
-  .nav-actions app-lang-switcher { display: none; }
-  .nav-links-lang { display: block; margin-top: .25rem; }
+  // The language switcher moved to the `max-width: 768px` block above, which
+  // is where the burger appears and therefore where the nav actually becomes
+  // tight. Keeping it here left 481-768px untightened. See the note there.
 
   // ── Log in and Get started stay in the HEADER on a phone ───────────────
   //
