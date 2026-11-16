@@ -48,9 +48,11 @@ const WIDTHS = process.env.WIDTHS
 
 const PAGES = (process.env.PAGES ?? '/,/pricing,/advertise,/legal/terms,/auth/login,/auth/register').split(',');
 
-// The margin of safety the header must keep while the burger is shown.
-// Derived from measurement, not taste — see the long note at the point of use.
+// The margin of safety the header must keep, and the band it is asked for in.
+// Both derived from measurement on two machines — see the note at the point of
+// use, which records how the first version of this got it wrong.
 const NAV_HEADROOM_MIN = 40;
+const NAV_HEADROOM_ABOVE = 480;
 
 let fail = 0;
 const bad = (t) => { console.log(`    \u001b[31m❌\u001b[0m ${t}`); fail++; };
@@ -74,7 +76,7 @@ for (const path of PAGES) {
 
       const r = await page.evaluate(() => {
         const vw = document.documentElement.clientWidth;
-        const out = { vw, hScroll: document.documentElement.scrollWidth - vw, spills: [], clipped: [], overlaps: [], navHeadroom: null };
+        const out = { vw, hScroll: document.documentElement.scrollWidth - vw, spills: [], clipped: [], overlaps: [], navHeadroom: null, burgerShown: false, headerLangShown: false };
 
         const describe = (e) => {
           // getAttribute, not .className: on an SVG element className is an
@@ -145,17 +147,44 @@ for (const path of PAGES) {
          * only number that distinguishes them is the free space between the
          * logo and the actions. That is what this measures.
          *
-         * Measured floor after the fix: 53px at 359px — the deliberately
-         * tight phone case the nav was hand-fitted for — and 92px at 481px.
-         * The broken state read 16px. 40px sits below every real value and
-         * well above the broken one, so this fails on the old stylesheet on
-         * THIS machine rather than only on a runner whose fonts differ.
+         * 🔴 The first version of this check made the EXACT mistake it exists
+         * to catch, and the record is worth more than the rule. It asserted a
+         * 40px floor at every width the burger shows, calibrated against the
+         * tightest value measured HERE: 53px at 359px. On CI the same layout
+         * measures 35px at 359px, because CI's text is wider — so the check
+         * condemned four pages at 359/360/361px that CI's own overflow
+         * assertion passes. Calibrating a cross-machine check against one
+         * machine is what this whole finding was about.
+         *
+         *   width   this container   CI's runner
+         *   359px        53px           35px
+         *   360px        54px           36px
+         *   361px        55px           37px
+         *   481px        92px          ~74px   (16px / overflowing, before)
+         *
+         * So the floor is asked for only ABOVE 480px, and that is a reason
+         * rather than a dodge: at and below 480px the nav is deliberately
+         * hand-fitted to the pixel — the rules there tighten padding and font
+         * size, measured at 360/390/430px by nav-ui-drive — so demanding 40px
+         * of slack contradicts a decision taken on purpose. Above 480px
+         * nothing was tightened, so slack is expected and its absence is the
+         * defect: 40px sits far below the ~74px CI measures after the fix and
+         * far above the 16px that shipped.
+         *
+         * ⚠️ A pixel floor is machine-dependent however it is calibrated, so
+         * it is no longer the only guard. `langInHeader` below asserts the
+         * same thing STRUCTURALLY — while the burger is shown, the language
+         * switcher must not be in the header — which needs no text metrics,
+         * cannot drift between runners, and pins the actual regression.
          *
          * Only while the burger is shown. Above 768px `.nav-links` fills the
          * middle of the header on purpose and the gap means nothing.
          */
         const burger = document.querySelector('button.nav-burger');
         if (burger && visible(burger)) {
+          out.burgerShown = true;
+          const headerLang = document.querySelector('.nav-actions app-lang-switcher');
+          out.headerLangShown = !!(headerLang && visible(headerLang));
           const logo = document.querySelector('a.logo');
           const actions = document.querySelector('.nav-actions');
           if (logo && actions && visible(logo) && visible(actions)) {
@@ -223,12 +252,20 @@ for (const path of PAGES) {
         return out;
       });
 
-      // See the note beside the measurement: the floor is 40px because the
-      // tightest width the nav was deliberately fitted for measures 53px and
-      // the state that shipped broken measured 16px.
-      const tightNav = r.navHeadroom !== null && r.navHeadroom < NAV_HEADROOM_MIN;
+      // See the note beside the measurement for both the floor and the band.
+      const tightNav =
+        r.navHeadroom !== null &&
+        width > NAV_HEADROOM_ABOVE &&
+        r.navHeadroom < NAV_HEADROOM_MIN;
+      // Machine-independent, and the one that pins the actual defect.
+      const langInHeader = r.burgerShown && r.headerLangShown;
       const problems =
-        r.hScroll > 2 || r.spills.length || r.clipped.length || r.overlaps.length || tightNav;
+        r.hScroll > 2 ||
+        r.spills.length ||
+        r.clipped.length ||
+        r.overlaps.length ||
+        tightNav ||
+        langInHeader;
       if (!problems) {
         console.log(`    \u001b[32m·\u001b[0m ${String(width).padStart(4)}px clean`);
       } else {
@@ -240,8 +277,15 @@ for (const path of PAGES) {
         if (tightNav)
           bad(
             `${width}px ${path}: the header has only ${r.navHeadroom}px between the logo and ` +
-              `its actions (floor ${NAV_HEADROOM_MIN}px) — it fits here but not on a machine ` +
-              `whose text measures wider`,
+              `its actions (floor ${NAV_HEADROOM_MIN}px above ${NAV_HEADROOM_ABOVE}px) — it ` +
+              `fits here but not on a machine whose text measures wider`,
+          );
+        if (langInHeader)
+          bad(
+            `${width}px ${path}: the language switcher is in the HEADER while the burger is ` +
+              `shown — it belongs in the drawer (.nav-links-lang) at every width the burger ` +
+              `appears at, and competing with it for the same row is what produced 20px of ` +
+              `page scroll at 481px`,
           );
       }
     } catch (e) {

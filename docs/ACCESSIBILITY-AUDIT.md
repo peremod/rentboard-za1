@@ -325,6 +325,51 @@ That change is what makes the check deterministic: with the old stylesheet it
 now fails **on this machine**, at 481px, reading 16px, exit 1 — rather than
 only on a runner whose fonts differ.
 
+🔴 **And the first version of that floor made the same mistake one layer up.**
+It asked for 40px at every width the burger shows, calibrated against the
+tightest value measured *here* — 53px at 359px. CI measures 35px at 359px,
+so the check condemned four pages at 359/360/361px that CI's own overflow
+assertion passes. A cross-machine check calibrated against one machine is
+exactly the finding above, committed by the fix for it.
+
+| width | this container | CI's runner |
+| --- | --- | --- |
+| 359px | 53px | **35px** |
+| 360px | 54px | 36px |
+| 361px | 55px | 37px |
+| 481px | 92px | ~74px (16px and overflowing, before) |
+
+Two changes, and the second matters more:
+
+- **The floor is asked for only above 480px**, which is a reason and not a
+  dodge. At and below 480px the nav is deliberately hand-fitted to the pixel —
+  those rules tighten padding and font size, measured at 360/390/430px by
+  `nav-ui-drive` — so demanding slack there contradicts a decision taken on
+  purpose. Above 480px nothing was tightened, so slack is expected and its
+  absence is the defect: 40px sits far below the ~74px CI measures after the
+  fix and far above the 16px that shipped.
+- **A structural assertion now carries the weight**: while the burger is
+  shown, the language switcher must not be in the header. It needs no text
+  metrics, so it cannot drift between runners, and it pins the actual
+  regression rather than a symptom of it.
+
+Falsified against the genuine pre-fix stylesheet, and the result argues for
+the structural check on its own: at 481px both guards fire (16px, and the
+switcher in the header); **at 600px only the structural one fires**, because
+the headroom there is comfortable on this machine while the defect is still
+fully present. The pixel floor is blind to exactly the band it was written
+for.
+
+⚠️ One more thing belongs here, because it nearly went into this document as
+a verification that never happened. The first attempt to falsify the revised
+check used `git stash` on the stylesheet — which did nothing, because by then
+the fix was **committed**, so the file had no uncommitted changes to stash.
+The drive therefore ran against the fixed code and reported a clean pass,
+which read exactly like a check that cannot fail. The real falsification
+needed `git show 739cfd3:…` to put the pre-fix file back. A reverting step
+that silently reverts nothing is the same defect as a check that cannot
+fail, and it is invisible in the output.
+
 ### 4e. The scroll-lock check was asking the wrong element
 
 CI also failed `nav-sheet-drive` — three assertions, all
