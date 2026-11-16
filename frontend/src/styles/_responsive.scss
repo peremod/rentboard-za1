@@ -177,6 +177,50 @@
   body:has(.filter-panel.open) { overflow: hidden; }
 }
 
+/**
+ * ── ≥769px — the desktop nav must not push the page ─────────────────────
+ *
+ * 🔴 Measured: horizontal page scroll on EVERY page, continuously from 769px
+ * to 904px — 135px of it at 769px, falling to 3px at 901px. The desktop nav
+ * needs 904px (logo + 441px of links + 270px of actions) and the mobile nav
+ * only takes over at ≤768px, so a 136px-wide band showed a nav too wide to
+ * fit. CLAUDE.md's first mobile check, broken on every page, at widths its
+ * own prescribed set (360 / 390 / 768 / 1280) brackets without ever landing
+ * in.
+ *
+ * ⚠️ Fixed by letting the links shrink rather than by moving the breakpoint,
+ * for two reasons.
+ *
+ * The drawer's styling — the sheet, the scrim, the close button, the scroll
+ * lock — all lives inside the ≤768px block below. Moving only
+ * `.nav-links { display: none }` and the burger up to the existing 900px
+ * breakpoint would open an unstyled drawer between 769 and 900px: a dark
+ * panel on a dark hero with no way out, which is the exact state that block's
+ * own comment says was fixed once already.
+ *
+ * And no fixed breakpoint can be right. The nav needs 904px in English and
+ * 906px at 930px wide, because the link text changes — this product ships
+ * eleven languages, so a width chosen against one of them is wrong in the
+ * others. Shrinking is content-independent.
+ *
+ * The scroller only engages when the links genuinely do not fit, which today
+ * is a 4px band, so there is no visible change in English. It is the same
+ * pattern `.portal-nav` already uses below 900px, for the same reason.
+ */
+@media (min-width: 769px) {
+  .nav-links {
+    // flex:1 already lets it grow; min-width:0 is what lets it SHRINK. A flex
+    // item's default min-width:auto is its min-content width, which for a row
+    // of nowrap links is the full 441px — so without this the links refuse to
+    // give up a pixel and the overflow lands on the page instead.
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+  }
+}
+
 // ── ≤768px — tablet / large phone ────────────────────────────────────────
 @media (max-width: 768px) {
   // Nav
@@ -351,7 +395,23 @@
   // Filters and Sort stayed stacked on a phone.
 
   // Two columns at this size, one below
-  .room-grid { grid-template-columns: 1fr 1fr; }
+  /**
+   * 🔴 `1fr 1fr` forced TWO columns all the way down to 481px, and a room
+   * card's min-content width is 282px — so the grid demanded 564px plus the
+   * gap inside a 449px box and the PAGE scrolled sideways by 119px, the first
+   * item on CLAUDE.md's mobile list.
+   *
+   * Measured by scripts/responsive-drive.mjs: broken continuously from 481px
+   * to 599px on the board. Invisible at every prescribed width — 360 and 390
+   * are below the 480 breakpoint where a single column takes over, and 768
+   * and 1280 are above where two columns genuinely fit.
+   *
+   * auto-fit with the card's real minimum, so the column count follows the
+   * space available instead of being asserted. Two columns where two fit, one
+   * where they do not, and no breakpoint to keep in step with the card's
+   * width.
+   */
+  .room-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 
   // Portal
   .portal-wrap { grid-template-columns: 1fr; min-height: auto; }
