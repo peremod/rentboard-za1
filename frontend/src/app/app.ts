@@ -11,8 +11,19 @@ import { Footer } from './shared/components/footer/footer';
   standalone: true,
   imports: [RouterOutlet, CookieConsentBanner, Navbar, Footer, AppDialog],
   template: `
+    <!-- 2.4.1 Bypass Blocks, Level A. Driven by
+         scripts/a11y-keyboard-drive.mjs: there was no skip link on any page,
+         so a keyboard user tabbed the whole navigation before reaching
+         content, every time.
+         What made it worth a comment: the TARGET below already existed, and
+         styles.scss already carried a rule for it commented "Skip link target
+         used by the app shell". The id and the CSS were built; the link never
+         was. Another control that only looked like one.
+         First in the DOM so it is the first tab stop, which is the half of
+         2.4.1 that a link alone does not satisfy. -->
+    <a class="skip-link" href="#main-content">Skip to the main content</a>
     <app-navbar/>
-    <main id="main-content"><router-outlet/></main>
+    <main id="main-content" tabindex="-1"><router-outlet/></main>
     <app-footer/>
     <app-cookie-consent/>
     <app-dialog/>

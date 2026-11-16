@@ -48,18 +48,33 @@ import { Icon } from '../../../shared/components/icon/icon';
 
 
         <form [formGroup]="form" (ngSubmit)="onSubmit()">
+          <!-- 3.3.1 Error Identification, Level A. aria-invalid and
+               aria-describedby, driven by scripts/a11y-keyboard-drive.mjs.
+               The message itself was already fine: "Invalid email or password"
+               in a role="alert", so a screen reader announces it the moment
+               it appears. What was missing is the link between the message and
+               the fields it is about — so somebody who tabbed back to the
+               email box after hearing it was told nothing about that box, and
+               had to go looking for a message they had already heard once.
+               Both fields are marked, because the server deliberately does not
+               say which of the two was wrong (naming it would tell an attacker
+               whether an address has an account). -->
           <div class="auth__field">
             <label for="email">{{ 'auth.email' | translate }}</label>
-            <input id="email" type="email" formControlName="email" autocomplete="email"/>
+            <input id="email" type="email" formControlName="email" autocomplete="email"
+                   [attr.aria-invalid]="error() ? 'true' : null"
+                   [attr.aria-describedby]="error() ? 'login-error' : null"/>
           </div>
 
           <div class="auth__field">
             <label for="password">{{ 'auth.password' | translate }}</label>
-            <input id="password" type="password" formControlName="password" autocomplete="current-password"/>
+            <input id="password" type="password" formControlName="password" autocomplete="current-password"
+                   [attr.aria-invalid]="error() ? 'true' : null"
+                   [attr.aria-describedby]="error() ? 'login-error' : null"/>
           </div>
 
           @if (error()) {
-            <p class="auth__error" role="alert">{{ error() }}</p>
+            <p class="auth__error" id="login-error" role="alert">{{ error() }}</p>
           }
 
           <button type="submit" class="auth__submit" [disabled]="form.invalid || loading()">

@@ -151,7 +151,11 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:16px;scroll-behavior:smooth}
-body{font-family:var(--font-body);background:var(--cream2);color:var(--ink);line-height:1.5;overflow-x:hidden}
+/* ⚠️ overflow-x:hidden moved to `html` — see the note in styles.scss. On
+   `body` it forced body's overflow-y to compute as `auto`, which made body a
+   scroll container and broke scrollIntoView for the whole application. */
+body{font-family:var(--font-body);background:var(--cream2);color:var(--ink);line-height:1.5}
+html{overflow-x:hidden}
 a{color:var(--terra);text-decoration:none}
 a:hover{text-decoration:underline}
 img{display:block;max-width:100%}

@@ -889,6 +889,113 @@ input[type='file']:not([hidden]) {
 // Skip link target used by the app shell
 #main-content:focus { outline: none; }
 
+// ── 🔴 overflow-x:hidden belongs on `html`, not `body` ───────────────────
+//
+// _spec.scss had `body { … overflow-x: hidden }`, almost certainly to stop
+// horizontal page scroll — which is the first item on CLAUDE.md's mobile
+// checklist, so the intent was right.
+//
+// The side effect was not. Per the CSS overflow spec, if one axis is not
+// `visible` the other computes to `auto`, so `overflow-x: hidden` silently
+// gave body `overflow-y: auto` and made it a scroll container — while
+// `document.scrollingElement` stayed `html`. That combination breaks
+// `scrollIntoView()` for the ENTIRE APPLICATION: the ancestor walk finds body
+// first, scrolls body's scrollport (which has nothing to scroll), and never
+// touches the document. Measured: a direct
+// `el.scrollIntoView({ block: 'center' })` on a footer link moved the page
+// zero pixels with 1,612px of scroll available.
+//
+// That is not only this criterion's problem. Anything that relies on
+// scroll-into-view — an anchor jump, scrolling to the first invalid field —
+// has been quietly inert.
+//
+// On `html` the clip still happens and the scrolling element is unchanged, so
+// scrollIntoView works again. ⚠️ Horizontal page scroll at 360 and 390px must
+// be re-checked after this, because that is what the original line was for.
+
+// ── 2.4.11: nothing may sit under the fixed cookie notice ────────────────
+//
+// The notice is fixed at the bottom at z-index 9999. Measured with real Tab
+// presses, it entirely hid eleven focused controls on the board at 390px, ten
+// on the sign-in page, and the whole legal footer column at 1280px — WCAG 2.2
+// AA 2.4.11. See the long note in cookie-consent.ts for why reserving the
+// space is the fix and `scroll-padding-bottom` alone is not: padding moves the
+// content out from under the notice, whereas scroll-padding only helps when a
+// scroll actually happens, and a control already under the notice never
+// causes one.
+//
+// --cookie-notice-h is measured by a ResizeObserver in the component, because
+// the notice is three lines tall at 1280px and six at 360px. The extra 1.5rem
+// is its own `bottom: 1rem` offset plus a little air, so a focused control
+// does not sit flush against it.
+// Declared with an initial value rather than relying on a var() fallback at
+// every use: a fallback repeated in three places is three places to get wrong,
+// and scale-lint cannot read a length out of `var(--x, .75rem)` so the
+// fallbacks also read as off-scale spacing. The component overwrites this with
+// the measured height.
+:root { --cookie-notice-h: 0px; }
+
+body.has-cookie-notice {
+  padding-bottom: calc(var(--cookie-notice-h) + #{$sp-5});
+}
+
+html {
+  // For the case the padding above does not cover: a Tab that DOES scroll.
+  scroll-padding-bottom: calc(var(--cookie-notice-h) + #{$sp-5});
+
+  // ⚠️ Preventative, not a measured finding. `.nav` is `position: sticky;
+  // top: 0; z-index: 100`, which is the other classic 2.4.11 trigger — a
+  // control scrolled to just under a sticky header is focused and hidden.
+  // The keyboard drive did not catch one, because the nav is short and the
+  // browser's own scroll-into-view clears it today. This makes that
+  // independent of the nav's height.
+  scroll-padding-top: 5rem;
+}
+
+// ── The skip link: hidden until it is focused, then unmissable ───────────
+//
+// 2.4.1 Bypass Blocks. It cannot use `.visually-hidden`, because that class is
+// for text that is ALWAYS off-screen — a skip link has to become visible the
+// moment it takes focus, or a sighted keyboard user tabs onto something they
+// cannot see and has no idea what Enter will do.
+//
+// Positioned off the top rather than clipped, so the transform back into view
+// is the whole of the reveal and there is no second state to keep in step.
+.skip-link {
+  position: absolute;
+  top: 0;
+  left: $sp-4;
+  z-index: 1000;          // above the sticky nav (z-index 100), below dialogs
+  transform: translateY(-120%);
+  padding: $sp-3 $sp-4;
+  background: var(--ink);
+  // 🔴 --cream does not exist. This said `var(--cream)`, and token-lint caught
+  // it: an unresolved custom property means the declaration is DROPPED, so the
+  // skip link's text would have inherited its colour against an --ink
+  // background — a focus-only control that might have been invisible exactly
+  // when it appears. The palette has --cream2 and --white.
+  color: var(--white);
+  border-radius: 0 0 var(--r8) var(--r8);
+  text-decoration: underline;
+  font-weight: 600;
+
+  &:focus-visible {
+    transform: translateY(0);
+    outline: none;
+    box-shadow: var(--ring-gold);
+  }
+}
+
+// `<main tabindex="-1">` is what lets the jump actually move FOCUS and not
+// only the scroll position. Without it the browser scrolls to the anchor and
+// leaves focus on the link, so the next Tab goes back into the navigation —
+// the link appears to work and changes nothing for a keyboard user. The
+// outline is suppressed because main is not an interactive control; see the
+// rule further down that was written for exactly this and had no link to
+// serve it.
+#main-content:focus,
+#main-content:focus-visible { outline: none; }
+
 // ── Scrollable regions a keyboard can reach ──────────────────────────────
 //
 // `.table-scroll` wraps every table that scrolls sideways at small widths,

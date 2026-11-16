@@ -214,7 +214,23 @@ for (const width of WIDTHS) {
       if (stop === null) break;                       // focus left the document
       if (seen.length && stop.id === seen[0].id) break; // cycled back to the start
       seen.push(stop);
-      if (i === MAX - 1) trapped = true;
+      /**
+       * 🔴 Running out of presses is not a trap.
+       *
+       * The board at 1280px has twelve room cards with several controls each
+       * plus the filter set, and it reported "keyboard trap" purely for
+       * exceeding 120 Tab presses while still finding NEW controls — which is
+       * a long page, not a trap. 2.1.2 is about focus that cannot get out: the
+       * signature is the stop list ceasing to grow while Tab keeps moving.
+       */
+      if (i === MAX - 1) {
+        const ids = new Set(seen.map((x) => x.id));
+        const lastTwenty = new Set(seen.slice(-20).map((x) => x.id));
+        const allRevisited = [...lastTwenty].every((id) =>
+          seen.slice(0, -20).some((x) => x.id === id));
+        if (allRevisited) trapped = true;
+        else note(`2.1.2 stopped after ${MAX} Tab presses with ${ids.size} distinct controls and still finding new ones — a long page, not a trap`);
+      }
     }
 
     check(seen.length > 0, `2.1.1 Tab reaches ${seen.length} control(s)`);
@@ -290,8 +306,23 @@ for (const width of WIDTHS) {
           // is what 3.3.8 exists to prevent.
           blocksPaste: !!(i.onpaste || i.getAttribute('onpaste')),
         })));
+      /**
+       * Only fields that identify the PERSON.
+       *
+       * 🔴 Version one asked every text input for an autocomplete token and
+       * reported the registration form's "referralCode" as a failure. There
+       * is no HTML autocomplete token for a referral code, and inventing one
+       * would be wrong — 3.3.8 is about not making the person retype
+       * credentials a manager could fill, and a referral code is neither a
+       * credential nor something a manager holds. A check that demands an
+       * attribute the standard does not define is a check that teaches people
+       * to add noise to shut it up.
+       */
+      const IDENTIFYING = new Set(['email', 'password', 'tel']);
+      const NAME_LIKE = /name|surname|given|family/i;
       for (const f of fields) {
-        if (f.type === 'password' || f.type === 'email' || f.type === 'text' || f.type === 'tel') {
+        const identifying = IDENTIFYING.has(f.type) || NAME_LIKE.test(f.name ?? '');
+        if (identifying) {
           check(!!f.autocomplete,
             `3.3.8 ${f.type} field "${f.name}" declares autocomplete="${f.autocomplete ?? 'MISSING'}" so a manager can fill it`);
         }
