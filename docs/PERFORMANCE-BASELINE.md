@@ -573,7 +573,15 @@ field — which is how a cold start is detectable from outside.
    as a visitor scrolled — so any change here must keep it honest or stop
    showing it. Not a silent optimisation.
 
-5. **Decide about the board's ordering.** Denormalising `openFlagCount` onto
+5. ⏸️ **The board's ordering — measured, and deliberately NOT done. [16 Nov]**
+   §7 has the curve: the ordering costs 2.4 ms at 1,000 active rooms, 9.4 ms
+   at 20,000 and 33 ms at 100,000, and the board holds 30. The fix is a SECOND
+   denormalisation hop on a counter that already needed a reconciler for its
+   first, and it governs the rule that a bought boost must not outrank an open
+   deposit complaint. Recorded with a trigger point — revisit at 20,000 active
+   rooms — rather than built. Original note follows.
+
+   **Decide about the board's ordering.** Denormalising `openFlagCount` onto
    `rooms` plus a composite index takes the page query from 83–114 ms to
    **0.045 ms** at 100k rooms (§2g), because no index on `rooms` can serve an
    `orderBy` whose leading key lives in `users`. It is a migration plus
@@ -800,7 +808,61 @@ removing the flag.
 
 ---
 
-## 7. [15 Nov] What is still not measured
+## 7. [16 Nov] The board's ordering — where it actually starts to cost
+
+Before denormalising `openFlagCount` onto `rooms`, the obvious question turned
+out not to have been asked: **at what board size does this ordering cost
+anything?** §2g measured only the 100,000-room end, which made it look urgent.
+
+The sort-and-scan core of the page query, by `EXPLAIN ANALYZE`, same fixture
+at four sizes:
+
+| active rooms | page query |
+| --- | --- |
+| 1,030 | **2.4 ms** |
+| 5,030 | **3.8 ms** |
+| 20,030 | **9.4 ms** |
+| 100,030 | **33.0 ms** |
+| **the board today** | **30 rooms** |
+
+(These are smaller than the 83–114 ms in §2g because that figure is Prisma's
+full page statement, all 34 columns plus the landlord relation. This isolates
+the ordering, which is the part the denormalisation would fix.)
+
+So the ordering costs **single-digit milliseconds up to twenty thousand
+rooms**, and the board currently holds thirty. Mastande would need to grow by
+roughly 700× before this is the slowest thing on the page — and on a 0.1 CPU
+instance that caps out near 0.35 logins a second (§5a), it would hit several
+harder walls first.
+
+### What the fix would cost
+
+`openFlagCount` is **already** a denormalised counter — flags →
+`users.openFlagCount` — maintained inside three transactions and backed by
+`recount()`, which exists because, in its own words, "a counter with no way to
+be put right is a counter that quietly goes wrong". Pushing it onto `rooms` is
+a **second** denormalisation hop on the same number, and that number decides a
+deliberate product rule: a bought feature boost must not outrank an open
+deposit complaint. Drift there does not look like a bug, it looks like the
+board working normally while a flagged landlord sits at the top.
+
+There is also no precedent for a database trigger in any of the 39 migrations,
+so the unbypassable version of the sync would be a first for this codebase.
+
+### The judgement
+
+**This is a real optimisation aimed at a problem the product does not have
+yet.** It is recorded here with a trigger point rather than built: revisit when
+the board passes **20,000 active rooms**, which is when the ordering crosses
+10 ms and starts to be worth a second counter. The recipe is known and measured
+— a local counter plus an index on
+`(status, flagCount ASC, isFeatured DESC, publishedAt DESC)` turns the page
+query into an `Index Scan` with no `Sort` node at **0.045 ms** (§2g) — so
+nothing is lost by waiting.
+
+---
+
+## 8. [15 Nov] What is still not measured
 
 Unchanged from §2e and worth repeating so the gaps are not read as covered:
 
