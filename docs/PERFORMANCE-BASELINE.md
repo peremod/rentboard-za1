@@ -559,10 +559,9 @@ field — which is how a cold start is detectable from outside.
    Also fixed while in there: the Prisma `warn` and `error` channels that had
    never had a subscriber (§2f).
 
-4. 🔴 **Bound the unbounded board query — singular. [16 Nov] This is now
-   first, ahead of everything else on this list.** (It read "the two" until
-   today; `knownPlaces()` turned out to be already cached and already a
-   `groupBy` — correction in §2g.) §5c works out what that query
+4. ✅ **DONE, 16 November — the unbounded board query is bounded.** (It read
+   "the two" earlier today; `knownPlaces()` turned out to be already cached
+   and already a `groupBy` — correction in §2g.) Measured result in §6. §5c works out what that query
    costs in MEMORY rather than time: ~10 MB of heap per in-flight request at
    100k active rooms, so a few dozen simultaneous visitors to an unfiltered
    board is an out-of-memory kill on a 512 MB instance with one replica and no
@@ -699,7 +698,109 @@ needs either the container test that was declined or a bounded staging run.
 
 ---
 
-## 6. [15 Nov] What is still not measured
+## 6. [16 Nov] The verified-landlord count, bounded — measured
+
+Recommendation 4, done. The honesty constraints came first, because this is a
+trust figure and it has been false once already.
+
+### 6a. What it was, and why it was the most expensive thing on the board
+
+```ts
+findMany({ where, select: { landlordId: true }, distinct: ['landlordId'] })
+  .then((rows) => rows.length)
+```
+
+The comment beside it said "`distinct` on landlordId rather than a groupBy: the
+question is how many people, not how many rooms". The intent was right; the
+mechanism was not. **Prisma applies `distinct` in the client, not in SQL.** The
+captured statement carried no `DISTINCT` and selected `rooms.id` as well, so
+every row matching the search crossed the wire and landed in the heap to be
+reduced by JavaScript afterwards.
+
+### 6b. What it is now
+
+A `groupBy` on `landlordId` with `take: 201`, spread from the **same `where`
+object** the listing and the count use.
+
+That last point is why this is not hand-written SQL with `COUNT(DISTINCT …)`,
+which would be O(1) rather than O(cap): the filter has fifteen optional
+clauses including nested relations and date logic, and restating it in SQL
+would make two sources of truth for one question. The day they drift, the
+figure starts counting landlords whose rooms are not on the board — the exact
+dishonesty the original comment exists to prevent. O(201) is small enough.
+
+### 6c. Measured, at 100,000 active rooms
+
+The statement, by `EXPLAIN ANALYZE`:
+
+| | plan | rows examined | **rows returned to Node** |
+| --- | --- | --- | --- |
+| old `distinct` | Hash Join over a Seq Scan | **100,020** | **50,000** |
+| new `groupBy` + `LIMIT` | `Limit` → `Group` → Nested Loop | **801** | **201** |
+
+It is not only de-duplication moving into Postgres — it is **early
+termination**. `ORDER BY landlordId` lets the planner walk
+`rooms_landlordId_idx`, produce groups in order and stop once it has 201, so on
+an unfiltered board it touches 801 rows instead of 100,020.
+
+End to end, via the request-timing log:
+
+| | before | after |
+| --- | --- | --- |
+| unfiltered board | 199 ms | **121 ms** |
+| one broad search word | 216 ms | **164 ms** |
+| the count statement itself, unfiltered | 110 ms | **under 15 ms** (fell off the log) |
+| the count statement itself, one word | 189 ms | 98 ms |
+
+The search case improves less because an `ILIKE` cannot be served from that
+index, so there is no early termination — but the **memory** win holds in both
+cases, and that was the point. 201 rows instead of 50,000 removes the
+out-of-memory path §5c predicted.
+
+### 6d. How it stays honest
+
+The cap introduces a **new** way to lie: reporting a clamped 200 as though it
+were exact. So the response carries `verifiedLandlordsCapped`, and the hero
+renders `200+` — true, stable for the same search, and needing no new
+translation in any of the eleven languages because the number is rendered
+separately from its label.
+
+`scripts/verified-count-drive.mjs` (13 assertions, in CI) asserts all three
+ways it could lie, and **each was reintroduced and each turned the drive red**:
+
+| mutation | caught |
+| --- | --- |
+| drop the verified-only filter | ✅ "is 16, expected 7" |
+| ignore the search filter | ✅ "city=Tembisa → 7, SQL says 4" |
+| clamp silently | ✅ "the response SAYS it is a floor" |
+
+It also asserts the boundary that a naive implementation gets wrong: **exactly
+200 is still exact** and must not report itself as capped.
+
+Two frontend tests cover the browser half, both falsified (dropping the `+`
+suffix, and ignoring the flag on the response). `landlordCountLabel` is a
+**method rather than a `computed`** for a specific reason: `home.spec.ts` builds
+the component with `Object.create(Home.prototype)`, field initialisers do not
+run there, so a `computed` would not exist and the only way to assert it would
+be to rebuild the same expression in the test — which passes just as happily
+with the logic deleted.
+
+`scripts/smoke-test.sh` asserts the response shape on every run, falsified by
+removing the flag.
+
+### 6e. What this does not do
+
+- It does not make the count O(1). It makes it O(cap), and the reason is in
+  §6b.
+- Above 200 the figure is a floor. That is a product change, small and stated
+  on screen, not a silent one.
+- Every number here is local, on 4 CPUs. The §5c out-of-memory prediction it
+  defuses was itself arithmetic; it has not been observed on a 512 MB
+  instance, and now should not be.
+
+---
+
+## 7. [15 Nov] What is still not measured
 
 Unchanged from §2e and worth repeating so the gaps are not read as covered:
 

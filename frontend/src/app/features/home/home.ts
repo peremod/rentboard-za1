@@ -85,7 +85,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
         @if (!auth.isAuthenticated()) {
           <div class="hero-stats">
             <div class="hero-stat"><strong>{{ total() }}</strong><span>{{ 'hero.stat_rooms' | translate }}</span></div>
-            <div class="hero-stat"><strong>{{ landlordCount() }}</strong><span>{{ 'hero.stat_landlords' | translate }}</span></div>
+            <div class="hero-stat"><strong>{{ landlordCountLabel() }}</strong><span>{{ 'hero.stat_landlords' | translate }}</span></div>
             <div class="hero-stat"><strong>{{ 'hero.stat_free' | translate }}</strong><span>{{ 'hero.stat_to_apply' | translate }}</span></div>
             <div class="hero-stat"><strong>9 provinces</strong><span>and growing</span></div>
           </div>
@@ -1142,6 +1142,35 @@ export class Home implements OnInit, OnDestroy {
    * this one sat in the hero of the landing page.
    */
   landlordCount = signal(0);
+  /**
+   * The server counts verified landlords exactly up to a cap and then says so
+   * rather than clamping silently — 201 reported as "200" would be a false
+   * trust figure, and this hero stat has a history of being one. The suffix
+   * needs no translation: the number is rendered separately from its label in
+   * all eleven languages.
+   */
+  landlordCountCapped = signal(false);
+
+  /**
+   * A METHOD and not a `computed`, deliberately, and the reason is testability
+   * rather than style.
+   *
+   * home.spec.ts builds this component with `Object.create(Home.prototype)`,
+   * because instantiating it needs the whole injector. Field initialisers do
+   * not run on a prototype-built object, so a `computed` field would simply
+   * not exist there — and the only way to assert it would be to rebuild the
+   * same expression in the test, which passes just as happily with the logic
+   * below deleted. That is the shape of unfalsifiable check this repository
+   * keeps finding. A method lives on the prototype, so the spec calls the real
+   * one.
+   *
+   * It reads signals, so the template stays reactive; re-evaluating a string
+   * concat per change detection on one hero stat is not a cost worth a worse
+   * test.
+   */
+  landlordCountLabel(): string {
+    return `${this.landlordCount()}${this.landlordCountCapped() ? '+' : ''}`;
+  }
 
   /** Hero "Browse rooms" jumps to the board rather than navigating away. */
   scrollToBoard(event: Event) {
@@ -1381,6 +1410,7 @@ export class Home implements OnInit, OnDestroy {
       this.total.set(res.total);
       this.searchMeta.set(res.search ?? null);
       this.landlordCount.set(res.verifiedLandlords ?? 0);
+      this.landlordCountCapped.set(res.verifiedLandlordsCapped === true);
       this.hasMore.set(res.hasMore);
       this.loading.set(false);
       this.loadingMore.set(false);

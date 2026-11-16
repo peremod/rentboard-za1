@@ -594,6 +594,25 @@ jobs:
       # A diagnostics step must never add a failure row of its own: when the
       # API was never started the log does not exist, `cat` exits 1, and the
       # job grows a fourth red step that says nothing about the real fault.
+      - name: The hero's verified-landlord figure is bounded AND honest
+        # This stat has been false once already: computed in the browser from
+        # the loaded rooms, so it counted unverified landlords and grew as a
+        # visitor scrolled. It was then changed a SECOND time for performance —
+        # the server-side count was a findMany({ distinct }), and Prisma
+        # applies distinct in the CLIENT, so every matching row crossed into
+        # the heap: ~10 MB per in-flight request at 100k active rooms, on a
+        # 512 MB instance with one replica. It is a groupBy with a LIMIT now.
+        #
+        # A performance change to a trust figure is exactly the change that can
+        # quietly make it lie again, so the drive asserts the three ways it
+        # could: counting unverified landlords, counting landlords the search
+        # excludes, or clamping to 200 without saying so. Each mutation was
+        # reintroduced and each turned it red.
+        run: node scripts/verified-count-drive.mjs
+        env:
+          API: http://localhost:3000
+          DATABASE_URL: postgresql://postgres:test@localhost:5432/mastande_test
+
       - name: One room, let once
         # §93 and the gap docs/API-TESTING.md §6.5 names in its own words:
         # "No test races two acceptances of the same room". It did not, and

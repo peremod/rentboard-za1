@@ -43,13 +43,32 @@ import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SYNTHETIC_TAG = 'SCALE-PROBE';
-const API = process.env.API_BASE ?? 'http://localhost:3000';
+// `API` is what ci.yml passes to every other drive; API_BASE kept for callers
+// that already use it.
+const API = process.env.API ?? process.env.API_BASE ?? 'http://localhost:3000';
 
 // ── The connection, and the refusal ────────────────────────────────────
-const envText = readFileSync(join(ROOT, 'backend/.env'), 'utf8');
-const rawUrl = (/^DATABASE_URL\s*=\s*"?([^"\n]+)"?/m.exec(envText) ?? [])[1];
+/**
+ * The connection, from the environment first and backend/.env second.
+ *
+ * CI has no backend/.env — the workflow passes DATABASE_URL as a step env, the
+ * way scripts/double-let-drive.mjs and the other API drives receive it. Reading
+ * only the file would make this work on a laptop and fail on every push, which
+ * is the direction that wastes a CI cycle to discover.
+ */
+const rawUrl =
+  process.env.DATABASE_URL ??
+  (() => {
+    let envText;
+    try {
+      envText = readFileSync(join(ROOT, 'backend/.env'), 'utf8');
+    } catch {
+      return undefined;
+    }
+    return (/^DATABASE_URL\s*=\s*"?([^"\n]+)"?/m.exec(envText) ?? [])[1];
+  })();
 if (!rawUrl) {
-  console.error('❌ no DATABASE_URL in backend/.env');
+  console.error('❌ no DATABASE_URL: not in the environment, and not in backend/.env');
   process.exit(1);
 }
 // psql rejects the whole URI over ?schema=public — a Prisma-only parameter —
