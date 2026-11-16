@@ -889,6 +889,88 @@ input[type='file']:not([hidden]) {
 // Skip link target used by the app shell
 #main-content:focus { outline: none; }
 
+// ── Scrollable regions a keyboard can reach ──────────────────────────────
+//
+// `.table-scroll` wraps every table that scrolls sideways at small widths,
+// and `.trust-strip` becomes a scroller itself. Both carry `tabindex="0"`,
+// which makes them reachable — and a tab stop with no visible focus ring is
+// WCAG 2.4.7 traded for 2.1.1, so the ring is not optional.
+//
+// The scroll itself lives in _responsive.scss, inside the media queries where
+// the overflow actually happens. These two rules are unconditional: the base
+// declaration so the class is never a template class with no rule at all
+// (scripts/css-coverage-audit.mjs), and the focus ring so it is visible at
+// every width the element can be focused at.
+.table-scroll {
+  // No overflow here on purpose — a desktop table is not a scroller and must
+  // not become a tab stop for nothing.
+  max-width: 100%;
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--ring-terra);
+    border-radius: var(--r8);
+  }
+}
+
+.trust-strip:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-terra);
+  border-radius: var(--r12);
+}
+
+// ── A link in running text may not be distinguished by colour alone ──────
+//
+// 🔴 WCAG 1.4.1 (Use of Colour), found by scripts/a11y-scan.mjs: 79 nodes
+// across 23 pages, at all four widths. _spec.scss sets
+// `a { text-decoration: none }` with `a:hover { text-decoration: underline }`,
+// so at rest a prose link is told apart from the sentence around it only by
+// its colour — and the measured ratios are nowhere near the 3:1 that 1.4.1
+// requires when colour is the only signal:
+//
+//     #ad4222 link on #736755 body text   1.06:1   (.pricing-note, /advertise)
+//     #d4a853 link on #bfbdbc body text   1.17:1   (.cookie-notice__body)
+//
+// ⚠️ And the hover underline is not a mitigation for the people this product
+// is built for. There is no hover on a touch screen, so a visitor on a cheap
+// Android phone — the whole premise of Mastande — never sees it at all.
+//
+// Scoped to `p`, which is exactly what axe's `link-in-text-block` flags: a
+// link sharing a text block with prose. Nav links, footer list items, cards
+// and buttons are link-ONLY containers with no surrounding sentence to be
+// confused with, so they are deliberately untouched — underlining those would
+// be a restyle of the whole app rather than a fix for this criterion.
+//
+// `.btn` is excluded because a button that happens to sit inside a paragraph
+// is not prose. There are none today; the guard is so that adding one does
+// not quietly make it look like a link.
+p a:not(.btn):not(.btn-link) {
+  text-decoration: underline;
+  // The default `auto` sits on the text baseline and clips descenders in DM
+  // Sans at the sizes the legal pages use.
+  text-underline-offset: .15em;
+}
+
+// ── The cookie notice's own link ─────────────────────────────────────────
+//
+// 🔴 It is inside a `<p>`, so the rule above now covers it — but it was
+// SUPPOSED to be covered already, and that is the finding worth keeping.
+//
+// _spec.scss carries `.cookie-banner a { color: var(--gold);
+// text-decoration: underline }`, plus four more `.cookie-banner` rules and a
+// responsive override. `.cookie-banner` appears in NO template: the component
+// renders `.cookie-notice` / `.cookie-notice__body` / `.cookie-notice__ok`.
+// So somebody had already identified this exact problem and fixed it against
+// a class name that no longer exists, and the dead rule read as coverage.
+//
+// The live class is named here so the gold-on-grey case is explicit rather
+// than inherited, and so a future change to the `p` scoping cannot silently
+// un-fix it.
+.cookie-notice__body a {
+  text-decoration: underline;
+  text-underline-offset: .15em;
+}
+
 // ═════════════════════════════════════════════════════════════════════════
 // AUTH PAGES (login / register)
 // Shared shell so both pages stay identical — they were previously two

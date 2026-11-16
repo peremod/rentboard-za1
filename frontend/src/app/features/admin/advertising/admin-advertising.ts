@@ -39,44 +39,46 @@ import { Icon } from '../../../shared/components/icon/icon';
               <strong>{{ r.totalRequests }}</strong> requests measured so far.
             </p>
 
-            <table class="growth-table">
-              <thead>
-                <tr>
-                  <th>Targeting</th>
-                  <th>Campaigns</th>
-                  <th>Requests</th>
-                  <th>Reach</th>
-                  <th>Priced at</th>
-                  <th>Verdict</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (l of r.levels; track l.level) {
+            <div class="table-scroll" tabindex="0" role="group" aria-label="Advertising reach, scrolls sideways">
+              <table class="growth-table">
+                <thead>
                   <tr>
-                    <td>{{ l.level }}</td>
-                    <td>{{ l.campaigns }}</td>
-                    <td>{{ l.eligibleRequests }}</td>
-                    <td>{{ l.reachSharePct }}%</td>
-                    <td>{{ l.pricedSharePct }}%</td>
-                    <td>
-                      @if (!l.reliable) {
-                        <span class="muted">Too little data</span>
-                      } @else if (l.gapPct > 8) {
-                        <span class="verdict verdict--under">
-                          Underpriced by {{ l.gapPct }} points
-                        </span>
-                      } @else if (l.gapPct < -8) {
-                        <span class="verdict verdict--over">
-                          Overpriced by {{ -l.gapPct }} points
-                        </span>
-                      } @else {
-                        <span class="verdict verdict--ok">About right</span>
-                      }
-                    </td>
+                    <th>Targeting</th>
+                    <th>Campaigns</th>
+                    <th>Requests</th>
+                    <th>Reach</th>
+                    <th>Priced at</th>
+                    <th>Verdict</th>
                   </tr>
-                }
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  @for (l of r.levels; track l.level) {
+                    <tr>
+                      <td>{{ l.level }}</td>
+                      <td>{{ l.campaigns }}</td>
+                      <td>{{ l.eligibleRequests }}</td>
+                      <td>{{ l.reachSharePct }}%</td>
+                      <td>{{ l.pricedSharePct }}%</td>
+                      <td>
+                        @if (!l.reliable) {
+                          <span class="muted">Too little data</span>
+                        } @else if (l.gapPct > 8) {
+                          <span class="verdict verdict--under">
+                            Underpriced by {{ l.gapPct }} points
+                          </span>
+                        } @else if (l.gapPct < -8) {
+                          <span class="verdict verdict--over">
+                            Overpriced by {{ -l.gapPct }} points
+                          </span>
+                        } @else {
+                          <span class="verdict verdict--ok">About right</span>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
 
             <p class="field-hint">
               'Too little data' means under 5,000 measured requests — below that

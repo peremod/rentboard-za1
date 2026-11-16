@@ -108,7 +108,17 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
       }
     </section>
 
-    <div class="trust-strip">
+    <!-- 🔴 tabindex and a label because this becomes a horizontal SCROLLER
+         below 900px (_responsive.scss), and a scrollable region that nothing
+         inside can take focus is a region a keyboard cannot scroll — WCAG
+         2.1.1 and 2.1.3, axe's scrollable-region-focusable rule. The three
+         items are plain divs, so without this the claims past the right edge
+         were unreachable without a mouse or a finger. Flagged at 360 and
+         390px only, which is why a single-width audit never saw it.
+         NB: no backticks in here — this is inside an inline template
+         literal, and a backtick terminates it. CLAUDE.md names the trap and
+         this comment walked straight into it on the first try. -->
+    <div class="trust-strip" tabindex="0" role="group" aria-label="What Mastande promises, scrolls sideways">
       <div class="trust-item"><app-icon class="trust-icon" name="lock"/>POPIA Compliant</div>
       <div class="trust-item"><app-icon class="trust-icon" name="scale"/>Rental Housing Act Aligned</div>
       <div class="trust-item"><app-icon class="trust-icon" name="ban"/>No Agent Fees</div>

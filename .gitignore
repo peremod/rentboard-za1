@@ -95,3 +95,8 @@ mastande-design-handoff.zip
 *.pgdump
 *.sql.gz
 *.sql.bz2
+
+# Accessibility sweep output — scripts/a11y-scan.mjs. Timestamped JSON, one
+# file per run, regenerated rather than maintained. The FINDINGS live in
+# PRE-LAUNCH-CHECKLIST.md and docs/; these are the raw runs behind them.
+scripts/a11y-reports/

@@ -157,7 +157,7 @@ import { Icon } from '../../../shared/components/icon/icon';
       <!-- Beside the reviews, because they are the same moment in a
            person's life — the letting is over — and two different things to
            do about it. -->
-      <app-dispute-panel role="landlord"/>
+      <app-dispute-panel party="landlord"/>
 
       <section class="dash-section" id="active-listings">
         <h2 class="dash-section-title">Active listings</h2>

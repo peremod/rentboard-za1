@@ -83,40 +83,42 @@ import { Icon } from '../../../shared/components/icon/icon';
             board gets busier, you get more views at the same price.
           </p>
 
-          <table class="rate-table">
-            <thead>
-              <tr>
-                <th>Placement</th>
-                <th>Nationwide</th>
-                <th>One province</th>
-                <th>One city</th>
-                <th>One suburb</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <strong>Sidebar</strong>
-                  <span class="rate-table__note">Beside the filters, whole search</span>
-                </td>
-                <td>R2,500</td><td>R1,250</td><td>R700</td><td>R450</td>
-              </tr>
-              <tr>
-                <td>
-                  <strong>In-grid</strong>
-                  <span class="rate-table__note">After every sixth room</span>
-                </td>
-                <td>R4,000</td><td>R2,000</td><td>R1,100</td><td>R600</td>
-              </tr>
-              <tr>
-                <td>
-                  <strong>Room detail</strong>
-                  <span class="rate-table__note">Below a listing</span>
-                </td>
-                <td>R3,000</td><td>R1,500</td><td>R850</td><td>R450</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-scroll" tabindex="0" role="group" aria-label="Advertising rate card, scrolls sideways">
+            <table class="rate-table">
+              <thead>
+                <tr>
+                  <th>Placement</th>
+                  <th>Nationwide</th>
+                  <th>One province</th>
+                  <th>One city</th>
+                  <th>One suburb</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <strong>Sidebar</strong>
+                    <span class="rate-table__note">Beside the filters, whole search</span>
+                  </td>
+                  <td>R2,500</td><td>R1,250</td><td>R700</td><td>R450</td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>In-grid</strong>
+                    <span class="rate-table__note">After every sixth room</span>
+                  </td>
+                  <td>R4,000</td><td>R2,000</td><td>R1,100</td><td>R600</td>
+                </tr>
+                <tr>
+                  <td>
+                    <strong>Room detail</strong>
+                    <span class="rate-table__note">Below a listing</span>
+                  </td>
+                  <td>R3,000</td><td>R1,500</td><td>R850</td><td>R450</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
           <p class="muted" style="margin-top:1rem">
             <strong>Narrower targeting costs less, not more.</strong> A nationwide

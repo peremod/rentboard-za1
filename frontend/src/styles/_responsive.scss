@@ -586,11 +586,29 @@
   .nav-actions .btn { padding: .45rem .7rem; font-size: .78rem; }
 
   .legal-page { padding: 2rem 1rem; }
-  // Scrolls sideways, but the cells still wrap. `white-space: nowrap` was
-  // right for the short rate-card tables and wrong for the PAIA inventory,
-  // whose cells are sentences — it turned each one into a single line
-  // hundreds of characters wide, on the phones most of this market uses.
-  .legal-table { display: block; overflow-x: auto; }
+  // 🔴 The scroll moved to a WRAPPER — `.table-scroll` — and `display: block`
+  // came off the table. Two reasons, and the second is the one that was
+  // silently costing people the content.
+  //
+  //   1. WCAG 2.1.1/2.1.3. A region that scrolls must be reachable by
+  //      keyboard, and axe's `scrollable-region-focusable` flagged these on
+  //      nine pages at 360 and 390px only — the widths where this rule
+  //      applies. A keyboard user could not scroll the table at all, so the
+  //      columns past the right edge were simply unreachable. `tabindex="0"`
+  //      cannot go on the `<table>` itself without the wrapper, because the
+  //      role that makes it announce as a scroller would destroy the table
+  //      semantics.
+  //   2. `display: block` on a `<table>` drops it out of the table layout
+  //      box, and with it the row/column relationships several screen readers
+  //      derive from that box. So the mobile adaptation that made the PAIA
+  //      inventory swipeable also risked turning it from a table into a run
+  //      of unrelated cells — at exactly the widths this market uses.
+  //
+  // The cells still wrap. `white-space: nowrap` was right for the short
+  // rate-card tables and wrong for the PAIA inventory, whose cells are
+  // sentences — it turned each one into a single line hundreds of characters
+  // wide, on the phones most of this market uses.
+  .table-scroll { overflow-x: auto; }
 
   /**
    * ⚠️ The same treatment, and /admin/analytics needed it: a six-column
@@ -607,7 +625,9 @@
    * it either until the sweep ran with admin credentials: without them it
    * prints "SKIP the admin screens" and reports clean.
    */
-  .growth-table { display: block; overflow-x: auto; }
+  // Wrapped in `.table-scroll` too, for the reasons above — the scroll and the
+  // keyboard access both belong to the wrapper now, so this needs no rule.
+  // `display: block` is gone; see the note on `.legal-table`.
   .legal-table td, .legal-table th { white-space: normal; min-width: 11rem; }
   // The first column is short labels, so it does not need the prose width.
   .legal-table td:first-child, .legal-table th:first-child { min-width: 7rem; }
@@ -1018,8 +1038,11 @@
 
 @media (max-width: 700px) {
   // Four price columns will not fit; scroll rather than shrink the type to
-  // something unreadable.
-  .rate-table { display: block; overflow-x: auto; white-space: nowrap; }
+  // something unreadable. The scroll is on the `.table-scroll` wrapper so a
+  // keyboard can reach it and the table keeps its semantics — see the note on
+  // `.legal-table`.
+  .table-scroll { overflow-x: auto; }
+  .rate-table { white-space: nowrap; }
 }
 
 // Rate-verdict badges on the advertising reach table.

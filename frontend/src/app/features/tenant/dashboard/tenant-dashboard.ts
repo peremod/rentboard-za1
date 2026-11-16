@@ -67,7 +67,7 @@ import { Icon } from '../../../shared/components/icon/icon';
       <!-- Beside the reviews, because they are the same moment in a
            person's life — the letting is over — and two different things to
            do about it. -->
-      <app-dispute-panel role="tenant"/>
+      <app-dispute-panel party="tenant"/>
 
       <!-- ⚠️ Its own section, above the applications, because it is not one.
            A room you live in was filed under "Your applications / Live —
