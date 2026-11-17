@@ -34,7 +34,41 @@ version_at() {
     | sed -n 's/^  "version": "\([^"]*\)".*/\1/p' | head -1
 }
 
-git fetch "$REMOTE" --tags --quiet 2>/dev/null || grey "  (could not fetch $REMOTE — working from what is local)"
+git fetch "$REMOTE" "$BRANCH" --tags --quiet 2>/dev/null \
+  || git fetch "$REMOTE" --tags --quiet 2>/dev/null \
+  || grey "  (could not fetch $REMOTE — working from what is local)"
+
+# 🔴 Walk the REMOTE branch, not the local one.
+#
+# BRANCH defaulted to `develop`, which git resolves to the LOCAL branch of that
+# name — and a local branch is only as current as the last `git pull`. On 17
+# November this printed "Every release tag on develop is already on origin"
+# while v1.187.0 existed on neither the remote nor the machine: the local
+# `develop` was 48 commits behind origin and genuinely contained no release
+# commit the remote lacked. The script was not wrong about what it looked at.
+# It looked at the wrong thing, and said so in the reassuring direction.
+#
+# That is the shape CLAUDE.md keeps naming — a check that cannot fail, here by
+# measuring a ref nobody deploys from. Release tags are a property of the
+# SHARED history, so the shared ref is the only honest source.
+#
+# An explicit BRANCH=origin/develop still works: $REMOTE/$BRANCH does not
+# resolve for it, so it falls through to the value as given.
+if git rev-parse --verify --quiet "$REMOTE/$BRANCH" >/dev/null; then
+  SOURCE_REF="$REMOTE/$BRANCH"
+else
+  SOURCE_REF="$BRANCH"
+  git rev-parse --verify --quiet "$SOURCE_REF" >/dev/null \
+    || { red "neither $REMOTE/$BRANCH nor $BRANCH resolves — nothing to read."; exit 1; }
+  grey "  ($REMOTE/$BRANCH does not resolve — reading $SOURCE_REF as given)"
+fi
+
+# Informational, because an operator reading this output will otherwise wonder
+# why it disagrees with their checkout.
+if git rev-parse --verify --quiet "$BRANCH" >/dev/null && [[ "$SOURCE_REF" != "$BRANCH" ]]; then
+  behind=$(git rev-list --count "$BRANCH..$SOURCE_REF" 2>/dev/null || echo 0)
+  [[ "$behind" -gt 0 ]] && grey "  (your local $BRANCH is $behind commit(s) behind $SOURCE_REF; reading $SOURCE_REF)"
+fi
 
 REMOTE_TAGS=$(git ls-remote --tags "$REMOTE" 2>/dev/null | sed -n 's#.*refs/tags/\([^^]*\)$#\1#p' | sort -u)
 
@@ -60,10 +94,10 @@ while read -r commit; do
   fi
 
   if ! grep -qx "$tag" <<<"$REMOTE_TAGS"; then missing+=("$tag"); fi
-done < <(git rev-list --first-parent "$BRANCH")
+done < <(git rev-list --first-parent "$SOURCE_REF")
 
 if [[ ${#missing[@]} -eq 0 ]]; then
-  green "Every release tag on $BRANCH is already on $REMOTE."
+  green "Every release tag on $SOURCE_REF is already on $REMOTE."
   exit 0
 fi
 
