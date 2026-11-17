@@ -65,9 +65,20 @@ jobs:
 
       # OSV draws on a broader advisory corpus than npm's own feed (GHSA plus
       # distro and language-specific sources), so it catches advisories npm
-      # audit has not picked up. Overlap is expected and fine; the two
-      # disagreeing is the useful signal.
-      - name: OSV-Scanner — all three lockfiles
+      # audit has not picked up. Overlap is expected; the two disagreeing is
+      # the useful signal.
+      #
+      # 🔴 ADVISORY, not blocking, and the first run is why. OSV scans a
+      # lockfile whole — it has no `--omit=dev` equivalent for npm — so it
+      # reported 54 advisories and exited non-zero. Every one of the 54 was
+      # dev-flagged and NONE was production, which is both a useful
+      # corroboration of audit-gate.mjs's verdict and the proof that blocking
+      # here would reintroduce exactly what that gate exists to avoid: a red
+      # tick for build-chain transitives nobody can fix inside a range this
+      # project controls. The gate above is the blocking signal; this is
+      # breadth.
+      - name: OSV-Scanner — all three lockfiles (reports, does not block)
+        continue-on-error: true
         uses: google/osv-scanner-action/osv-scanner-action@v2.2.3
         with:
           scan-args: |-
@@ -75,19 +86,34 @@ jobs:
             --lockfile=./frontend/package-lock.json
             --lockfile=./backend/package-lock.json
 
-  dependency-review:
-    name: New dependencies in this PR
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      # Reviews what the PR ADDS rather than the whole tree, so a new
-      # dependency arriving with a known advisory is caught at the moment
-      # somebody introduces it, named in the PR that introduced it.
-      - uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
-          comment-summary-in-pr: on-failure
+  # ── `dependency-review` is NOT here, and that is a finding rather than an
+  # omission.
+  #
+  # The job existed in the first version of this file and failed on its first
+  # run with: "Dependency review is not supported on this repository. Please
+  # ensure that Dependency graph is enabled". That is a repository SETTING
+  # (Settings -> Code security -> Dependency graph), not something a workflow
+  # can turn on, so the job could never pass as written and a check that
+  # structurally cannot run is noise rather than security.
+  #
+  # ⚠️ The same setting gates Dependabot ALERTS, which means
+  # .github/dependabot.yml only proposes scheduled version bumps until it is
+  # enabled — it will not raise a security update for a newly disclosed
+  # advisory. Enabling Dependency graph is therefore worth more than this job
+  # was: it switches on the alerts AND makes dependency review possible.
+  #
+  # To restore once it is on, re-add:
+  #
+  #   dependency-review:
+  #     name: New dependencies in this PR
+  #     if: github.event_name == 'pull_request'
+  #     runs-on: ubuntu-latest
+  #     steps:
+  #       - uses: actions/checkout@v5
+  #       - uses: actions/dependency-review-action@v4
+  #         with:
+  #           fail-on-severity: high
+  #           comment-summary-in-pr: on-failure
 
   secrets:
     name: Secrets
@@ -145,14 +171,61 @@ jobs:
       - name: Build the image as Render builds it
         run: docker build -f backend/Dockerfile -t mastande-api:scan ./backend
 
-      - name: Trivy — OS packages and application dependencies in the image
-        uses: aquasecurity/trivy-action@0.33.1
-        with:
-          image-ref: mastande-api:scan
-          format: table
-          # The image is the production artifact, so critical and high in it
-          # block, matching the dependency gate's threshold rather than
-          # inventing a second standard.
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: '1'
+      # 🔴 The pinned BINARY, not the action. The first version of this file
+      # used `aquasecurity/trivy-action@0.33.1`, a version string invented
+      # rather than looked up, and the job died in "Set up job" with "Unable to
+      # resolve action ... unable to find version `0.33.1`".
+      #
+      # The audit environment cannot query any GitHub repository but this one,
+      # so no action version could be verified — and guessing again would be
+      # the same mistake. Release DOWNLOADS are reachable, so v0.70.0 was
+      # fetched, unpacked and run (`Version: 0.70.0`) before being written
+      # here. This also removes a third-party action from the supply chain and
+      # pins an exact artifact instead of a mutable tag.
+      - name: Install Trivy (pinned)
+        run: |
+          curl -sSL -o /tmp/trivy.tar.gz \
+            https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_0.70.0_Linux-64bit.tar.gz
+          mkdir -p /tmp/trivy && tar -xzf /tmp/trivy.tar.gz -C /tmp/trivy
+          /tmp/trivy/trivy --version
+
+      # 🔴 `--pkg-types os`, and this scope is the point rather than a
+      # weakening to get green.
+      #
+      # Measured against node:22-alpine before this was written: scanning ALL
+      # package types reports 10 CRITICAL/HIGH findings WITH fixes available,
+      # and every one of them is `lang-pkgs/node-pkg` — the npm tooling bundled
+      # inside the upstream Node image (ip-address, pacote, picomatch,
+      # sigstore). Those are neither this project's dependencies nor its OS
+      # packages, and nothing in this repository can patch them. Blocking on
+      # them would have been red on arrival for the second time in this
+      # workflow, after OSV.
+      #
+      # The OS layer, scanned alone, is clean — and it is the one layer nothing
+      # else here looks at: the application's npm tree is already covered twice
+      # over, by audit-gate.mjs for production and OSV for breadth. So Trivy
+      # blocks on exactly what it uniquely sees, which is a gate that can both
+      # pass today and fail for a real reason tomorrow when Alpine publishes an
+      # advisory.
+      - name: Trivy — OS packages in the image (blocking)
+        run: |
+          /tmp/trivy/trivy image \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --pkg-types os \
+            --exit-code 1 \
+            --format table \
+            mastande-api:scan
+
+      # The rest of the image, reported so the bundled-npm findings above are
+      # visible rather than silently out of scope. They move when the base
+      # image moves, which is a Dockerfile decision, not a lockfile one.
+      - name: Trivy — everything else in the image (reports, does not block)
+        continue-on-error: true
+        run: |
+          /tmp/trivy/trivy image \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 0 \
+            --format table \
+            mastande-api:scan

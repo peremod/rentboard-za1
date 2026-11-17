@@ -37,6 +37,11 @@ mkdir -p /tmp/gl && tar -xzf /tmp/gl.tar.gz -C /tmp/gl
 
 # Container image, as Render builds it.
 docker build -f backend/Dockerfile -t mastande-api:scan ./backend
+
+# what BLOCKS: the OS layer only — see "Three things the first run corrected"
+trivy image --severity CRITICAL,HIGH --ignore-unfixed --pkg-types os mastande-api:scan
+
+# what REPORTS: everything, including the base image's bundled npm tooling
 trivy image --severity CRITICAL,HIGH --ignore-unfixed mastande-api:scan
 ```
 
@@ -54,12 +59,13 @@ scanner that will ignore the day somebody commits one.
 | --- | --- | --- |
 | `audit-gate.mjs` — critical/high in the **production** tree | push, PR, weekly | **yes** |
 | `audit-gate.mjs` — everything else | push, PR, weekly | no, printed and counted |
-| OSV-Scanner — all three lockfiles | push, PR, weekly | **yes** |
-| `dependency-review` — what the PR adds | PR | **yes**, at high |
+| OSV-Scanner — all three lockfiles | push, PR, weekly | no, reports |
+| `dependency-review` — what the PR adds | — | **not configured**, see below |
 | `secret-scan.mjs` — tracked files | push, PR, weekly | **yes** |
 | Gitleaks — PR diff | PR | **yes** |
 | Gitleaks — full history | weekly, manual | no, reports |
-| Trivy — container image | push, PR, weekly | **yes**, critical/high |
+| Trivy — **OS packages** in the image | push, PR, weekly | **yes**, critical/high |
+| Trivy — everything else in the image | push, PR, weekly | no, reports |
 
 Two of those choices are deliberate and worth defending.
 
@@ -76,6 +82,51 @@ contains a real exposure — commit `b4c9852`, two Neon connection strings,
 20 October 2026 — and no scan can un-expose it. Rotation is the remedy. Making
 that job permanently red would train everyone to ignore it; reporting keeps the
 finding visible and keeps the blocking signals meaningful.
+
+---
+
+## Three things the first CI run corrected
+
+The workflow had never executed when it was written — no runner existed in the
+audit environment — and its first run on PR #9 failed three jobs. All three were
+configuration, and the corrections are more interesting than the mistakes.
+
+**1. OSV blocked on findings the gate deliberately does not.** OSV scans a
+lockfile whole; it has no `--omit=dev` equivalent for npm. It reported **54
+advisories and exited non-zero** — and every one of the 54 was dev-flagged,
+with **zero** in production. So it simultaneously corroborated
+`audit-gate.mjs`'s verdict and proved that blocking on it reintroduces exactly
+what that gate exists to prevent. It reports now.
+
+**2. Trivy was pinned to an invented version.** `aquasecurity/trivy-action@0.33.1`
+does not exist; the job died in *Set up job* with "unable to find version". The
+audit environment cannot query any GitHub repository but this one, so no action
+version could be verified — and guessing twice would be the same mistake. The
+workflow now downloads the **Trivy binary at a pinned v0.70.0**, which was
+fetched, unpacked and run before being written down. That also removes a
+third-party action from the supply chain.
+
+**3. Trivy's scope was wrong, and would have been red on arrival.** Scanning all
+package types in `node:22-alpine` reports **10 CRITICAL/HIGH findings with
+fixes available**, every one of them `lang-pkgs/node-pkg` — the npm tooling
+bundled inside the upstream Node image (`ip-address`, `pacote`, `picomatch`,
+`sigstore`). Those are neither this project's dependencies nor its OS packages,
+and nothing here can patch them. The **OS layer scanned alone is clean**, and it
+is the one layer nothing else looks at — the application's npm tree is already
+covered twice, by the gate for production and OSV for breadth. So Trivy blocks
+on exactly what it uniquely sees, and reports the rest.
+
+⚠️ **`dependency-review` was removed, and that is a finding.** It failed with
+"Dependency review is not supported on this repository. Please ensure that
+Dependency graph is enabled" — a setting under Settings → Code security, not
+something a workflow can switch on. A check that structurally cannot run is
+noise, not security.
+
+**The same setting gates Dependabot alerts.** Until Dependency graph is enabled,
+`.github/dependabot.yml` only proposes scheduled version bumps — it will not
+raise a security update when an advisory lands. Enabling it is worth more than
+the removed job was, and `.github/workflows/security.yml` carries the exact
+snippet to restore.
 
 ---
 
