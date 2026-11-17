@@ -1063,12 +1063,13 @@ p a:not(.btn):not(.btn-link) {
 // 🔴 It is inside a `<p>`, so the rule above now covers it — but it was
 // SUPPOSED to be covered already, and that is the finding worth keeping.
 //
-// _spec.scss carries `.cookie-banner a { color: var(--gold);
-// text-decoration: underline }`, plus four more `.cookie-banner` rules and a
-// responsive override. `.cookie-banner` appears in NO template: the component
+// _spec.scss USED TO CARRY `.cookie-banner a { color: var(--gold);
+// text-decoration: underline }`, plus eight more rules for that class and a
+// responsive override. `.cookie-banner` appeared in NO template: the component
 // renders `.cookie-notice` / `.cookie-notice__body` / `.cookie-notice__ok`.
 // So somebody had already identified this exact problem and fixed it against
-// a class name that no longer exists, and the dead rule read as coverage.
+// a class name that no longer existed, and the dead rule read as coverage.
+// All nine are deleted now; the tombstone in _spec.scss keeps the finding.
 //
 // The live class is named here so the gold-on-grey case is explicit rather
 // than inherited, and so a future change to the `p` scoping cannot silently

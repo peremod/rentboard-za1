@@ -715,7 +715,6 @@
   .legal-table td, .legal-table th { white-space: normal; min-width: 11rem; }
   // The first column is short labels, so it does not need the prose width.
   .legal-table td:first-child, .legal-table th:first-child { min-width: 7rem; }
-  .cookie-banner { left: .75rem; right: .75rem; bottom: .75rem; max-width: none; padding: 1.15rem; }
   .section { padding: 2.5rem 1rem; }
 }
 
