@@ -507,6 +507,12 @@ be read as cross-browser evidence.
 
 ## 6. Recommendations, in the order I would do them
 
+> **Status, 17 November 2026.** #2 was done with the audit. #3, #4, #7, #8 and
+> #9 are done and are described in §7. #1 and #6 remain, and both are blocked
+> on something this container cannot supply: a product decision and a real
+> screen reader. #5 remains and is not blocked.
+
+
 1. **Declare a browser support matrix.** It is the prerequisite for Step 4, and
    it is a product decision: name the Android Chrome and WebView versions this
    market actually runs, and say plainly that Opera Mini and KaiOS are not
@@ -532,3 +538,120 @@ be read as cross-browser evidence.
    coverage.
 9. **Scale the Tab walk's press budget** to the controls a page actually has
    (§5c), so a long board stops reading as a keyboard trap.
+
+
+---
+
+## 7. The five follow-ups, 17 November 2026
+
+Done after the audit landed. Each one is here because the thing it fixed was
+not what the recommendation said it was.
+
+### 7a. #9 — the Tab walk: the budget was innocent
+
+The recommendation was "scale the press budget to the controls a page has",
+because the board reported **2.1.2 no keyboard trap** as a failure here while
+CI passed it. Measuring first turned up a different cause.
+
+The drive identified a tab stop by a string: `TAG.class#id:text(20)`. On the
+board that collides wholesale — every room card's save button is a `BUTTON`
+with class `save-btn` and no text, so all of them produce `BUTTON.save-btn#:`.
+Measured on this container: a 120-press walk produced **120 stops and 20
+distinct id strings**, with `BUTTON.save-btn#:` appearing **49 times**.
+
+The walk was not cycling at all. The board lazy-loads cards as Tab scrolls it,
+so it kept reaching genuinely new controls — but the `allRevisited` test
+compared strings, found every one of the last twenty "already seen", and
+declared a trap. Scaling the budget would have made the walk longer and the
+verdict just as wrong.
+
+So the stop now carries a real identity: `data-a11y-uid`, assigned the first
+time an element is seen and kept after, which survives the DOM growing under
+the walk. The budget is scaled as well, because that part was also true — it
+is `controls-at-load × 3 + 60`, floored at 120 and ceilinged at 600, and the
+ceiling is reported when reached rather than passed over.
+
+| | before | after |
+| --- | --- | --- |
+| board @ 390px | 120 stops, **reported a trap** | 158 stops, ring closes, passes |
+| board @ 1280px | 120 stops | 190 stops |
+| full drive | 1m53s | 2m15s |
+
+That also closes §5c: the far end of the board is no longer unmeasured for
+2.4.11 and 2.4.7. Falsified with a **real** keyboard trap injected into
+`app.ts` — a handler that cycles focus between two controls — which the drive
+caught at exit 1 after the full 240 presses, and which was reverted.
+
+### 7b. #3 — CLAUDE.md's breakpoints, and the list one level down
+
+CLAUDE.md said "the breakpoints this codebase actually uses are 900 / 768 /
+480". The stylesheets declare eleven. It now names all eleven, says the four
+hand-checked widths are a smoke check rather than coverage, and records that
+both §4c defects lived in the gaps those four leave.
+
+The part worth more than the text: **`responsive-drive.mjs` was itself
+carrying a hand-written array** of the same eleven numbers. A second list to
+keep in step is the same defect one level in, and it would have gone stale the
+same way while the drive still printed "every declared breakpoint". It now
+reads every `(min|max)-width` out of `frontend/src`, and exits 1 if it finds
+none, so an empty list cannot sail through. Proven by adding a `523px` query
+and watching 522/523/524 appear in the next run unprompted.
+
+### 7c. #7 — 320px Reflow: clean, and now driven
+
+All six public pages pass at 320px, so 1.4.10 had no defect to find. 320 is
+not a breakpoint and the derivation above would never have reached it, so it
+is added by hand as a criterion and kept separate from the derived list to
+keep that distinction visible. The drive is 180 layouts now. Falsified by
+forcing a 430px min-width under 330px: 110px of page scroll, exit 1.
+
+### 7d. #8 — the dead cookie rules were nine, not five
+
+`.cookie-banner` and its `h3`/`p`/`a`, `@keyframes slideUp`, `.cookie-actions`,
+`.btn-cookie-reject`/`accept`/`manage`, and a responsive override. None of them
+appears in any template; the live component renders `.cookie-notice*`.
+
+⚠️ **`css-coverage-audit.mjs` cannot see this class of defect, by design.** Its
+own baseline says what it checks: "classes used in a template with no rule
+anywhere". The reverse — a rule with no template — is unguarded, and that is
+how a correct `text-decoration: underline` sat in this repository pointing at
+nothing while the live cookie link failed 1.4.1.
+
+Measured rather than guessed, and **not** turned into a gate: **32 of 417**
+classes declared in the global stylesheets are mentioned nowhere else. But
+about twelve of those are live — `status-*` and `passport-pill--*` are applied
+through `[class]="'status-' + x"` bindings, and `ng-invalid`/`ng-touched` are
+Angular's own. A bare reverse sweep would condemn live code, so it needs
+judgement per class rather than a baseline nobody reads. Recorded as a
+follow-up, with one specific lead: the six `btn--*` aliases in `_bridge.scss`
+exist under a comment claiming "templates use both", and no template uses the
+BEM form.
+
+### 7e. #4 — an alt check that covers what the sweep cannot
+
+`scripts/alt-text-lint.mjs`: 11 `<img>` tags across 8 files, all of which
+already declare alt. It is preventive, and it is a **source** lint on purpose.
+axe reports `image-alt` for images that are in the DOM when it looks, and an
+image only gets there if something rendered it — the ad slot needs a live
+campaign, the storefront logo an upload, the gallery photos, the admin preview
+a chosen file. The sweep speaks for whatever the fixtures produced on the
+routes it visited; Lighthouse speaks for four URLs. Reading the source covers
+every branch no seeded database will reach.
+
+`alt=""` passes deliberately — it is the specified way to mark an image
+decorative and four images here use it correctly next to the text they would
+otherwise repeat. Only a missing alt fails.
+
+Two things it taught while being built, both recorded in the script:
+
+- its first run reported an `<img>` inside a **doc comment** in
+  `imagekit.utils.ts`, prose about images rather than an image;
+- stripping those comments then moved every line number after them, so the
+  falsification pointed at line 82 for a tag on line 93. Comments are blanked
+  in place now, preserving newlines. **A finding that points at the wrong line
+  teaches the reader not to trust the next one.**
+
+⚠️ And it is wired in **two** places, which is the point: `npm run audit`, and
+its own step in `ci.yml`. CI invokes these scripts individually and does not
+run `npm run audit`, so the package script alone would have been a control
+that only looked like one.

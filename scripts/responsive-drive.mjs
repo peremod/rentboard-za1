@@ -37,14 +37,69 @@
  *   WIDTHS=600,601 node scripts/responsive-drive.mjs
  */
 import { chromium } from 'playwright';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const WEB = process.env.BASE_URL ?? 'http://localhost:4200';
 
-/** Every boundary the stylesheets actually declare, each probed ±1. */
-const BOUNDARIES = [360, 480, 600, 640, 700, 768, 769, 860, 900, 901, 1600];
+/**
+ * Every boundary the stylesheets actually declare, each probed ±1 — READ FROM
+ * THE SOURCE rather than written down here.
+ *
+ * 🔴 This was a hand-maintained array, and a hand-maintained list of
+ * breakpoints is precisely the defect this drive was built to catch. CLAUDE.md
+ * named three of the eleven this codebase declares and prescribed four test
+ * widths; both defects §4c found lived in the gaps that left, because 600, 640,
+ * 700 and 860 were never crossed by anything. An array in this file would have
+ * gone stale the same way, just one level further in — and the drive would
+ * still have reported "every declared breakpoint" while skipping the new one.
+ *
+ * So the list is derived. Add a media query anywhere under frontend/src and
+ * this drive crosses it on the next run, with no second place to remember.
+ */
+const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'frontend', 'src');
+const walk = (d) =>
+  readdirSync(d).flatMap((e) => {
+    const f = join(d, e);
+    return statSync(f).isDirectory() ? walk(f) : [f];
+  });
+const declaredBoundaries = () => {
+  const found = new Set();
+  for (const f of walk(SRC)) {
+    if (!/\.(scss|css|ts|html)$/.test(f)) continue;
+    for (const m of readFileSync(f, 'utf8').matchAll(/\((?:min|max)-width:\s*(\d+)px\)/g)) {
+      found.add(Number(m[1]));
+    }
+  }
+  return [...found].sort((a, b) => a - b);
+};
+/**
+ * 320px is not a breakpoint — it is a CRITERION, so it is added by hand.
+ *
+ * WCAG 2.2 1.4.10 Reflow (Level AA) requires content to work at 320 CSS px
+ * wide without two-dimensional scrolling: that is 1280px at 400% zoom, which
+ * is how a low-vision user actually reaches it. Nothing in the stylesheets
+ * declares a 320px boundary, so deriving the widths from the source — correct
+ * for everything else — would never test it. The narrowest width this drive
+ * crossed before was 359px, and the criterion's threshold is 320.
+ *
+ * It is kept separate from BOUNDARIES rather than appended to the array so
+ * that it cannot be mistaken for something the stylesheets asked for.
+ */
+const REFLOW_WIDTH = 320;
+const BOUNDARIES = declaredBoundaries();
+// A drive that finds nothing to drive must say so rather than pass: an empty
+// list would sail through every assertion below and report success.
+if (BOUNDARIES.length === 0) {
+  console.error(`❌ no media-query boundaries found under ${SRC} — nothing was driven.`);
+  process.exit(1);
+}
 const WIDTHS = process.env.WIDTHS
   ? process.env.WIDTHS.split(',').map(Number)
-  : [...new Set(BOUNDARIES.flatMap((b) => [b - 1, b, b + 1]))].sort((a, b) => a - b);
+  : [...new Set([REFLOW_WIDTH, ...BOUNDARIES.flatMap((b) => [b - 1, b, b + 1])])].sort(
+      (a, b) => a - b,
+    );
 
 const PAGES = (process.env.PAGES ?? '/,/pricing,/advertise,/legal/terms,/auth/login,/auth/register').split(',');
 

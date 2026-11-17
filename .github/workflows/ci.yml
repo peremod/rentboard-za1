@@ -174,6 +174,23 @@ jobs:
         # Runs after the production build above, because it reads the built CSS.
         run: node scripts/css-coverage-audit.mjs
 
+      - name: Image alt text — every <img> in every template
+        # The complement to the axe sweep in the e2e job, not a duplicate of it.
+        #
+        # axe reports `image-alt` on the images that are IN THE DOM when it
+        # looks, and an image only gets there if something rendered it: the ad
+        # slot needs a live campaign, the storefront logo needs an upload, the
+        # room gallery needs photos, the admin creative preview needs a chosen
+        # file. So the sweep speaks for whatever the seeded database produced
+        # on the routes it visited, and is silent about the rest. Lighthouse is
+        # narrower still — lighthouserc.json names four URLs.
+        #
+        # This reads the source, so it covers every <img> a developer can write
+        # whether or not any fixture reaches it. alt="" PASSES: an empty alt is
+        # the specified way to mark an image decorative, and four in this
+        # codebase correctly use it. What fails is no alt in any form.
+        run: node scripts/alt-text-lint.mjs
+
       # `if: !cancelled()` on the three steps below, and on three in the e2e
       # job. A job stops at its first failing step, so for ten runs the red
       # production build was also hiding everything after it — and when the

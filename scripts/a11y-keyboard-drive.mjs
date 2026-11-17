@@ -135,7 +135,31 @@ for (const width of WIDTHS) {
     // Tab is pressed for real rather than calling .focus(), because the
     // question is what a keyboard user reaches, and .focus() reaches things
     // the Tab order does not.
-    const MAX = 120;
+    /**
+     * The budget follows the page, rather than the page having to fit a
+     * number chosen once for a different page.
+     *
+     * A flat 120 was both too small and too large: too small for the board,
+     * whose far end went unmeasured for 2.4.11 and 2.4.7 (§5c), and larger
+     * than any auth page needs. It is now three times the controls the page
+     * offers at load, plus headroom, because the board lazy-loads more cards
+     * as Tab scrolls it and the count at load is a floor rather than a total.
+     *
+     * Bounded at both ends on purpose: never below 120, so a short page is
+     * still walked well past its own ring and a trap there is still caught;
+     * never above HARD_CEILING, so a page that genuinely never stops growing
+     * cannot hang CI. Reaching the ceiling is reported as what it is.
+     */
+    const atLoad = await page.evaluate(() =>
+      [...document.querySelectorAll(
+        'a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"])',
+      )].filter((e) => {
+        const cs = getComputedStyle(e);
+        const r = e.getBoundingClientRect();
+        return cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0 && r.height > 0;
+      }).length);
+    const HARD_CEILING = 600;
+    const MAX = Math.min(HARD_CEILING, Math.max(120, atLoad * 3 + 60));
     const seen = [];
     await page.evaluate(() => document.body.focus());
     let trapped = false;
@@ -246,6 +270,35 @@ for (const width of WIDTHS) {
           visiblePoints: visible,
           probedPoints: probed,
           coveredBy,
+          /**
+           * 🔴 `id` is a LABEL, not an identity, and for a long time it was
+           * used as both.
+           *
+           * It is `TAG.class#id:text(20)`, which on the board collides wholesale:
+           * 49 room cards each carry a save button with the same tag, the same
+           * class and no text, so all 49 produce the string `BUTTON.save-btn#:`.
+           * Measured on this container: a 120-press walk produced 120 stops and
+           * TWENTY distinct id strings.
+           *
+           * That is what made 2.1.2 fail on a page with no trap. The board
+           * lazy-loads more cards as Tab scrolls, so the walk keeps reaching
+           * genuinely new controls — but the last twenty all matched an earlier
+           * STRING, the `allRevisited` test concluded focus was cycling, and the
+           * drive reported a keyboard trap. It passed in CI only because CI's
+           * seeded database has few enough rooms that the ring closes first.
+           *
+           * `uid` is the identity: assigned the first time an element is seen
+           * and kept thereafter, so it survives the DOM growing underneath the
+           * walk. One attribute, matched by no selector in this application.
+           */
+          uid: (() => {
+            let u = el.getAttribute('data-a11y-uid');
+            if (!u) {
+              u = `u${(window.__a11yUid = (window.__a11yUid ?? 0) + 1)}`;
+              el.setAttribute('data-a11y-uid', u);
+            }
+            return u;
+          })(),
           id: `${el.tagName}.${String(el.className ?? '')}#${el.id}:${(el.textContent ?? '').slice(0, 20)}`,
           // The geometry at the moment of the verdict, so a 2.4.11 failure can
           // be read rather than re-derived. Two cases survived the fix and my
@@ -277,8 +330,8 @@ for (const width of WIDTHS) {
         if (again && again.id === stop.id) stop = again;
       }
 
-      if (stop === null) break;                       // focus left the document
-      if (seen.length && stop.id === seen[0].id) break; // cycled back to the start
+      if (stop === null) break;                        // focus left the document
+      if (seen.length && stop.uid === seen[0].uid) break; // cycled back to the start
       seen.push(stop);
       /**
        * 🔴 Running out of presses is not a trap.
@@ -290,17 +343,24 @@ for (const width of WIDTHS) {
        * signature is the stop list ceasing to grow while Tab keeps moving.
        */
       if (i === MAX - 1) {
-        const ids = new Set(seen.map((x) => x.id));
-        const lastTwenty = new Set(seen.slice(-20).map((x) => x.id));
-        const allRevisited = [...lastTwenty].every((id) =>
-          seen.slice(0, -20).some((x) => x.id === id));
+        // By uid, so "already seen" means the SAME CONTROL and not merely one
+        // that describes itself the same way. See the note on uid above.
+        const uids = new Set(seen.map((x) => x.uid));
+        const lastTwenty = new Set(seen.slice(-20).map((x) => x.uid));
+        const allRevisited = [...lastTwenty].every((uid) =>
+          seen.slice(0, -20).some((x) => x.uid === uid));
         if (allRevisited) trapped = true;
-        else note(`2.1.2 stopped after ${MAX} Tab presses with ${ids.size} distinct controls and still finding new ones — a long page, not a trap`);
+        else
+          note(
+            `2.1.2 stopped after ${MAX} Tab presses (budget from ${atLoad} controls at load` +
+              `${MAX === HARD_CEILING ? ', at the hard ceiling' : ''}) with ${uids.size} ` +
+              `distinct controls and still finding new ones — a long page, not a trap`,
+          );
       }
     }
 
     check(seen.length > 0, `2.1.1 Tab reaches ${seen.length} control(s)`);
-    check(!trapped, `2.1.2 no keyboard trap — the Tab order ends or cycles within ${MAX} presses`);
+    check(!trapped, `2.1.2 no keyboard trap — the Tab order ends or cycles within ${MAX} presses (${seen.length} walked)`);
 
     // Only elements that were really testable: at least one probe point inside
     // the viewport, and none of them reaching the element.
