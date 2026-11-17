@@ -386,6 +386,47 @@ describe('account lifecycle: deactivate, reactivate, delete', () => {
     await stillThere(tenant.userId, tenant.email);
   });
 
+  /**
+   * ⚠️ AND THE MIRROR OF IT, which is the check the harness was missing.
+   *
+   * The test above proves the reset does not switch throttling OFF. Nothing
+   * proved it switches the counter BACK, so when @nestjs/throttler 6.5.0 ->
+   * 6.8.0 made `resetRateLimits` a partial clear, the whole suite went red
+   * with "expected 429 to be 200" in eleven specs about erasure, verification
+   * and tenancies — and not one of them named the limiter.
+   *
+   * 6.8.0 splits the state across two maps: the record, and a timestamp per
+   * hit. `increment` rebuilds the count from the second one on every request,
+   * so clearing the first is undone immediately. A structural guard inside the
+   * helper cannot see that (it was written, run against 6.8.0, and did not
+   * fire — the clear it checks for genuinely succeeds). Driving a real request
+   * through the real limiter can, and that is all this test does.
+   *
+   * Falsified by clearing only `.storage` in the helper, which is the 6.5.0
+   * behaviour: 6 of this file's 20 cases fail, as they did before — but this
+   * one fails as "expected 429 to be 403" under the name "resets the limiter
+   * it claims to reset", where the other five say "expected 429 to be 200" in
+   * tests about erasure. It does not fail alone; it names the cause.
+   */
+  it('resets the limiter it claims to reset', async () => {
+    const tenant = await signUp(ctx, 'TENANT');
+    // Wrong password throughout: every attempt is refused on its merits, the
+    // account survives, and the only thing that moves is the counter.
+    const attempt = () => del(tenant.token, {
+      password: 'NotMyPassword1', confirm: 'DELETE', understood: true,
+    });
+
+    for (let i = 0; i < 10; i++) expect((await attempt()).status).toBe(403);
+    expect((await attempt()).status).toBe(429);
+
+    await resetRateLimits(ctx);
+
+    // 403, not 429: refused for the wrong password again, which is the proof
+    // that the counter went back to zero rather than the route going quiet.
+    expect((await attempt()).status).toBe(403);
+    await stillThere(tenant.userId, tenant.email);
+  });
+
   it('refuses a second deletion, and pausing or waking a dead account', async () => {
     const tenant = await signUp(ctx, 'TENANT');
     const token = tenant.token;

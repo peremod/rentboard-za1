@@ -325,10 +325,85 @@ export async function signUp(
  * for the duration of every test — including the one that asserts it bites.
  */
 export async function resetRateLimits(ctx: TestContext): Promise<void> {
-  const storage = ctx.app.get<{ storage?: Map<string, unknown> }>(ThrottlerStorage, {
-    strict: false,
-  });
-  storage?.storage?.clear();
+  /**
+   * 🔴 The throw below is the LAST line of defence, not the check. The check is
+   * a test — see "resets the limiter it claims to reset" in
+   * test/account-lifecycle.int-spec.ts.
+   *
+   * `storage?.storage?.clear()` reached two levels into a private field of
+   * @nestjs/throttler with optional chaining, so the day that internal changed
+   * shape the call became a silent no-op: the limiter was never reset, every
+   * test that relies on the reset started hitting 429, and the failure
+   * surfaced as "expected 429 to be 200" in eleven unrelated specs with
+   * nothing pointing at the cause.
+   *
+   * That is exactly the shape of defect this codebase keeps finding — the
+   * comment above already warns that a reset which quietly became "throttling
+   * off" would be a control that only looks like a control. It had the
+   * failure direction right and the mechanism inverted: the reset did not stop
+   * throttling, it stopped resetting.
+   *
+   * ⚠️ And a structural guard here CANNOT catch it. The first attempt at this
+   * rewrite threw when the internals exposed no clearable Map, was run against
+   * 6.8.0 to prove it, and did not fire: 6.8.0 still exposes a Map, the clear
+   * still succeeds, and the count comes back anyway from a SECOND map the
+   * helper never touched. A check on the shape of the API cannot see a clear
+   * that is undone one line later; only driving a request through the limiter
+   * can. Hence the test, which does.
+   *
+   * Found when @nestjs/throttler 6.5.0 -> 6.8.0 broke it. That bump has since
+   * been reverted (no advisory asked for it), but .github/dependabot.yml will
+   * propose it again, so the no-op had to become a detected failure rather
+   * than a version to avoid.
+   */
+  const store = ctx.app.get<unknown>(ThrottlerStorage, { strict: false });
+  if (!store) {
+    throw new Error(
+      'resetRateLimits: no ThrottlerStorage is registered. Rate limits cannot be ' +
+        'cleared between cases, so any suite heavier than one person will fail on a 429.',
+    );
+  }
+
+  // The documented surface first: a storage implementation that exposes its own
+  // clear/reset (a Redis-backed one, say) is the stable thing to call. Not a
+  // `return` though — see below, a clear() that clears only part of the state
+  // is exactly the bug this helper already had once.
+  const withClear = store as { clear?: () => void; reset?: () => void };
+  if (typeof withClear.clear === 'function') withClear.clear();
+  else if (typeof withClear.reset === 'function') withClear.reset();
+
+  /**
+   * Then every Map the storage holds, because the count does not live in one.
+   *
+   * 6.8.0 keeps TWO: `_storage` (exposed through a `storage` getter) holds the
+   * record, and `hitExpirations` holds a timestamp per hit. `increment` calls
+   * `pruneExpiredHits` on every request, whose last line is
+   *
+   *     this.storage.get(key).totalHits.set(throttlerName, hits.length)
+   *
+   * — it RECONSTRUCTS the count from `hitExpirations`. So clearing `.storage`
+   * alone is not merely incomplete: the next request puts the count straight
+   * back. 6.5.0 had one map and clearing it worked, which is why the bump read
+   * as a mystery 429 rather than as a broken helper.
+   *
+   * Clearing whatever Maps are there, rather than the ones named today, is what
+   * survives the next split. Deduplicated by identity because `storage` and
+   * `_storage` are the same object.
+   */
+  const maps = new Set<Map<unknown, unknown>>();
+  const consider = (v: unknown) => { if (v instanceof Map) maps.add(v); };
+  consider((store as { storage?: unknown }).storage);
+  for (const v of Object.values(store as Record<string, unknown>)) consider(v);
+  for (const m of maps) m.clear();
+
+  if (maps.size === 0 && typeof withClear.clear !== 'function' && typeof withClear.reset !== 'function') {
+    throw new Error(
+      'resetRateLimits: ThrottlerStorage exposes no clear(), no reset(), and holds no ' +
+        'Map to clear. @nestjs/throttler has almost certainly changed its internals. Fix ' +
+        'this helper rather than letting it silently stop resetting — the symptom is ' +
+        '"expected 429 to be 200" in specs that have nothing to do with rate limiting.',
+    );
+  }
 }
 
 export async function signUpAdmin(ctx: TestContext) {

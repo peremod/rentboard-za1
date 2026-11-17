@@ -1,0 +1,79 @@
+# Dependabot — automated dependency updates and alerts.
+#
+# Three npm manifests plus the Actions used by the workflows. Before this file
+# existed there was no dependabot config at all, so nothing proposed a security
+# update and nothing watched the Actions.
+#
+# ── Why grouped, and why weekly
+#
+# The Angular packages peer-depend on each other at EXACT versions: a lone PR
+# bumping @angular/core cannot resolve, because @angular/forms wants the old
+# one. They are grouped so Dependabot opens one coherent PR. The same is true
+# of the @nestjs family.
+#
+# Weekly, not daily. This project has one maintainer; a daily cadence across
+# three manifests produces more PRs than anyone will read, and a bot nobody
+# reads is the "control that only looks like a control" CLAUDE.md warns about.
+# Security updates are not rate-limited by this setting — Dependabot raises
+# those as soon as an advisory lands.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      # commitlint.config.js governs this repo; `chore(deps)` is an allowed
+      # type/scope pair, and a PR whose title fails the Validate commit
+      # messages job cannot merge.
+      prefix: "chore(deps)"
+    groups:
+      dev-tooling:
+        patterns: ["*"]
+        dependency-type: development
+
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      angular:
+        patterns: ["@angular/*"]
+      other:
+        patterns: ["*"]
+        exclude-patterns: ["@angular/*"]
+
+  - package-ecosystem: npm
+    directory: "/backend"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      nestjs:
+        patterns: ["@nestjs/*"]
+      prisma:
+        patterns: ["prisma", "@prisma/*"]
+      other:
+        patterns: ["*"]
+        exclude-patterns: ["@nestjs/*", "prisma", "@prisma/*"]
+
+  # The workflows pin third-party actions by TAG, which is mutable: whoever
+  # controls the tag controls what runs in CI. Watching them here is the
+  # mitigation this repository can actually maintain; pinning by commit SHA is
+  # stricter and docs/SECURITY-SCANNING.md says how.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "ci(deps)"

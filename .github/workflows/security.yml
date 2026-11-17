@@ -1,0 +1,231 @@
+# Security — dependency vulnerabilities, secrets, and the container image.
+#
+# Before this file, NONE of npm audit, OSV, Trivy, Snyk, Gitleaks, TruffleHog,
+# CodeQL, Semgrep, dependency-review or even the repository's own
+# scripts/secret-scan.mjs ran in CI. The secret scanner existed but lived only
+# in .husky/pre-commit — a client-side hook, skipped by `git commit --no-verify`
+# and absent for anyone who has not run husky. Nothing server-side looked.
+#
+# ── What blocks and what reports, and why the split
+#
+# Blocking a merge is a strong claim and it has to be survivable. The gate is
+# critical/high in the PRODUCTION dependency tree, because that code answers
+# real requests. The build chain is reported, not blocked: it currently carries
+# 3 high and 19 moderate transitives under @angular/cli's own npm tooling with
+# no fix inside any range this project controls, and a gate nobody can satisfy
+# is a gate someone switches off. scripts/audit-gate.mjs implements that split
+# and self-checks before it judges anything.
+#
+# Secrets block on a pull request diff. The FULL-HISTORY scan reports instead,
+# for an honest reason: this repository's history contains a real exposure
+# (commit b4c9852, two Neon connection strings, 20 October 2026) that no scan
+# can un-expose. Rotation is the remedy, not a passing tick. Making that
+# permanent red would train everyone to ignore the job; reporting it keeps it
+# visible and keeps the blocking signal meaningful.
+#
+# ⚠️ Third-party actions are pinned by TAG, not commit SHA. A tag is mutable,
+# so this trades some supply-chain strictness for maintainability by one
+# person; .github/dependabot.yml watches them, and
+# docs/SECURITY-SCANNING.md explains how to harden to SHA pins.
+name: Security
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main, develop]
+  schedule:
+    # Weekly, Monday 04:17 UTC. A newly disclosed advisory needs no commit to
+    # become true, so the schedule is the only thing that catches one against
+    # code nobody has touched. 04:17 rather than 04:00: the hour is heavily
+    # contended and a queued run is a delayed run.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependencies:
+    name: Dependency vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      # No `npm ci` anywhere in this job. `npm audit` reads the lockfile, and
+      # installing would execute dependency install scripts — 5 of the
+      # frontend's and 5 of the backend's declare one — for a step whose whole
+      # purpose is to judge those dependencies before trusting them.
+      - name: Production vulnerabilities block; build-chain findings report
+        run: node scripts/audit-gate.mjs
+
+      # OSV draws on a broader advisory corpus than npm's own feed (GHSA plus
+      # distro and language-specific sources), so it catches advisories npm
+      # audit has not picked up. Overlap is expected; the two disagreeing is
+      # the useful signal.
+      #
+      # 🔴 ADVISORY, not blocking, and the first run is why. OSV scans a
+      # lockfile whole — it has no `--omit=dev` equivalent for npm — so it
+      # reported 54 advisories and exited non-zero. Every one of the 54 was
+      # dev-flagged and NONE was production, which is both a useful
+      # corroboration of audit-gate.mjs's verdict and the proof that blocking
+      # here would reintroduce exactly what that gate exists to avoid: a red
+      # tick for build-chain transitives nobody can fix inside a range this
+      # project controls. The gate above is the blocking signal; this is
+      # breadth.
+      - name: OSV-Scanner — all three lockfiles (reports, does not block)
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@v2.2.3
+        with:
+          scan-args: |-
+            --lockfile=./package-lock.json
+            --lockfile=./frontend/package-lock.json
+            --lockfile=./backend/package-lock.json
+
+  # ── `dependency-review` is NOT here, and that is a finding rather than an
+  # omission.
+  #
+  # The job existed in the first version of this file and failed on its first
+  # run with: "Dependency review is not supported on this repository. Please
+  # ensure that Dependency graph is enabled". That is a repository SETTING
+  # (Settings -> Code security -> Dependency graph), not something a workflow
+  # can turn on, so the job could never pass as written and a check that
+  # structurally cannot run is noise rather than security.
+  #
+  # ⚠️ The same setting gates Dependabot ALERTS, which means
+  # .github/dependabot.yml only proposes scheduled version bumps until it is
+  # enabled — it will not raise a security update for a newly disclosed
+  # advisory. Enabling Dependency graph is therefore worth more than this job
+  # was: it switches on the alerts AND makes dependency review possible.
+  #
+  # To restore once it is on, re-add:
+  #
+  #   dependency-review:
+  #     name: New dependencies in this PR
+  #     if: github.event_name == 'pull_request'
+  #     runs-on: ubuntu-latest
+  #     steps:
+  #       - uses: actions/checkout@v5
+  #       - uses: actions/dependency-review-action@v4
+  #         with:
+  #           fail-on-severity: high
+  #           comment-summary-in-pr: on-failure
+
+  secrets:
+    name: Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Gitleaks needs history to scan history; the default shallow clone
+          # would silently scan one commit and pass.
+          fetch-depth: 0
+
+      # The repository's own calibrated scanner, which until now ran only as a
+      # pre-commit hook and so was absent from every push made with
+      # --no-verify or without husky installed.
+      - name: In-repo scanner — live credentials in tracked files
+        run: node scripts/secret-scan.mjs
+
+      # Blocking, and scoped to what this change introduces.
+      - name: Gitleaks — this pull request's diff
+        if: github.event_name == 'pull_request'
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
+          GITLEAKS_ENABLE_SUMMARY: 'true'
+
+      # Reporting, not blocking — see the header. Reads the whole history every
+      # week so a credential that was committed and later removed is still
+      # named, because removal does not revoke anything.
+      - name: Gitleaks — full history (reports, does not block)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'true'
+          GITLEAKS_ENABLE_SUMMARY: 'true'
+
+  container:
+    name: Container image
+    # render.yaml runs BOTH api services with `runtime: docker` and
+    # `dockerfilePath: ./backend/Dockerfile`, so this image IS the production
+    # artifact — and its base, node:22-alpine, is an unpinned mutable tag that
+    # nothing scanned until now. Scoped to when the image or its inputs change,
+    # plus the weekly run, because the base image gains advisories on its own.
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build the image as Render builds it
+        run: docker build -f backend/Dockerfile -t mastande-api:scan ./backend
+
+      # 🔴 The pinned BINARY, not the action. The first version of this file
+      # used `aquasecurity/trivy-action@0.33.1`, a version string invented
+      # rather than looked up, and the job died in "Set up job" with "Unable to
+      # resolve action ... unable to find version `0.33.1`".
+      #
+      # The audit environment cannot query any GitHub repository but this one,
+      # so no action version could be verified — and guessing again would be
+      # the same mistake. Release DOWNLOADS are reachable, so v0.70.0 was
+      # fetched, unpacked and run (`Version: 0.70.0`) before being written
+      # here. This also removes a third-party action from the supply chain and
+      # pins an exact artifact instead of a mutable tag.
+      - name: Install Trivy (pinned)
+        run: |
+          curl -sSL -o /tmp/trivy.tar.gz \
+            https://github.com/aquasecurity/trivy/releases/download/v0.70.0/trivy_0.70.0_Linux-64bit.tar.gz
+          mkdir -p /tmp/trivy && tar -xzf /tmp/trivy.tar.gz -C /tmp/trivy
+          /tmp/trivy/trivy --version
+
+      # 🔴 `--pkg-types os`, and this scope is the point rather than a
+      # weakening to get green.
+      #
+      # Measured against node:22-alpine before this was written: scanning ALL
+      # package types reports 10 CRITICAL/HIGH findings WITH fixes available,
+      # and every one of them is `lang-pkgs/node-pkg` — the npm tooling bundled
+      # inside the upstream Node image (ip-address, pacote, picomatch,
+      # sigstore). Those are neither this project's dependencies nor its OS
+      # packages, and nothing in this repository can patch them. Blocking on
+      # them would have been red on arrival for the second time in this
+      # workflow, after OSV.
+      #
+      # The OS layer, scanned alone, is clean — and it is the one layer nothing
+      # else here looks at: the application's npm tree is already covered twice
+      # over, by audit-gate.mjs for production and OSV for breadth. So Trivy
+      # blocks on exactly what it uniquely sees, which is a gate that can both
+      # pass today and fail for a real reason tomorrow when Alpine publishes an
+      # advisory.
+      - name: Trivy — OS packages in the image (blocking)
+        run: |
+          /tmp/trivy/trivy image \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --pkg-types os \
+            --exit-code 1 \
+            --format table \
+            mastande-api:scan
+
+      # The rest of the image, reported so the bundled-npm findings above are
+      # visible rather than silently out of scope. They move when the base
+      # image moves, which is a Dockerfile decision, not a lockfile one.
+      - name: Trivy — everything else in the image (reports, does not block)
+        continue-on-error: true
+        run: |
+          /tmp/trivy/trivy image \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 0 \
+            --format table \
+            mastande-api:scan
