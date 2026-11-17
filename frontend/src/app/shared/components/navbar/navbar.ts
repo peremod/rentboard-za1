@@ -184,9 +184,16 @@ export class Navbar {
      * positioned against the header rather than the viewport, the menu
      * then slid away up the screen while still open.
      *
-     * `overflow-y` and not `overflow`: body already carries
-     * `overflow-x:hidden` from _spec.scss, and setting the shorthand here
-     * would quietly drop it on every close.
+     * `overflow-y` and not `overflow`, and the reason is now stronger than
+     * when this was written. The horizontal clamp lives on `html`, not body
+     * (_spec.scss), because `body { overflow-x: hidden }` made body a scroll
+     * container while `document.scrollingElement` stayed `html` and left
+     * `scrollIntoView()` inert across the whole application.
+     *
+     * So the shorthand here would do two things, not one: drop the clamp on
+     * every close, and — by setting body's own overflow-x to hidden — make
+     * body a scroll container again and reintroduce that defect. Both are
+     * asserted by scripts/nav-sheet-drive.mjs.
      */
     effect(() => {
       if (!this.isBrowser) return;
