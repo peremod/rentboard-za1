@@ -87,6 +87,19 @@ export class SeoController {
     }
 
     return [
+      '# AI crawlers — search, retrieval AND training — are allowed, deliberately.',
+      '# GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, PerplexityBot,',
+      '# Google-Extended, CCBot and the rest all match "User-agent: *" below, so',
+      '# they are allowed on public pages and refused on the private ones by the',
+      '# same rules as every other crawler. This is the whole policy.',
+      '#',
+      '# 🔴 Do NOT "add AI-crawler support" by giving any of them their own',
+      '# User-agent group. A bot obeys the MOST specific group that matches it and',
+      '# ignores "*" entirely — so "User-agent: GPTBot / Allow: /" would hand that',
+      '# crawler the public site AND the private areas this file protects. Allowing',
+      '# everything through "*" is what keeps /tenant/, /account/ and /admin/',
+      '# closed to them. seo-drive.mjs asserts no such per-agent group exists.',
+      '',
       'User-agent: *',
       'Allow: /',
       '',

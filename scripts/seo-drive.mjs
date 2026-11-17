@@ -285,6 +285,18 @@ console.log(`\n── robots.txt says what this deployment is ────`);
       check(body.includes(`Disallow: ${prefix}`), `robots.txt disallows ${prefix}`);
     }
     check(/^Sitemap:\s*https?:\/\/\S+\/sitemap\.xml$/m.test(body), 'robots.txt names a sitemap');
+
+    // AI-crawler policy = allow all, via "*". That only stays true while there
+    // is NO per-agent User-agent group: a bot obeys the most specific group
+    // that names it and ignores "*", so a "User-agent: GPTBot / Allow: /" would
+    // hand that crawler the private areas the "*" Disallows protect. Asserting
+    // the one group is "*" makes that mistake impossible to ship silently.
+    const uaGroups = [...body.matchAll(/^User-agent:\s*(.+)$/gim)].map((m) => m[1].trim());
+    check(
+      uaGroups.length === 1 && uaGroups[0] === '*',
+      'robots.txt has exactly one User-agent group, "*", so no AI crawler can bypass the private Disallows',
+      `groups: ${uaGroups.join(', ') || '(none)'}`,
+    );
   } else {
     // A copy must not advertise the real site's URLs as its own.
     check(!/^Sitemap:/m.test(body), 'a non-indexable copy advertises no sitemap');
