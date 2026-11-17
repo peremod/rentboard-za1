@@ -146,7 +146,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
 
       <div class="footer-bottom">
         <div>
-          &copy; {{ year }} Umastande (Pty) Ltd · CIPC Reg No. 2026/757331/07<br/>
+          &copy; {{ year }} <a routerLink="/about">Umastande (Pty) Ltd</a> · CIPC Reg No. 2026/757331/07<br/>
           Mastande is an intermediary platform — not an estate agent (PPRA).
           Not registered under the Property Practitioners Act 22 of 2019.
         </div>

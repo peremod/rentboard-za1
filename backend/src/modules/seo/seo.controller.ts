@@ -162,6 +162,7 @@ export class SeoController {
       { loc: '/', priority: '1.0', freq: 'daily' },
       { loc: '/how-it-works', priority: '0.8', freq: 'monthly' },
       { loc: '/pricing', priority: '0.8', freq: 'monthly' },
+      { loc: '/about', priority: '0.6', freq: 'monthly' },
       { loc: '/advertise', priority: '0.5', freq: 'monthly' },
       { loc: '/legal/privacy', priority: '0.3', freq: 'yearly' },
       { loc: '/legal/terms', priority: '0.3', freq: 'yearly' },

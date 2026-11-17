@@ -181,9 +181,26 @@ for (const path of ['/tenant/dashboard', '/landlord/dashboard', '/account/settin
 
 // And the control: a PUBLIC page must NOT pick up that header, or the rule is
 // a blanket noindex wearing a prefix list.
-for (const path of ['/', '/pricing', '/how-it-works']) {
+for (const path of ['/', '/pricing', '/how-it-works', '/about']) {
   const res = await fetch(`${BASE}${path}`, { redirect: 'manual' });
   check(!(res.headers.get('x-robots-tag') ?? '').includes('noindex'), `${path} is NOT noindexed`);
+}
+
+console.log(`\n── About: the entity page a crawler and an AI can read ────`);
+{
+  // SEO/AEO/GEO: the page that states plainly what Mastande is and who runs
+  // it, in the SERVED HTML — not painted in after hydration, which is why this
+  // reads the bytes. Every assertion is a fact the page must carry server-side;
+  // a client-rendered shell (the §87f failure one layer out) would fail them.
+  const { status, html } = await get('/about');
+  check(status === 200, '/about is served (200)', `status ${status}`);
+  check(/<title>[^<]*About[^<]*<\/title>/i.test(html), '/about has a title naming itself');
+  check(/<meta name="description" content="[^"]+"/i.test(html), '/about has a meta description');
+  check(/<link rel="canonical"[^>]*\/about"/i.test(html), '/about declares a self canonical');
+  check(/<h1[^>]*>\s*About Mastande\s*<\/h1>/i.test(html), '/about server-renders its H1, not a shell');
+  // The entity claim a GEO reader extracts — the operating company — has to be
+  // in the body, not only in the Organization JSON-LD on the homepage.
+  check(/Umastande \(Pty\) Ltd/.test(html), '/about names the operating company in its prose');
 }
 
 console.log(`\n── robots.txt says what this deployment is ────`);

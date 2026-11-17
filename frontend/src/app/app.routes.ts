@@ -303,6 +303,7 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'how-it-works', renderMode: RenderMode.Prerender },
   { path: 'pricing', renderMode: RenderMode.Prerender },
   { path: 'advertise', renderMode: RenderMode.Prerender },
+  { path: 'about', renderMode: RenderMode.Prerender },
 
   // ── The other ten locales ──
   // Prerendered where the URL is fully enumerable AND the content does not
