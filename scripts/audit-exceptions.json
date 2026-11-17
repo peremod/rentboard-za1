@@ -1,0 +1,20 @@
+{
+  "//": [
+    "Accepted dependency risks, read by scripts/audit-gate.mjs.",
+    "",
+    "An entry needs a package, a reason of at least 12 characters, and an expiry",
+    "date. All three are ENFORCED, not conventional: an entry missing any of them",
+    "is rejected and the finding still blocks, and an expired entry stops",
+    "suppressing. That is deliberate — accepting a risk should carry a review date",
+    "rather than becoming a line in an ignore file that outlives the person who",
+    "understood it. Both rules are falsified in the gate's self-checks.",
+    "",
+    "This list is EMPTY on purpose: every critical and high in the production",
+    "dependency tree was fixed within its existing semver range, so nothing needs",
+    "accepting today. An empty list is the honest state, not an oversight.",
+    "",
+    "Build-chain findings do not belong here. They never block, so they need no",
+    "exception; they are printed as advisory on every run."
+  ],
+  "exceptions": []
+}

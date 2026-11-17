@@ -1,0 +1,158 @@
+# Security — dependency vulnerabilities, secrets, and the container image.
+#
+# Before this file, NONE of npm audit, OSV, Trivy, Snyk, Gitleaks, TruffleHog,
+# CodeQL, Semgrep, dependency-review or even the repository's own
+# scripts/secret-scan.mjs ran in CI. The secret scanner existed but lived only
+# in .husky/pre-commit — a client-side hook, skipped by `git commit --no-verify`
+# and absent for anyone who has not run husky. Nothing server-side looked.
+#
+# ── What blocks and what reports, and why the split
+#
+# Blocking a merge is a strong claim and it has to be survivable. The gate is
+# critical/high in the PRODUCTION dependency tree, because that code answers
+# real requests. The build chain is reported, not blocked: it currently carries
+# 3 high and 19 moderate transitives under @angular/cli's own npm tooling with
+# no fix inside any range this project controls, and a gate nobody can satisfy
+# is a gate someone switches off. scripts/audit-gate.mjs implements that split
+# and self-checks before it judges anything.
+#
+# Secrets block on a pull request diff. The FULL-HISTORY scan reports instead,
+# for an honest reason: this repository's history contains a real exposure
+# (commit b4c9852, two Neon connection strings, 20 October 2026) that no scan
+# can un-expose. Rotation is the remedy, not a passing tick. Making that
+# permanent red would train everyone to ignore the job; reporting it keeps it
+# visible and keeps the blocking signal meaningful.
+#
+# ⚠️ Third-party actions are pinned by TAG, not commit SHA. A tag is mutable,
+# so this trades some supply-chain strictness for maintainability by one
+# person; .github/dependabot.yml watches them, and
+# docs/SECURITY-SCANNING.md explains how to harden to SHA pins.
+name: Security
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main, develop]
+  schedule:
+    # Weekly, Monday 04:17 UTC. A newly disclosed advisory needs no commit to
+    # become true, so the schedule is the only thing that catches one against
+    # code nobody has touched. 04:17 rather than 04:00: the hour is heavily
+    # contended and a queued run is a delayed run.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dependencies:
+    name: Dependency vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      # No `npm ci` anywhere in this job. `npm audit` reads the lockfile, and
+      # installing would execute dependency install scripts — 5 of the
+      # frontend's and 5 of the backend's declare one — for a step whose whole
+      # purpose is to judge those dependencies before trusting them.
+      - name: Production vulnerabilities block; build-chain findings report
+        run: node scripts/audit-gate.mjs
+
+      # OSV draws on a broader advisory corpus than npm's own feed (GHSA plus
+      # distro and language-specific sources), so it catches advisories npm
+      # audit has not picked up. Overlap is expected and fine; the two
+      # disagreeing is the useful signal.
+      - name: OSV-Scanner — all three lockfiles
+        uses: google/osv-scanner-action/osv-scanner-action@v2.2.3
+        with:
+          scan-args: |-
+            --lockfile=./package-lock.json
+            --lockfile=./frontend/package-lock.json
+            --lockfile=./backend/package-lock.json
+
+  dependency-review:
+    name: New dependencies in this PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Reviews what the PR ADDS rather than the whole tree, so a new
+      # dependency arriving with a known advisory is caught at the moment
+      # somebody introduces it, named in the PR that introduced it.
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
+
+  secrets:
+    name: Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Gitleaks needs history to scan history; the default shallow clone
+          # would silently scan one commit and pass.
+          fetch-depth: 0
+
+      # The repository's own calibrated scanner, which until now ran only as a
+      # pre-commit hook and so was absent from every push made with
+      # --no-verify or without husky installed.
+      - name: In-repo scanner — live credentials in tracked files
+        run: node scripts/secret-scan.mjs
+
+      # Blocking, and scoped to what this change introduces.
+      - name: Gitleaks — this pull request's diff
+        if: github.event_name == 'pull_request'
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
+          GITLEAKS_ENABLE_SUMMARY: 'true'
+
+      # Reporting, not blocking — see the header. Reads the whole history every
+      # week so a credential that was committed and later removed is still
+      # named, because removal does not revoke anything.
+      - name: Gitleaks — full history (reports, does not block)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'true'
+          GITLEAKS_ENABLE_SUMMARY: 'true'
+
+  container:
+    name: Container image
+    # render.yaml runs BOTH api services with `runtime: docker` and
+    # `dockerfilePath: ./backend/Dockerfile`, so this image IS the production
+    # artifact — and its base, node:22-alpine, is an unpinned mutable tag that
+    # nothing scanned until now. Scoped to when the image or its inputs change,
+    # plus the weekly run, because the base image gains advisories on its own.
+    if: >-
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build the image as Render builds it
+        run: docker build -f backend/Dockerfile -t mastande-api:scan ./backend
+
+      - name: Trivy — OS packages and application dependencies in the image
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: mastande-api:scan
+          format: table
+          # The image is the production artifact, so critical and high in it
+          # block, matching the dependency gate's threshold rather than
+          # inventing a second standard.
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
