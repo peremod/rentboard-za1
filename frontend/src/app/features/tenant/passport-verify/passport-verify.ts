@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { VerificationService } from '../../../core/services/verification.service';
 import { UploadsService } from '../../../core/services/uploads.service';
 import { RoomsService } from '../../../core/services/rooms.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { Room } from '../../../core/models/room.model';
 import { VerificationType } from '../../../core/models/verification.model';
 import { WHATSAPP_ENABLED } from '../../../core/config/feature-flags';
@@ -227,6 +228,7 @@ export class PassportVerify implements OnInit {
   protected readonly verification = inject(VerificationService);
   private uploads = inject(UploadsService);
   private rooms = inject(RoomsService);
+  private auth = inject(AuthService);
 
   protected readonly uploading = signal<VerificationType | null>(null);
   protected readonly submitting = signal(false);
@@ -313,11 +315,21 @@ export class PassportVerify implements OnInit {
       return;
     }
 
+    // B-01: upload into this account's own namespace, verification/{userId}/.
+    // The API refuses a submitted path outside the caller's prefix, so the
+    // folder is not cosmetic — it is what makes the submit succeed, and what
+    // stops one account attaching another's document path to its own request.
+    const userId = this.auth.user()?.id;
+    if (!userId) {
+      this.error.set('Your session has expired. Please sign in again and retry.');
+      return;
+    }
+
     this.uploading.set(type);
     this.uploadingRoom.set(roomId ?? null);
     this.error.set(null);
     try {
-      const { path } = await this.uploads.uploadPrivate(file, 'verification');
+      const { path } = await this.uploads.uploadPrivate(file, `verification/${userId}`);
       this.verification.submit(type, path, undefined, roomId).subscribe({
         next: () => { this.uploading.set(null); this.uploadingRoom.set(null); },
         error: (err) => {

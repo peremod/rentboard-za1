@@ -83,8 +83,9 @@ try {
   });
   const LT = landlord.body.accessToken;
 
+  // B-01: the document path must be under the submitter's own namespace.
   const submitted = await api('POST', '/api/verification',
-    { type: 'identity', documentPath: `private/verification/refund-${stamp}.jpg` }, LT);
+    { type: 'identity', documentPath: `verification/${landlord.body.user.id}/refund-${stamp}.jpg` }, LT);
   ok('a landlord identity check waits for the fee', submitted.body?.status === 'pending_payment',
     `status ${submitted.body?.status}`);
   const requestId = submitted.body.id;

@@ -37,22 +37,27 @@ describe('private documents: submission, review and deletion', () => {
     ctx.outbox.signedUrls.length = 0;
   });
 
-  const DOC = 'private/verification/bank-statement-aug.jpg';
+  // B-01: a verification document lives under its submitter's own namespace,
+  // `verification/{userId}/…`, and the submit endpoint refuses anything else.
+  // So the fixture path is per-user, not a shared constant — a shared constant
+  // would be exactly the cross-account path the fix now forbids.
+  const docFor = (userId: string) => `verification/${userId}/bank-statement-aug.jpg`;
 
   const submit = (token: string, body: Record<string, unknown>) =>
     ctx.http().post('/api/verification').set({ Authorization: `Bearer ${token}` }).send(body);
 
   const asTenantWithDocument = async () => {
     const tenant = await signUp(ctx, 'TENANT');
-    const res = await submit(tenant.token, { type: 'bank_statement', documentPath: DOC });
+    const doc = docFor(tenant.userId);
+    const res = await submit(tenant.token, { type: 'bank_statement', documentPath: doc });
     expect([200, 201]).toContain(res.status);
-    return { tenant, res };
+    return { tenant, res, doc };
   };
 
   // ── Submission ────────────────────────────────────────────────────────────
 
   it('stores the document path but never echoes it back to the submitter', async () => {
-    const { res } = await asTenantWithDocument();
+    const { res, doc } = await asTenantWithDocument();
 
     // The submitter knows their own path — they uploaded it — but the response
     // shape is the one the admin screen reuses, and a shape that carries the
@@ -60,28 +65,81 @@ describe('private documents: submission, review and deletion', () => {
     // contract.
     expect(res.body.hasDocument).toBe(true);
     expect(res.body.documentPath).toBeUndefined();
-    expect(JSON.stringify(res.body)).not.toContain(DOC);
+    expect(JSON.stringify(res.body)).not.toContain(doc);
 
     const row = await ctx.prisma.verificationRequest.findFirst();
-    expect(row!.documentPath).toBe(DOC);
+    expect(row!.documentPath).toBe(doc);
     expect(row!.status).toBe('pending');
   });
 
+  /**
+   * B-01: a submitted documentPath must belong to the submitter.
+   *
+   * The browser uploads straight to ImageKit and then reports the resulting
+   * path to this endpoint, so the path is attacker-controlled input like any
+   * other. Before the fix the service stored whatever string it was handed —
+   * so a user could attach a path under ANOTHER account's verification
+   * namespace (or any other folder entirely) to their own request, and an
+   * admin reviewing it would open a file that was never theirs to submit.
+   *
+   * The bind is a per-user prefix, `verification/{userId}/`, enforced here
+   * where the authenticated caller is known — not in the DTO, which cannot see
+   * who is calling. This test is the falsification: it fails (submission
+   * accepted) against the version that trusted the path.
+   */
+  it('refuses a documentPath outside the submitter\'s own namespace (B-01)', async () => {
+    const victim = await signUp(ctx, 'TENANT');
+    const attacker = await signUp(ctx, 'TENANT');
+
+    // A path under the victim's verification namespace. The attacker is signed
+    // in as themselves; the path names someone else.
+    const foreign = `verification/${victim.userId}/id-${Date.now()}.jpg`;
+    const res = await submit(attacker.token, { type: 'bank_statement', documentPath: foreign });
+
+    expect(res.status).toBe(400);
+    expect(await ctx.prisma.verificationRequest.count()).toBe(0);
+  });
+
+  it('refuses a documentPath in an unrelated folder (B-01)', async () => {
+    const tenant = await signUp(ctx, 'TENANT');
+    // A lease document path, or a room photo path — anything not under this
+    // user's own verification prefix.
+    for (const foreign of [
+      'leases/someone-elses-lease.pdf',
+      `verification/${tenant.userId}/../../leases/x.pdf`,
+      'rooms/abc/photo.jpg',
+    ]) {
+      const res = await submit(tenant.token, { type: 'bank_statement', documentPath: foreign });
+      expect(res.status, foreign).toBe(400);
+    }
+    expect(await ctx.prisma.verificationRequest.count()).toBe(0);
+  });
+
+  it('accepts a documentPath under the submitter\'s own namespace (B-01, positive)', async () => {
+    const tenant = await signUp(ctx, 'TENANT');
+    const own = `verification/${tenant.userId}/bank-${Date.now()}.jpg`;
+    const res = await submit(tenant.token, { type: 'bank_statement', documentPath: own });
+
+    expect([200, 201]).toContain(res.status);
+    const row = await ctx.prisma.verificationRequest.findFirst();
+    expect(row!.documentPath).toBe(own);
+  });
+
   it('keeps the path out of the submitter\'s own list', async () => {
-    const { tenant } = await asTenantWithDocument();
+    const { tenant, doc } = await asTenantWithDocument();
     const res = await ctx.http().get('/api/verification/mine')
       .set({ Authorization: `Bearer ${tenant.token}` }).expect(200);
 
     expect(res.body).toHaveLength(1);
     expect(res.body[0].hasDocument).toBe(true);
-    expect(JSON.stringify(res.body)).not.toContain(DOC);
+    expect(JSON.stringify(res.body)).not.toContain(doc);
   });
 
   it('refuses a document on a check that is a phone call, not a file', async () => {
     const tenant = await signUp(ctx, 'TENANT');
     const res = await submit(tenant.token, {
       type: 'landlord_reference',
-      documentPath: DOC,
+      documentPath: docFor(tenant.userId),
       reference: { refereeName: 'Mrs Dlamini', refereePhone: '0821234567' },
     });
     expect(res.status).toBe(400);
@@ -92,14 +150,14 @@ describe('private documents: submission, review and deletion', () => {
 
   it('refuses a check that belongs to the other side of the market', async () => {
     const tenant = await signUp(ctx, 'TENANT');
-    const res = await submit(tenant.token, { type: 'proof_of_ownership', documentPath: DOC });
+    const res = await submit(tenant.token, { type: 'proof_of_ownership', documentPath: docFor(tenant.userId) });
     expect(res.status).toBe(400);
     expect(await ctx.prisma.verificationRequest.count()).toBe(0);
   });
 
   it('holds a landlord identity check out of the queue until the fee is paid', async () => {
     const landlord = await signUp(ctx, 'LANDLORD');
-    const res = await submit(landlord.token, { type: 'identity', documentPath: DOC });
+    const res = await submit(landlord.token, { type: 'identity', documentPath: docFor(landlord.userId) });
     expect([200, 201]).toContain(res.status);
 
     const row = await ctx.prisma.verificationRequest.findFirst();
@@ -120,7 +178,7 @@ describe('private documents: submission, review and deletion', () => {
     for (const type of ['sassa_grant', 'employer_confirmation', 'bank_statement']) {
       await resetDatabase(ctx.prisma);
       const tenant = await signUp(ctx, 'TENANT');
-      const res = await submit(tenant.token, { type, documentPath: DOC });
+      const res = await submit(tenant.token, { type, documentPath: docFor(tenant.userId) });
       expect([200, 201]).toContain(res.status);
       const row = await ctx.prisma.verificationRequest.findFirst();
       expect(row!.status, `${type} must go straight to review`).toBe('pending');
@@ -130,7 +188,7 @@ describe('private documents: submission, review and deletion', () => {
   // ── Download ──────────────────────────────────────────────────────────────
 
   it('hands the admin queue a signed, expiring URL and not the stored path', async () => {
-    await asTenantWithDocument();
+    const { doc } = await asTenantWithDocument();
     const admin = await signUpAdmin(ctx);
 
     const queue = await ctx.http().get('/api/verification/pending')
@@ -143,12 +201,12 @@ describe('private documents: submission, review and deletion', () => {
     expect(entry.documentUrl).toBeTruthy();
     // The raw path must not be the thing the screen links to — that is the
     // exact shipped bug: a relative path resolved against the app's own origin.
-    expect(entry.documentUrl).not.toBe(DOC);
+    expect(entry.documentUrl).not.toBe(doc);
 
     // And the URL must be short-lived, asked for with an expiry rather than
     // minted forever.
     expect(ctx.outbox.signedUrls).toHaveLength(1);
-    expect(ctx.outbox.signedUrls[0].path).toBe(DOC);
+    expect(ctx.outbox.signedUrls[0].path).toBe(doc);
     expect(ctx.outbox.signedUrls[0].validForSeconds).toBeGreaterThan(0);
     expect(ctx.outbox.signedUrls[0].validForSeconds).toBeLessThanOrEqual(60 * 60);
   });
@@ -192,7 +250,7 @@ describe('private documents: submission, review and deletion', () => {
 
   for (const decision of ['approved', 'rejected'] as const) {
     it(`deletes the document when a request is ${decision}`, async () => {
-      await asTenantWithDocument();
+      const { doc } = await asTenantWithDocument();
       const admin = await signUpAdmin(ctx);
       const row = await ctx.prisma.verificationRequest.findFirst();
 
@@ -212,7 +270,7 @@ describe('private documents: submission, review and deletion', () => {
       // "forgotten" — this row is the whole retention guarantee.
       const queued = await ctx.prisma.fileDeletion.findMany();
       expect(queued).toHaveLength(1);
-      expect(queued[0].path).toBe(DOC);
+      expect(queued[0].path).toBe(doc);
       expect(queued[0].verificationRequestId).toBe(row!.id);
 
       // And asked for immediately, because the screen promises "as soon as
@@ -222,7 +280,7 @@ describe('private documents: submission, review and deletion', () => {
   }
 
   it('refuses a rejection with no reason, and deletes nothing', async () => {
-    await asTenantWithDocument();
+    const { doc } = await asTenantWithDocument();
     const admin = await signUpAdmin(ctx);
     const row = await ctx.prisma.verificationRequest.findFirst();
 
@@ -233,14 +291,14 @@ describe('private documents: submission, review and deletion', () => {
     // cleared the path would destroy the document and leave the request
     // pending, un-reviewable forever.
     const after = await ctx.prisma.verificationRequest.findUnique({ where: { id: row!.id } });
-    expect(after!.documentPath).toBe(DOC);
+    expect(after!.documentPath).toBe(doc);
     expect(after!.status).toBe('pending');
     expect(await ctx.prisma.fileDeletion.count()).toBe(0);
     expect(ctx.outbox.deletionPasses).toHaveLength(0);
   });
 
   it('refuses an ordinary account the right to decide, and deletes nothing', async () => {
-    const { tenant } = await asTenantWithDocument();
+    const { tenant, doc } = await asTenantWithDocument();
     const row = await ctx.prisma.verificationRequest.findFirst();
 
     const res = await review(tenant.token, row!.id, { status: 'approved' });
@@ -248,7 +306,7 @@ describe('private documents: submission, review and deletion', () => {
 
     const after = await ctx.prisma.verificationRequest.findUnique({ where: { id: row!.id } });
     expect(after!.status).toBe('pending');
-    expect(after!.documentPath).toBe(DOC);
+    expect(after!.documentPath).toBe(doc);
     expect(await ctx.prisma.fileDeletion.count()).toBe(0);
   });
 
@@ -271,7 +329,7 @@ describe('private documents: submission, review and deletion', () => {
   // ── What survives: the outcome, and nothing else ──────────────────────────
 
   it('publishes the outcome of an approved check and nothing private with it', async () => {
-    const { tenant } = await asTenantWithDocument();
+    const { tenant, doc } = await asTenantWithDocument();
     const admin = await signUpAdmin(ctx);
     const row = await ctx.prisma.verificationRequest.findFirst();
     await review(admin.token, row!.id, { status: 'approved' }).then((r) => expect(r.status).toBe(200));
@@ -281,7 +339,7 @@ describe('private documents: submission, review and deletion', () => {
 
     expect(res.body.checks.map((c: any) => c.type)).toEqual(['bank_statement']);
     expect(res.body.checks[0].confirmedAt).toBeTruthy();
-    expect(JSON.stringify(res.body)).not.toContain(DOC);
+    expect(JSON.stringify(res.body)).not.toContain(doc);
   });
 
   it('never publishes a rejection, nor the note written about it', async () => {
@@ -310,7 +368,7 @@ describe('private documents: submission, review and deletion', () => {
     const admin = await signUpAdmin(ctx);
 
     const approve = async (type: string) => {
-      const r = await submit(tenant.token, { type, documentPath: `${DOC}#${type}` });
+      const r = await submit(tenant.token, { type, documentPath: `${docFor(tenant.userId)}#${type}` });
       expect([200, 201]).toContain(r.status);
       const req = await ctx.prisma.verificationRequest.findFirst({
         where: { userId: tenant.userId, type: type as any, status: 'pending' },

@@ -24,6 +24,7 @@
     "audit:fonts": "node scripts/font-lint.mjs",
     "audit:viewport": "node scripts/viewport-unit-lint.mjs",
     "audit:inbox-race": "node scripts/inbox-race-drive.mjs",
+    "audit:imagekit-privacy": "node scripts/imagekit-privacy-check.mjs",
     "audit:font-paint": "node scripts/font-paint-drive.mjs",
     "audit:double-let": "node scripts/double-let-drive.mjs",
     "audit:anchors": "node scripts/fragment-anchor-lint.mjs",

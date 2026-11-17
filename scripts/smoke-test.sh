@@ -254,6 +254,9 @@ req POST /api/auth/register \
   "{\"email\":\"$LANDLORD_EMAIL\",\"password\":\"$PASSWORD\",\"fullName\":\"Test Landlord\",\"role\":\"LANDLORD\"}"
 check "register landlord" 201 "$STATUS" "$BODY"
 LTOKEN=$(echo "$BODY" | jq -r '.accessToken // empty')
+# B-01: a verification document must sit under its submitter's namespace,
+# verification/{userId}/…, so the smoke flow needs the landlord's id too.
+LANDLORD_ID=$(echo "$BODY" | jq -r '.user.id // empty')
 
 req POST /api/auth/register \
   "{\"email\":\"$TENANT_EMAIL\",\"password\":\"$PASSWORD\",\"fullName\":\"Test Tenant\",\"role\":\"TENANT\"}"
@@ -946,7 +949,7 @@ check "tenant CANNOT read the admin review queue" 403 "$STATUS" "$BODY"
 req POST /api/verification '{"type":"sassa_grant","documentPath":"private/verification/wrong-side.jpg"}' "$LTOKEN"
 check "landlord CANNOT submit a tenant income proof" 400 "$STATUS" "$BODY"
 
-req POST /api/verification '{"type":"identity","documentPath":"private/verification/smoke-test.jpg"}' "$LTOKEN"
+req POST /api/verification "{\"type\":\"identity\",\"documentPath\":\"verification/$LANDLORD_ID/smoke-test.jpg\"}" "$LTOKEN"
 check "submit an identity document" 201 "$STATUS" "$BODY"
 
 if echo "$BODY" | jq -e 'has("documentPath")' >/dev/null 2>&1; then
@@ -955,7 +958,7 @@ else
   green "  PASS  documentPath withheld from the response"; PASS=$((PASS+1))
 fi
 
-req POST /api/verification '{"type":"identity","documentPath":"private/verification/again.jpg"}' "$LTOKEN"
+req POST /api/verification "{\"type\":\"identity\",\"documentPath\":\"verification/$LANDLORD_ID/again.jpg\"}" "$LTOKEN"
 check "rejects a duplicate pending request" 400 "$STATUS" "$BODY"
 
 req POST /api/verification '{"type":"nonsense","documentPath":"x"}' "$LTOKEN"
@@ -2240,7 +2243,7 @@ fi
 # The security-critical assertions are the negative ones: a forged ITN must not
 # mark anything paid, and an unpaid request must not reach the review queue.
 head_ "25. Verification payment"
-req POST /api/verification '{"type":"identity","documentPath":"private/verification/pay-test.jpg"}' "$LTOKEN"
+req POST /api/verification "{\"type\":\"identity\",\"documentPath\":\"verification/$LANDLORD_ID/pay-test.jpg\"}" "$LTOKEN"
 if [[ "$STATUS" == "201" ]]; then
   PAY_VR=$(echo "$BODY" | jq -r '.id // empty')
   VR_STATUS=$(echo "$BODY" | jq -r '.status')
@@ -3310,11 +3313,11 @@ req GET "/api/rooms?limit=1&listerType=not-a-thing"
 check "a bogus listerType is rejected rather than ignored" 400 "$STATUS" "$BODY"
 
 # A sublet check is about a listing, and is free.
-req POST /api/verification '{"type":"sublet_right","documentPath":"verification/smoke-lease.jpg"}' "$TTOKEN"
+req POST /api/verification "{\"type\":\"sublet_right\",\"documentPath\":\"verification/$TENANT_ID/smoke-lease.jpg\"}" "$TTOKEN"
 check "a sublet check with no listing named is refused" 400 "$STATUS" "$BODY"
 
 if [[ -n "$SUBLET_ROOM" ]]; then
-  req POST /api/verification "{\"type\":\"sublet_right\",\"documentPath\":\"verification/smoke-lease.jpg\",\"roomId\":\"$SUBLET_ROOM\"}" "$TTOKEN"
+  req POST /api/verification "{\"type\":\"sublet_right\",\"documentPath\":\"verification/$TENANT_ID/smoke-lease.jpg\",\"roomId\":\"$SUBLET_ROOM\"}" "$TTOKEN"
   check "a sublet check against their own listing is accepted" 201 "$STATUS" "$BODY"
 fi
 
@@ -3693,7 +3696,7 @@ check "a document type without a document is refused" 400 "$STATUS" "$BODY"
 req POST /api/verification '{"type":"landlord_reference"}' "$TTOKEN"
 check "a reference without a referee is refused" 400 "$STATUS" "$BODY"
 
-req POST /api/verification '{"type":"sassa_grant","documentPath":"private/verification/smoke-sassa.jpg"}' "$TTOKEN"
+req POST /api/verification "{\"type\":\"sassa_grant\",\"documentPath\":\"verification/$TENANT_ID/smoke-sassa.jpg\"}" "$TTOKEN"
 check "SASSA confirmation submitted" 201 "$STATUS" "$BODY"
 SASSA_ID=$(echo "$BODY" | jq -r '.id // empty')
 if [[ "$(echo "$BODY" | jq -r '.status')" == "pending" ]]; then
@@ -3702,7 +3705,7 @@ else
   red "  FAIL  tenant proof is waiting for payment"; FAIL=$((FAIL+1))
 fi
 
-req POST /api/verification '{"type":"identity","documentPath":"private/verification/smoke-id.jpg"}' "$TTOKEN"
+req POST /api/verification "{\"type\":\"identity\",\"documentPath\":\"verification/$TENANT_ID/smoke-id.jpg\"}" "$TTOKEN"
 check "tenant identity submitted" 201 "$STATUS" "$BODY"
 ID_ID=$(echo "$BODY" | jq -r '.id // empty')
 
@@ -4153,7 +4156,7 @@ if [[ -n "${ADMIN_TOKEN:-}" ]]; then
 
   # A tenant's checks are free, so rejecting one must never owe anybody money.
   # This is the guard on "free to apply, always" from the money side.
-  req POST /api/verification '{"type":"sassa_grant","documentPath":"private/verification/refund-guard.jpg"}' "$TTOKEN"
+  req POST /api/verification "{\"type\":\"sassa_grant\",\"documentPath\":\"verification/$TENANT_ID/refund-guard.jpg\"}" "$TTOKEN"
   FREE_VR=$(echo "$BODY" | jq -r '.id // empty')
   if [[ -n "$FREE_VR" ]]; then
     req PATCH "/api/verification/$FREE_VR/review" '{"status":"rejected","reviewNote":"Not legible — testing that a free check owes nothing."}' "$ADMIN_TOKEN"

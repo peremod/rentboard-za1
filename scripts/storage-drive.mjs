@@ -345,9 +345,12 @@ const drain3 = await apiCall(API, 'POST', '/api/admin/storage/drain', {}, AT);
 //
 // The case the promise was originally made about. A tenant uploads a proof, an
 // admin decides, and the document must actually leave storage.
-const ID_PATH = 'verification/drive/sassa-letter.jpg';
-files.set(ID_PATH, 'file-sassa-1');
+// B-01: a verification document lives under the submitter's own namespace,
+// verification/{userId}/…, so the drive builds the path from tn2's own id —
+// the same path the real uploader would produce.
 const tn2 = await registerUser(API, 'TENANT');
+const ID_PATH = `verification/${tn2.id}/sassa-letter.jpg`;
+files.set(ID_PATH, 'file-sassa-1');
 const sub = await apiCall(API, 'POST', '/api/verification', {
   type: 'sassa_grant', documentPath: ID_PATH,
 }, tn2.token);
