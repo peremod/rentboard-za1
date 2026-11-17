@@ -9292,3 +9292,71 @@ The production bundle cannot be driven from this container — it calls
 (`403 to CONNECT`, in the proxy's own `recentRelayFailures`). The interceptor,
 the hydration and the transfer cache are the same code in both, so the
 mechanism carries; the production bundle itself has not been watched doing it.
+
+## 107. Three security findings accepted, each with the condition that reopens it — 17 November 2026
+
+The penetration test (`docs/SECURITY-ASSESSMENT-PENTEST.md`) closed its two
+actionable findings in code: B-01 (a verification document bound to its
+uploader) and B-02 (a probe that proves ImageKit private-file enforcement). The
+three that remain are Informational, and for two of them the obvious fix would
+make the product worse rather than better. So they are **accepted deliberately**,
+and recorded here with the trigger that should reopen each — because an accepted
+risk with no review condition is just a risk nobody wrote down.
+
+### B-03 — the per-IP throttle is a backstop, not a control. ACCEPTED.
+
+Rate limits are per-IP with in-memory storage. Two known weaknesses: carrier-grade
+NAT in this market puts a whole neighbourhood behind one address, so a limit tight
+enough to stop an attacker locks out real users; and each instance keeps its own
+counters, so N instances mean roughly N× every limit.
+
+**Why accepted, not fixed:**
+- Tightening the limits is the *wrong* fix — `app.module.ts` set them loose on
+  purpose for the CGNAT reason, and the per-account / per-number caps in
+  `PhoneOtpService` are the real control.
+- The *right* fix — moving throttle state to a shared store (Redis) — is premature
+  while the backend runs as effectively one instance on Render's free tier. It
+  would add a dependency, a secret and a cost for a weakness that is not yet live.
+
+🔁 **REVIEW TRIGGER:** the day a **second backend instance** is run (horizontal
+scaling, blue-green, or a second region). At that point the in-memory counters
+genuinely diverge and a shared throttle store becomes worth its cost. Already
+noted in `app.module.ts`; this is the standing task.
+
+### B-04 — the ImageKit upload token is 30 minutes and broadly scoped. ACCEPTED.
+
+`GET /api/uploads/imagekit-auth` mints a 30-minute token that authorises an
+upload (not a read) to a client-chosen path.
+
+**Why accepted, not fixed:**
+- The meaningful risk — a client attaching an arbitrary or another account's path —
+  was **closed by B-01**, which now requires a submitted verification path to sit
+  under `verification/{userId}/`.
+- Shortening the TTL (e.g. 30→10 min) is a one-line change with a **real UX cost**
+  in this market: a user on a slow mobile connection who picks a file and takes a
+  while would hit an expired token. The 30 minutes exists for that audience.
+
+🔁 **REVIEW TRIGGER:** if ImageKit ever exposes a way to **fold the upload folder
+into the signed token** (so the server pins `verification/{userId}/` at mint time
+rather than only enforcing it at submit), take it — that removes the client's
+choice of path entirely. Also revisit if a shorter TTL stops costing uploads
+(faster connections, resumable upload).
+
+### B-05 — unauthenticated read endpoints have no rate limit. ACCEPTED.
+
+`places`, `seo` and the public `rooms` board take no throttle.
+
+**Why accepted, not fixed:**
+- They read indexed local tables and are cached (`places` carries a 1-hour
+  `Cache-Control`); the abuse value is negligible.
+- The obvious fix fights reality twice: the same CGNAT problem as B-03, **and**
+  the SSR server calls these endpoints for every server-rendered page from a
+  single IP — a tight limit would throttle the whole site under load.
+
+🔁 **REVIEW TRIGGER:** if logs ever show these endpoints driving real database load
+or cost (a scraper hammering `places/suggest` past the cache), add a **loose**
+per-IP limit scoped to exclude the SSR origin — not a tight one. Until there is
+evidence of load, a limit here is a check developers would route around.
+
+**None of the three is a code change today.** Each is reopened by a specific,
+observable condition above, not by the calendar.
