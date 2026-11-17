@@ -313,6 +313,22 @@ function fallbackRobots(indexable: boolean): string {
     'Disallow: /admin/',
     'Disallow: /api/',
     '',
+    // AI TRAINING crawlers/tokens are blocked in full, the same split the
+    // API's own robots.txt carries (seo.controller.ts). Search/retrieval
+    // crawlers are deliberately absent so they fall through to "*". Kept in
+    // step by hand because this is the degraded copy served only when the API
+    // is unreachable; if that list changes there, change it here too.
+    'User-agent: GPTBot',
+    'User-agent: CCBot',
+    'User-agent: ClaudeBot',
+    'User-agent: anthropic-ai',
+    'User-agent: Claude-Web',
+    'User-agent: Google-Extended',
+    'User-agent: Applebot-Extended',
+    'User-agent: Meta-ExternalAgent',
+    'User-agent: Bytespider',
+    'Disallow: /',
+    '',
     `Sitemap: ${environment.siteUrl.replace(/\/$/, '')}/sitemap.xml`,
     '',
   ].join('\n');

@@ -286,17 +286,58 @@ console.log(`\n── robots.txt says what this deployment is ────`);
     }
     check(/^Sitemap:\s*https?:\/\/\S+\/sitemap\.xml$/m.test(body), 'robots.txt names a sitemap');
 
-    // AI-crawler policy = allow all, via "*". That only stays true while there
-    // is NO per-agent User-agent group: a bot obeys the most specific group
-    // that names it and ignores "*", so a "User-agent: GPTBot / Allow: /" would
-    // hand that crawler the private areas the "*" Disallows protect. Asserting
-    // the one group is "*" makes that mistake impossible to ship silently.
-    const uaGroups = [...body.matchAll(/^User-agent:\s*(.+)$/gim)].map((m) => m[1].trim());
-    check(
-      uaGroups.length === 1 && uaGroups[0] === '*',
-      'robots.txt has exactly one User-agent group, "*", so no AI crawler can bypass the private Disallows',
-      `groups: ${uaGroups.join(', ') || '(none)'}`,
-    );
+    // AI-crawler policy = allow SEARCH via "*", block TRAINING by name. The
+    // trap this guards: a bot obeys the most specific group that names it and
+    // ignores "*", so a "User-agent: GPTBot / Allow: /" would hand that crawler
+    // the private areas the "*" Disallows protect. The invariant that makes the
+    // trap unshippable is therefore NOT "only one group exists" (there are now
+    // named training blocks) but "every named group is a full Disallow: / and
+    // carries no Allow" — a named group can only ever subtract, never add.
+    //
+    // Parse robots.txt into groups. Consecutive User-agent lines share the
+    // directives that follow them (standard grouping). Sitemap is a non-group
+    // directive and is ignored here.
+    const groups = [];
+    let cur = null;
+    for (const raw of body.split('\n')) {
+      const line = raw.replace(/#.*$/, '').trim();
+      if (!line) continue;
+      const ua = line.match(/^User-agent:\s*(.+)$/i);
+      if (ua) {
+        if (cur && cur.rules.length === 0) cur.agents.push(ua[1].trim());
+        else { cur = { agents: [ua[1].trim()], rules: [] }; groups.push(cur); }
+      } else if (cur && /^(Allow|Disallow):/i.test(line)) {
+        cur.rules.push(line);
+      }
+    }
+    const star = groups.find((g) => g.agents.includes('*'));
+    check(!!star, 'robots.txt has a "*" group', `groups: ${groups.map((g) => g.agents.join('+')).join(' / ') || '(none)'}`);
+
+    const named = groups.filter((g) => !g.agents.includes('*'));
+    // Every named group must be a FULL block and nothing else: at least one
+    // "Disallow: /" and zero "Allow:" lines. This is what keeps a named crawler
+    // from ever reaching more than "*" grants.
+    for (const g of named) {
+      const label = g.agents.join('+');
+      const hasFullDisallow = g.rules.some((r) => /^Disallow:\s*\/\s*$/i.test(r));
+      const hasAllow = g.rules.some((r) => /^Allow:/i.test(r));
+      check(
+        hasFullDisallow && !hasAllow,
+        `robots.txt group "${label}" is a full block, so it cannot bypass the private Disallows`,
+        `rules: ${g.rules.join(' | ') || '(none)'}`,
+      );
+    }
+
+    // The GREEN half of the split, asserted both ways so neither drifts:
+    // the named training crawlers ARE blocked, and the search/retrieval
+    // crawlers are NOT named (they must fall through to "*" and stay allowed).
+    const namedAgents = named.flatMap((g) => g.agents);
+    for (const trainer of ['GPTBot', 'CCBot', 'ClaudeBot', 'Google-Extended', 'Applebot-Extended', 'Meta-ExternalAgent', 'Bytespider']) {
+      check(namedAgents.includes(trainer), `robots.txt blocks the training crawler ${trainer}`, `named: ${namedAgents.join(', ') || '(none)'}`);
+    }
+    for (const searcher of ['OAI-SearchBot', 'Claude-SearchBot', 'PerplexityBot', 'Googlebot', 'ChatGPT-User']) {
+      check(!namedAgents.includes(searcher), `robots.txt leaves the search crawler ${searcher} to "*" (allowed)`, `named: ${namedAgents.join(', ') || '(none)'}`);
+    }
   } else {
     // A copy must not advertise the real site's URLs as its own.
     check(!/^Sitemap:/m.test(body), 'a non-indexable copy advertises no sitemap');
