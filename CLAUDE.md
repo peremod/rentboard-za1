@@ -16,8 +16,30 @@ of them is a product decision, not a refactor.
 **Whenever you change navigation, buttons, cards, forms or footer elements,
 verify the responsive behaviour at mobile, tablet AND desktop widths.** A task
 is not complete if the desktop layout works and the mobile experience is
-broken. In practice: 360px, 390px, 768px and 1280px, and the breakpoints this
-codebase actually uses are 900 / 768 / 480 (`frontend/src/styles/_responsive.scss`).
+broken.
+
+**By hand, as a smoke check: 360px, 390px, 768px and 1280px.** Treat those four
+as a sanity pass and not as coverage, because they are not where the layout
+changes.
+
+⚠️ This file used to say "the breakpoints this codebase actually uses are
+900 / 768 / 480". That was wrong, and expensively so. The stylesheets declare
+**eleven**:
+
+    max-width:  360  480  600  700  768  860  900
+    min-width:  640  769  901  1600
+
+The four prescribed widths cross none of 480, 600, 640, 700, 860, 900, 901 or
+1600, and **both responsive defects the accessibility audit found lived in
+exactly those gaps** — 135px of horizontal page scroll on every page from 769
+to 904px, and 119px on the board from 481 to 599px. Each had been there for the
+life of the product, under four widths that bracketed them precisely.
+
+So do not maintain a list of breakpoints, here or anywhere else. Run
+`node scripts/responsive-drive.mjs`: it **reads the boundaries out of
+`frontend/src`** and probes each at −1, boundary and +1, so a media query added
+anywhere is driven on the next run with no second place to remember. The eleven
+above are printed by that drive, not copied into it.
 
 Check for horizontal page scroll, controls under the 44px touch target
 (WCAG 2.5.8), buttons that collapse into each other, and text that becomes a

@@ -1,6 +1,7 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { LastSeenInterceptor } from './common/interceptors/last-seen.interceptor';
+import { RequestTimingMiddleware } from './common/middleware/request-timing.middleware';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -146,4 +147,19 @@ import { MessagesModule } from './modules/messages/messages.module';
   controllers: [HealthController],
   providers: [{ provide: APP_INTERCEPTOR, useClass: LastSeenInterceptor }],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  /**
+   * Request timing across every route, including the ones that answer 404.
+   *
+   * Registered as middleware rather than an interceptor on purpose: an
+   * interceptor's clock starts after the guards have run, so it cannot see
+   * the time an authentication guard spends in bcrypt — which, at 12 rounds,
+   * is the single largest cost in this API.
+   *
+   * The threshold comes from the environment and defaults to off; see
+   * config/configuration.ts for why unset means silent rather than verbose.
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestTimingMiddleware).forRoutes('*');
+  }
+}

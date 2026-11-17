@@ -1,0 +1,122 @@
+# Gitleaks configuration.
+#
+# Gitleaks complements scripts/secret-scan.mjs rather than replacing it. The
+# in-repo scanner is fast, calibrated to the one incident this project actually
+# had, and runs before a commit exists. It has two limits Gitleaks fills:
+#
+#   · it knows three patterns — Neon passwords, remote database URLs with an
+#     embedded password, and private key blocks. This stack also holds Stripe,
+#     Resend, Google OAuth, PayFast, ImageKit and Meta credentials, none of
+#     which it would recognise;
+#   · it scans `git ls-files` at HEAD, so it cannot see HISTORY — which its own
+#     docstring calls the real problem, because `git rm` leaves the blob
+#     reachable by SHA for ever.
+#
+# Both run. Neither is the other's backup.
+#
+# ── Two things this file got wrong before it worked, both worth keeping
+#
+# 1. It was first written with YAML syntax (`extend:` and an indented key)
+#    inside a TOML file. Gitleaks rejected it outright — the CI step would have
+#    failed on its first run.
+# 2. The context-anchored exemptions were put in `[allowlist].regexes`, which
+#    gitleaks matches against the EXTRACTED SECRET. A pattern naming the
+#    surrounding key or function call can never match there, so the finding
+#    count stayed at six, unchanged. An allowlist that silently matches nothing
+#    looks exactly like one that is working. Those entries need
+#    `regexTarget = "line"`, which is why there is a second block below.
+#
+# Validated by running gitleaks against this tree — see docs/SECURITY-SCANNING.md.
+
+[extend]
+useDefault = true
+
+# ── Allowlist 1: matched against the extracted SECRET (gitleaks' default).
+#
+# Both blocks use the PLURAL [[allowlists]] form: gitleaks 8.30 rejects the
+# singular [allowlist] alongside it with "[allowlist] is deprecated, it cannot
+# be used alongside [[allowlists]]".
+[[allowlists]]
+description = """
+Narrow, documented allowlist. Every entry names why, and none is a path-wide
+exclusion of a file that could plausibly receive a real secret later.
+
+⚠️ Note what is deliberately NOT allowlisted: commit b4c9852, which put two
+real Neon connection strings into this public repository on 20 October 2026.
+Silencing that would be the one exclusion that actually matters, and a passing
+scan does not undo an exposure — rotation does. The weekly full-history job
+therefore REPORTS rather than blocks, so the finding stays visible instead of
+being configured away.
+"""
+
+# Paths holding secret NAMES or secret-shaped PATTERNS by necessity.
+#
+# backend/.env.example was audited line by line: 38 keys, of which 7 carry a
+# value that is not a placeholder — six are URLs and email addresses, all
+# public configuration. The seventh is JWT_SECRET, whose "value" is an
+# 88-character sentence containing spaces telling the operator how to generate
+# one. Characterised, not assumed: it has spaces, is not base64, and matches
+# prose. There is no credential in that file.
+paths = [
+  '''backend/\.env\.example$''',
+  '''scripts/secret-scan\.mjs$''',
+  '''\.gitleaks\.toml$''',
+]
+
+regexes = [
+  # Localhost database credentials are not secrets. README.md and
+  # scripts/lib/drive-session.mjs legitimately carry them, and the in-repo
+  # scanner makes the same allowance for the same reason.
+  '''(?:postgres|postgresql)://[^\s:/@]+:[^\s:/@]*@(?:localhost|127\.0\.0\.1)(?::\d+)?/''',
+  # Documentation placeholders in connection-string examples.
+  '''://(?:USER|user|<[^>]+>):(?:PASSWORD|password|<[^>]+>)@''',
+  # The self-describing CI test signing value.
+  '''test-secret-minimum-32-characters-long-ok''',
+]
+
+# ── Allowlist 2: matched against the whole LINE.
+#
+# These exemptions are deliberately context-anchored — they name the key or the
+# function call, which is what keeps them narrow — so they must be matched
+# against the line rather than the secret. See note 2 in the header.
+[[allowlists]]
+description = "Context-anchored CI and drive fixtures, matched against the whole line"
+regexTarget = "line"
+regexes = [
+  # ci.yml:511 and :593. The value is `whsec_` plus 36 alphanumerics, which is
+  # indistinguishable in SHAPE from a real Resend webhook secret — but it
+  # appears in no other file (.env.example and render.yaml both checked) and
+  # carries a comment saying it exists so the smoke suite can sign a webhook
+  # and assert that a forged or replayed signature is refused. A real secret
+  # for this key would arrive as ${{ secrets.* }}, never as a literal in a
+  # workflow, so exempting the literal form of this one key stays narrow.
+  '''RESEND_WEBHOOK_SECRET:\s*whsec_[A-Za-z0-9]{20,}''',
+  # The remaining one-word CI fixtures.
+  '''PAYFAST_MERCHANT_KEY=k\b''',
+  '''IMAGEKIT_PRIVATE_KEY=priv\b''',
+  '''RESEND_API_KEY=re_test\b''',
+  # A literal typed into a password field by a browser automation script. The
+  # drives register throwaway accounts; each literal is local to its own drive
+  # and appears nowhere else in the repository (verified). Structural rather
+  # than path-wide, so a credential pasted elsewhere in the same file is still
+  # caught.
+  '''fill\(\s*'[^']*[Pp]assword[^']*'\s*,\s*'[^']{6,}'\s*\)''',
+  # curl basic-auth where the user is an ENVIRONMENT VARIABLE, not a literal:
+  # scripts/test-imagekit.sh uses -u "$IMAGEKIT_PRIVATE_KEY:" — the secret is
+  # supplied at run time and is not in the file.
+  '''-u\s+"\$\{?[A-Z_][A-Z0-9_]*\}?:?"''',
+]
+
+# ── One project-specific rule, so a recurrence of the October incident is
+# caught by name rather than by a generic entropy heuristic.
+[[rules]]
+id = "neon-database-password"
+description = "Neon Postgres password (npg_ prefix) — the exact shape of the October 2026 incident"
+regex = '''npg_[A-Za-z0-9]{8,}'''
+tags = ["database", "neon", "postgres"]
+
+  [[rules.allowlists]]
+  description = "The elided and redacted forms used in prose, commit messages and the scanner's own output"
+  regexes = [
+    '''npg_(\.\.\.|\[REDACTED\]|XXXX)''',
+  ]

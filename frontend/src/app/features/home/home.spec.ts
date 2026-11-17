@@ -125,7 +125,7 @@ describe('Home — fetchRooms wires the notice up', () => {
     h['roomsService'] = { getRooms };
     h['sortBy'] = 'newest';
     h['page'] = 1;
-    for (const k of ['rooms', 'searchMeta', 'total', 'landlordCount', 'hasMore', 'loading', 'loadingMore']) {
+    for (const k of ['rooms', 'searchMeta', 'total', 'landlordCount', 'landlordCountCapped', 'hasMore', 'loading', 'loadingMore']) {
       h[k] = signal<unknown>(k === 'rooms' ? [] : null);
     }
     h.slowWake = signal(false) as unknown as typeof h.slowWake;
@@ -133,6 +133,40 @@ describe('Home — fetchRooms wires the notice up', () => {
   };
 
   const response = { data: [], total: 0, hasMore: false, verifiedLandlords: 0 };
+
+  /**
+   * The hero's trust figure, and whether it admits when it is a floor.
+   *
+   * This stat has been false once already — it was computed in the browser
+   * from the loaded rooms, so it counted unverified landlords and grew as a
+   * visitor scrolled. It is now capped server-side at 200, which introduces a
+   * NEW way for it to lie: reporting a clamped 200 as though it were exact.
+   * The API sends `verifiedLandlordsCapped` for that reason and these two
+   * assert the browser does not drop it on the floor.
+   *
+   * `landlordCountLabel` is where the suffix is decided, and it is asserted
+   * through that method rather than by reading the two signals, because the
+   * template binds the method — asserting the inputs alone would pass with the
+   * suffix logic deleted. It is a method and not a `computed` precisely so a
+   * prototype-built instance has it; see the note on it in home.ts.
+   */
+  const label = (h: Record<string, unknown>) =>
+    (h as { landlordCountLabel(): string }).landlordCountLabel();
+
+  it('an exact count renders without a plus', () => {
+    const h = board(() => of({ ...response, verifiedLandlords: 7, verifiedLandlordsCapped: false }));
+    h.fetchRooms();
+    expect((h['landlordCount'] as () => number)()).toBe(7);
+    expect((h['landlordCountCapped'] as () => boolean)()).toBe(false);
+    expect(label(h)).toBe('7');
+  });
+
+  it('a capped count says so, rather than claiming an exact 200', () => {
+    const h = board(() => of({ ...response, verifiedLandlords: 200, verifiedLandlordsCapped: true }));
+    h.fetchRooms();
+    expect((h['landlordCountCapped'] as () => boolean)()).toBe(true);
+    expect(label(h)).toBe('200+');
+  });
 
   it('a warm response leaves the notice unarmed', () => {
     const h = board(() => of(response));

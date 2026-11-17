@@ -48,15 +48,17 @@ import { RouterLink } from '@angular/router';
           <p><strong>There are no subscription plans.</strong> Listing a room is free and
           applying for one is free, with no commission on rent and no limit on how many
           rooms a landlord may list.</p>
-          <table class="legal-table">
-            <thead><tr><th>What</th><th>Who pays</th><th>Price</th></tr></thead>
-            <tbody>
-              <tr><td>Listing a room</td><td>Landlords</td><td>R 0</td></tr>
-              <tr><td>Applying for a room</td><td>Tenants</td><td>R 0</td></tr>
-              <tr><td>Renter's Passport</td><td>Tenants</td><td>R 0</td></tr>
-              <tr><td>Landlord identity verification</td><td>Landlords, optional</td><td>R 149 once off</td></tr>
-            </tbody>
-          </table>
+          <div class="table-scroll" tabindex="0" role="group" aria-label="Terms summary, scrolls sideways">
+            <table class="legal-table">
+              <thead><tr><th>What</th><th>Who pays</th><th>Price</th></tr></thead>
+              <tbody>
+                <tr><td>Listing a room</td><td>Landlords</td><td>R 0</td></tr>
+                <tr><td>Applying for a room</td><td>Tenants</td><td>R 0</td></tr>
+                <tr><td>Renter's Passport</td><td>Tenants</td><td>R 0</td></tr>
+                <tr><td>Landlord identity verification</td><td>Landlords, optional</td><td>R 149 once off</td></tr>
+              </tbody>
+            </table>
+          </div>
           <p>The <strong>R 149 identity check is the only charge</strong>. It is a once-off
           amount, not a recurring one, and it is optional — an unverified listing is shown
           and searched exactly the same way as a verified one. If we cannot verify you, the

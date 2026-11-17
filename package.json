@@ -1,8 +1,8 @@
 {
   "name": "mastande-za",
-  "version": "1.187.0",
+  "version": "1.188.0",
   "private": true,
-  "description": "Mastande ZA — South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
+  "description": "Mastande ZA \u2014 South Africa's room-letting notice board. Monorepo root (git hooks + workspace scripts only; app code lives in frontend/ and backend/).",
   "scripts": {
     "prepare": "husky",
     "frontend": "npm --prefix frontend run start",
@@ -10,7 +10,8 @@
     "install:all": "npm install && npm --prefix frontend install && npm --prefix backend install",
     "verify": "bash scripts/verify-build.sh",
     "audit:controls": "node scripts/control-contrast-audit.mjs",
-    "audit": "npm run audit:routes && npm run audit:anchors && npm run audit:i18n && npm run audit:env && npm run audit:tokens && npm run audit:states && npm run audit:feedback && npm run audit:scale && npm run audit:fonts && npm run audit:controls && npm run lint:templates",
+    "audit:alt": "node scripts/alt-text-lint.mjs",
+    "audit": "npm run audit:routes && npm run audit:anchors && npm run audit:i18n && npm run audit:env && npm run audit:tokens && npm run audit:states && npm run audit:feedback && npm run audit:scale && npm run audit:fonts && npm run audit:controls && npm run audit:alt && npm run lint:templates",
     "audit:css": "node scripts/css-coverage-audit.mjs",
     "audit:routes": "node scripts/route-audit.mjs",
     "audit:i18n": "node scripts/i18n-audit.mjs",
@@ -49,7 +50,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "axe-core": "4.13.0",
     "husky": "^9.1.6",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.3.2",
     "vitest": "^4.1.10"
   }
 }

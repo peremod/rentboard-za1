@@ -196,6 +196,12 @@ export interface PaginatedRooms {
    * from the loaded rooms and got it wrong twice over.
    */
   verifiedLandlords: number;
+  /**
+   * True when `verifiedLandlords` hit the server's cap and is a FLOOR rather
+   * than an exact figure — render it as "200+". Optional so an older response
+   * still parses; absent means the number is exact.
+   */
+  verifiedLandlordsCapped?: boolean;
 }
 
 export interface RelistPayload {

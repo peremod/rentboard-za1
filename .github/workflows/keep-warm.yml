@@ -22,14 +22,38 @@
 #      around the clock runs ~730 hours a month. If the account's free
 #      allowance is 750 hours TOTAL, this one service is very nearly all of
 #      it — so pinging STAGING as well would exceed it and take production
-#      down with it. That is why only production is listed below. Verify the
-#      current number on Render's pricing page; render.yaml's header already
-#      warns that free-tier terms change.
-#   3. GitHub's scheduled runners are best-effort and are frequently late
-#      under load — a */10 schedule does not guarantee a ping every ten
-#      minutes. This reduces how often somebody meets a cold start; it does
-#      not eliminate it. A missed window is a slow page, not an outage, so
-#      the job does not fail on one.
+#      down with it. That is why only production is listed below.
+#
+#      ✅ CONFIRMED against Render's documentation, 15 November 2026: 750 free
+#      instance hours per WORKSPACE per calendar month, shared across every
+#      free service in it, and this blueprint has two. Exceeding it suspends
+#      the services for the remainder of the month — there is no overage
+#      charge, there is an outage. render.yaml's header warns that free-tier
+#      terms change, so re-check before trusting this line much later.
+#   3. 🔴 GITHUB IS NOT FIRING THIS ON ANYTHING LIKE THE DECLARED SCHEDULE,
+#      and that was invisible for months because every single run succeeded.
+#      Measured 15 November 2026 across the last 60 runs (31 Oct – 15 Nov):
+#      the gap between consecutive runs ran 170–616 minutes, median 389, and
+#      NONE of the 59 gaps was inside the ~15-minute sleep window. A
+#      ten-minute cron would have produced 2,160 runs in that span. GitHub
+#      delivered 60 — about one every six and a half hours. No run was
+#      cancelled or skipped, so `concurrency` below is not eating them.
+#
+#      This is the scheduler running hours behind for this repository, not a
+#      dropped job: the weekly Lighthouse cron (`0 5 * * 1`) fires every
+#      Monday without a miss, but 5–8.5 hours late, which is the same
+#      magnitude. So NO cron expression fixes it. Tightening this number
+#      changes what the file claims and not what happens — except in the one
+#      case that matters, which is GitHub's backlog clearing and the ping
+#      suddenly working, at which point cost note 2 suspends production.
+#
+#      The honest summary: there is no cadence that both covers the sleep
+#      window and fits the free allowance, because covering the window means
+#      being awake continuously and being awake continuously costs the whole
+#      allowance. This workflow reduces how often somebody meets a cold start
+#      by about one visit in four, at best, and in practice by much less. A
+#      missed window is a slow page, not an outage, so the job does not fail
+#      on one.
 #
 # ── Why /health/live and not /health ────────────────────────────────────
 #
@@ -42,9 +66,17 @@ name: Keep production warm
 
 on:
   schedule:
-    # Every ten minutes. The sleep threshold is ~15, so a late run still
-    # usually lands inside the window.
-    - cron: '*/10 * * * *'
+    # ⚠️ HOURLY, AND DELIBERATELY NOT TIGHTER. Read cost note 2 and the
+    # measurement note below before changing this number — a ten-minute
+    # schedule, which is what this said until 15 November 2026, projects 731
+    # instance hours a month against an allowance of 750 shared with staging,
+    # and spending it means Render SUSPENDS both services for the rest of the
+    # month. scripts/keep-warm-budget.mjs does that arithmetic and fails on a
+    # cadence that does not fit.
+    #
+    # Hourly projects ~180 hours and covers at most 25% of the day. That is a
+    # worse promise honestly stated, not a fix. The fix is a paid instance.
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 # If a run is somehow still going when the next fires, the new one wins:

@@ -109,13 +109,30 @@ for (const width of [360, 390, 768]) {
   check(await page.evaluate(() => document.body.style.overflowY) === 'hidden',
     'the page behind is locked while it is open');
   /**
-   * ⚠️ And overflow-X is still hidden. body carries `overflow-x:hidden`
-   * from _spec.scss; a lock written as the `overflow` SHORTHAND would drop
-   * it on every close, which is a horizontal scrollbar appearing on a phone
-   * after the second time somebody opens the menu.
+   * ⚠️ And the horizontal clamp is still hidden. A lock written as the
+   * `overflow` SHORTHAND would drop it on every close, which is a horizontal
+   * scrollbar appearing on a phone after the second time somebody opens the
+   * menu.
+   *
+   * 🔴 This check read `document.body` for its whole life and had to move,
+   * because its SUBJECT moved. `overflow-x: hidden` sat on `body` until the
+   * accessibility audit measured what that cost: it made body a scroll
+   * container while `document.scrollingElement` stayed `html`, so
+   * `scrollIntoView()` was inert across the whole application — 0px of
+   * movement with 1,612px of scroll available. The clamp is on `html` now
+   * (_spec.scss), so reading body's overflow-x asked the wrong element and
+   * failed on a page that was correct.
+   *
+   * It asserts two things rather than one, and the second is the stronger:
+   * the clamp survives the lock, AND the lock has not written the shorthand
+   * onto body — because doing that would make body a scroll container again
+   * and silently reintroduce the inert-scrollIntoView defect. The first form
+   * of this check could not have seen that; this one turns red on it.
    */
-  check(await page.evaluate(() => getComputedStyle(document.body).overflowX) === 'hidden',
-    '…without dropping the overflow-x the body already had');
+  check(await page.evaluate(() => getComputedStyle(document.documentElement).overflowX) === 'hidden',
+    '…without dropping the overflow-x the page already had (on html)');
+  check(await page.evaluate(() => document.body.style.overflowX) === '',
+    '…and without making body a scroll container again (no overflow shorthand)');
 
   // ── 6. the sheet's own controls are legible ON THE SHEET ───────────────
   const sheetBg = await sheet.evaluate((e) => getComputedStyle(e).backgroundColor);

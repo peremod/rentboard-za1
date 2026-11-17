@@ -1,6 +1,6 @@
 {
   "name": "mastande-backend",
-  "version": "1.187.0",
+  "version": "1.188.0",
   "private": true,
   "description": "Mastande ZA API — NestJS 11 + Prisma 6 + PostgreSQL",
   "scripts": {
@@ -28,20 +28,20 @@
     "test:cov": "npm --prefix .. run test:backend:cov"
   },
   "dependencies": {
-    "@nestjs/common": "^11.1.23",
+    "@nestjs/common": "^11.2.10",
     "@nestjs/config": "^4.0.0",
-    "@nestjs/core": "^11.1.23",
+    "@nestjs/core": "^11.2.10",
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/passport": "^11.0.0",
-    "@nestjs/platform-express": "^11.2.6",
+    "@nestjs/platform-express": "^11.2.10",
     "@nestjs/schedule": "^6.0.0",
-    "@nestjs/swagger": "^11.0.0",
+    "@nestjs/swagger": "^11.4.8",
     "@nestjs/throttler": "^6.2.1",
     "@prisma/client": "^6.0.0",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
-    "compression": "^1.7.5",
+    "compression": "^1.8.2",
     "cookie-parser": "^1.4.7",
     "express-rate-limit": "^7.4.1",
     "helmet": "^8.0.0",
@@ -51,7 +51,7 @@
     "reflect-metadata": "^0.2.2",
     "resend": "^4.0.0",
     "rxjs": "^7.8.1",
-    "sanitize-html": "^2.13.1",
+    "sanitize-html": "^2.18.2",
     "stripe": "^17.0.0"
   },
   "devDependencies": {
@@ -75,8 +75,9 @@
     "typescript-eslint": "^8.70.0"
   },
   "overrides": {
-    "@prisma/config": {
-      "deepmerge-ts": "^8.0.2"
-    }
+    "express": "^5.3.0",
+    "body-parser": "^2.4.0",
+    "qs": "^6.17.1",
+    "deepmerge-ts": "^8.0.2"
   }
 }

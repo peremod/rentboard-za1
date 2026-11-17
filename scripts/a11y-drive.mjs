@@ -48,6 +48,16 @@ import { createRequire } from 'node:module';
  * axe already does that properly, so this runs axe rather than a formula.
  */
 const require = createRequire(import.meta.url);
+/**
+ * WCAG 2.2 Level AA, and everything it subsumes. Not `best-practice`.
+ *
+ * `wcag22a` is in the list because 2.2 Level A criteria are part of AA
+ * conformance — 3.2.6 Consistent Help and 3.3.7 Redundant Entry are both A and
+ * both new in 2.2, and leaving them out would make the tag set narrower than
+ * the standard this product claims.
+ */
+const WCAG_AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
+
 let axeSource = null;
 try {
   axeSource = readFileSync(require.resolve('axe-core'), 'utf8');
@@ -754,10 +764,8 @@ async function auditPage(page, path, { close = true } = {}) {
   if (axeSource) {
     try {
       await page.evaluate(axeSource);
-      const contrast = await page.evaluate(async () => {
-        const run = await window.axe.run(document, {
-          runOnly: { type: 'rule', values: ['color-contrast'] },
-        });
+      const axeResult = await page.evaluate(async (tags) => {
+        const run = await window.axe.run(document, { runOnly: { type: 'tag', values: tags } });
         // ⚠️ `incomplete`, not just `violations`, and the reason is the whole
         // defect this line was added for.
         //
@@ -790,7 +798,30 @@ async function auditPage(page, path, { close = true } = {}) {
           ),
         })).filter((v) => v.nodes.length);
 
-        return [...run.violations, ...promoted].flatMap((v) =>
+        /**
+         * Everything that is NOT colour contrast, reported separately.
+         *
+         * One axe run, two buckets. The contrast path below carries lessons
+         * that are specific to it — the equalRatio promotion, and digging the
+         * ratio out of whichever of any/none/all holds it — and widening the
+         * run must not cost those. So the tag set is the full WCAG 2.2 AA one
+         * and the results are split, rather than running axe twice per page
+         * (which at 39 pages × 4 widths would be 312 runs instead of 156).
+         */
+        const other = run.violations
+          .filter((v) => v.id !== 'color-contrast')
+          .map((v) => ({
+            id: v.id,
+            impact: v.impact,
+            help: v.help,
+            wcag: v.tags.filter((t) => /^wcag\d/.test(t)).join(' '),
+            count: v.nodes.length,
+            targets: v.nodes.slice(0, 3).map((n) =>
+              Array.isArray(n.target) ? n.target.join(' ') : String(n.target)),
+            why: (v.nodes[0]?.failureSummary ?? '').replace(/\s+/g, ' ').slice(0, 160),
+          }));
+
+        const contrast = [...run.violations.filter((v) => v.id === 'color-contrast'), ...promoted].flatMap((v) =>
           v.nodes.map((n) => {
             // axe puts the measured ratio and the threshold in the check's
             // own data, which is the part worth printing: "2.86:1, needs
@@ -812,7 +843,44 @@ async function auditPage(page, path, { close = true } = {}) {
             };
           }),
         );
-      });
+
+        return { contrast, other };
+      }, WCAG_AA_TAGS);
+
+      const { contrast, other } = axeResult;
+
+      /**
+       * ── The rest of the ruleset ───────────────────────────────────────
+       *
+       * 🔴 This ran `runOnly: ['color-contrast']` for its whole life, and the
+       * comment above said why: the full ruleset "would surface dozens of
+       * findings at once, and a gate that is red on the day it lands is a gate
+       * someone turns off. Widening it is a decision to take with the findings
+       * in hand, not a default to inherit."
+       *
+       * The findings are now in hand. scripts/a11y-scan.mjs ran the full WCAG
+       * 2.2 AA ruleset over 51 pages at four widths — 204 page-scans — and
+       * found three rules: an invalid ARIA role on the two dashboards (an
+       * Angular input named `role`), prose links told apart by colour alone at
+       * 1.06:1, and scrollable tables no keyboard could reach at 360 and
+       * 390px. All three are fixed, and the sweep is at zero.
+       *
+       * So the fear was right in general and wrong here: there were three, not
+       * dozens, and widening the gate lands GREEN rather than red. That is the
+       * only moment at which this can be done without someone turning it off.
+       */
+      if (other.length) {
+        console.log(`  ${other.reduce((a, v) => a + v.count, 0)} other WCAG 2.2 AA violation(s) in ${other.length} rule(s)`);
+        for (const v of other) {
+          const times = v.count > 1 ? ` ×${v.count}` : '';
+          console.log(`    ❌ [${(v.impact ?? '?').toUpperCase()}] ${v.id}${times} — ${v.help}`);
+          console.log(`       ${v.wcag}  ${v.targets[0] ?? ''}`);
+          if (v.why) console.log(`       ${v.why}`);
+          failures.push(`${path}: ${v.id}${times} (${v.impact}) — ${v.help}`);
+        }
+      } else {
+        console.log('  ✅ no other WCAG 2.2 AA violation (full axe ruleset)');
+      }
 
       if (!contrast.length) {
         console.log('  ✅ contrast: every visible text node meets its WCAG threshold');
@@ -842,8 +910,8 @@ async function auditPage(page, path, { close = true } = {}) {
     } catch (err) {
       // A thrown axe is not a pass. It used to be possible to lose this
       // silently by catching and continuing.
-      console.log(`    ❌ contrast check did not run: ${err.message}`);
-      failures.push(`${path}: the contrast check itself failed — ${err.message}`);
+      console.log(`    ❌ the axe pass did not run: ${err.message}`);
+      failures.push(`${path}: the axe pass itself failed (contrast AND the rest of the ruleset) — ${err.message}`);
     }
   }
 

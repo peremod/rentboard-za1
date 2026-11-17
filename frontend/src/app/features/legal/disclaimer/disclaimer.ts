@@ -38,17 +38,19 @@ import { Icon } from '../../../shared/components/icon/icon';
 
         <section>
           <h2>3. Rental Housing Tribunal Contacts</h2>
-          <table class="legal-table">
-            <thead><tr><th>Province</th><th>Contact</th></tr></thead>
-            <tbody>
-              <tr><td>Gauteng</td><td>011 355 4000</td></tr>
-              <tr><td>Western Cape</td><td>021 483 5020</td></tr>
-              <tr><td>KwaZulu-Natal</td><td>031 336 5300</td></tr>
-              <tr><td>Eastern Cape</td><td>040 609 3200</td></tr>
-              <tr><td>Legal Aid SA (all provinces)</td><td>0800 110 110 (free)</td></tr>
-              <tr><td>SAPS (emergency)</td><td>10111</td></tr>
-            </tbody>
-          </table>
+          <div class="table-scroll" tabindex="0" role="group" aria-label="Disclaimer summary, scrolls sideways">
+            <table class="legal-table">
+              <thead><tr><th>Province</th><th>Contact</th></tr></thead>
+              <tbody>
+                <tr><td>Gauteng</td><td>011 355 4000</td></tr>
+                <tr><td>Western Cape</td><td>021 483 5020</td></tr>
+                <tr><td>KwaZulu-Natal</td><td>031 336 5300</td></tr>
+                <tr><td>Eastern Cape</td><td>040 609 3200</td></tr>
+                <tr><td>Legal Aid SA (all provinces)</td><td>0800 110 110 (free)</td></tr>
+                <tr><td>SAPS (emergency)</td><td>10111</td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section>

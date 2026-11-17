@@ -33,6 +33,21 @@ const MAX_PHOTOS_PER_ROOM = 20;
 const UNDO_LET_WINDOW_MINUTES = 30;
 
 /**
+ * The most verified landlords the board's hero stat will count exactly.
+ *
+ * Above this it reports "200+", which is true, stable, and all a trust signal
+ * needs — nobody reads "213 verified landlords" differently from "200+". The
+ * number exists to bound the MEMORY that counting costs: see the long note on
+ * the groupBy in search(), and docs/PERFORMANCE-BASELINE.md §5c.
+ *
+ * 200 and not 50: it has to sit far above any realistic search so the figure
+ * is exact in practice and the cap is a backstop rather than the normal
+ * answer. 200 rows of one id each is on the order of 20 KB; the unbounded
+ * version was on the order of 10 MB at 100,000 active rooms.
+ */
+const VERIFIED_LANDLORD_CAP = 200;
+
+/**
  * The only landlord fields any public room response carries: a name, an
  * avatar, the rating tenants gave them and whether their identity was
  * checked. No email, no phone, no document — POPIA s.10, and the same
@@ -254,14 +269,60 @@ export class RoomsService {
        * number of "verified landlords" grew as a visitor scrolled. A trust
        * figure that is both false and unstable is worse than no figure.
        *
-       * `distinct` on landlordId rather than a groupBy: the question is how
-       * many people, not how many rooms.
+       * ── Why this is a groupBy with a LIMIT, and not `distinct` ──────────
+       *
+       * 🔴 It used to be `findMany({ select: { landlordId }, distinct })`, and
+       * the comment here used to say "`distinct` on landlordId rather than a
+       * groupBy: the question is how many people, not how many rooms". The
+       * intent was right and the mechanism was not: Prisma applies `distinct`
+       * in the CLIENT, not in SQL. The statement it emitted carried no
+       * DISTINCT and selected `rooms.id` as well, so **every row matching the
+       * search crossed the wire and landed in the heap** to be reduced by
+       * JavaScript afterwards.
+       *
+       * Which made this the most expensive statement on the board. A page of
+       * twelve rooms is paginated; this was not, and it runs on the UNFILTERED
+       * board too, because the default `where` is just `status: 'active'`.
+       * Measured at 100,000 active rooms: 110 ms on an unfiltered board and
+       * 189 ms on a one-word search, the largest single cost in the request,
+       * and on the order of 10 MB of heap PER IN-FLIGHT REQUEST. On a 512 MB
+       * free instance with one replica and no scaling, a few dozen
+       * simultaneous visitors is an out-of-memory kill — a restart and a cold
+       * start for everybody — rather than a slow page.
+       * See docs/PERFORMANCE-BASELINE.md §2g and §5c.
+       *
+       * `groupBy` emits a real `GROUP BY`, so Postgres does the
+       * de-duplication and returns one row per landlord instead of one per
+       * room. `take` then bounds what comes back at all. The heap cost stops
+       * depending on how full the board is.
+       *
+       * ── What this does NOT change, deliberately ─────────────────────────
+       *
+       * The `where` is still spread from the SAME object the listing and the
+       * count use. That is the whole reason this is not hand-written SQL with
+       * a `COUNT(DISTINCT …)`, which would be O(1) instead of O(cap): the
+       * filter has fifteen optional clauses including nested relations and
+       * date logic, and restating it in SQL would make two sources of truth
+       * for one question. The day they drift, this figure starts counting
+       * landlords whose rooms are not on the board — which is the dishonesty
+       * the whole comment above exists to prevent. O(cap) is small enough.
+       *
+       * It still asks about VERIFIED landlords only, and still asks across the
+       * WHOLE result set rather than the current page. Both of the original
+       * defects stay fixed.
        */
       this.prisma.room
-        .findMany({
+        .groupBy({
+          by: ['landlordId'],
           where: { ...where, landlord: { landlordProfile: { idVerified: true } } },
-          select: { landlordId: true },
-          distinct: ['landlordId'],
+          // Prisma requires an orderBy once `take` is present, and refuses one
+          // naming a field outside `by` — without this it injects `id` and
+          // fails with "Every field used for orderBy must be included in the
+          // by-arguments". It costs nothing: the GROUP BY is already sorted.
+          orderBy: { landlordId: 'asc' },
+          // One MORE than the cap, so the answer distinguishes "exactly the
+          // cap" from "more than the cap" without a second query.
+          take: VERIFIED_LANDLORD_CAP + 1,
         })
         .then((rows) => rows.length),
     ]);
@@ -297,7 +358,16 @@ export class RoomsService {
     return {
       data, total, page, limit,
       hasMore: skip + data.length < total,
-      verifiedLandlords,
+      /**
+       * Capped, and the cap is reported rather than hidden.
+       *
+       * A number silently clamped to 200 would be a lie at 201. The flag lets
+       * the hero stat render "200+", which is a true statement, stays the same
+       * for the same search, and needs no new translation in any of the eleven
+       * languages because the number is rendered separately from the label.
+       */
+      verifiedLandlords: Math.min(verifiedLandlords, VERIFIED_LANDLORD_CAP),
+      verifiedLandlordsCapped: verifiedLandlords > VERIFIED_LANDLORD_CAP,
       /**
        * How the phrase was read, so the results page can say so. A person who
        * typed "rooms to rent in Springs" and sees "Springs" as a removable

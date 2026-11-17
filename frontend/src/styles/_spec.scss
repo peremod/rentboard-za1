@@ -151,7 +151,11 @@
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{font-size:16px;scroll-behavior:smooth}
-body{font-family:var(--font-body);background:var(--cream2);color:var(--ink);line-height:1.5;overflow-x:hidden}
+/* ⚠️ overflow-x:hidden moved to `html` — see the note in styles.scss. On
+   `body` it forced body's overflow-y to compute as `auto`, which made body a
+   scroll container and broke scrollIntoView for the whole application. */
+body{font-family:var(--font-body);background:var(--cream2);color:var(--ink);line-height:1.5}
+html{overflow-x:hidden}
 a{color:var(--terra);text-decoration:none}
 a:hover{text-decoration:underline}
 img{display:block;max-width:100%}
@@ -930,24 +934,28 @@ img{display:block;max-width:100%}
 .status-accepted{background:rgba(61,112,64,.2);color:var(--sage-deep)}
 .status-rejected{background:rgba(115, 103, 85,.1);color:var(--slate)}
 
-/* ═══ COOKIE BANNER ═══ */
-.cookie-banner{
-  position:fixed;bottom:1.25rem;left:1.25rem;
-  max-width:480px;z-index:9999;
-  background:var(--ink);color:var(--white);
-  border-radius:var(--r12);padding:1.5rem;
-  box-shadow:var(--shadow-xl);
-  border-top:3px solid var(--terra);
-  animation:slideUp .4s cubic-bezier(.16,1,.3,1);
-}
-@keyframes slideUp{from{transform:translateY(120%);opacity:0}to{transform:translateY(0);opacity:1}}
-.cookie-banner h3{font-size:1rem;font-weight:700;margin-bottom:.5rem}
-.cookie-banner p{font-size:.82rem;color:rgba(250,247,240,.65);line-height:1.65;margin-bottom:1rem}
-.cookie-banner a{color:var(--gold);text-decoration:underline}
-.cookie-actions{display:flex;gap:.5rem;flex-wrap:wrap}
-.btn-cookie-reject{flex:1;padding:.5rem .85rem;border-radius:var(--r4);border:1.5px solid rgba(250,247,240,.25);background:transparent;color:rgba(250,247,240,.75);font-weight:600;cursor:pointer;font-size:.82rem;font-family:var(--font-body)}
-.btn-cookie-accept{flex:1;padding:.5rem .85rem;border-radius:var(--r4);background:var(--terra);color:var(--white);border:none;font-weight:700;cursor:pointer;font-size:.82rem;font-family:var(--font-body)}
-.btn-cookie-manage{width:100%;padding:.4rem;background:transparent;color:rgba(250,247,240,.4);border:none;cursor:pointer;font-size:.78rem;font-family:var(--font-body);margin-top:.3rem}
+/* ═══ COOKIE BANNER — deleted, and worth saying why ═══
+ *
+ * Nine rules lived here for a class that appeared in NO template:
+ * .cookie-banner and its h3/p/a, @keyframes slideUp, .cookie-actions and
+ * .btn-cookie-reject/accept/manage, plus a responsive override in
+ * _responsive.scss. The live component renders .cookie-notice,
+ * .cookie-notice__title, .cookie-notice__body and .cookie-notice__ok.
+ *
+ * 🔴 The reason this mattered is not the bytes. `.cookie-banner a` set
+ * `text-decoration: underline` — which is exactly the fix the accessibility
+ * audit had to make for the cookie notice's link under 1.4.1 (§3b). Somebody
+ * had already found that problem and fixed it against a name that no longer
+ * existed, so the repository contained a correct fix that reached nothing,
+ * and a reader looking for coverage would have found it and stopped looking.
+ *
+ * ⚠️ scripts/css-coverage-audit.mjs could not see this, by its own design:
+ * it reports a class used in a template with NO rule, never a rule with no
+ * template. The opposite direction is unguarded — see docs/ACCESSIBILITY-AUDIT.md
+ * §3b for the measurement (32 of 417 global classes unreferenced, of which
+ * ~12 are live through `[class]` bindings and Angular's own ng-* classes, so
+ * the reverse check needs judgement rather than a bare sweep).
+ */
 
 /* ═══ FOOTER ═══ */
 .footer{background:var(--ink);padding:3.5rem 1.5rem 2rem}

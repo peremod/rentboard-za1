@@ -36,6 +36,50 @@ const check = (c, m) => (c ? ok(m) : bad(m));
 const browser = await chromium.launch();
 
 /** The build-error overlay makes every UI check below meaningless. */
+/**
+ * Wait until a locator EXISTS, and report whether it ever did.
+ *
+ * ── 🔴 Why this replaced `waitForTimeout` at the points that gate a check
+ *
+ * This drive failed in CI on `the one question appears right after applying`
+ * while passing locally and on the two commits either side of it. The cause
+ * was not the survey: it was `await page.waitForTimeout(2500)` standing in for
+ * "the prompt has rendered". A fixed wait encodes a guess about the slowest
+ * machine that will ever run it, and CI's runner is slower than this
+ * container, so the guess expired before the apply round-trip finished and the
+ * drive reported a defect in a feature that works.
+ *
+ * ⚠️ And the same fixed wait made a check pass for the WRONG REASON, which is
+ * worse than the red one. Section 6b's second half asserts two things after
+ * one 2500ms wait: that `.pill--green` appeared, and that the survey prompt
+ * did NOT come back. On a runner where the apply had not finished, the pill is
+ * missing — a false failure — and the prompt is absent because nothing had
+ * rendered yet, so "the question is not asked a second time" PASSES VACUOUSLY.
+ * A check that can pass because the page was still blank is not a check.
+ *
+ * ── The distinction this helper exists to keep
+ *
+ * Waiting for something to APPEAR is a condition, and belongs here: it returns
+ * as soon as the thing exists, and fails only when it never does.
+ *
+ * Waiting to prove something is ABSENT cannot be a condition — there is no
+ * event for "nothing happened". Those waits stay, and the fix is to anchor
+ * them to a positive signal first: once the pill has appeared the apply is
+ * demonstrably complete, so an absent prompt means absent rather than early.
+ *
+ * The timeout is generous on purpose. It is not a performance budget — if the
+ * prompt takes 8 seconds the drive should still report the truth about the
+ * survey, and nothing here is measuring speed.
+ */
+async function appears(locator, ms = 20000) {
+  try {
+    await locator.first().waitFor({ state: 'attached', timeout: ms });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function freshBundle(page, where) {
   if (await page.locator('vite-error-overlay').count()) {
     bad(`${where}: the dev server is showing a build error — every check here would be reading the PREVIOUS bundle`);
@@ -210,12 +254,22 @@ console.log('\n── 3. Asked once ──────────────�
   // The dashboard carries no survey card at all any more.
   const page = await signIn(browser, WEB, landlord.email, PASSWORD, { width: 390, height: 1400 });
   await page.goto(`${WEB}/landlord/dashboard`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(2500);
+  /**
+   * ⚠️ Another negative check that needed a positive anchor. "No survey card
+   * on the dashboard" is satisfied by a dashboard that has not rendered at
+   * all, so the fixed wait it replaced could pass this on a blank page. A
+   * section title is proof the dashboard itself arrived.
+   */
+  const dashReady = await appears(page.locator('.dash-section-title'));
   await freshBundle(page, '/landlord/dashboard');
-  check(
-    (await page.locator('app-survey-prompt').count()) === 0,
-    'the landlord dashboard has no survey card on it any more',
-  );
+  if (!dashReady) {
+    bad('the landlord dashboard never rendered — "no survey card" was NOT measured');
+  } else {
+    check(
+      (await page.locator('app-survey-prompt').count()) === 0,
+      'the landlord dashboard has no survey card on it any more',
+    );
+  }
   await page.close();
 }
 
@@ -322,7 +376,9 @@ console.log('\n── 6b. The card, where a person meets it ──────�
 
   const page = await signIn(browser, WEB, tenant.email, PASSWORD, { width: 390, height: 1400 });
   await page.goto(`${WEB}/rooms/${room.body.id}`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(2500);
+  // The Apply button IS this section's readiness signal, so wait for it rather
+  // than for a number. If it never arrives the `bad()` below still fires.
+  await appears(page.locator('button', { hasText: 'Apply' }));
   await freshBundle(page, '/rooms/:id');
   if (await page.locator('.cookie-notice__ok').count()) {
     await page.locator('.cookie-notice__ok').click();
@@ -334,8 +390,11 @@ console.log('\n── 6b. The card, where a person meets it ──────�
     bad('the room page has no Apply button for a signed-in tenant — nothing below was measured');
   } else {
     await applyButton.click();
-    await page.waitForTimeout(2500);
+    // 🔴 The assertion that failed in CI. `count()` still has to be exactly
+    // one, so this waits for the card to exist and then counts: a second card
+    // is as much a defect as none, and a condition wait cannot see that.
     const card = page.locator('app-survey-prompt .survey-prompt');
+    await appears(card);
     check(await card.count() === 1, 'the one question appears right after applying');
 
     const text = await card.first().textContent().then((t) => (t ?? '').replace(/\s+/g, ' ').trim(), () => '');
@@ -392,7 +451,7 @@ console.log('\n── 6b. The card, where a person meets it ──────�
 
   const again = await signIn(browser, WEB, tenant.email, PASSWORD, { width: 390, height: 1400 });
   await again.goto(`${WEB}/rooms/${second.body.id}`, { waitUntil: 'domcontentloaded' });
-  await again.waitForTimeout(2500);
+  await appears(again.locator('button', { hasText: 'Apply' }));
   if (await again.locator('.cookie-notice__ok').count()) {
     await again.locator('.cookie-notice__ok').click();
     await again.waitForTimeout(300);
@@ -402,7 +461,14 @@ console.log('\n── 6b. The card, where a person meets it ──────�
     bad('the second room has no Apply button — the "asked once" check never ran');
   } else {
     await applyAgain.click();
-    await again.waitForTimeout(2500);
+    /**
+     * ⚠️ The pill first, and the ORDER is the point. The next check asserts
+     * the prompt did NOT come back, and "absent" only means absent once the
+     * apply has demonstrably finished. Waiting for the pill is that proof;
+     * the fixed wait this replaced let the negative check pass on a page that
+     * had simply not rendered yet.
+     */
+    await appears(again.locator('.pill--green'));
     const applied = await again.locator('.pill--green').count();
     check(applied === 1, 'applying for a second room works as before');
     check(

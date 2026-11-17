@@ -54,17 +54,19 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 
         <section>
           <h2>3. Lawful Grounds (POPIA Section 11)</h2>
-          <table class="legal-table">
-            <thead><tr><th>Processing activity</th><th>Lawful ground</th></tr></thead>
-            <tbody>
-              <tr><td>Account management</td><td>Contract — s.11(1)(b)</td></tr>
-              <tr><td>Payment processing (ZAR)</td><td>Contract — s.11(1)(b)</td></tr>
-              <tr><td>Marketing emails</td><td>Consent — s.11(1)(a)</td></tr>
-              <tr><td>Usage measurement</td><td>Not personal information — daily counts only, no cookie</td></tr>
-              <tr><td>WhatsApp notifications</td><td>Consent + Contract</td></tr>
-              <tr><td>Fraud prevention</td><td>Legitimate interest — s.11(1)(f)</td></tr>
-            </tbody>
-          </table>
+          <div class="table-scroll" tabindex="0" role="group" aria-label="What we collect and why, scrolls sideways">
+            <table class="legal-table">
+              <thead><tr><th>Processing activity</th><th>Lawful ground</th></tr></thead>
+              <tbody>
+                <tr><td>Account management</td><td>Contract — s.11(1)(b)</td></tr>
+                <tr><td>Payment processing (ZAR)</td><td>Contract — s.11(1)(b)</td></tr>
+                <tr><td>Marketing emails</td><td>Consent — s.11(1)(a)</td></tr>
+                <tr><td>Usage measurement</td><td>Not personal information — daily counts only, no cookie</td></tr>
+                <tr><td>WhatsApp notifications</td><td>Consent + Contract</td></tr>
+                <tr><td>Fraud prevention</td><td>Legitimate interest — s.11(1)(f)</td></tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section>
@@ -90,70 +92,72 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
           <p>We use other companies to run Mastande. Under POPIA they are <strong>Operators</strong>:
           they process your information on our instructions, and we stay responsible for it. We do
           not sell your personal information to anyone, and we do not use it for advertising.</p>
-          <table class="legal-table">
-            <thead><tr><th>Operator</th><th>What it receives</th><th>Where it is processed</th></tr></thead>
-            <tbody>
-              <tr>
-                <td><strong>PayFast</strong><br/>payments</td>
-                <td>Only if you pay the R149 verification fee: your first name, email address, the
-                amount, and a reference number. Your card or banking details are entered on
-                PayFast's own pages and never reach us.</td>
-                <td>South Africa</td>
-              </tr>
-              <tr>
-                <td><strong>Neon</strong><br/>database</td>
-                <td>Everything you give us that we store — your account, listings, applications and
-                messages.</td>
-                <td><strong>Frankfurt, Germany</strong></td>
-              </tr>
-              <tr>
-                <td><strong>Render</strong><br/>application hosting</td>
-                <td>Everything the site processes while you use it.</td>
-                <td><strong>Frankfurt, Germany</strong></td>
-              </tr>
-              <tr>
-                <td><strong>Vercel</strong><br/>website hosting</td>
-                <td>Your IP address and the pages you request.</td>
-                <td>Outside South Africa</td>
-              </tr>
-              <tr>
-                <td><strong>ImageKit</strong><br/>photo and document storage</td>
-                <td>Room photographs, any identity or supporting document you upload, and any lease
-                or related paperwork stored against a tenancy. These go from your browser straight
-                to ImageKit. Documents are stored privately and are not publicly viewable; opening
-                one uses a link that expires.
-                <br/><br/>
-                <strong>Identity and supporting documents are deleted from storage once reviewed</strong>
-                — only the outcome is kept (POPIA s.26). Deletion is retried until it is confirmed by
-                the storage provider, and we record the outcome rather than assuming it.
-                <br/><br/>
-                <strong>A lease is different and is kept</strong>, because both you and the other
-                party need it for as long as the agreement can be disputed — deleting the only copy
-                of what you agreed would be the harm, not the protection. Only the two parties to
-                the tenancy can open it; we do not read it, and our staff cannot. Whoever uploaded a
-                document can remove it at any time, which deletes the file itself.</td>
-                <td>Outside South Africa</td>
-              </tr>
-              <tr>
-                <td><strong>Resend</strong><br/>email delivery</td>
-                <td>Your email address and name, and the contents of emails we send you.</td>
-                <td>Outside South Africa</td>
-              </tr>
-              <tr>
-                <td><strong>Meta Platforms</strong><br/>WhatsApp messages</td>
-                <td>Only if you use WhatsApp with us: your phone number and the contents of those
-                messages.</td>
-                <td>Outside South Africa</td>
-              </tr>
-              <tr>
-                <td><strong>Google</strong><br/>sign-in</td>
-                <td>Only if you choose to sign in with Google: Google tells us your email address,
-                name and profile photo, and Google learns that you signed in to Mastande. We ask
-                for nothing else from your Google account.</td>
-                <td>Outside South Africa</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-scroll" tabindex="0" role="group" aria-label="How long we keep each record, scrolls sideways">
+            <table class="legal-table">
+              <thead><tr><th>Operator</th><th>What it receives</th><th>Where it is processed</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>PayFast</strong><br/>payments</td>
+                  <td>Only if you pay the R149 verification fee: your first name, email address, the
+                  amount, and a reference number. Your card or banking details are entered on
+                  PayFast's own pages and never reach us.</td>
+                  <td>South Africa</td>
+                </tr>
+                <tr>
+                  <td><strong>Neon</strong><br/>database</td>
+                  <td>Everything you give us that we store — your account, listings, applications and
+                  messages.</td>
+                  <td><strong>Frankfurt, Germany</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>Render</strong><br/>application hosting</td>
+                  <td>Everything the site processes while you use it.</td>
+                  <td><strong>Frankfurt, Germany</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>Vercel</strong><br/>website hosting</td>
+                  <td>Your IP address and the pages you request.</td>
+                  <td>Outside South Africa</td>
+                </tr>
+                <tr>
+                  <td><strong>ImageKit</strong><br/>photo and document storage</td>
+                  <td>Room photographs, any identity or supporting document you upload, and any lease
+                  or related paperwork stored against a tenancy. These go from your browser straight
+                  to ImageKit. Documents are stored privately and are not publicly viewable; opening
+                  one uses a link that expires.
+                  <br/><br/>
+                  <strong>Identity and supporting documents are deleted from storage once reviewed</strong>
+                  — only the outcome is kept (POPIA s.26). Deletion is retried until it is confirmed by
+                  the storage provider, and we record the outcome rather than assuming it.
+                  <br/><br/>
+                  <strong>A lease is different and is kept</strong>, because both you and the other
+                  party need it for as long as the agreement can be disputed — deleting the only copy
+                  of what you agreed would be the harm, not the protection. Only the two parties to
+                  the tenancy can open it; we do not read it, and our staff cannot. Whoever uploaded a
+                  document can remove it at any time, which deletes the file itself.</td>
+                  <td>Outside South Africa</td>
+                </tr>
+                <tr>
+                  <td><strong>Resend</strong><br/>email delivery</td>
+                  <td>Your email address and name, and the contents of emails we send you.</td>
+                  <td>Outside South Africa</td>
+                </tr>
+                <tr>
+                  <td><strong>Meta Platforms</strong><br/>WhatsApp messages</td>
+                  <td>Only if you use WhatsApp with us: your phone number and the contents of those
+                  messages.</td>
+                  <td>Outside South Africa</td>
+                </tr>
+                <tr>
+                  <td><strong>Google</strong><br/>sign-in</td>
+                  <td>Only if you choose to sign in with Google: Google tells us your email address,
+                  name and profile photo, and Google learns that you signed in to Mastande. We ask
+                  for nothing else from your Google account.</td>
+                  <td>Outside South Africa</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
           <p><strong>Information sent outside South Africa (POPIA s.72).</strong> As the table shows,
           most of these operators process your information outside the country — our database and
           application servers are in Frankfurt, Germany. We use them under their standard data

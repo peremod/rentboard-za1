@@ -363,6 +363,38 @@ if [[ -n "$ROOM_ID" ]]; then
   req GET "/api/rooms?province=Gauteng&maxRentCents=600000"
   check "filtered search" 200 "$STATUS" "$BODY"
 
+  # ── The hero's trust figure is bounded, and says when it is a floor ──────
+  #
+  # "N verified landlords" on the landing page. It has been false once
+  # already — computed in the browser from the loaded rooms, so it counted
+  # unverified landlords and grew as a visitor scrolled. It is now capped
+  # server-side at 200 for memory reasons (the old query handed every matching
+  # row to Node: ~10 MB of heap per request at 100k rooms, on a 512 MB
+  # instance), which introduced a new way for it to lie — reporting a clamped
+  # 200 as though it were exact.
+  #
+  # So the contract this asserts is the PAIR: a number, and a boolean saying
+  # whether that number is exact. A response carrying the count without the
+  # flag is the state in which the browser cannot tell, and would print a
+  # false exact figure. scripts/verified-count-drive.mjs asserts the values;
+  # this asserts the shape is there at all, on every smoke run.
+  req GET "/api/rooms?limit=1"
+  if [[ "$STATUS" == "200" ]]; then
+    if echo "$BODY" | jq -e 'has("verifiedLandlords") and has("verifiedLandlordsCapped")' >/dev/null 2>&1; then
+      VL=$(echo "$BODY" | jq -r '.verifiedLandlords')
+      VC=$(echo "$BODY" | jq -r '.verifiedLandlordsCapped')
+      if [[ "$VL" -le 200 ]]; then
+        green "  PASS  board reports verifiedLandlords ($VL) with its exactness flag (capped=$VC)"; PASS=$((PASS+1))
+      else
+        red "  FAIL  verifiedLandlords is $VL, above the 200 cap — the bound is not being applied"; FAIL=$((FAIL+1))
+      fi
+    else
+      red "  FAIL  board response is missing verifiedLandlords or verifiedLandlordsCapped: $(echo "$BODY" | head -c 200)"; FAIL=$((FAIL+1))
+    fi
+  else
+    red "  FAIL  GET /api/rooms?limit=1 returned $STATUS"; FAIL=$((FAIL+1))
+  fi
+
   # ── Pagination is BOUNDED, and the board answers 400 rather than 500 ─────
   #
   # 🔴 Found by the API contract sweep on 21 October:
