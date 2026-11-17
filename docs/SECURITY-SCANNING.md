@@ -206,3 +206,33 @@ is the cheaper mistake.
   run. OSV is there to disagree with it.
 - **Trivy scans the image, not the running host.** Render's platform is outside
   anything this repository can see.
+---
+
+## A bump no advisory asked for
+
+Worth its own heading because it cost a CI cycle and a wrong diagnosis.
+
+While clearing production criticals and highs, `@nestjs/throttler` was moved
+**6.5.0 → 6.8.0**. No advisory covered it. It broke `resetRateLimits` in
+`backend/test/support/test-app.ts`, and the symptom was **11 integration specs
+reporting "expected 429 to be 200"** in tests about erasure, verification and
+tenancies — nothing pointing at the limiter.
+
+Two things follow, and the second is the one worth keeping.
+
+**Fix what an advisory names, and nothing else.** The gate reports the version
+and the range; it does not ask for a newer minor. A bump with no finding behind
+it carries all of the risk and none of the reason. The bump is reverted to its
+baseline `^6.2.1` — not pinned to an exact version, because an artificial pin is
+its own change and fights `.github/dependabot.yml`.
+
+**And the first fix for it was a check that could not fail.** The helper was
+rewritten to assert the storage internals' shape and throw when it could not
+clear — then run against 6.8.0 to prove it, where **it did not fire**. 6.8.0
+splits the state across two maps and rebuilds the count from the second on every
+request, so the clear being checked for genuinely succeeds and is undone one line
+later. A structural check on an API's shape cannot see that; only driving a
+request through the limiter can. The check is now a test
+(`resets the limiter it claims to reset`), falsified by sabotaging the helper.
+
+Recorded in full in `PRE-LAUNCH-CHECKLIST.md` row 169.
