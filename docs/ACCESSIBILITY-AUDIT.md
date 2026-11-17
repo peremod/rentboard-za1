@@ -507,10 +507,10 @@ be read as cross-browser evidence.
 
 ## 6. Recommendations, in the order I would do them
 
-> **Status, 17 November 2026.** #2 was done with the audit. #3, #4, #7, #8 and
-> #9 are done and are described in §7. #1 and #6 remain, and both are blocked
-> on something this container cannot supply: a product decision and a real
-> screen reader. #5 remains and is not blocked.
+> **Status, 17 November 2026.** #2 was done with the audit. #3, #4, #5, #7, #8
+> and #9 are done and are described in §7. #1 and #6 remain, and both are
+> blocked on something this container cannot supply: a product decision and a
+> real screen reader.
 
 
 1. **Declare a browser support matrix.** It is the prerequisite for Step 4, and
@@ -655,3 +655,75 @@ Two things it taught while being built, both recorded in the script:
 its own step in `ci.yml`. CI invokes these scripts individually and does not
 run `npm run audit`, so the package script alone would have been a control
 that only looked like one.
+
+
+---
+
+## 8. 🔴 #5 — asserting the live site, and what asserting it found
+
+Recommendation 5 was a one-line job: `lighthouserc.production.json` collected
+accessibility and never asserted it, so the only accessibility score anybody
+guaranteed was the one from a localhost build nobody visits. Adding the
+assertion turned up a live defect.
+
+### 8a. The live site scores 0.96, and it is the cookie link again
+
+This container cannot reach `www.umastande.co.za` (egress policy), so the
+number is not mine — it is read from the weekly production audit's own run of
+16 November, which **passed** because nothing asserted it:
+
+```
+── https://www.umastande.co.za/            performance 0.97  accessibility 0.96
+── https://www.umastande.co.za/pricing     performance 1     accessibility 0.96
+── https://www.umastande.co.za/how-it-works performance 0.99  accessibility 0.96
+
+accessibility 0.96 — what it lost it on:
+  · link-in-text-block  score 0  weight 7.00  Links rely on color to be distinguishable.
+    selector: app-cookie-consent > div.cookie-notice > p.cookie-notice__body > a
+```
+
+One audit, on all three URLs, and it is **exactly the defect §3b fixed** — a
+prose link told apart from its sentence by colour alone at 1.06:1, underlined
+only on `:hover`, on a product whose audience has no hover.
+
+### 8b. Why: production serves `master`, and the fix is on `develop`
+
+Verified rather than assumed, with `git show origin/master`: `master` contains
+no `.cookie-notice__body a` rule and no `p a:not(.btn)` rule. The fix went in
+with the audit on `develop`. So the live site is serving a build that predates
+it, the cookie notice is on **every** page, and **every page of the live site
+currently fails WCAG 1.4.1**.
+
+⚠️ **This is the finding, not the assertion.** The defect has been live since
+the audit was written. Nothing caught it because the one job that looks at the
+live site collected the score and asserted four other things.
+
+### 8c. The threshold is 1.0, and it will be red until production is deployed
+
+`categories:accessibility: ["error", { "minScore": 1.0 }]`.
+
+1.0 is not aspirational — it is what the fixed code measures, and the PR gate
+in `lighthouserc.json` has asserted it for the life of that file. Asserting
+0.96 to make the weekly job green today would lock the defect in, which is the
+opposite of what an assertion is for. **The red is correct and the remedy is a
+production deploy from `develop`.**
+
+### 8d. Falsified, by rebuilding production's own state
+
+Removing `.cookie-notice__body a { text-decoration: underline }` was **not
+enough** — accessibility stayed at 1.0. §3b had added two independent rules,
+and the cookie link sits inside a `<p>`, so `p a:not(.btn):not(.btn-link)`
+still underlined it. Worth recording as a property of the fix: the link is
+underlined by two rules, so losing either one does not regress it.
+
+With both disabled, the production state reproduced exactly:
+
+| | fixed build | both rules disabled | live site |
+| --- | --- | --- | --- |
+| `categories:accessibility` | **1.0** | **0.96** | **0.96** |
+| `link-in-text-block` | 1 | 0 | 0 |
+| failing node | — | `…p.cookie-notice__body > a` | `…p.cookie-notice__body > a` |
+
+`lhci assert` against the production config then failed as it should —
+`expected: >=1, found: 0.96`, exit 1 — and passes at exit 0 with both rules
+restored.
