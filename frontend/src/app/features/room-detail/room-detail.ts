@@ -622,6 +622,7 @@ export class RoomDetail implements OnInit {
       },
       error: (err: { status?: number }) => {
         this.seo.setJsonLd('room', null);
+        this.seo.setJsonLd('breadcrumb', null);
 
         // "Gone" and "could not ask" are different answers, and until v1.74.0
         // this treated them as the same one: any error set notFound, which
@@ -777,6 +778,30 @@ export class RoomDetail implements OnInit {
           containedInPlace: { '@type': 'AdministrativeArea', name: r.province },
         },
       },
+    });
+
+    /**
+     * Where this page sits — a BreadcrumbList, to match the visible path.
+     *
+     * The page already shows the way back to the board (the `back-link` at the
+     * top, "Back to all rooms" → `/`), so this structured data describes a
+     * trail a visitor can actually see rather than inventing one. Two levels,
+     * Home → this room: there is no indexable listing level between them today
+     * (`/rooms` redirects to `/`, the board), and a crumb pointing at the same
+     * URL as Home would be noise. When location pages exist, the city becomes
+     * the middle crumb.
+     *
+     * Keyed `breadcrumb` so it replaces its own block and leaves `room` and
+     * `site` alone; cleared on not-found beside `room`, so a gone page carries
+     * no trail to a listing that is no longer there.
+     */
+    this.seo.setJsonLd('breadcrumb', {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: `${environment.siteUrl}/` },
+        { '@type': 'ListItem', position: 2, name: r.title, item: `${environment.siteUrl}/rooms/${r.id}` },
+      ],
     });
   }
 

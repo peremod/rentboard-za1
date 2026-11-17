@@ -104,6 +104,19 @@ console.log(`\n── Room listing markup ────────────�
     check(!!listing, 'the room page carries listing markup at all');
     const blob = JSON.stringify(listing ?? {});
 
+    // A BreadcrumbList that matches the visible path: Home → this room. Two
+    // items, first the site root, last this room's own URL. A trail that does
+    // not end on the page it is on is describing a different page.
+    const crumb = nodes(blocks).find((n) => n['@type'] === 'BreadcrumbList');
+    check(!!crumb, 'the room page carries a BreadcrumbList');
+    const items = crumb?.itemListElement ?? [];
+    check(items.length === 2, 'the trail is two levels, Home → this room', `${items.length} item(s)`);
+    check(items[0]?.position === 1 && /\/$/.test(items[0]?.item ?? ''), 'position 1 is the site root');
+    check(
+      items[1]?.position === 2 && new RegExp(`/rooms/${roomId}$`).test(items[1]?.item ?? ''),
+      'position 2 is this room, and its URL is this room',
+    );
+
     /**
      * 🔴 The rating is the one that matters. It used to be the LANDLORD's
      * rating attached to the ROOM — a room with no reviews of its own
@@ -196,7 +209,10 @@ console.log(`\n── About: the entity page a crawler and an AI can read ──
   check(status === 200, '/about is served (200)', `status ${status}`);
   check(/<title>[^<]*About[^<]*<\/title>/i.test(html), '/about has a title naming itself');
   check(/<meta name="description" content="[^"]+"/i.test(html), '/about has a meta description');
-  check(/<link rel="canonical"[^>]*\/about"/i.test(html), '/about declares a self canonical');
+  // Canonical presence is environment-dependent — a non-indexable (development
+  // or preview) deployment deliberately emits none, which the dedicated
+  // crawl-direction section below asserts. So the canonical is NOT checked here,
+  // where it would fail on exactly the dev build this drive also runs against.
   check(/<h1[^>]*>\s*About Mastande\s*<\/h1>/i.test(html), '/about server-renders its H1, not a shell');
   // The entity claim a GEO reader extracts — the operating company — has to be
   // in the body, not only in the Organization JSON-LD on the homepage.
