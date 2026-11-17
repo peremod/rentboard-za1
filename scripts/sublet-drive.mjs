@@ -198,19 +198,19 @@ const applicantTypes = await apiCall(API, 'GET', '/api/verification/types', unde
   : bad('sublet_right is offered to somebody with no sublet listing');
 
 const noRoom = await apiCall(API, 'POST', '/api/verification',
-  { type: 'sublet_right', documentPath: 'verification/stub-lease.jpg' }, sublessor.token);
+  { type: 'sublet_right', documentPath: `verification/${sublessor.id}/stub-lease.jpg` }, sublessor.token);
 noRoom.status >= 400
   ? ok('a sublet check with no listing named is refused — the right comes from one lease over one address')
   : bad('a sublet check was accepted without a listing');
 
 const notTheirs = await apiCall(API, 'POST', '/api/verification',
-  { type: 'sublet_right', documentPath: 'verification/stub-lease.jpg', roomId: ownerRoom.body?.id }, sublessor.token);
+  { type: 'sublet_right', documentPath: `verification/${sublessor.id}/stub-lease.jpg`, roomId: ownerRoom.body?.id }, sublessor.token);
 notTheirs.status >= 400
   ? ok('…and one naming somebody else’s listing is refused')
   : bad('a sublet check was accepted against another account’s listing');
 
 const submitted = await apiCall(API, 'POST', '/api/verification',
-  { type: 'sublet_right', documentPath: 'verification/stub-lease.jpg', roomId }, sublessor.token);
+  { type: 'sublet_right', documentPath: `verification/${sublessor.id}/stub-lease.jpg`, roomId }, sublessor.token);
 submitted.status === 201
   ? ok('the check can be submitted against their own listing')
   : bad(`submitting the sublet check returned ${submitted.status} ${JSON.stringify(submitted.body).slice(0, 160)}`);
@@ -261,7 +261,7 @@ if (!ADMIN) {
 
   // Rejection of a later submission takes the stamp away.
   const again = await apiCall(API, 'POST', '/api/verification',
-    { type: 'sublet_right', documentPath: 'verification/stub-lease-2.jpg', roomId }, sublessor.token);
+    { type: 'sublet_right', documentPath: `verification/${sublessor.id}/stub-lease-2.jpg`, roomId }, sublessor.token);
   const rejected = await apiCall(API, 'PATCH', `/api/verification/${again.body?.id}/review`,
     { status: 'rejected', reviewNote: 'The consent letter is not from the owner.' }, ADMIN);
   rejected.status === 200 && q(`SELECT ("subletCheckedAt" IS NULL)::text FROM rooms WHERE id='${roomId}'`) === 'true'
