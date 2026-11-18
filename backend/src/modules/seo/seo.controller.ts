@@ -31,6 +31,111 @@ const HREFLANG: Record<string, string> = {
  * The sitemap is generated from live data — every active room is included,
  * and let/draft rooms are excluded so crawlers never index a dead listing.
  */
+/**
+ * AI TRAINING crawlers and the two robots.txt control tokens, each refused in
+ * full. SEARCH / retrieval crawlers (OAI-SearchBot, Claude-SearchBot,
+ * PerplexityBot, the *-User fetchers) and classic Googlebot/Bingbot are
+ * deliberately NOT here: they fall through to "*" and stay allowed, because
+ * they index to cite and link back. Google-Extended / Applebot-Extended are
+ * tokens, not crawlers — blocking them stops Gemini/Apple-Intelligence TRAINING
+ * without touching Google/Apple SEARCH.
+ *
+ * ⚠️ Never add a search crawler to this list, and never give any crawler its
+ * own "Allow:" group — a bot obeys its most specific group and ignores "*", so
+ * a per-agent Allow would hand that crawler the private areas "*" protects.
+ * robots.spec.ts asserts both; seo-drive asserts the structural half against
+ * the served file on any deployment.
+ */
+export const AI_TRAINING_CRAWLERS = [
+  'GPTBot', 'CCBot', 'ClaudeBot', 'anthropic-ai', 'Claude-Web',
+  'Google-Extended', 'Applebot-Extended', 'Meta-ExternalAgent', 'Bytespider',
+] as const;
+
+/** Search/retrieval crawlers that MUST stay allowed via "*" (never blocked). */
+export const AI_SEARCH_CRAWLERS = [
+  'OAI-SearchBot', 'Claude-SearchBot', 'PerplexityBot', 'ChatGPT-User', 'Perplexity-User',
+] as const;
+
+/**
+ * The robots.txt body. Pure, so robots.spec.ts can assert the policy without a
+ * ConfigService or a network — the served file in CI is often PROXIED from
+ * live production (the prod build's bundle fetches the production origin), so
+ * seo-drive cannot verify THIS build's policy there; this is where it is
+ * verified, against this build's own code.
+ */
+export function buildRobotsTxt(site: string, indexable: boolean): string {
+  if (!indexable) {
+    // Staging and development: nothing at all. Belt and braces with the
+    // X-Robots-Tag header set in vercel.json for the frontend host.
+    return ['User-agent: *', 'Disallow: /'].join('\n');
+  }
+
+  return [
+    '# AI crawlers are split by what they do, not allowed wholesale.',
+    '#',
+    '# SEARCH / RETRIEVAL crawlers — OAI-SearchBot, Claude-SearchBot,',
+    '# PerplexityBot, and the user-triggered fetchers (ChatGPT-User,',
+    '# Perplexity-User) — are NOT named below, so they fall to "User-agent: *"',
+    '# and crawl the public site like Googlebot. These index the page to CITE it',
+    '# and link back: that is free distribution, the same deal as web search, and',
+    '# the reason a room can surface in an AI answer at all.',
+    '#',
+    '# TRAINING crawlers — the group further down — are refused entirely. Their',
+    '# job is to pull the corpus into a model, not to send anyone here. A free',
+    "# notice board gets nothing back for it, so it is declined. Google-Extended",
+    '# and Applebot-Extended are robots.txt control tokens, not crawlers:',
+    '# blocking them stops Gemini/Apple-Intelligence TRAINING while Googlebot and',
+    '# Applebot keep crawling for SEARCH through "*". That is the whole point of',
+    '# naming them — search stays, training goes.',
+    '#',
+    '# 🔴 The one thing never to do here: give any crawler its own group with an',
+    '# "Allow:". A bot obeys the MOST specific group that matches it and ignores',
+    '# "*" entirely — so "User-agent: GPTBot / Allow: /" would hand that crawler',
+    '# the public site AND the private areas "*" protects below. Every named',
+    '# group in this file is a FULL "Disallow: /" and nothing else; the private',
+    '# areas stay closed because "*" is the only group that ever says "Allow".',
+    '# seo-drive.mjs asserts exactly that: no named group is anything but a full',
+    '# block.',
+    '',
+    'User-agent: *',
+    'Allow: /',
+    '',
+    '# Private and authenticated areas — no SEO value, and must not be crawled.',
+    'Disallow: /auth/',
+    'Disallow: /tenant/',
+    'Disallow: /landlord/',
+    'Disallow: /account/',
+    'Disallow: /admin/',
+    'Disallow: /api/',
+    '',
+    '# Filter permutations on the board are near-duplicates of each other and',
+    '# burn crawl budget that belongs to room pages.',
+    'Disallow: /*?*province=',
+    'Disallow: /*?*maxRent=',
+    'Disallow: /*?*sort=',
+    '',
+    '# Tracking parameters must never fork a URL in the index.',
+    'Disallow: /*?*utm_',
+    '',
+    '# Locale-prefixed private areas — the same rules apply in all 11 languages.',
+    ...PREFIXED_LOCALES.flatMap((l) => [
+      `Disallow: /${l}/auth/`,
+      `Disallow: /${l}/tenant/`,
+      `Disallow: /${l}/landlord/`,
+      `Disallow: /${l}/account/`,
+      `Disallow: /${l}/admin/`,
+    ]),
+    '',
+    '# AI TRAINING crawlers and tokens — refused in full (see note above).',
+    '# Each is a complete block; none may carry an "Allow". Search crawlers are',
+    '# deliberately absent so they fall through to "*".',
+    ...AI_TRAINING_CRAWLERS.map((ua) => `User-agent: ${ua}`),
+    'Disallow: /',
+    '',
+    `Sitemap: ${site}/sitemap.xml`,
+  ].join('\n');
+}
+
 @Controller()
 export class SeoController {
   constructor(
@@ -81,84 +186,7 @@ export class SeoController {
   @Header('Content-Type', 'text/plain')
   @Header('Cache-Control', 'public, max-age=3600')
   robots(): string {
-    if (!this.indexable) {
-      // Staging and development: nothing at all. Belt and braces with the
-      // X-Robots-Tag header set in vercel.json for the frontend host.
-      return ['User-agent: *', 'Disallow: /'].join('\n');
-    }
-
-    return [
-      '# AI crawlers are split by what they do, not allowed wholesale.',
-      '#',
-      '# SEARCH / RETRIEVAL crawlers — OAI-SearchBot, Claude-SearchBot,',
-      '# PerplexityBot, and the user-triggered fetchers (ChatGPT-User,',
-      '# Perplexity-User) — are NOT named below, so they fall to "User-agent: *"',
-      '# and crawl the public site like Googlebot. These index the page to CITE it',
-      '# and link back: that is free distribution, the same deal as web search, and',
-      '# the reason a room can surface in an AI answer at all.',
-      '#',
-      '# TRAINING crawlers — the group further down — are refused entirely. Their',
-      '# job is to pull the corpus into a model, not to send anyone here. A free',
-      "# notice board gets nothing back for it, so it is declined. Google-Extended",
-      '# and Applebot-Extended are robots.txt control tokens, not crawlers:',
-      '# blocking them stops Gemini/Apple-Intelligence TRAINING while Googlebot and',
-      '# Applebot keep crawling for SEARCH through "*". That is the whole point of',
-      '# naming them — search stays, training goes.',
-      '#',
-      '# 🔴 The one thing never to do here: give any crawler its own group with an',
-      '# "Allow:". A bot obeys the MOST specific group that matches it and ignores',
-      '# "*" entirely — so "User-agent: GPTBot / Allow: /" would hand that crawler',
-      '# the public site AND the private areas "*" protects below. Every named',
-      '# group in this file is a FULL "Disallow: /" and nothing else; the private',
-      '# areas stay closed because "*" is the only group that ever says "Allow".',
-      '# seo-drive.mjs asserts exactly that: no named group is anything but a full',
-      '# block.',
-      '',
-      'User-agent: *',
-      'Allow: /',
-      '',
-      '# Private and authenticated areas — no SEO value, and must not be crawled.',
-      'Disallow: /auth/',
-      'Disallow: /tenant/',
-      'Disallow: /landlord/',
-      'Disallow: /account/',
-      'Disallow: /admin/',
-      'Disallow: /api/',
-      '',
-      '# Filter permutations on the board are near-duplicates of each other and',
-      '# burn crawl budget that belongs to room pages.',
-      'Disallow: /*?*province=',
-      'Disallow: /*?*maxRent=',
-      'Disallow: /*?*sort=',
-      '',
-      '# Tracking parameters must never fork a URL in the index.',
-      'Disallow: /*?*utm_',
-      '',
-      '# Locale-prefixed private areas — the same rules apply in all 11 languages.',
-      ...PREFIXED_LOCALES.flatMap((l) => [
-        `Disallow: /${l}/auth/`,
-        `Disallow: /${l}/tenant/`,
-        `Disallow: /${l}/landlord/`,
-        `Disallow: /${l}/account/`,
-        `Disallow: /${l}/admin/`,
-      ]),
-      '',
-      '# AI TRAINING crawlers and tokens — refused in full (see note above).',
-      '# Each is a complete block; none may carry an "Allow". Search crawlers are',
-      '# deliberately absent so they fall through to "*".',
-      'User-agent: GPTBot',
-      'User-agent: CCBot',
-      'User-agent: ClaudeBot',
-      'User-agent: anthropic-ai',
-      'User-agent: Claude-Web',
-      'User-agent: Google-Extended',
-      'User-agent: Applebot-Extended',
-      'User-agent: Meta-ExternalAgent',
-      'User-agent: Bytespider',
-      'Disallow: /',
-      '',
-      `Sitemap: ${this.site}/sitemap.xml`,
-    ].join('\n');
+    return buildRobotsTxt(this.site, this.indexable);
   }
 
   @Get('sitemap.xml')

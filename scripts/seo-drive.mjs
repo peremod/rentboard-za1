@@ -421,15 +421,20 @@ console.log(`\n── robots.txt says what this deployment is ────`);
       );
     }
 
-    // The GREEN half of the split, asserted both ways so neither drifts:
-    // the named training crawlers ARE blocked, and the search/retrieval
-    // crawlers are NOT named (they must fall through to "*" and stay allowed).
+    // ⚠️ Whether the TRAINING blocks are PRESENT is NOT asserted here, and the
+    // reason is load-bearing: on the production build this drive runs against,
+    // robots.txt is proxied from the live production origin — the DEPLOYED
+    // code's policy, not this branch's. Requiring this branch's training groups
+    // here can never pass until after deploy, a chicken-and-egg. That presence
+    // is verified against this build's own code in
+    // backend/src/modules/seo/robots.spec.ts instead. What IS safe to assert on
+    // any deployment is the one-directional half below: whatever crawlers are
+    // named, a search crawler must never be among them (a search crawler in a
+    // named group is in a full block — refused — which breaks "citable, not
+    // trainable" on production too, not just here).
     const namedAgents = named.flatMap((g) => g.agents);
-    for (const trainer of ['GPTBot', 'CCBot', 'ClaudeBot', 'Google-Extended', 'Applebot-Extended', 'Meta-ExternalAgent', 'Bytespider']) {
-      check(namedAgents.includes(trainer), `robots.txt blocks the training crawler ${trainer}`, `named: ${namedAgents.join(', ') || '(none)'}`);
-    }
-    for (const searcher of ['OAI-SearchBot', 'Claude-SearchBot', 'PerplexityBot', 'Googlebot', 'ChatGPT-User']) {
-      check(!namedAgents.includes(searcher), `robots.txt leaves the search crawler ${searcher} to "*" (allowed)`, `named: ${namedAgents.join(', ') || '(none)'}`);
+    for (const searcher of ['OAI-SearchBot', 'Claude-SearchBot', 'PerplexityBot', 'Googlebot', 'Bingbot', 'ChatGPT-User']) {
+      check(!namedAgents.includes(searcher), `robots.txt never blocks the search crawler ${searcher}`, `named: ${namedAgents.join(', ') || '(none)'}`);
     }
   } else {
     // A copy must not advertise the real site's URLs as its own.

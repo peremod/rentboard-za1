@@ -659,7 +659,13 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
              links inherit it rather than declaring their own. -->
         @if (provinceLinks().length) {
           <nav aria-label="Browse rooms by province" style="margin-top:2rem">
-            <h2 class="results-count">Rooms by province</h2>
+            <!-- A bare h2, deliberately. It must NOT reuse .results-count: the
+                 board's "N rooms found" heading is an h2.results-count, and
+                 wake-notice-drive reads that as a strict Playwright locator that
+                 throws on two matches. A second one here broke that drive. A
+                 classless h2 takes the global display-heading style and adds no
+                 new class for the CSS-coverage gate to flag. -->
+            <h2>Rooms by province</h2>
             <div class="filter-pill-wrap">
               @for (p of provinceLinks(); track p.slug) {
                 <a class="filter-pill" [routerLink]="['/rooms/in', p.slug]">{{ p.province }} ({{ p.count }})</a>
