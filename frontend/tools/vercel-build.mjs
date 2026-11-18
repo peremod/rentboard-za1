@@ -137,6 +137,55 @@ await writeFile(
 /** Hosts that serve a production build but are not the production site. */
 const PREVIEW_HOSTS = '(staging\\.umastande\\.co\\.za|rentboard-za1\\.vercel\\.app|.*\\.vercel\\.app)';
 
+/**
+ * Content-Security-Policy for the user-facing origin (F-02).
+ *
+ * The other security headers above were already here; a CSP was not. This is
+ * defence-in-depth — Angular's own contextual escaping is the primary XSS
+ * control and the app contains no `bypassSecurityTrust*`, `innerHTML` or
+ * `DomSanitizer` sink — so the policy's job is to cap the blast radius of any
+ * future sink, not to be the only guard.
+ *
+ * ⚠️ `script-src`/`style-src` keep `'unsafe-inline'`, and that is forced by the
+ * architecture, not an oversight. This build PRERENDERS pages and uses
+ * `provideClientHydration(withEventReplay())`, both of which bake an inline
+ * script into the HTML at BUILD time. A nonce is per-request and set by the
+ * function; it cannot match a script baked into a prerendered file served from
+ * disk, so a nonce policy would blank the prerendered pages (the ones a crawler
+ * sees). `'unsafe-inline'` is the documented Angular posture for this setup. The
+ * policy still blocks what matters for this app: no external script/style
+ * ORIGIN can load, no `eval` (`'unsafe-eval'` is absent), no plugins
+ * (`object-src 'none'`), no framing or `<base>` hijack, and `connect-src` and
+ * `form-action` are allow-listed to exactly the origins the app uses.
+ *
+ * Every non-`'self'` origin below is load-bearing and was traced to its caller
+ * — remove one and a real flow breaks:
+ *   · ik.imagekit.io      room/listing images (img) and signed document reads
+ *   · upload.imagekit.io  the browser uploads straight here (uploads.service.ts)
+ *   · api.umastande.co.za / mastande-api.onrender.com  the API, prod + staging
+ *   · www/sandbox.payfast.co.za  payment is a top-level form POST PayFast's way
+ *                                (payments.service.redirectToPayfast) — NOT
+ *                                connect-src, so it lives only in form-action
+ *
+ * If a new external origin is added (an analytics script, a new CDN, a fonts
+ * host), its directive has to be added here or the browser blocks it — which is
+ * the point. verify-build.sh asserts the policy is present and carries the
+ * directives that must never silently drop.
+ */
+const CONTENT_SECURITY_POLICY = [
+  `default-src 'self'`,
+  `base-uri 'self'`,
+  `object-src 'none'`,
+  `frame-ancestors 'self'`,
+  `img-src 'self' data: https://ik.imagekit.io`,
+  `font-src 'self'`,
+  `style-src 'self' 'unsafe-inline'`,
+  `script-src 'self' 'unsafe-inline'`,
+  `connect-src 'self' https://api.umastande.co.za https://mastande-api.onrender.com https://ik.imagekit.io https://upload.imagekit.io`,
+  `form-action 'self' https://www.payfast.co.za https://sandbox.payfast.co.za`,
+  `upgrade-insecure-requests`,
+].join('; ');
+
 await writeFile(
   join(out, 'config.json'),
   JSON.stringify(
@@ -158,6 +207,7 @@ await writeFile(
             'referrer-policy': 'strict-origin-when-cross-origin',
             'x-frame-options': 'SAMEORIGIN',
             'permissions-policy': 'camera=(), microphone=(), geolocation=(self), interest-cohort=()',
+            'content-security-policy': CONTENT_SECURITY_POLICY,
           },
           continue: true,
         },

@@ -791,6 +791,37 @@ else
       ? fail("a route points at a .html path, which cleanUrls-style handling makes unreachable")
       : pass("no route points at a .html path");
 
+    // F-02: the user-facing origin carries a Content-Security-Policy, and it
+    // keeps the directives that must never silently drop. The CSP is defence in
+    // depth, but two of its origins are load-bearing — remove them and a real
+    // flow breaks with no other warning — so they are asserted here, where the
+    // generated artefact is read, not trusted from the source.
+    const csp = routes
+      .map((r) => (r.headers ?? {})["content-security-policy"])
+      .find(Boolean) ?? "";
+    csp
+      ? pass("the frontend origin sets a Content-Security-Policy")
+      : fail("no Content-Security-Policy header on the frontend origin");
+    if (csp) {
+      const must = [
+        ["object-src 'none'",            /object-src 'none'/],
+        ["frame-ancestors 'self'",       /frame-ancestors 'self'/],
+        ["base-uri 'self'",              /base-uri 'self'/],
+        // Payment is a top-level form POST to PayFast; without this in
+        // form-action the browser blocks the redirect and nobody can pay.
+        ["form-action allows PayFast",   /form-action[^;]*payfast\.co\.za/],
+        // The browser uploads straight to ImageKit; without this in
+        // connect-src every upload is blocked.
+        ["connect-src allows the ImageKit upload host", /connect-src[^;]*upload\.imagekit\.io/],
+        // The API itself.
+        ["connect-src allows the API",   /connect-src[^;]*api\.umastande\.co\.za/],
+        ["img-src allows ImageKit",      /img-src[^;]*ik\.imagekit\.io/],
+      ];
+      for (const [label, re] of must) {
+        re.test(csp) ? pass(`CSP: ${label}`) : fail(`CSP is missing: ${label}`);
+      }
+    }
+
     // vercel.json must not quietly re-enable framework inference.
     const v = JSON.parse(fs.readFileSync(vjson, "utf8"));
     v.outputDirectory
