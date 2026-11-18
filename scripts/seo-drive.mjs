@@ -138,6 +138,99 @@ console.log(`\n── Room listing markup ────────────�
   }
 }
 
+console.log(`\n── Province landing pages, and the inventory gate ────`);
+{
+  /**
+   * The gate (backend rooms/locations.ts): a province gets a landing page only
+   * at/above the inventory threshold. The sitemap is the published set — so the
+   * drive takes the pages it checks from the sitemap, the same way the room
+   * block takes its id from the board. That makes "nothing is published yet" a
+   * stated skip, not a silent green, and keeps the drive honest on any build.
+   *
+   * ⚠️ The negative half is the one that matters, and it is checked two ways:
+   * a province the sitemap does NOT list must refuse to be a page — it carries
+   * the 404 status marker AND a noindex meta. A gate that publishes an empty
+   * "no rooms here yet" 200 is exactly the soft-404 this whole mechanism exists
+   * to prevent, so the drive asserts the gated-out province is never that.
+   */
+  const ALL_SLUGS = [
+    'eastern-cape', 'free-state', 'gauteng', 'kwazulu-natal', 'limpopo',
+    'mpumalanga', 'northern-cape', 'north-west', 'western-cape',
+  ];
+
+  const sitemap = await get('/sitemap.xml');
+  const published = [...new Set(
+    [...sitemap.html.matchAll(/\/rooms\/in\/([a-z-]+)/g)].map((m) => m[1]),
+  )];
+
+  // Every slug the sitemap advertises must be a real province slug — a sitemap
+  // that lists a page the site cannot serve is the defect this guards.
+  for (const slug of published) {
+    check(ALL_SLUGS.includes(slug), `sitemap's /rooms/in/${slug} is a known province slug`);
+  }
+
+  if (published.length === 0) {
+    console.log(`  ⏭  no province is at/above the inventory gate on this board — landing-page checks skipped`);
+    console.log('     (seed ≥ the threshold of active rooms in one province to drive these)');
+  } else {
+    const slug = published[0];
+    const { status, html } = await get(`/rooms/in/${slug}`);
+    check(status === 200, `/rooms/in/${slug} is served (200)`, `status ${status}`);
+
+    const blocks = jsonLd(html);
+    const t = typesOf(blocks);
+    const page = nodes(blocks).find((n) => n['@type'] === 'CollectionPage');
+    check(!!page, 'the landing page is a CollectionPage', t.join(','));
+    // Without this, "numberOfItems" etc. below pass on an empty object.
+    const list = page?.mainEntity;
+    check(list?.['@type'] === 'ItemList', 'its main entity is an ItemList of the rooms on show');
+    check(Array.isArray(list?.itemListElement) && list.itemListElement.length > 0,
+      'the ItemList is not empty', `${list?.itemListElement?.length ?? 0} item(s)`);
+    check(list?.itemListElement?.[0]?.position === 1, 'the ItemList is positioned from 1');
+
+    const crumb = nodes(blocks).find((n) => n['@type'] === 'BreadcrumbList');
+    check(!!crumb, 'the landing page carries a BreadcrumbList');
+    const items = crumb?.itemListElement ?? [];
+    check(items.length === 2, 'the trail is two levels, Home → this province', `${items.length} item(s)`);
+    check(items[0]?.position === 1 && /\/$/.test(items[0]?.item ?? ''), 'position 1 is the site root');
+    check(
+      items[1]?.position === 2 && new RegExp(`/rooms/in/${slug}$`).test(items[1]?.item ?? ''),
+      'position 2 is this province, and its URL is this province',
+    );
+
+    // The board links to the page — the crawlable internal path, not only the
+    // sitemap. One link per published province at the foot of the board.
+    const board = await get('/');
+    check(
+      board.html.includes(`/rooms/in/${slug}`),
+      'the board internal-links to this province landing page',
+    );
+
+    // The gate's negative. A province the sitemap does not list must not be a
+    // page: 404 marker + noindex, never a 200 "nothing here yet". Checked on
+    // the marker and meta (always present) rather than the HTTP status, which
+    // only server.ts applies — a dev `ng serve` serves the marker under 200.
+    const gatedOut = ALL_SLUGS.find((s) => !published.includes(s));
+    if (gatedOut) {
+      const out = await get(`/rooms/in/${gatedOut}`);
+      check(
+        /mastande-status["'][^>]*content=["']404["']/.test(out.html),
+        `the gated-out province ${gatedOut} asks for a 404, not a soft-404 200`,
+      );
+      check(
+        /<meta name="robots"[^>]*noindex/.test(out.html),
+        `the gated-out province ${gatedOut} is noindex`,
+      );
+      check(
+        !jsonLd(out.html).some((b) => JSON.stringify(b).includes('CollectionPage')),
+        `the gated-out province ${gatedOut} emits no CollectionPage markup`,
+      );
+    } else {
+      console.log('  ⏭  every province is published on this board — gated-out negative not exercised here');
+    }
+  }
+}
+
 console.log(`\n── Icons a result can display ─────────────────`);
 for (const [path, kind] of [['/favicon.svg', 'image/svg'], ['/icon-48.png', 'image/png'], ['/icon-192.png', 'image/png'], ['/icon-512.png', 'image/png'], ['/apple-touch-icon.png', 'image/png']]) {
   const res = await fetch(`${BASE}${path}`);

@@ -248,6 +248,14 @@ check "GET /robots.txt" 200 "$STATUS"
 req GET /sitemap.xml
 check "GET /sitemap.xml" 200 "$STATUS"
 
+# Province landing pages (GEO/local SEO). Inventory-independent checks: the
+# published set is always a JSON array, and a slug that names no province is a
+# genuine 404 — the gate's floor, which must never be a 200 "nothing here".
+req GET /api/rooms/locations
+check "GET /rooms/locations lists the published set" 200 "$STATUS" "$BODY"
+req GET "/api/rooms/locations/not-a-province"
+check "GET /rooms/locations/:slug 404s for an unknown province" 404 "$STATUS"
+
 # ── 2. Auth ────────────────────────────────────────────────────────────────
 head_ "2. Auth"
 req POST /api/auth/register \

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PUBLIC_USER } from '../../common/prisma/account-visibility';
+import { publishedFromCounts } from '../rooms/locations';
 
 /**
  * Locales that carry a URL prefix. Mirrors PREFIXED_LOCALES in
@@ -190,6 +191,27 @@ export class SeoController {
     });
 
     /**
+     * Province landing pages (GEO/local SEO) — only the ones the inventory gate
+     * actually publishes. The SAME rule the API serves them by
+     * (rooms/locations.ts, read through publishedFromCounts): a sitemap must
+     * never advertise a URL the site answers 404 for, so this reads the gate
+     * rather than listing all nine provinces. A province that drops below the
+     * line leaves the sitemap on the next render, exactly as it leaves the API.
+     *
+     * Priority 0.7: above a storefront and below a room page — a provincial
+     * board is a stronger landing target than one landlord's profile and a
+     * weaker one than the specific room a searcher is actually after.
+     */
+    const locationRows = await this.prisma.room.groupBy({
+      by: ['province'],
+      where: { status: 'active' },
+      _count: { id: true },
+    });
+    const locations = publishedFromCounts(
+      locationRows.map((r) => ({ province: r.province, count: r._count.id })),
+    );
+
+    /**
      * Every entry here must resolve to a real route with a 200. The previous
      * list included '/rooms', which had no route and fell through to the
      * not-found page — a soft 404 advertised to Google in our own sitemap.
@@ -266,6 +288,13 @@ export class SeoController {
       ...storefronts.map(
         (p) =>
           `  <url><loc>${this.site}/landlords/${p.slug}</loc><lastmod>${p.user.updatedAt.toISOString().split('T')[0]}</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>`,
+      ),
+      // No hreflang cluster: a room's description is the landlord's own words
+      // and is never translated, so the localised province boards serve the
+      // same listings — the same reasoning as rooms and storefronts above.
+      ...locations.map(
+        (l) =>
+          `  <url><loc>${this.site}/rooms/in/${l.slug}</loc><changefreq>daily</changefreq><priority>0.7</priority></url>`,
       ),
       '</urlset>',
     ].join('\n');

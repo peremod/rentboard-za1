@@ -119,12 +119,20 @@ without risking the domain.
 
 ## 3. Local SEO (Phase 3)
 
-- **Location pages (3.1):** the single biggest traditional opportunity *and* the one the
-  prior work correctly deferred. Recommendation unchanged: a **small** set of genuine
-  city/suburb pages, each **gated behind a live-listing floor** (e.g. ≥ N active rooms),
-  generated from real inventory and **removed when supply drops** rather than left to rot.
-  Build the *mechanism* now if desired, but publish pages only as inventory arrives.
-  Never publish a page claiming rooms in an area with none.
+- **Location pages (3.1): ✅ mechanism shipped (province level), gated.** One indexable
+  page per province at `/rooms/in/:slug` ("Rooms to rent in Gauteng"), each **gated behind
+  a live-listing floor** — `LOCATION_PAGE_MIN_ROOMS` active rooms (currently 3) in
+  `backend/src/modules/rooms/locations.ts`. The gate is single-sourced and read by three
+  callers that cannot disagree: the public API (`GET /rooms/locations[/:slug]`), the sitemap,
+  and the page's own 404. A province below the floor is a **real 404** (the `mastande-status`
+  marker server.ts reads), never a 200 "no rooms here yet" soft-404; it leaves the sitemap
+  and the board's "Rooms by province" links on the next render, and returns when supply
+  recovers. Pages are server-rendered (live), carry `CollectionPage`+`ItemList`+`BreadcrumbList`
+  markup, and cross-link to the other published provinces. **Next increment — city/suburb
+  pages:** the same shape (`by: ['city','province']` groupBy behind the same threshold and the
+  same `{slug,label,count}` contract), deferred on its own because cities collide across
+  provinces and their slugs are not stable; design slug disambiguation before building.
+  Floor is one constant to raise as inventory grows.
 - **Google Business Profile (3.2):** assess eligibility honestly. Mastande is an online
   service without a public walk-in office; GBP is for businesses with a physical location
   or defined service area. **Do not invent an address.** If the company has a registered

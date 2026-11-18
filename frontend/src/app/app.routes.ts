@@ -56,6 +56,27 @@ const CONTENT_ROUTES: Routes = [
     redirectTo: '',
   },
   {
+    /**
+     * Province landing pages — "Rooms to rent in Gauteng" (GEO/local SEO).
+     *
+     * ⚠️ ABOVE 'rooms/:id', and that is load-bearing. Angular matches in
+     * declaration order, so if this sat below the room route, '/rooms/in/…'
+     * would match 'rooms/:id' with id='in' and try to load a room called "in".
+     * The '/in/' segment also keeps these clear of the room-id space for good:
+     * a room id is a UUID, never the literal 'in'.
+     *
+     * Server-rendered, not prerendered: which provinces have a page depends on
+     * live inventory (the gate in backend rooms/locations.ts), and a build-time
+     * list would go stale the moment a province crossed or fell below the line.
+     * The component sets its own title/description/canonical/JSON-LD once the
+     * data is in, exactly like a room or storefront page, and renders a real
+     * 404 for a gated-out province rather than a soft-404 200.
+     */
+    path: 'rooms/in/:location',
+    loadComponent: () => import('./features/locations/location/location').then((m) => m.Location),
+    title: 'Rooms to rent — Mastande',
+  },
+  {
     path: 'rooms/:id',
     loadComponent: () => import('./features/room-detail/room-detail').then((m) => m.RoomDetail),
     // Title, description, canonical and JSON-LD are set by the component once
@@ -295,6 +316,11 @@ export const serverRoutes: ServerRoute[] = [
    * visitor wait on the API. See BOARD_CACHE_CONTROL there.
    */
   { path: '', renderMode: RenderMode.Server },
+  // Before 'rooms/:id', same reason as in CONTENT_ROUTES. Server-rendered
+  // because the published province set tracks live inventory; a gated-out
+  // province answers 404 through the component's status marker, not a route
+  // status (the status is dynamic — the same route is 200 or 404 by inventory).
+  { path: 'rooms/in/:location', renderMode: RenderMode.Server },
   { path: 'rooms/:id', renderMode: RenderMode.Server },
   // Server-rendered, not prerendered: the slug set changes whenever a landlord
   // publishes, and a build-time list would go stale the moment one did.
@@ -318,6 +344,7 @@ export const serverRoutes: ServerRoute[] = [
   // time, so the localised legal pages are server-rendered per request
   // instead. Still fully crawlable — just not baked into the build output.
   { path: ':lang/legal/**', renderMode: RenderMode.Server },
+  { path: ':lang/rooms/in/:location', renderMode: RenderMode.Server },
   { path: ':lang/rooms/:id', renderMode: RenderMode.Server },
   // Explicit, same reason as ':lang/legal/**' above. Without this, the
   // builder's fallback logic hands the bare '**' entry's own prerender pass
