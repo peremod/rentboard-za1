@@ -919,7 +919,7 @@ jobs:
 
       - name: The browser drives' logs, when any of them failed
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ui-drive-logs
           path: /tmp/ui-drives
@@ -996,7 +996,7 @@ jobs:
           echo "── accessibility ──"; tail -60 /tmp/a11y.log 2>/dev/null || true
       - name: Upload logs and the Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-diagnostics
           # ci-logs/ first because it is the one that is always there. The
