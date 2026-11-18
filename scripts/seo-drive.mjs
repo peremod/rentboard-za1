@@ -62,6 +62,44 @@ console.log(`\n── Site identity ──────────────�
   check(probe.status === 200, 'and that search URL actually answers 200', String(probe.status));
 }
 
+console.log(`\n── About entity page ──────────────────────────`);
+{
+  // /about is prerendered static HTML, so this is build-agnostic — there is no
+  // production-API skip to make here, unlike the board and room sections.
+  const { status, html } = await get('/about');
+  check(status === 200, '/about answers 200', `status ${status}`);
+
+  const blocks = jsonLd(html);
+  const all = nodes(blocks);
+  const about = all.find((n) => n['@type'] === 'AboutPage');
+  check(!!about, '/about server-renders an AboutPage', typesOf(blocks).join(',') || '(no json-ld)');
+
+  if (about) {
+    check(/\/about\/#webpage$/.test(about['@id'] ?? ''), 'the AboutPage has its own stable @id', about['@id'] ?? '(none)');
+    check(/\/about$/.test(about.url ?? ''), 'its url is /about', about.url ?? '(none)');
+
+    // 🔴 The whole point of the block: its references must resolve to the SAME
+    // entities the site graph mints ON THIS PAGE. If the Organization/WebSite
+    // nodes are not here, or the ids do not match, the AboutPage is describing a
+    // second, unrelated company and the entity signal splits instead of joining
+    // — which is worse than no block at all. This also proves the site identity
+    // graph reaches a prerendered page, not only the server-rendered board.
+    const org = all.find((n) => n['@type'] === 'Organization') ?? {};
+    const web = all.find((n) => n['@type'] === 'WebSite') ?? {};
+    check(!!org['@id'] && about.about?.['@id'] === org['@id'],
+      'its about[@id] is this page\'s own Organization', `${about.about?.['@id']} vs ${org['@id'] ?? '(absent)'}`);
+    check(!!web['@id'] && about.isPartOf?.['@id'] === web['@id'],
+      'its isPartOf[@id] is this page\'s own WebSite', `${about.isPartOf?.['@id']} vs ${web['@id'] ?? '(absent)'}`);
+
+    // The same line site-identity.ts holds, on the one page whose entire job is
+    // to be trusted about the entity: an AboutPage asserting a phone or address
+    // the site cannot show is the fabricated-fact failure these audits forbid.
+    const invented = ['address', 'telephone', 'email', 'foundingDate', 'aggregateRating', 'review', 'priceRange']
+      .filter((k) => k in about);
+    check(invented.length === 0, 'the AboutPage invents nothing', invented.join(','));
+  }
+}
+
 console.log(`\n── Room listing markup ────────────────────────`);
 {
   /**
@@ -291,8 +329,19 @@ console.log(`\n── Private areas stay out ───────────�
  * route, so it fell to the server-rendered 404, which does carry noindex. A
  * check can be right by accident; this one now asserts the mechanism that
  * actually covers every private URL whether the route exists or not.
+ *
+ * ⚠️ One probe per entry in server.ts PRIVATE_PREFIXES — auth, welcome, tenant,
+ * landlord, account, admin, reference — so dropping ANY prefix from that list
+ * fails a check here. `welcome` and `reference` had no probe before, which left
+ * two prefixes a refactor could have quietly deleted with every test still
+ * green. The header is set by prefix whether or not the route exists, so a
+ * synthetic sub-path is a valid probe of the rule.
  */
-for (const path of ['/tenant/dashboard', '/landlord/dashboard', '/account/settings', '/admin/users', '/zu/tenant/dashboard', '/auth/login']) {
+for (const path of [
+  '/auth/login', '/welcome', '/tenant/dashboard', '/landlord/dashboard',
+  '/account/settings', '/admin/users', '/reference/sample',
+  '/zu/tenant/dashboard',
+]) {
   const res = await fetch(`${BASE}${path}`, { redirect: 'manual' });
   const header = res.headers.get('x-robots-tag') ?? '';
   const html = await res.text();

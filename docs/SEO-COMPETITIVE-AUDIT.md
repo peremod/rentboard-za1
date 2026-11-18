@@ -432,8 +432,65 @@ listings or claims introduced.**
 
 ---
 
-## Phase 2 — STOP, awaiting approval
-No codebase changes will be made until you approve a scope. The highest-value
-next action is **P0, and it is yours** (Search Console + DNS) — I can prepare the
-exact steps and the code-side support (verification token wiring, any metadata
-polish) on approval.
+## Phase 2 — approved ("do all the phases")
+
+## Phase 3 — implemented (code), with what was found already-done and what stays yours
+
+Phase 3 was scoped **honestly against the live code**, not against the brief's
+generic P1 list — because several of that list's items were already shipped, and
+one would require fabrication. What that inspection found, and what was built:
+
+### Built (TDD: RED → GREEN → prove-the-check-fails)
+- **`AboutPage`/`WebPage` JSON-LD on `/about`.** The one genuinely-missing,
+  high-value, truthful change. `/about` carried prose but no structured data of
+  its own; it now emits an `AboutPage` node whose `about` and `isPartOf`
+  references reuse the **exact `@id`s** the site graph mints (`#organization`,
+  `#website`), so a parser reads "this page is about the company that publishes
+  this site" instead of describing a second, unlinked company. This is the
+  entity-disambiguation signal the one-letter uMaStandi collision makes worth
+  stating. It invents nothing — no address, phone, rating or review — holding the
+  same line `site-identity.ts` holds.
+  - Unit: `frontend/src/app/features/pages/about/about.spec.ts` (3 tests). The
+    @id-link guard and the fabrication guard were each proven to fail under a
+    deliberate mutation (wrong `@id`; injected `telephone`), not merely to pass.
+  - Served bytes: `scripts/seo-drive.mjs` "About entity page" section asserts the
+    block is in the **prerendered HTML** and its `@id`s match the Organization/
+    WebSite nodes on that same page — proven to fail when `AboutPage` is absent.
+- **Private-prefix `noindex` drive hardened.** `seo-drive.mjs` probed 5 of the 7
+  `PRIVATE_PREFIXES`; `welcome` and `reference` had no probe, so a refactor could
+  have dropped either with every test still green. It now probes all seven, and
+  dropping one was proven to fail the check.
+
+### Found already-done — recorded, not re-shipped (no churn on good code)
+- **`WebSite` `SearchAction`** — present (`site-identity.ts`), pointing at the
+  board's real `/?q=` search; the drive asserts the search URL answers 200.
+- **Brand / homepage meta description** — already brand-correct in its first 120
+  chars (`/about` route meta and `FALLBACK_DESCRIPTION`). Changing good copy for
+  its own sake was declined.
+- **Fonts self-hosted** — Playfair Display + DM Sans served from origin; the
+  font-lint gate asserts no third-party font origin is fetched by `index.html`.
+- **`X-Robots-Tag` on private prefixes** — set by server header on all seven
+  prefixes (`server.ts`), independent of JavaScript or robots.txt; drive-tested.
+- **Verification-file route** — `GOOGLE_SITE_VERIFICATION` wiring is live in
+  `server.ts`; setting the token is operational (Step 1 of the runbook).
+
+### Declined on principle (would require fabrication) — unchanged
+- **`sameAs` social profiles** on `Organization`. Umastande has no social
+  accounts linked from the site, so any `sameAs` URL would be invented —
+  `site-identity.ts` omits them deliberately and that stands. Add them only when
+  real profiles exist.
+- **`FAQPage`** over the legal/resource pages — declined until that content is
+  attorney-reviewed (OUTSTANDING §8).
+
+### Stays yours (operational — no deploy can do it)
+- **P0: clear "No information is available for this page."** The code causes are
+  fixed; the lever is Search Console verification → sitemap → Request Indexing,
+  plus confirming apex→www DNS. Full step-by-step:
+  **`docs/SEO-SEARCH-CONSOLE-RUNBOOK.md`.**
+- **P2/P3** (content pillars, city/suburb pages as inventory crosses the gate,
+  backlink/authority programme) grow with real inventory and real links and are
+  not manufacturable by a deploy. Register and roadmap: §8, §16 above and
+  `docs/SEO-AEO-GEO-STRATEGY.md`.
+
+**No fabricated content, reviews, stats, listings or claims were introduced, and
+no affiliation with uMaStandi is represented anywhere.**
