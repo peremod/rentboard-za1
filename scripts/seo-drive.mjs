@@ -438,7 +438,16 @@ console.log(`\n── robots.txt says what this deployment is ────`);
   check(type.startsWith('text/plain'), 'robots.txt is text/plain', type || '(absent)');
   check(!body.includes('<'), 'robots.txt is not an HTML page wearing a .txt name');
 
-  const blanket = /^\s*Disallow:\s*\/\s*$/m.test(body);
+  // A robots.txt refuses the WHOLE site only with `Disallow: /` AND no `Allow: /`.
+  // The crawlable production policy carries a `Disallow: /` SCOPED under the named
+  // AI-training crawlers (GPTBot … Bytespider) on top of `Allow: /` for `*`, so a
+  // naive `^Disallow: /$` match reads that scoped line as a sitewide block and
+  // fails an indexable deployment for being perfectly crawlable. That is why this
+  // check went red on the prod-build pass once v1.189.0's AI-crawler policy was
+  // live (the served robots carries the scoped block); it is the same false
+  // positive robots.spec.ts and verify-build.sh already guard against. Blanket is
+  // the compound condition: a `Disallow: /` with no `Allow: /` to carve it open.
+  const blanket = /^\s*Disallow:\s*\/\s*$/m.test(body) && !/^\s*Allow:\s*\/\s*$/m.test(body);
   const expectCrawl = indexable && isCanonical;
   check(
     expectCrawl ? !blanket : blanket,
