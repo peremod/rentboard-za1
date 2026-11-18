@@ -3,6 +3,29 @@ import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 
 /**
+ * Constant-time equality for two signature strings.
+ *
+ * PayFast's signature is a 32-char MD5 hex digest, and comparing it with `!==`
+ * leaks, through timing, how many leading characters matched — the same
+ * side-channel every OTP and webhook check in this codebase already closes with
+ * `crypto.timingSafeEqual` (phone-otp, phone-signup, notifications, whatsapp).
+ * This brings the PayFast ITN check onto that one pattern.
+ *
+ * The server-confirmation callback is still the real defence against a forged
+ * ITN; this removes the inconsistency rather than the backstop. Exported so the
+ * comparison can be unit-falsified on its own, the way B-01's path check is.
+ *
+ * `timingSafeEqual` throws on a length mismatch, so the lengths are checked
+ * first — and an unequal length is itself a non-match, decided before the
+ * constant-time compare rather than inside it.
+ */
+export function signaturesMatch(received: string, expected: string): boolean {
+  const a = Buffer.from(received, 'utf8');
+  const b = Buffer.from(expected, 'utf8');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/**
  * PayFast integration.
  *
  * PayFast is a redirect-and-notify gateway, not an API: we build a signed form,
@@ -117,7 +140,7 @@ export class PayfastService {
     // 1. Signature over everything except the signature itself, in received order.
     const { signature, ...rest } = payload;
     if (!signature) return { valid: false, reason: 'missing signature' };
-    if (this.signature(rest) !== signature) {
+    if (!signaturesMatch(this.signature(rest), signature)) {
       return { valid: false, reason: 'signature mismatch' };
     }
 
