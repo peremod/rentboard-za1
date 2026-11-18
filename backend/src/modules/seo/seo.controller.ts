@@ -324,6 +324,14 @@ export class SeoController {
         (l) =>
           `  <url><loc>${this.site}/rooms/in/${l.slug}</loc><changefreq>daily</changefreq><priority>0.7</priority></url>`,
       ),
+      // The landlord-acquisition guide. English-only prose — like rooms,
+      // storefronts and the province boards it carries NO hreflang cluster,
+      // because it is not translated and a localised URL would serve the same
+      // English text. Submitted once, here, at its English canonical. It is
+      // deliberately NOT in staticUrls, which expands every entry to all eleven
+      // locales — doing that would advertise /af/rent-out-a-room and nine more
+      // URLs that do not exist.
+      `  <url><loc>${this.site}/rent-out-a-room</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>`,
       '</urlset>',
     ].join('\n');
 

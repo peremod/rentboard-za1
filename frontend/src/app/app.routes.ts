@@ -330,6 +330,11 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'pricing', renderMode: RenderMode.Prerender },
   { path: 'advertise', renderMode: RenderMode.Prerender },
   { path: 'about', renderMode: RenderMode.Prerender },
+  // English-only prose guide — no ':lang' variant on purpose: the content is not
+  // translated, so a localised copy would serve English under a translated
+  // chrome, the untranslated-locale defect. Its route sets alternates:false and
+  // the sitemap submits it once at this URL, no hreflang cluster.
+  { path: 'rent-out-a-room', renderMode: RenderMode.Prerender },
 
   // ── The other ten locales ──
   // Prerendered where the URL is fully enumerable AND the content does not
