@@ -479,20 +479,18 @@ else
   # The invariant is that robots.txt agrees with the deployment's own
   # indexability, so BOTH directions are asserted, each against the build it
   # belongs to. This is a development build, talking to a development API.
-  #
-  # ⚠️ "Blanket block" is NOT "contains a `Disallow: /` line". The crawlable
-  # production fallback (fallbackRobots() in server.ts) carries `Allow: /` for
-  # the `*` group AND a `Disallow: /` SCOPED under the named AI-training
-  # crawlers — a `Disallow: /` line that blocks GPTBot et al. and nobody else.
-  # A naive `^Disallow: /$` grep matched that scoped line and read the perfectly
-  # crawlable fallback as a sitewide block — a false "deindex the site" on every
-  # run. A site is blanket-blocked only when it disallows everything with no
-  # Allow to carve the exception: `Disallow: /` present AND no `Allow: /`. Same
-  # distinction seo-drive.mjs and the API-robots checks already make.
+  # A robots.txt refuses the WHOLE site when it carries "Disallow: /" AND no
+  # "Allow: /". That Allow is what tells a blanket refusal (staging, a copy)
+  # apart from a crawlable production file that also carries a SCOPED
+  # "Disallow: /" under named AI-TRAINING crawlers — a full block for those
+  # bots, not for the site. Grepping the bare Disallow line alone (which this
+  # once did) reads the training block as a sitewide refusal and fails a
+  # correctly-crawlable production robots.txt.
   is_blanket_disallow() {
-    printf '%s\n' "$1" | grep -qiE '^[[:space:]]*Disallow:[[:space:]]*/[[:space:]]*$' \
-      && ! printf '%s\n' "$1" | grep -qiE '^[[:space:]]*Allow:[[:space:]]*/[[:space:]]*$'
+    echo "$1" | grep -qiE '^[[:space:]]*Disallow:[[:space:]]*/[[:space:]]*$' \
+      && ! echo "$1" | grep -qiE '^[[:space:]]*Allow:[[:space:]]*/[[:space:]]*$'
   }
+
   ROBOTS=$(curl -s --max-time 20 http://localhost:4111/robots.txt)
   echo "$ROBOTS" | grep -qi 'user-agent' \
     && ok "/robots.txt is a robots.txt, not a page that happens to be text" \
@@ -550,11 +548,9 @@ else
     # them — which had rentboard-za1.vercel.app answering Allow: / for a site
     # that does not exist yet. A copy must not invite crawlers.
     COPY_ROBOTS=$(curl -s --max-time 25 -H "Host: some-preview.vercel.app" http://localhost:4112/robots.txt)
-    if is_blanket_disallow "$COPY_ROBOTS"; then
-      ok "and tells every other hostname not to crawl it"
-    else
-      bad "a non-canonical hostname is invited to crawl: $(echo "$COPY_ROBOTS" | head -2 | tr '\n' ' ')"
-    fi
+    is_blanket_disallow "$COPY_ROBOTS" \
+      && ok "and tells every other hostname not to crawl it" \
+      || bad "a non-canonical hostname is invited to crawl: $(echo "$COPY_ROBOTS" | head -2 | tr '\n' ' ')"
     [ "$(curl -s -o /dev/null --max-time 25 -H "Host: some-preview.vercel.app" -w '%{http_code}' http://localhost:4112/sitemap.xml)" = "404" ] \
       && ok "and serves no sitemap there" \
       || bad "a non-canonical hostname serves a sitemap of the real site's URLs"
