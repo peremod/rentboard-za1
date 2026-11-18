@@ -13,6 +13,11 @@ import { RelistDto } from './dto/relist.dto';
 import { sanitizeText } from '../../common/utils/sanitize.util';
 import { parseSearchPhrase, KnownPlace } from './search-phrase';
 import { availabilityClause } from './availability';
+import {
+  PublishedLocation,
+  provinceFromSlug,
+  publishedFromCounts,
+} from './locations';
 
 /**
  * There is no room limit: unlimited listings is the product, not a pause.
@@ -1286,6 +1291,61 @@ export class RoomsService {
 
     this.categoriesCache = { at: Date.now(), value };
     return value;
+  }
+
+  // ── Location landing pages (GEO/local SEO) ──────────────────────────────
+  //
+  // One indexable page per province, gated on live inventory. The gate and the
+  // slug mapping live in locations.ts so the API, the sitemap and the page's
+  // own 404 all read the same rule; see that file for why an empty landing page
+  // is worse than no page.
+
+  private locationsCache: { at: number; value: PublishedLocation[] } | null = null;
+
+  /**
+   * The provinces that currently qualify for a landing page — at or above the
+   * inventory gate, highest first. The single source of truth for which
+   * location pages exist: the sitemap advertises exactly these, and
+   * `locationDetail` serves a 200 only for a slug in this set.
+   */
+  async publishedLocations(): Promise<PublishedLocation[]> {
+    const TWO_MINUTES = 2 * 60 * 1000;
+    if (this.locationsCache && Date.now() - this.locationsCache.at < TWO_MINUTES) {
+      return this.locationsCache.value;
+    }
+    const rows = await this.prisma.room.groupBy({
+      by: ['province'],
+      where: { status: 'active' },
+      _count: { id: true },
+    });
+    const value = publishedFromCounts(
+      rows.map((r) => ({ province: r.province, count: r._count.id })),
+    );
+    this.locationsCache = { at: Date.now(), value };
+    return value;
+  }
+
+  /**
+   * A province landing page, or null when the slug names no province OR the
+   * province sits below the gate. Null is the signal the controller turns into
+   * a 404 and the component renders the status marker for — a gated-out
+   * location must be a real 404, never a 200 "no rooms here yet" soft-404.
+   *
+   * The listings themselves come straight from `findAll`, so a location page
+   * and the board filtered to the same province can never show different rooms.
+   */
+  async locationDetail(slug: string) {
+    const province = provinceFromSlug(slug);
+    if (!province) return null;
+
+    const published = await this.publishedLocations();
+    const match = published.find((p) => p.slug === slug);
+    if (!match) return null;
+
+    // 24, not the board's 12: a landing page earns its place by showing the
+    // depth behind the search term, and it is one page with no pager of its own.
+    const board = await this.findAll({ province, limit: 24, sortBy: 'featured' } as RoomFiltersDto);
+    return { slug, province, count: match.count, ...board };
   }
 
   /**

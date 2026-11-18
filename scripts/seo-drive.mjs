@@ -104,6 +104,19 @@ console.log(`\n── Room listing markup ────────────�
     check(!!listing, 'the room page carries listing markup at all');
     const blob = JSON.stringify(listing ?? {});
 
+    // A BreadcrumbList that matches the visible path: Home → this room. Two
+    // items, first the site root, last this room's own URL. A trail that does
+    // not end on the page it is on is describing a different page.
+    const crumb = nodes(blocks).find((n) => n['@type'] === 'BreadcrumbList');
+    check(!!crumb, 'the room page carries a BreadcrumbList');
+    const items = crumb?.itemListElement ?? [];
+    check(items.length === 2, 'the trail is two levels, Home → this room', `${items.length} item(s)`);
+    check(items[0]?.position === 1 && /\/$/.test(items[0]?.item ?? ''), 'position 1 is the site root');
+    check(
+      items[1]?.position === 2 && new RegExp(`/rooms/${roomId}$`).test(items[1]?.item ?? ''),
+      'position 2 is this room, and its URL is this room',
+    );
+
     /**
      * 🔴 The rating is the one that matters. It used to be the LANDLORD's
      * rating attached to the ROOM — a room with no reviews of its own
@@ -122,6 +135,99 @@ console.log(`\n── Room listing markup ────────────�
       listing.mainEntity?.address?.addressCountry === 'ZA',
       'the place carries suburb, region and country only',
     );
+  }
+}
+
+console.log(`\n── Province landing pages, and the inventory gate ────`);
+{
+  /**
+   * The gate (backend rooms/locations.ts): a province gets a landing page only
+   * at/above the inventory threshold. The sitemap is the published set — so the
+   * drive takes the pages it checks from the sitemap, the same way the room
+   * block takes its id from the board. That makes "nothing is published yet" a
+   * stated skip, not a silent green, and keeps the drive honest on any build.
+   *
+   * ⚠️ The negative half is the one that matters, and it is checked two ways:
+   * a province the sitemap does NOT list must refuse to be a page — it carries
+   * the 404 status marker AND a noindex meta. A gate that publishes an empty
+   * "no rooms here yet" 200 is exactly the soft-404 this whole mechanism exists
+   * to prevent, so the drive asserts the gated-out province is never that.
+   */
+  const ALL_SLUGS = [
+    'eastern-cape', 'free-state', 'gauteng', 'kwazulu-natal', 'limpopo',
+    'mpumalanga', 'northern-cape', 'north-west', 'western-cape',
+  ];
+
+  const sitemap = await get('/sitemap.xml');
+  const published = [...new Set(
+    [...sitemap.html.matchAll(/\/rooms\/in\/([a-z-]+)/g)].map((m) => m[1]),
+  )];
+
+  // Every slug the sitemap advertises must be a real province slug — a sitemap
+  // that lists a page the site cannot serve is the defect this guards.
+  for (const slug of published) {
+    check(ALL_SLUGS.includes(slug), `sitemap's /rooms/in/${slug} is a known province slug`);
+  }
+
+  if (published.length === 0) {
+    console.log(`  ⏭  no province is at/above the inventory gate on this board — landing-page checks skipped`);
+    console.log('     (seed ≥ the threshold of active rooms in one province to drive these)');
+  } else {
+    const slug = published[0];
+    const { status, html } = await get(`/rooms/in/${slug}`);
+    check(status === 200, `/rooms/in/${slug} is served (200)`, `status ${status}`);
+
+    const blocks = jsonLd(html);
+    const t = typesOf(blocks);
+    const page = nodes(blocks).find((n) => n['@type'] === 'CollectionPage');
+    check(!!page, 'the landing page is a CollectionPage', t.join(','));
+    // Without this, "numberOfItems" etc. below pass on an empty object.
+    const list = page?.mainEntity;
+    check(list?.['@type'] === 'ItemList', 'its main entity is an ItemList of the rooms on show');
+    check(Array.isArray(list?.itemListElement) && list.itemListElement.length > 0,
+      'the ItemList is not empty', `${list?.itemListElement?.length ?? 0} item(s)`);
+    check(list?.itemListElement?.[0]?.position === 1, 'the ItemList is positioned from 1');
+
+    const crumb = nodes(blocks).find((n) => n['@type'] === 'BreadcrumbList');
+    check(!!crumb, 'the landing page carries a BreadcrumbList');
+    const items = crumb?.itemListElement ?? [];
+    check(items.length === 2, 'the trail is two levels, Home → this province', `${items.length} item(s)`);
+    check(items[0]?.position === 1 && /\/$/.test(items[0]?.item ?? ''), 'position 1 is the site root');
+    check(
+      items[1]?.position === 2 && new RegExp(`/rooms/in/${slug}$`).test(items[1]?.item ?? ''),
+      'position 2 is this province, and its URL is this province',
+    );
+
+    // The board links to the page — the crawlable internal path, not only the
+    // sitemap. One link per published province at the foot of the board.
+    const board = await get('/');
+    check(
+      board.html.includes(`/rooms/in/${slug}`),
+      'the board internal-links to this province landing page',
+    );
+
+    // The gate's negative. A province the sitemap does not list must not be a
+    // page: 404 marker + noindex, never a 200 "nothing here yet". Checked on
+    // the marker and meta (always present) rather than the HTTP status, which
+    // only server.ts applies — a dev `ng serve` serves the marker under 200.
+    const gatedOut = ALL_SLUGS.find((s) => !published.includes(s));
+    if (gatedOut) {
+      const out = await get(`/rooms/in/${gatedOut}`);
+      check(
+        /mastande-status["'][^>]*content=["']404["']/.test(out.html),
+        `the gated-out province ${gatedOut} asks for a 404, not a soft-404 200`,
+      );
+      check(
+        /<meta name="robots"[^>]*noindex/.test(out.html),
+        `the gated-out province ${gatedOut} is noindex`,
+      );
+      check(
+        !jsonLd(out.html).some((b) => JSON.stringify(b).includes('CollectionPage')),
+        `the gated-out province ${gatedOut} emits no CollectionPage markup`,
+      );
+    } else {
+      console.log('  ⏭  every province is published on this board — gated-out negative not exercised here');
+    }
   }
 }
 
@@ -181,9 +287,29 @@ for (const path of ['/tenant/dashboard', '/landlord/dashboard', '/account/settin
 
 // And the control: a PUBLIC page must NOT pick up that header, or the rule is
 // a blanket noindex wearing a prefix list.
-for (const path of ['/', '/pricing', '/how-it-works']) {
+for (const path of ['/', '/pricing', '/how-it-works', '/about']) {
   const res = await fetch(`${BASE}${path}`, { redirect: 'manual' });
   check(!(res.headers.get('x-robots-tag') ?? '').includes('noindex'), `${path} is NOT noindexed`);
+}
+
+console.log(`\n── About: the entity page a crawler and an AI can read ────`);
+{
+  // SEO/AEO/GEO: the page that states plainly what Mastande is and who runs
+  // it, in the SERVED HTML — not painted in after hydration, which is why this
+  // reads the bytes. Every assertion is a fact the page must carry server-side;
+  // a client-rendered shell (the §87f failure one layer out) would fail them.
+  const { status, html } = await get('/about');
+  check(status === 200, '/about is served (200)', `status ${status}`);
+  check(/<title>[^<]*About[^<]*<\/title>/i.test(html), '/about has a title naming itself');
+  check(/<meta name="description" content="[^"]+"/i.test(html), '/about has a meta description');
+  // Canonical presence is environment-dependent — a non-indexable (development
+  // or preview) deployment deliberately emits none, which the dedicated
+  // crawl-direction section below asserts. So the canonical is NOT checked here,
+  // where it would fail on exactly the dev build this drive also runs against.
+  check(/<h1[^>]*>\s*About Mastande\s*<\/h1>/i.test(html), '/about server-renders its H1, not a shell');
+  // The entity claim a GEO reader extracts — the operating company — has to be
+  // in the body, not only in the Organization JSON-LD on the homepage.
+  check(/Umastande \(Pty\) Ltd/.test(html), '/about names the operating company in its prose');
 }
 
 console.log(`\n── robots.txt says what this deployment is ────`);
@@ -252,6 +378,64 @@ console.log(`\n── robots.txt says what this deployment is ────`);
       check(body.includes(`Disallow: ${prefix}`), `robots.txt disallows ${prefix}`);
     }
     check(/^Sitemap:\s*https?:\/\/\S+\/sitemap\.xml$/m.test(body), 'robots.txt names a sitemap');
+
+    // AI-crawler policy = allow SEARCH via "*", block TRAINING by name. The
+    // trap this guards: a bot obeys the most specific group that names it and
+    // ignores "*", so a "User-agent: GPTBot / Allow: /" would hand that crawler
+    // the private areas the "*" Disallows protect. The invariant that makes the
+    // trap unshippable is therefore NOT "only one group exists" (there are now
+    // named training blocks) but "every named group is a full Disallow: / and
+    // carries no Allow" — a named group can only ever subtract, never add.
+    //
+    // Parse robots.txt into groups. Consecutive User-agent lines share the
+    // directives that follow them (standard grouping). Sitemap is a non-group
+    // directive and is ignored here.
+    const groups = [];
+    let cur = null;
+    for (const raw of body.split('\n')) {
+      const line = raw.replace(/#.*$/, '').trim();
+      if (!line) continue;
+      const ua = line.match(/^User-agent:\s*(.+)$/i);
+      if (ua) {
+        if (cur && cur.rules.length === 0) cur.agents.push(ua[1].trim());
+        else { cur = { agents: [ua[1].trim()], rules: [] }; groups.push(cur); }
+      } else if (cur && /^(Allow|Disallow):/i.test(line)) {
+        cur.rules.push(line);
+      }
+    }
+    const star = groups.find((g) => g.agents.includes('*'));
+    check(!!star, 'robots.txt has a "*" group', `groups: ${groups.map((g) => g.agents.join('+')).join(' / ') || '(none)'}`);
+
+    const named = groups.filter((g) => !g.agents.includes('*'));
+    // Every named group must be a FULL block and nothing else: at least one
+    // "Disallow: /" and zero "Allow:" lines. This is what keeps a named crawler
+    // from ever reaching more than "*" grants.
+    for (const g of named) {
+      const label = g.agents.join('+');
+      const hasFullDisallow = g.rules.some((r) => /^Disallow:\s*\/\s*$/i.test(r));
+      const hasAllow = g.rules.some((r) => /^Allow:/i.test(r));
+      check(
+        hasFullDisallow && !hasAllow,
+        `robots.txt group "${label}" is a full block, so it cannot bypass the private Disallows`,
+        `rules: ${g.rules.join(' | ') || '(none)'}`,
+      );
+    }
+
+    // ⚠️ Whether the TRAINING blocks are PRESENT is NOT asserted here, and the
+    // reason is load-bearing: on the production build this drive runs against,
+    // robots.txt is proxied from the live production origin — the DEPLOYED
+    // code's policy, not this branch's. Requiring this branch's training groups
+    // here can never pass until after deploy, a chicken-and-egg. That presence
+    // is verified against this build's own code in
+    // backend/src/modules/seo/robots.spec.ts instead. What IS safe to assert on
+    // any deployment is the one-directional half below: whatever crawlers are
+    // named, a search crawler must never be among them (a search crawler in a
+    // named group is in a full block — refused — which breaks "citable, not
+    // trainable" on production too, not just here).
+    const namedAgents = named.flatMap((g) => g.agents);
+    for (const searcher of ['OAI-SearchBot', 'Claude-SearchBot', 'PerplexityBot', 'Googlebot', 'Bingbot', 'ChatGPT-User']) {
+      check(!namedAgents.includes(searcher), `robots.txt never blocks the search crawler ${searcher}`, `named: ${namedAgents.join(', ') || '(none)'}`);
+    }
   } else {
     // A copy must not advertise the real site's URLs as its own.
     check(!/^Sitemap:/m.test(body), 'a non-indexable copy advertises no sitemap');

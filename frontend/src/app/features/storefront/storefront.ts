@@ -326,5 +326,21 @@ export class Storefront implements OnInit {
         url: `${environment.siteUrl}/rooms/${r.id}`,
       })),
     });
+
+    /**
+     * Where this page sits — Home → this landlord. The page's "Browse rooms"
+     * link is the visible way back to the board, so the trail describes a path
+     * a visitor can see. Set on success only, like the `storefront` block
+     * above: a 404 storefront is server-rendered without either, so a crawler
+     * never sees a trail to a page that is not there.
+     */
+    this.seo.setJsonLd('breadcrumb', {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: `${environment.siteUrl}/` },
+        { '@type': 'ListItem', position: 2, name: s.displayName, item: `${environment.siteUrl}/landlords/${s.slug}` },
+      ],
+    });
   }
 }

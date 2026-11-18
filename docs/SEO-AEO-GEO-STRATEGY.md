@@ -32,11 +32,16 @@ CI, and Lighthouse budgets. This is not a site that needs its SEO rebuilt.
    it. The biggest wins are **authoring genuinely useful content** and **growing
    supply**, not more markup.
 
-2. **There is exactly one real technical-SEO defect, and it is already tracked:**
-   the board (`/`, the single most important page) scores **Performance 0.62 and
-   CLS 0.953 — nine times the budget** on mobile (`SEO.md` §8; `OUTSTANDING.md`
-   §87/§103). Core Web Vitals is a ranking input, and this is on the page that
-   matters most. This is a **Priority 1** fix and the one "do it now" technical item.
+2. **The board Core Web Vitals "Priority 1" was STALE — it is already fixed.**
+   ⚠️ Correction (17 Nov 2026): this section first cited the board at Performance
+   0.62 / CLS 0.953 from `SEO.md` §8's *21 October* table. That defect — the board
+   served as a client-side shell — was fixed and verified in production on **25
+   October** (v1.165.0, `OUTSTANDING.md` §87i). The **16 November** weekly
+   production audit measures the board at **CLS 0.000** (runs 0.018/0.000/0.000),
+   LCP 2089 ms, SEO category 1.0. There is **no open Core Web Vitals or SEO defect
+   on the board.** (The weekly job's current red is `link-in-text-block` /
+   accessibility — the cookie-notice link — which master v1.188.0 now carries, a
+   separate a11y-deploy matter, not SEO.)
 
 3. **AEO and GEO are genuinely greenfield, and that is the opportunity — but only
    if built on real content.** No AI-crawler policy, no FAQ/answer-first structure,
@@ -64,7 +69,7 @@ Severity key: 🔴 Critical · 🟠 High · 🟡 Medium · 🟢 Low · ✨ Enhan
 | **robots.txt** | Env-aware; blocks private areas, filter params, UTM; all 11 locales | ✅ Working for classic crawlers | **No AI-crawler policy** (GPTBot, ClaudeBot, PerplexityBot, Google-Extended, CCBot all fall under `*`) | 🟠 | Add an explicit, documented AI-crawler policy (Phase 5.1 below). |
 | **Sitemap** | Live rooms + published storefronts + static pages; all entries 200 | ✅ Working | No `<lastmod>` on some static entries; no image or news sitemap | 🟡 | Add `lastmod` where known; image sitemap only if listing photos become an SEO surface. |
 | **Structured data** | Organization, WebSite (SearchAction), RealEstateListing — principled, no invented facts | ✅ Excellent, honest | **No BreadcrumbList, no FAQPage, no Article/BlogPosting** | 🟠 | Add BreadcrumbList (cheap, legitimate); add FAQPage/Article only where real content exists. |
-| **Core Web Vitals** | Budgets in two lighthouse configs; most pages excellent | 🔴 **Board: Perf 0.62, CLS 0.953** on mobile | The board's layout shift and LCP | 🔴 | Fix the board CLS/LCP (OUTSTANDING §87/§103). Priority 1. |
+| **Core Web Vitals** | Budgets in two lighthouse configs; board fixed 25 Oct (§87i) | ✅ **Board: CLS 0.000, LCP 2089ms** (16 Nov prod audit) | — (the 0.953 figure was stale) | 🟢 | None. Resolved before this work. |
 | **On-page (static pages)** | `/`, `/how-it-works`, `/pricing`, `/advertise`, `/legal/*`, `/templates/*` — unique titles, H1s | ✅ Good | Not **answer-first**; thin on depth; few internal links between them | 🟡 | Restructure key informational pages answer-first (AEO); add contextual internal links. |
 | **Location pages** | None (filtered URLs canonicalise to `/`) | ❌ Absent — **by deliberate, correct choice** | The real traditional-SEO gap, **gated on inventory** | 🟠 (blocked) | Build a *small* set of real city pages **only above a live-listing floor**, appearing/disappearing with supply. Do not build until inventory supports it. |
 | **Content / topical authority** | `/legal/*`, `/templates/*`, `/how-it-works` are seeds | ❌ No guides, blog, FAQ, education hub | Entire AEO/GEO content ecosystem | 🟠 | A small, maintained content set on topics the platform can speak to first-hand. Phase 6. |
@@ -88,10 +93,9 @@ protection, hreflang/i18n, the `seo-drive.mjs` CI gate. The security audit
 private data and private routes are protected — so "crawlable but safe" holds.
 
 **Real items:**
-- 🔴 **Board Core Web Vitals.** CLS 0.953 / Perf 0.62 on `/`. Priority 1. The cause is
-  not yet root-caused (OUTSTANDING §87) — likely late-loading board cards shifting
-  layout. Fix with reserved space / skeleton sizing and verify the weekly Lighthouse
-  job goes green (it is currently correctly red on this).
+- ✅ **Board Core Web Vitals — already fixed (25 Oct, §87i), not an open item.** The
+  0.953/0.62 figures were stale; the 16 Nov production audit shows the board at CLS
+  0.000 / LCP 2089 ms / SEO 1.0. Nothing to do here.
 - 🟡 **Internal linking depth.** The static pages barely link to each other; room pages
   don't link to related rooms or a (future) location page. Thin internal linking caps
   topical authority. Address alongside content work.
@@ -115,12 +119,20 @@ without risking the domain.
 
 ## 3. Local SEO (Phase 3)
 
-- **Location pages (3.1):** the single biggest traditional opportunity *and* the one the
-  prior work correctly deferred. Recommendation unchanged: a **small** set of genuine
-  city/suburb pages, each **gated behind a live-listing floor** (e.g. ≥ N active rooms),
-  generated from real inventory and **removed when supply drops** rather than left to rot.
-  Build the *mechanism* now if desired, but publish pages only as inventory arrives.
-  Never publish a page claiming rooms in an area with none.
+- **Location pages (3.1): ✅ mechanism shipped (province level), gated.** One indexable
+  page per province at `/rooms/in/:slug` ("Rooms to rent in Gauteng"), each **gated behind
+  a live-listing floor** — `LOCATION_PAGE_MIN_ROOMS` active rooms (currently 3) in
+  `backend/src/modules/rooms/locations.ts`. The gate is single-sourced and read by three
+  callers that cannot disagree: the public API (`GET /rooms/locations[/:slug]`), the sitemap,
+  and the page's own 404. A province below the floor is a **real 404** (the `mastande-status`
+  marker server.ts reads), never a 200 "no rooms here yet" soft-404; it leaves the sitemap
+  and the board's "Rooms by province" links on the next render, and returns when supply
+  recovers. Pages are server-rendered (live), carry `CollectionPage`+`ItemList`+`BreadcrumbList`
+  markup, and cross-link to the other published provinces. **Next increment — city/suburb
+  pages:** the same shape (`by: ['city','province']` groupBy behind the same threshold and the
+  same `{slug,label,count}` contract), deferred on its own because cities collide across
+  provinces and their slugs are not stable; design slug disambiguation before building.
+  Floor is one constant to raise as inventory grows.
 - **Google Business Profile (3.2):** assess eligibility honestly. Mastande is an online
   service without a public walk-in office; GBP is for businesses with a physical location
   or defined service area. **Do not invent an address.** If the company has a registered
@@ -245,9 +257,9 @@ for code changes, per the repo standard; a `seo-drive.mjs` assertion for anythin
 changes served HTML, robots.txt or the sitemap.
 
 ### Priority 1 — foundations (do first)
-1. **Fix the board's CLS/LCP.** Obj: pass Core Web Vitals on the most important page.
-   Benefit: ranking + UX on `/`. Files: `home.ts`/board components, OUTSTANDING §87/§103.
-   Complexity: M. Verify: weekly Lighthouse job goes green (median), CLS ≤ 0.1.
+1. ✅ **Board CLS/LCP — already done (25 Oct, §87i).** Stale when first written; the
+   board measures CLS 0.000 / LCP 2089 ms in the 16 Nov production audit. No action.
+   The work below starts at P2.
 
 ### Priority 2 — technical & content improvements
 2. **BreadcrumbList schema** on room + storefront (and home). Low complexity; `seo-drive.mjs`

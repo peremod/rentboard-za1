@@ -2,7 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, shareReplay } from 'rxjs';
 import { environment } from '@env/environment';
-import { Room, RoomFilters, PaginatedRooms, RelistPayload } from '../models/room.model';
+import { Room, RoomFilters, PaginatedRooms, RelistPayload, PublishedLocation, LocationPage } from '../models/room.model';
 
 /**
  * RoomsService — Angular data layer for the Rooms API added in this pass.
@@ -60,6 +60,20 @@ export class RoomsService {
 
   getRoom(id: string): Observable<Room> {
     return this.http.get<Room>(`${this.api}/rooms/${id}`);
+  }
+
+  /** The provinces that currently have a landing page (at/above the gate). */
+  getLocations(): Observable<PublishedLocation[]> {
+    return this.http.get<PublishedLocation[]>(`${this.api}/rooms/locations`);
+  }
+
+  /**
+   * A province landing page. A 404 here is not an error to swallow — it means
+   * the province is below the inventory gate, and the component turns it into a
+   * real page-level 404 (status marker) rather than a soft-404 200.
+   */
+  getLocation(slug: string): Observable<LocationPage> {
+    return this.http.get<LocationPage>(`${this.api}/rooms/locations/${slug}`);
   }
 
   createRoom(data: Partial<Room>): Observable<Room> {
