@@ -134,7 +134,7 @@ jobs:
       # Blocking, and scoped to what this change introduces.
       - name: Gitleaks — this pull request's diff
         if: github.event_name == 'pull_request'
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
@@ -147,7 +147,7 @@ jobs:
       - name: Gitleaks — full history (reports, does not block)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         continue-on-error: true
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
