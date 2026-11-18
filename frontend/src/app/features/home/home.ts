@@ -658,7 +658,7 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
              carries the 44px touch target the WCAG sweep enforces, so these
              links inherit it rather than declaring their own. -->
         @if (provinceLinks().length) {
-          <nav class="board-provinces" aria-label="Browse rooms by province" style="margin-top:2rem">
+          <nav aria-label="Browse rooms by province" style="margin-top:2rem">
             <h2 class="results-count">Rooms by province</h2>
             <div class="filter-pill-wrap">
               @for (p of provinceLinks(); track p.slug) {
