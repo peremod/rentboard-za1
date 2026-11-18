@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { environment } from '@env/environment';
+import { SeoService } from '../../../core/services/seo.service';
 import { Icon } from '../../../shared/components/icon/icon';
 
 /**
@@ -128,4 +130,41 @@ import { Icon } from '../../../shared/components/icon/icon';
     </div>
   `,
 })
-export class About {}
+export class About implements OnInit {
+  private readonly seo = inject(SeoService);
+
+  /**
+   * The AboutPage graph node. Everything here is already true on the page or in
+   * the Organization/WebSite block emitted site-wide — this only wires them
+   * together so a parser reads "the /about page is about the company that
+   * publishes this site," which is the entity signal the uMaStandi name
+   * collision makes worth stating explicitly.
+   *
+   * ⚠️ `about` and `isPartOf` reuse the EXACT @ids site-identity.ts mints
+   * (`#organization`, `#website`). A fresh inline Organization here would read
+   * as a second, unrelated company and split the very signal this is for.
+   *
+   * ⚠️ No address, telephone, founding date, rating or price — the same facts
+   * site-identity.ts omits because they are not verifiable on the site. The
+   * route's own `data.seo.description` (pages.routes.ts) supplies the meta
+   * description; the sentence here is the page's own, kept in step with it.
+   */
+  ngOnInit(): void {
+    const site = environment.siteUrl;
+    this.seo.setJsonLd('about', {
+      '@context': 'https://schema.org',
+      '@type': 'AboutPage',
+      '@id': `${site}/about/#webpage`,
+      url: `${site}/about`,
+      name: 'About Mastande',
+      inLanguage: 'en-ZA',
+      isPartOf: { '@id': `${site}/#website` },
+      about: { '@id': `${site}/#organization` },
+      primaryImageOfPage: { '@id': `${site}/#logo` },
+      description:
+        'What Mastande is and who runs it: a South African notice board for '
+        + 'letting rooms directly, with no estate agent and no commission. '
+        + 'Operated by Umastande (Pty) Ltd.',
+    });
+  }
+}

@@ -381,6 +381,11 @@ Console, and use URL Inspection → Request Indexing on the home page. Indexing
 then takes days; ranking for anything competitive takes months, and neither is
 something a deploy can hurry.
 
+The full operational sequence — verify, submit, Request Indexing, and the DNS
+apex→www check that clears the *"No information is available for this page"*
+snippet — is the step-by-step checklist in
+`docs/SEO-SEARCH-CONSOLE-RUNBOOK.md`.
+
 ### Room pages carry no alternates
 
 A landlord's title and description are written in their own words and are

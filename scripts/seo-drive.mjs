@@ -62,6 +62,44 @@ console.log(`\n── Site identity ──────────────�
   check(probe.status === 200, 'and that search URL actually answers 200', String(probe.status));
 }
 
+console.log(`\n── About entity page ──────────────────────────`);
+{
+  // /about is prerendered static HTML, so this is build-agnostic — there is no
+  // production-API skip to make here, unlike the board and room sections.
+  const { status, html } = await get('/about');
+  check(status === 200, '/about answers 200', `status ${status}`);
+
+  const blocks = jsonLd(html);
+  const all = nodes(blocks);
+  const about = all.find((n) => n['@type'] === 'AboutPage');
+  check(!!about, '/about server-renders an AboutPage', typesOf(blocks).join(',') || '(no json-ld)');
+
+  if (about) {
+    check(/\/about\/#webpage$/.test(about['@id'] ?? ''), 'the AboutPage has its own stable @id', about['@id'] ?? '(none)');
+    check(/\/about$/.test(about.url ?? ''), 'its url is /about', about.url ?? '(none)');
+
+    // 🔴 The whole point of the block: its references must resolve to the SAME
+    // entities the site graph mints ON THIS PAGE. If the Organization/WebSite
+    // nodes are not here, or the ids do not match, the AboutPage is describing a
+    // second, unrelated company and the entity signal splits instead of joining
+    // — which is worse than no block at all. This also proves the site identity
+    // graph reaches a prerendered page, not only the server-rendered board.
+    const org = all.find((n) => n['@type'] === 'Organization') ?? {};
+    const web = all.find((n) => n['@type'] === 'WebSite') ?? {};
+    check(!!org['@id'] && about.about?.['@id'] === org['@id'],
+      'its about[@id] is this page\'s own Organization', `${about.about?.['@id']} vs ${org['@id'] ?? '(absent)'}`);
+    check(!!web['@id'] && about.isPartOf?.['@id'] === web['@id'],
+      'its isPartOf[@id] is this page\'s own WebSite', `${about.isPartOf?.['@id']} vs ${web['@id'] ?? '(absent)'}`);
+
+    // The same line site-identity.ts holds, on the one page whose entire job is
+    // to be trusted about the entity: an AboutPage asserting a phone or address
+    // the site cannot show is the fabricated-fact failure these audits forbid.
+    const invented = ['address', 'telephone', 'email', 'foundingDate', 'aggregateRating', 'review', 'priceRange']
+      .filter((k) => k in about);
+    check(invented.length === 0, 'the AboutPage invents nothing', invented.join(','));
+  }
+}
+
 console.log(`\n── Room listing markup ────────────────────────`);
 {
   /**
@@ -164,14 +202,43 @@ console.log(`\n── Province landing pages, and the inventory gate ───�
   )];
 
   // Every slug the sitemap advertises must be a real province slug — a sitemap
-  // that lists a page the site cannot serve is the defect this guards.
+  // that lists a page the site cannot serve is the defect this guards. Safe on
+  // ANY build: it reads only the sitemap's own text.
   for (const slug of published) {
     check(ALL_SLUGS.includes(slug), `sitemap's /rooms/in/${slug} is a known province slug`);
   }
 
+  // ⚠️ The deep assertions below RENDER a location page, and on the PRODUCTION
+  // build that render comes from api.umastande.co.za — a remote, free-tier API
+  // that sleeps (OUTSTANDING §102) and whose live inventory AND wakefulness are
+  // not this run's to predict. They must run only against the build that serves
+  // location data LOCALLY (the dev build on the seeded database), exactly as the
+  // Playwright SEO spec stays off production with --grep-invert @local-api.
+  //
+  // 🔴 Do NOT gate this on "does the board render room links": that heuristic is
+  // nondeterministic here. When the production instance happens to be AWAKE, the
+  // prod board DOES serve its (production) room links, so the heuristic reads
+  // "development build" and runs these assertions against live production — the
+  // one thing this must never do. Run 436 failed precisely there, on a prod-build
+  // pass whose board had woken production.
+  //
+  // The deterministic signal is the BUILD'S OWN INDEXABILITY, which no live data
+  // can flip: the development build serves every page `noindex` (APP_ENV develop),
+  // the production build serves it indexable. SeoService sets the robots meta
+  // during SSR regardless of whether the API answered, so this holds even when
+  // the prod board degrades. So the RENDER checks run only on the non-indexable
+  // dev build; the production build runs only the build-agnostic sitemap slug
+  // check above. (If `/` somehow carries no robots meta at all, treat it as the
+  // production build and skip — the safe direction.)
+  const boardHtml = (await get('/')).html;
+  const indexableBuild = !/<meta\s+name="robots"[^>]*noindex/i.test(boardHtml);
+
   if (published.length === 0) {
     console.log(`  ⏭  no province is at/above the inventory gate on this board — landing-page checks skipped`);
     console.log('     (seed ≥ the threshold of active rooms in one province to drive these)');
+  } else if (indexableBuild) {
+    console.log(`  ⏭  production build (indexable; renders from api.umastande.co.za) — landing-page RENDER checks skipped`);
+    console.log('     (the sitemap slug check above still ran; the render checks run on the development build, CI step 17)');
   } else {
     const slug = published[0];
     const { status, html } = await get(`/rooms/in/${slug}`);
@@ -200,9 +267,8 @@ console.log(`\n── Province landing pages, and the inventory gate ───�
 
     // The board links to the page — the crawlable internal path, not only the
     // sitemap. One link per published province at the foot of the board.
-    const board = await get('/');
     check(
-      board.html.includes(`/rooms/in/${slug}`),
+      boardHtml.includes(`/rooms/in/${slug}`),
       'the board internal-links to this province landing page',
     );
 
@@ -273,8 +339,19 @@ console.log(`\n── Private areas stay out ───────────�
  * route, so it fell to the server-rendered 404, which does carry noindex. A
  * check can be right by accident; this one now asserts the mechanism that
  * actually covers every private URL whether the route exists or not.
+ *
+ * ⚠️ One probe per entry in server.ts PRIVATE_PREFIXES — auth, welcome, tenant,
+ * landlord, account, admin, reference — so dropping ANY prefix from that list
+ * fails a check here. `welcome` and `reference` had no probe before, which left
+ * two prefixes a refactor could have quietly deleted with every test still
+ * green. The header is set by prefix whether or not the route exists, so a
+ * synthetic sub-path is a valid probe of the rule.
  */
-for (const path of ['/tenant/dashboard', '/landlord/dashboard', '/account/settings', '/admin/users', '/zu/tenant/dashboard', '/auth/login']) {
+for (const path of [
+  '/auth/login', '/welcome', '/tenant/dashboard', '/landlord/dashboard',
+  '/account/settings', '/admin/users', '/reference/sample',
+  '/zu/tenant/dashboard',
+]) {
   const res = await fetch(`${BASE}${path}`, { redirect: 'manual' });
   const header = res.headers.get('x-robots-tag') ?? '';
   const html = await res.text();
@@ -361,7 +438,16 @@ console.log(`\n── robots.txt says what this deployment is ────`);
   check(type.startsWith('text/plain'), 'robots.txt is text/plain', type || '(absent)');
   check(!body.includes('<'), 'robots.txt is not an HTML page wearing a .txt name');
 
-  const blanket = /^\s*Disallow:\s*\/\s*$/m.test(body);
+  // A robots.txt refuses the WHOLE site only with `Disallow: /` AND no `Allow: /`.
+  // The crawlable production policy carries a `Disallow: /` SCOPED under the named
+  // AI-training crawlers (GPTBot … Bytespider) on top of `Allow: /` for `*`, so a
+  // naive `^Disallow: /$` match reads that scoped line as a sitewide block and
+  // fails an indexable deployment for being perfectly crawlable. That is why this
+  // check went red on the prod-build pass once v1.189.0's AI-crawler policy was
+  // live (the served robots carries the scoped block); it is the same false
+  // positive robots.spec.ts and verify-build.sh already guard against. Blanket is
+  // the compound condition: a `Disallow: /` with no `Allow: /` to carve it open.
+  const blanket = /^\s*Disallow:\s*\/\s*$/m.test(body) && !/^\s*Allow:\s*\/\s*$/m.test(body);
   const expectCrawl = indexable && isCanonical;
   check(
     expectCrawl ? !blanket : blanket,
