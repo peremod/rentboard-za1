@@ -11,10 +11,36 @@ and the two prior security deliverables. **No active testing against live hosts.
 OWASP ASVS v4, OWASP WSTG, relevant Cheat Sheets, NIST SSDF; framework-specific
 (Angular SSR host-header/trust-proxy, NestJS guards/pipes, Prisma parameterisation).
 
-> **STATUS: AUDIT COMPLETE. IMPLEMENTATION NOT STARTED.** No application code,
-> schema, configuration or infrastructure was modified during this audit. This
-> report is the deliverable for Phases 1–4 and stops at the approval checkpoint
-> (Section F). Remediation (Phase 5+) begins only on explicit approval.
+> **STATUS: AUDIT COMPLETE. REMEDIATION DONE (per approval 18 Nov 2026).**
+> Sections A–F are the original Phase 1–4 deliverable and are unchanged below.
+> **Section G records the remediation that followed the user's "do all" approval
+> and their note that the Neon credentials were already rotated.**
+
+---
+
+## G. Remediation status (added 18 Nov 2026, after approval)
+
+The user approved "do all" and stated **F-01 (Neon credential rotation) was
+already done on their side.** Code-side fixes were implemented one finding at a
+time, TDD (RED→GREEN→prove-the-check-can-fail), suites/drives after each,
+weakening no existing control.
+
+| ID | Status | What shipped / what remains |
+|---|---|---|
+| **F-01** | ✅ **Operator-done (rotation).** | User rotated both Neon creds. Verified corollary: the pre-commit gate confirms **no credential in any tracked file** (720 files) — the exposure is history-only, so rotation is the correct and sufficient control. Still worth: confirm repo visibility + enable push protection (F-04). |
+| **F-02** | ✅ **Fixed (code).** | CSP added to the frontend origin (`tools/vercel-build.mjs`) + `verify-build.sh` assertion. `script-src`/`style-src` keep `'unsafe-inline'` (prerender + event-replay bake inline scripts a per-request nonce can't cover — confirmed by scanning built HTML); policy still blocks external script/style origins, `eval`, plugins, framing, `<base>`, and allow-lists `connect-src`/`form-action` to traced origins. Driven: 8/8 CSP assertions pass; no built-HTML resource is blocked; sabotage proves the gate fails. |
+| **F-03** | ✅ **Fixed (code).** | PayFast ITN signature now uses a pure, exported `signaturesMatch` (length guard + `crypto.timingSafeEqual`). Unit spec + sabotage. Backend units 136/136. |
+| **F-05** | ✅ **Tooling shipped; one operator run.** | SHAs can't be resolved in this sandbox (GitHub scoped to this repo; `api.github.com` refuses action repos) and guessing is forbidden, so `scripts/pin-actions.mjs` resolves + rewrites where GitHub is reachable. Offline `--selfcheck` passes and fails under sabotage. **Operator:** `node scripts/pin-actions.mjs --write` locally/CI, commit the result. |
+| **F-04** | ⏳ **Operator-owned (settings); code already ready.** | Enable Dependency graph + Secret scanning + Push protection (Settings → Code security). The `dependency-review` job snippet is already in `security.yml` (commented) to uncomment once the setting is on — deliberately NOT re-added live, because a job that cannot pass until a setting is flipped is the "check that cannot run" this repo rejects. |
+| **B-02** | ⏳ **Operator-owned (run); probe already exists.** | `npm run audit:imagekit-privacy` self-falsifies offline; **operator** runs it with `IMAGEKIT_*` against staging+prod and records `PRE-LAUNCH-CHECKLIST.md` row 171, flipping "restrict unsigned URLs" if EXPOSED. No new CI plumbing added speculatively (same "no checks that can't run" principle). |
+
+**Net:** every finding with a safe, verifiable code fix is fixed (F-02, F-03) or
+has tested tooling ready (F-05). The rest are operator actions on
+settings/credentials/account config that code cannot perform, each with its tool
+or snippet already in place.
+
+> **Original Phase 1–4 report follows unchanged.** It still reads "audit only";
+> that was true when written. Section G above is the post-approval update.
 
 This round **builds on** the 17 November 2026 white-box pentest
 (`docs/SECURITY-ASSESSMENT-PENTEST.md`) and the scanning baseline
