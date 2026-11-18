@@ -164,14 +164,33 @@ console.log(`\n── Province landing pages, and the inventory gate ───�
   )];
 
   // Every slug the sitemap advertises must be a real province slug — a sitemap
-  // that lists a page the site cannot serve is the defect this guards.
+  // that lists a page the site cannot serve is the defect this guards. Safe on
+  // ANY build: it reads only the sitemap's own text.
   for (const slug of published) {
     check(ALL_SLUGS.includes(slug), `sitemap's /rooms/in/${slug} is a known province slug`);
   }
 
+  // ⚠️ Same rule as the room block above: the deep assertions below RENDER a
+  // page, and a production bundle renders it from api.umastande.co.za — a
+  // remote, free-tier API that sleeps (OUTSTANDING §102) and whose live
+  // inventory is not this run's to predict. So they run only against a build
+  // that serves location data LOCALLY, detected the same way the room block
+  // detects it: a board that server-renders room links is the development
+  // build on the seeded database. On the production build the board renders no
+  // local rooms, and these checks state a skip rather than asserting against
+  // whatever production happens to be serving this minute. The dev-build pass
+  // (step 17 in CI) is where they really run; this keeps the prod-build pass
+  // (which reads production) from going red on production's data, exactly as
+  // the room and sitemap sections already do.
+  const boardHtml = (await get('/')).html;
+  const servesLocalData = /\/rooms\/[0-9a-f-]{36}/.test(boardHtml);
+
   if (published.length === 0) {
     console.log(`  ⏭  no province is at/above the inventory gate on this board — landing-page checks skipped`);
     console.log('     (seed ≥ the threshold of active rooms in one province to drive these)');
+  } else if (!servesLocalData) {
+    console.log(`  ⏭  this board serves no local rooms (production bundle → api.umastande.co.za) — landing-page RENDER checks skipped`);
+    console.log('     (the sitemap slug check above still ran; the render checks run on the development build)');
   } else {
     const slug = published[0];
     const { status, html } = await get(`/rooms/in/${slug}`);
@@ -200,9 +219,8 @@ console.log(`\n── Province landing pages, and the inventory gate ───�
 
     // The board links to the page — the crawlable internal path, not only the
     // sitemap. One link per published province at the foot of the board.
-    const board = await get('/');
     check(
-      board.html.includes(`/rooms/in/${slug}`),
+      boardHtml.includes(`/rooms/in/${slug}`),
       'the board internal-links to this province landing page',
     );
 
