@@ -381,6 +381,137 @@ Unset, it skips and says so.
 
 ---
 
+## Production
+
+⚠️ **This section did not exist until 17 November 2026.** The runbook documented
+Development and Staging and stopped, so the one deploy that reaches real tenants
+was the one nobody had written down — reconstructed each time from
+`render.yaml`, `scripts/migrate-targets.json`, `ENVIRONMENTS.md` §8 and
+`verify-deployment.yml`, which is four places to be consistent across and no
+place to be wrong in safely.
+
+Production is `master`. Pushing to `master` **is** the deploy: Render
+(`rentboard-api`) and Vercel (`umastande.co.za`) both build on push, out of band,
+and neither runs migrations. Everything below is in the order it must happen.
+
+### 1. Square up, and square up the remote
+
+```bash
+git fetch --all --prune --tags
+git checkout develop && git pull --ff-only origin develop
+git checkout master  && git pull --ff-only origin master
+```
+
+`--ff-only` refuses rather than inventing a merge. If it refuses, stop and look
+— your local branch has commits the remote does not, and that is a question, not
+an obstacle.
+
+### 2. Is there a schema change?
+
+```bash
+diff <(git ls-tree -d --name-only origin/master backend/prisma/migrations/) \
+     <(git ls-tree -d --name-only origin/develop backend/prisma/migrations/)
+```
+
+**Empty output means skip step 3.** This is worth running every time rather than
+remembering: the answer changes silently, and the failure mode when it is not
+empty and you skipped it is a 500 on one endpoint, which reads as an application
+bug rather than a missing column.
+
+### 3. Migrate, ONLY if step 2 printed something — and before the push
+
+```bash
+export NEON_POOLED="postgresql://…-pooler….neon.tech/…?sslmode=require"
+export NEON_DIRECT="postgresql://….neon.tech/…?sslmode=require"
+
+bash scripts/migrate-remote.sh --env production
+```
+
+🔴 **Never `npx prisma migrate deploy` directly.** `schema.prisma` declares
+`directUrl = env("DIRECT_URL")`, so exporting only `DATABASE_URL` leaves
+`DIRECT_URL` coming from `backend/.env` — the migration lands on **localhost**
+while printing "All migrations have been successfully applied." That is
+`docs/OUTSTANDING.md` §5a, and it cost an extra hour of downtime on 5 October.
+`migrate-remote.sh` refuses in that state; `--env` is required and is checked
+against `scripts/migrate-targets.json`, because nothing in a Neon hostname says
+which environment it is.
+
+The direct string is not optional. Migrating through the pooled host fails with
+an advisory-lock error that reads like a permissions problem and is not one.
+
+### 4. Cut the release commit
+
+The version is what tells you afterwards whether the deploy landed, so it has to
+change. Three files, nothing else — matching every previous `chore(release)`:
+
+```bash
+git checkout develop
+# bump "version" in package.json, frontend/package.json, backend/package.json
+git diff --stat                      # expect exactly 3 files, 3 +, 3 -
+git commit -am "chore(release): v1.X.0"
+git push origin develop
+```
+
+⚠️ Skipping this is not cosmetic. If `master` already carries the same version,
+`/health` reports the same string before and after and **step 7 cannot
+distinguish a successful deploy from one that never landed**.
+
+### 5. Promote
+
+```bash
+gh run list --branch develop --limit 3        # green, on develop's head
+git checkout master
+git merge --no-ff origin/develop -m "Merge v1.X.0 into master: <what shipped>"
+npm run install:all
+npm run verify        # audits, all three builds, prerender, metadata, env guard
+```
+
+**Push only if `verify` exits 0.** This is the irreversible step.
+
+```bash
+git push origin master
+```
+
+### 6. Tag, after CI is green on the merge commit
+
+```bash
+./scripts/sync-tags.sh            # dry run
+./scripts/sync-tags.sh --push
+```
+
+Never hand-write `git push origin v1.a v1.b`: one unresolvable ref aborts the
+whole push and takes the good tags with it. That is what this script exists to
+prevent.
+
+### 7. Confirm — three things, not one
+
+```bash
+curl -s https://api.umastande.co.za/health
+```
+
+Wants `ok`, `connected`, and a `version` matching what you just released. The
+same string as before the deploy means it has not landed or it failed.
+
+Then the frontend, which has **no automated signal at all** — Vercel deploys on
+push and nothing asserts the result:
+
+```bash
+curl -sI https://umastande.co.za | head -1        # 200
+curl -s https://umastande.co.za/robots.txt        # must ALLOW crawling
+```
+
+And look at the thing that shipped. A green pipeline says the bytes moved; it
+does not say the change is on the page.
+
+### Afterwards
+
+`verify-deployment.yml` runs on the push and checks health, version, database
+and crawler rules — but **only if `PRODUCTION_API_HOST` is set**, at Settings →
+Secrets and variables → Actions → Variables, to `api.umastande.co.za`. Unset, it
+skips and says so. It once held a staging value and run 89 duly failed with
+"STAGING IS CRAWLABLE" after fetching production's `robots.txt`.
+
+---
 ## When something is wrong
 
 | Symptom | Cause |
@@ -392,3 +523,5 @@ Unset, it skips and says so.
 | `/health` reports an older version than you pushed | Stale build. Locally, restart; on Render, check the deploy |
 | Advisory-lock error during migration | You used the pooled connection string. Use the direct one |
 | Deploy check skips with "No STAGING_API_HOST" | Expected until you set the variable |
+| `sync-tags.sh` says every tag is pushed, but the remote lacks one | Fixed 17 Nov 2026: it walked the LOCAL `develop`, which is only as current as your last pull. It now reads `origin/develop`. If you see this on an older copy, `BRANCH=origin/develop ./scripts/sync-tags.sh` |
+| `/health` reports the version you expected even though the deploy failed | You skipped the release commit, so the version did not change. Production → step 4 |

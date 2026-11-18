@@ -293,13 +293,25 @@ jobs:
           ROBOTS=$(fetch -f "$API/robots.txt")
           echo "$ROBOTS"
 
+          # A robots.txt refuses the WHOLE site when it carries "Disallow: /"
+          # AND no "Allow: /". The Allow is what separates a blanket refusal
+          # (staging) from a crawlable production file that ALSO carries a
+          # SCOPED "Disallow: /" under named AI-TRAINING crawlers — a full
+          # block for those bots, not for the site. Grepping the bare Disallow
+          # line alone would read production's training block as a sitewide
+          # refusal and fail a correctly-crawlable deploy.
+          blanket_disallow() {
+            echo "$ROBOTS" | grep -q "^Disallow: /$" \
+              && ! echo "$ROBOTS" | grep -q "^Allow: /$"
+          }
+
           # ⚠️ Here the two environments want OPPOSITE things, and asserting
           # one shape against both is how the reverse fault hides. §59: a
           # production service mislabelled `staging` refuses every crawler —
           # catastrophic, and indistinguishable from a healthy staging box to
           # any check that only knows how staging should look.
           if [ "$ENV_NAME" = "production" ]; then
-            if echo "$ROBOTS" | grep -q "^Disallow: /$"; then
+            if blanket_disallow; then
               echo "❌ PRODUCTION IS REFUSING EVERY CRAWLER. Check APP_ENV —"
               echo "   it must be 'production'. The site is live and invisible"
               echo "   to search engines until this is fixed."
@@ -309,7 +321,7 @@ jobs:
               || { echo "❌ production is not advertising its sitemap — check SITE_URL"; exit 1; }
             echo "✅ production is healthy, current, and crawlable"
           else
-            echo "$ROBOTS" | grep -q "^Disallow: /$" \
+            blanket_disallow \
               || { echo "❌ STAGING IS CRAWLABLE. Check APP_ENV — it must be 'staging', not 'production'."; exit 1; }
 
             if echo "$ROBOTS" | grep -q "//umastande.co.za/sitemap"; then

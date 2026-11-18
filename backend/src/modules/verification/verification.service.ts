@@ -11,6 +11,36 @@ import { StorageService } from '../storage/storage.service';
 const PASSPORT_VALID_MONTHS = 12;
 
 /**
+ * The folder every account's verification documents live under — B-01.
+ *
+ * `verification/{userId}/…`. The browser uploads here (uploads.service.ts,
+ * passport-verify) and the submit endpoint refuses any path that is not under
+ * the caller's own prefix, so a path the client invents or copies from another
+ * account cannot be attached to a request.
+ */
+export function verificationPrefix(userId: string): string {
+  return `verification/${userId}/`;
+}
+
+/**
+ * Refuse a documentPath the submitter does not own.
+ *
+ * A plain prefix match plus a traversal guard. A path the client chose is only
+ * trustworthy to the extent it is provably theirs: anything outside
+ * `verification/{userId}/`, anything with a `..` segment, and the bare folder
+ * with no file after it are all refused. Exported so it can be falsified on its
+ * own, without a database.
+ */
+export function assertOwnDocumentPath(documentPath: string, userId: string): void {
+  const clean = documentPath.replace(/^\/+/, '');
+  const prefix = verificationPrefix(userId);
+  const ok = clean.startsWith(prefix) && clean.length > prefix.length && !clean.includes('..');
+  if (!ok) {
+    throw new BadRequestException('That document is not one of yours. Re-upload it and try again.');
+  }
+}
+
+/**
  * The landlord verification fee in whole rands, for the wording on the trail.
  *
  * Derived from the cents figure PaymentsService charges rather than typed
@@ -185,6 +215,23 @@ export class VerificationService {
     }
     if (!rule.needsDocument && dto.documentPath) {
       throw new BadRequestException(`${rule.label} is a phone call, not a document.`);
+    }
+    // B-01: the document has to be one THIS account uploaded.
+    //
+    // The browser uploads straight to ImageKit and then hands us the resulting
+    // path, so `documentPath` is attacker-controlled input — nothing about it
+    // is trustworthy because it came back from our own upload-auth endpoint.
+    // Before this check the service stored whatever string it was given, so a
+    // request could carry a path under another account's namespace, or a lease
+    // or room path entirely, and the admin reviewing it would open a file the
+    // submitter had no business attaching.
+    //
+    // The bind is a per-user prefix. It is enforced HERE and not in the DTO
+    // because only this layer knows who is calling; the frontend uploads
+    // verification documents under exactly this folder (see
+    // uploads.service.ts / passport-verify). A lying client fails the check.
+    if (dto.documentPath) {
+      assertOwnDocumentPath(dto.documentPath, user.id);
     }
     if (dto.type === 'landlord_reference' && !dto.reference) {
       throw new BadRequestException(

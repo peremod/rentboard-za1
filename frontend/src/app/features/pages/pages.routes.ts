@@ -20,4 +20,10 @@ export const PAGES_ROUTES: Routes = [
     title: 'Pricing — Free for Landlords | Mastande',
     data: { seo: { description: 'Mastande pricing in Rand. Tenants apply free, always. Landlords list two rooms free for life, with paid plans for larger portfolios. No commission, no agent fees.' } },
   },
+  {
+    path: 'about',
+    loadComponent: () => import('./about/about').then((m) => m.About),
+    title: 'About Mastande — A South African Room-Letting Notice Board',
+    data: { seo: { description: 'What Mastande is and who runs it: a South African notice board for letting rooms directly, with no estate agent and no commission. Free to browse, apply and list. Operated by Umastande (Pty) Ltd.' } },
+  },
 ];

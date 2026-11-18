@@ -10,7 +10,7 @@ import { RoomsService } from '../../core/services/rooms.service';
 import { AlertsService } from '../../core/services/alerts.service';
 import { WHATSAPP_ENABLED } from '../../core/config/feature-flags';
 import { AuthService } from '../../core/services/auth.service';
-import { Room, SA_PROVINCES, SearchMeta } from '../../core/models/room.model';
+import { Room, SA_PROVINCES, SearchMeta, PublishedLocation } from '../../core/models/room.model';
 import { RoomCard } from '../../shared/components/room-card/room-card';
 import { Icon } from '../../shared/components/icon/icon';
 import { AdSlot } from '../../shared/components/ad-slot/ad-slot';
@@ -649,6 +649,30 @@ import { PluralPipe } from '../../shared/pipes/plural.pipe';
             @for (i of [1,2,3]; track i) { <app-skeleton-card/> }
           </div>
         }
+
+        <!-- Browse by province — the crawlable entry link to the gated
+             location pages (/rooms/in/:slug). The API returns exactly the
+             PUBLISHED set (provinces at/above the inventory gate), so this can
+             never link to a province that would 404: the links appear and
+             disappear with the pages themselves. Reuses .filter-pill, which
+             carries the 44px touch target the WCAG sweep enforces, so these
+             links inherit it rather than declaring their own. -->
+        @if (provinceLinks().length) {
+          <nav aria-label="Browse rooms by province" style="margin-top:2rem">
+            <!-- A bare h2, deliberately. It must NOT reuse .results-count: the
+                 board's "N rooms found" heading is an h2.results-count, and
+                 wake-notice-drive reads that as a strict Playwright locator that
+                 throws on two matches. A second one here broke that drive. A
+                 classless h2 takes the global display-heading style and adds no
+                 new class for the CSS-coverage gate to flag. -->
+            <h2>Rooms by province</h2>
+            <div class="filter-pill-wrap">
+              @for (p of provinceLinks(); track p.slug) {
+                <a class="filter-pill" [routerLink]="['/rooms/in', p.slug]">{{ p.province }} ({{ p.count }})</a>
+              }
+            </div>
+          </nav>
+        }
       </main>
     </div>
   `,
@@ -675,6 +699,12 @@ export class Home implements OnInit, OnDestroy {
   private wakeTimer?: ReturnType<typeof setTimeout>;
 
   rooms = signal<Room[]>([]);
+  /**
+   * Provinces that currently have a landing page — the crawlable "Rooms by
+   * province" links at the foot of the board. Exactly the published set (the
+   * inventory gate, server-side), so the board never links to a page that 404s.
+   */
+  provinceLinks = signal<PublishedLocation[]>([]);
   /** How the server read the typed phrase. Null when nothing was typed. */
   searchMeta = signal<SearchMeta | null>(null);
   total = signal(0);
@@ -876,6 +906,15 @@ export class Home implements OnInit, OnDestroy {
       this.hydrateFromUrl(params);
       this.page = 1;
       this.fetchRooms();
+    });
+
+    // The "Rooms by province" links. Server-rendered so they are in the HTML a
+    // crawler reads; a failure only costs the links, never the board, so it is
+    // swallowed. Fetched once, not per search — the published set does not
+    // depend on the current filters.
+    this.roomsService.getLocations().subscribe({
+      next: (list) => this.provinceLinks.set(list),
+      error: () => this.provinceLinks.set([]),
     });
 
     // A landlord already knows they can list; lead with the tenant message

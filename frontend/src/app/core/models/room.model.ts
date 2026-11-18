@@ -204,6 +204,24 @@ export interface PaginatedRooms {
   verifiedLandlordsCapped?: boolean;
 }
 
+/** One entry in the published-locations list (GET /rooms/locations). */
+export interface PublishedLocation {
+  slug: string;
+  province: SAProvince;
+  count: number;
+}
+
+/**
+ * A province landing page (GET /rooms/locations/:slug) — the board filtered to
+ * one province, plus the province identity. A 404 from the API means the
+ * province is below the inventory gate and has no page.
+ */
+export interface LocationPage extends PaginatedRooms {
+  slug: string;
+  province: SAProvince;
+  count: number;
+}
+
 export interface RelistPayload {
   rentCents?: number;
   availableFrom?: string;

@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Header, ParseUUIDPipe, HttpCode, HttpStatus,
+  Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Header, ParseUUIDPipe, HttpCode, HttpStatus, NotFoundException,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -63,6 +63,31 @@ export class RoomsController {
   @ApiOperation({ summary: 'Browse shortcuts, built from live listings only' })
   categories() {
     return this.roomsService.categories();
+  }
+
+  /**
+   * ⚠️ ABOVE @Get(':id'), same reason as categories/suggest: '/rooms/locations'
+   * would otherwise arrive at findOne() as an id of "locations" and 404.
+   *
+   * The published set of province landing pages — exactly what the sitemap
+   * advertises and what the frontend may link to. Gated on live inventory.
+   */
+  @Get('locations')
+  @Header('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=120')
+  @ApiOperation({ summary: 'Provinces with enough live inventory for a landing page' })
+  locations() {
+    return this.roomsService.publishedLocations();
+  }
+
+  @Get('locations/:slug')
+  @Header('Cache-Control', 'public, s-maxage=120, stale-while-revalidate=120')
+  @ApiOperation({ summary: 'A province landing page: its listings, or 404 if below the gate' })
+  async location(@Param('slug') slug: string) {
+    const detail = await this.roomsService.locationDetail(slug);
+    // null = unknown province OR below the inventory gate. Both are a genuine
+    // 404 — the page does not exist — not an empty 200 the crawler would index.
+    if (!detail) throw new NotFoundException('No landing page for that location');
+    return detail;
   }
 
   @Get(':id')
