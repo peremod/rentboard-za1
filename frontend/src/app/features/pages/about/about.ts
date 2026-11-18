@@ -99,9 +99,9 @@ import { Icon } from '../../../shared/components/icon/icon';
         <section>
           <h2>Where it works, and in which languages</h2>
           <p>
-            Mastande serves the whole of South Africa and is available in eleven
-            languages, so a room can be posted and read in the language the people
-            letting and renting it actually speak.
+            Mastande serves the whole of South Africa. The site is available in
+            English, Afrikaans and isiZulu, so a room can be posted and read in
+            any of the three.
           </p>
         </section>
 
