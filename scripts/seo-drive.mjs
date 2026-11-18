@@ -208,27 +208,37 @@ console.log(`\n── Province landing pages, and the inventory gate ───�
     check(ALL_SLUGS.includes(slug), `sitemap's /rooms/in/${slug} is a known province slug`);
   }
 
-  // ⚠️ Same rule as the room block above: the deep assertions below RENDER a
-  // page, and a production bundle renders it from api.umastande.co.za — a
-  // remote, free-tier API that sleeps (OUTSTANDING §102) and whose live
-  // inventory is not this run's to predict. So they run only against a build
-  // that serves location data LOCALLY, detected the same way the room block
-  // detects it: a board that server-renders room links is the development
-  // build on the seeded database. On the production build the board renders no
-  // local rooms, and these checks state a skip rather than asserting against
-  // whatever production happens to be serving this minute. The dev-build pass
-  // (step 17 in CI) is where they really run; this keeps the prod-build pass
-  // (which reads production) from going red on production's data, exactly as
-  // the room and sitemap sections already do.
+  // ⚠️ The deep assertions below RENDER a location page, and on the PRODUCTION
+  // build that render comes from api.umastande.co.za — a remote, free-tier API
+  // that sleeps (OUTSTANDING §102) and whose live inventory AND wakefulness are
+  // not this run's to predict. They must run only against the build that serves
+  // location data LOCALLY (the dev build on the seeded database), exactly as the
+  // Playwright SEO spec stays off production with --grep-invert @local-api.
+  //
+  // 🔴 Do NOT gate this on "does the board render room links": that heuristic is
+  // nondeterministic here. When the production instance happens to be AWAKE, the
+  // prod board DOES serve its (production) room links, so the heuristic reads
+  // "development build" and runs these assertions against live production — the
+  // one thing this must never do. Run 436 failed precisely there, on a prod-build
+  // pass whose board had woken production.
+  //
+  // The deterministic signal is the BUILD'S OWN INDEXABILITY, which no live data
+  // can flip: the development build serves every page `noindex` (APP_ENV develop),
+  // the production build serves it indexable. SeoService sets the robots meta
+  // during SSR regardless of whether the API answered, so this holds even when
+  // the prod board degrades. So the RENDER checks run only on the non-indexable
+  // dev build; the production build runs only the build-agnostic sitemap slug
+  // check above. (If `/` somehow carries no robots meta at all, treat it as the
+  // production build and skip — the safe direction.)
   const boardHtml = (await get('/')).html;
-  const servesLocalData = /\/rooms\/[0-9a-f-]{36}/.test(boardHtml);
+  const indexableBuild = !/<meta\s+name="robots"[^>]*noindex/i.test(boardHtml);
 
   if (published.length === 0) {
     console.log(`  ⏭  no province is at/above the inventory gate on this board — landing-page checks skipped`);
     console.log('     (seed ≥ the threshold of active rooms in one province to drive these)');
-  } else if (!servesLocalData) {
-    console.log(`  ⏭  this board serves no local rooms (production bundle → api.umastande.co.za) — landing-page RENDER checks skipped`);
-    console.log('     (the sitemap slug check above still ran; the render checks run on the development build)');
+  } else if (indexableBuild) {
+    console.log(`  ⏭  production build (indexable; renders from api.umastande.co.za) — landing-page RENDER checks skipped`);
+    console.log('     (the sitemap slug check above still ran; the render checks run on the development build, CI step 17)');
   } else {
     const slug = published[0];
     const { status, html } = await get(`/rooms/in/${slug}`);
