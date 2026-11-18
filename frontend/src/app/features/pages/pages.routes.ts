@@ -26,4 +26,14 @@ export const PAGES_ROUTES: Routes = [
     title: 'About Mastande — A South African Room-Letting Notice Board',
     data: { seo: { description: 'What Mastande is and who runs it: a South African notice board for letting rooms directly, with no estate agent and no commission. Free to browse, apply and list. Operated by Umastande (Pty) Ltd.' } },
   },
+  {
+    path: 'rent-out-a-room',
+    loadComponent: () => import('./rent-out-a-room/rent-out-a-room').then((m) => m.RentOutARoom),
+    title: 'How to Rent Out a Room in South Africa — Free Step-by-Step Guide | Mastande',
+    // alternates: false — the guide is written in English and is not translated,
+    // so it must not claim a hreflang cluster of localised copies that would each
+    // serve the same English text (the same call room and location pages make).
+    // It is submitted to the sitemap once, at this English URL (seo.controller).
+    data: { seo: { description: 'How to rent out a room in South Africa, free: what to charge, how to prepare and describe the room, how to screen a tenant safely, and what the Rental Housing Act expects of the lease and deposit. No estate agent, no commission.', alternates: false } },
+  },
 ];
