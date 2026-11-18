@@ -54,6 +54,7 @@ import { TranslatePipe } from '../../pipes/translate.pipe';
               <li><a routerLink="/templates">Forms and templates</a></li>
             } @else {
               <li><a routerLink="/auth/register">Post a room free</a></li>
+              <li><a routerLink="/rent-out-a-room">How to rent out a room</a></li>
               <li><a routerLink="/how-it-works">How it works</a></li>
               <li><a routerLink="/pricing">Pricing</a></li>
               <!-- Phase 8a. In the VISITOR branch too: somebody searching for a
