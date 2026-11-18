@@ -479,11 +479,23 @@ else
   # The invariant is that robots.txt agrees with the deployment's own
   # indexability, so BOTH directions are asserted, each against the build it
   # belongs to. This is a development build, talking to a development API.
+  # A robots.txt refuses the WHOLE site when it carries "Disallow: /" AND no
+  # "Allow: /". That Allow is what tells a blanket refusal (staging, a copy)
+  # apart from a crawlable production file that also carries a SCOPED
+  # "Disallow: /" under named AI-TRAINING crawlers — a full block for those
+  # bots, not for the site. Grepping the bare Disallow line alone (which this
+  # once did) reads the training block as a sitewide refusal and fails a
+  # correctly-crawlable production robots.txt.
+  is_blanket_disallow() {
+    echo "$1" | grep -qiE '^[[:space:]]*Disallow:[[:space:]]*/[[:space:]]*$' \
+      && ! echo "$1" | grep -qiE '^[[:space:]]*Allow:[[:space:]]*/[[:space:]]*$'
+  }
+
   ROBOTS=$(curl -s --max-time 20 http://localhost:4111/robots.txt)
   echo "$ROBOTS" | grep -qi 'user-agent' \
     && ok "/robots.txt is a robots.txt, not a page that happens to be text" \
     || bad "/robots.txt has no User-agent line"
-  if echo "$ROBOTS" | grep -qiE '^[[:space:]]*Disallow:[[:space:]]*/[[:space:]]*$'; then
+  if is_blanket_disallow "$ROBOTS"; then
     ok "and a non-indexable build disallows the whole site, as it should"
   else
     bad "a development build's robots.txt does NOT disallow the site"
@@ -504,7 +516,7 @@ else
     # As the site itself. The API is unreachable from here, so this is the
     # fallback path — on the build that faces Googlebot.
     PROD_ROBOTS=$(curl -s --max-time 25 -H "Host: umastande.co.za" http://localhost:4112/robots.txt)
-    if echo "$PROD_ROBOTS" | grep -qiE '^[[:space:]]*Disallow:[[:space:]]*/[[:space:]]*$'; then
+    if is_blanket_disallow "$PROD_ROBOTS"; then
       bad "the PRODUCTION build serves 'Disallow: /' to its own domain when the API is unreachable"
       note "That is an instruction Google obeys. A missing robots.txt means crawl"
       note "freely; a Disallow: / means deindex. See fallbackRobots() in server.ts."
@@ -524,7 +536,7 @@ else
     # told to go away. Asserted here because the check above only ever asked
     # one of them, and it asked the one that stopped being the answer.
     WWW_ROBOTS=$(curl -s --max-time 25 -H "Host: www.umastande.co.za" http://localhost:4112/robots.txt)
-    if echo "$WWW_ROBOTS" | grep -qiE '^[[:space:]]*Disallow:[[:space:]]*/[[:space:]]*$'; then
+    if is_blanket_disallow "$WWW_ROBOTS"; then
       bad "the production build tells www.umastande.co.za not to crawl it"
       note "isCanonicalHost() in server.ts must accept the apex and www alike."
     else
@@ -536,7 +548,7 @@ else
     # them — which had rentboard-za1.vercel.app answering Allow: / for a site
     # that does not exist yet. A copy must not invite crawlers.
     COPY_ROBOTS=$(curl -s --max-time 25 -H "Host: some-preview.vercel.app" http://localhost:4112/robots.txt)
-    echo "$COPY_ROBOTS" | grep -qiE '^[[:space:]]*Disallow:[[:space:]]*/[[:space:]]*$' \
+    is_blanket_disallow "$COPY_ROBOTS" \
       && ok "and tells every other hostname not to crawl it" \
       || bad "a non-canonical hostname is invited to crawl: $(echo "$COPY_ROBOTS" | head -2 | tr '\n' ' ')"
     [ "$(curl -s -o /dev/null --max-time 25 -H "Host: some-preview.vercel.app" -w '%{http_code}' http://localhost:4112/sitemap.xml)" = "404" ] \
